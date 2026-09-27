@@ -1,0 +1,55 @@
+# Self-hosted deployment. Copy .env.example to .env and set BETTER_AUTH_SECRET,
+# BETTER_AUTH_URL (your public URL) and POSTGRES_PASSWORD first.
+name: catch
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '${CATCH_PORT:-3000}:3000'
+    environment:
+      DATABASE_URL: postgres://catch:${POSTGRES_PASSWORD:-catch}@postgres:5432/catch
+      ELECTRIC_URL: http://electric:3000
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-change-me}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      electric:
+        condition: service_started
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    command: postgres -c wal_level=logical
+    environment:
+      POSTGRES_USER: catch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catch}
+      POSTGRES_DB: catch
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U catch -d catch']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Streams Postgres changes to clients. Only reachable through the app's auth proxy.
+  electric:
+    image: electricsql/electric:1.8.1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://catch:${POSTGRES_PASSWORD:-catch}@postgres:5432/catch?sslmode=disable
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-change-me}
+    volumes:
+      - electric_data:/app/persistent
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  electric_data:

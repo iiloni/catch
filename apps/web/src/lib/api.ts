@@ -1,0 +1,37 @@
+import type { CreateNote, UpdateNote } from '@catch/shared';
+import { getAuthToken } from './auth';
+import { getServerUrl } from './serverUrl';
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Write endpoints return the Postgres txid so Electric can confirm the write synced. */
+type TxidResponse = { txid: number };
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const response = await fetch(`${getServerUrl()}/api${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  });
+  if (!response.ok) throw new ApiError(response.status, await response.text());
+  return response.json() as Promise<T>;
+}
+
+export const api = {
+  createNote: (body: CreateNote) =>
+    request<TxidResponse>('/notes', { method: 'POST', body: JSON.stringify(body) }),
+  updateNote: (id: string, body: UpdateNote) =>
+    request<TxidResponse>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteNote: (id: string) => request<TxidResponse>(`/notes/${id}`, { method: 'DELETE' }),
+};

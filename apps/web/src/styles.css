@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Theme tokens use light-dark(), so switching theme only means changing
+ * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
+ */
+:root {
+  color-scheme: light dark;
+  --radius: 0.75rem;
+  --background: light-dark(#fafafa, #121212);
+  --foreground: light-dark(#202124, #e8eaed);
+  --card: light-dark(#ffffff, #1e1e1e);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: light-dark(#202124, #e8eaed);
+  --primary-foreground: light-dark(#ffffff, #121212);
+  --secondary: light-dark(#f1f3f4, #2a2a2a);
+  --secondary-foreground: var(--foreground);
+  --muted: light-dark(#f1f3f4, #2a2a2a);
+  --muted-foreground: light-dark(#5f6368, #9aa0a6);
+  --accent: light-dark(#fef7e0, #3b3320);
+  --accent-foreground: var(--foreground);
+  --destructive: light-dark(#d93025, #f28b82);
+  --border: light-dark(#e0e0e0, #3c4043);
+  --input: var(--border);
+  --ring: light-dark(#f6c343, #e0a800);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Note colors, set with data-note-color on a note card. Matches NOTE_COLORS in @catch/shared. */
+[data-note-color] {
+  --note-bg: var(--card);
+}
+[data-note-color="red"] {
+  --note-bg: light-dark(#faafa8, #77172e);
+}
+[data-note-color="orange"] {
+  --note-bg: light-dark(#f39f76, #692b17);
+}
+[data-note-color="yellow"] {
+  --note-bg: light-dark(#fff8b8, #7c4a03);
+}
+[data-note-color="green"] {
+  --note-bg: light-dark(#e2f6d3, #264d3b);
+}
+[data-note-color="teal"] {
+  --note-bg: light-dark(#b4ddd3, #0c625d);
+}
+[data-note-color="blue"] {
+  --note-bg: light-dark(#d4e4ed, #256377);
+}
+[data-note-color="dark-blue"] {
+  --note-bg: light-dark(#aeccdc, #284255);
+}
+[data-note-color="purple"] {
+  --note-bg: light-dark(#d3bfdb, #472e5b);
+}
+[data-note-color="pink"] {
+  --note-bg: light-dark(#f6e2dd, #6c394f);
+}
+[data-note-color="brown"] {
+  --note-bg: light-dark(#e9e3d4, #4b443a);
+}
+[data-note-color="gray"] {
+  --note-bg: light-dark(#efeff1, #232427);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-note: var(--note-bg);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

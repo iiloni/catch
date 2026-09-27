@@ -1,0 +1,33 @@
+# Dev dependencies only. Run the app itself with `pnpm dev`.
+name: catch-dev
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: catch
+      POSTGRES_PASSWORD: catch
+      POSTGRES_DB: catch
+    command: postgres -c wal_level=logical
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U catch -d catch']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  electric:
+    image: electricsql/electric:1.8.1
+    environment:
+      DATABASE_URL: postgres://catch:catch@postgres:5432/catch?sslmode=disable
+      ELECTRIC_INSECURE: 'true'
+    ports:
+      - '3001:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
