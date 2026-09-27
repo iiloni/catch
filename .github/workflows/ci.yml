@@ -20,12 +20,6 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: postgres://catch:catch@localhost:5432/catch
-      ELECTRIC_URL: http://localhost:3001
-      BETTER_AUTH_URL: http://localhost:3000
-      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
-      TRUSTED_ORIGINS: http://localhost:5173
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -34,10 +28,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: docker compose -f docker-compose.dev.yml up -d --wait
-      - run: pnpm db:migrate
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      # Exercises the same worktree stack developers and agents use.
+      - run: ./scripts/dev.sh up
+      - run: ./scripts/dev.sh e2e
+      - if: failure()
+        run: ./scripts/dev.sh logs-once
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

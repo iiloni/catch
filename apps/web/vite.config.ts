@@ -42,6 +42,10 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
+    // Set by docker-compose.dev.yml so worktree stacks are reachable from the host
+    // and over Tailscale.
+    host: process.env.CATCH_DEV_HOST,
+    allowedHosts: process.env.CATCH_DEV_ALLOWED_HOSTS?.split(','),
     proxy: { '/api': 'http://localhost:3000' },
   },
   test: {

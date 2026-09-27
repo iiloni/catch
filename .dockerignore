@@ -4,5 +4,6 @@
 apps/web/android
 .git
 .env
+.env.worktree
 test-results
 playwright-report

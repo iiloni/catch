@@ -1,20 +1,33 @@
 # Self-hosted deployment. Copy .env.example to .env and set BETTER_AUTH_SECRET,
-# BETTER_AUTH_URL (your public URL) and POSTGRES_PASSWORD first.
+# BETTER_AUTH_URL (your public URL), POSTGRES_PASSWORD and ELECTRIC_SECRET first.
+# Development uses this file plus docker-compose.dev.yml through scripts/dev.sh.
 name: catch
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: production
     restart: unless-stopped
     ports:
-      - '${CATCH_PORT:-3000}:3000'
+      - '${CATCH_BIND_ADDRESS:-0.0.0.0}:${CATCH_PORT:-3000}:3000'
     environment:
       DATABASE_URL: postgres://catch:${POSTGRES_PASSWORD:-catch}@postgres:5432/catch
       ELECTRIC_URL: http://electric:3000
       ELECTRIC_SECRET: ${ELECTRIC_SECRET:-change-me}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     depends_on:
       postgres:
         condition: service_healthy

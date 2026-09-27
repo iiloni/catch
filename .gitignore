@@ -4,6 +4,7 @@ dev-dist/
 coverage/
 .env
 .env.local
+.env.worktree
 *.tsbuildinfo
 .tanstack/
 test-results/

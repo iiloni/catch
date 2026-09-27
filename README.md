@@ -15,19 +15,18 @@ app requires it. The first account you create becomes the instance admin.
 
 ## Development
 
-Requires Node 24, pnpm (via `corepack enable`) and Docker.
+Requires Docker and, for end-to-end tests and editor support on the host, Node 24 and pnpm
+(`corepack enable`).
 
 ```bash
-pnpm install
-cp .env.example .env
-pnpm db:up && pnpm db:migrate
-pnpm dev               # http://localhost:5173
-pnpm check             # lint, typecheck, test, build
-pnpm e2e               # Playwright end-to-end tests
+./scripts/dev.sh up    # isolated stack for this checkout; prints its URL
+./scripts/dev.sh check # lint, typecheck, test, build
+pnpm install && ./scripts/dev.sh e2e
 ```
 
-See [AGENTS.md](AGENTS.md) for architecture and conventions, and
-[docs/decisions](docs/decisions) for why the stack looks the way it does.
+Each Git worktree gets its own stack, so several branches can run side by side; see
+[WORKTREES.md](WORKTREES.md). See [AGENTS.md](AGENTS.md) for architecture and conventions,
+and [docs/decisions](docs/decisions) for why the stack looks the way it does.
 
 ## Android
 

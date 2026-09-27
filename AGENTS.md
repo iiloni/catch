@@ -18,17 +18,29 @@ longer holds, update it in the same change rather than working around it.
 
 ## Commands
 
-Run from the repo root.
+Development runs in Docker, one isolated stack per Git worktree (see `WORKTREES.md`).
+Always go through `./scripts/dev.sh` from the checkout you are working in; it targets that
+checkout's stack. Never hard-code container or project names.
 
-- `pnpm check`: lint, typecheck, unit tests, build. **Must pass before you finish.**
-- `pnpm db:up`, then `pnpm db:migrate`: start Postgres + Electric in Docker and apply migrations.
-- `pnpm dev`: API on :3000 and web on :5173 (Vite proxies `/api` to the API).
-- `pnpm e2e`: Playwright tests (needs `pnpm db:up`; starts `pnpm dev` if it is not running).
-- `pnpm db:generate`: create a migration after editing `apps/server/src/db/schema.ts`. Commit the generated SQL.
-- `pnpm format`: apply Biome formatting and import sorting.
-- `pnpm --filter @catch/web android:sync`: build the web app and copy it into the Android project.
+- `./scripts/dev.sh up`: start this worktree's stack and print its URL. Hot reload is on.
+- `./scripts/dev.sh check`: lint, typecheck, unit tests, build. **Must pass before you finish.**
+- `./scripts/dev.sh e2e`: Playwright tests against this worktree's stack.
+- `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
+  Commit the generated SQL and journal.
+- `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
+- `pnpm format` (host): apply Biome formatting and import sorting.
+- `pnpm --filter @catch/web android:sync` (host): build the web app into the Android project.
 
-Copy `.env.example` to `.env` for local development.
+Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.
+
+### Working in parallel
+
+- Start new work in its own worktree: `./scripts/worktree.sh create <branch>`, then
+  `./scripts/dev.sh up` inside it.
+- Only one agent should change the database schema at a time (Drizzle migrations are
+  numbered; see `WORKTREES.md`).
+- When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
+  from inside the worktree. It refuses to delete uncommitted work.
 
 ## How data flows
 
@@ -60,6 +72,9 @@ write routes that return `{ txid }`, then add a collection.
 - Keep comments for the *why*; do not narrate the code.
 
 ## Gotchas
+
+- A new workspace package needs its own `node_modules` volume in `docker-compose.dev.yml`,
+  or the container will install dependencies into the bind-mounted checkout.
 
 - `catch` is a Java keyword, so the Android application id is `org.iloni.catchnotes`.
 - The Android app runs on `https://localhost`, a different origin than the server, so all
