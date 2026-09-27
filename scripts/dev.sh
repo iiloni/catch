@@ -63,12 +63,33 @@ install_dependencies() {
     "${compose[@]}" run --rm --no-deps app pnpm install --frozen-lockfile
 }
 
+# Docker creates missing volume mount points inside the bind mount as root,
+# which would block a host `pnpm install`. Create them as the host user first.
+ensure_mount_points() {
+    local dir
+    for dir in "$repo_root" "$repo_root"/apps/* "$repo_root"/packages/*; do
+        [[ -f "$dir/package.json" ]] && mkdir -p "$dir/node_modules"
+    done
+    return 0
+}
+
+fix_permissions() {
+    "${compose[@]}" run --rm --no-deps -u root -v "$repo_root:/cleanup" app sh -c '
+        find /cleanup -path /cleanup/.git -prune -o ! -user "$1" -exec chown "$1:$2" {} +
+    ' sh "$CATCH_UID" "$CATCH_GID"
+}
+
+ensure_mount_points
+
 command=${1:-help}
 [[ $# -eq 0 ]] || shift
 
 case "$command" in
     up)
         "${compose[@]}" build app
+        if [[ -n "$(find "$repo_root" -path "$repo_root/.git" -prune -o ! -user "$CATCH_UID" -print -quit)" ]]; then
+            fix_permissions
+        fi
         install_dependencies
         "${compose[@]}" up -d --wait --remove-orphans "$@"
         show_url
@@ -127,10 +148,8 @@ case "$command" in
         "${compose[@]}" exec postgres psql -U catch -d catch "$@"
         ;;
     fix-permissions)
-        # Git cannot remove a worktree containing directories the host user cannot write.
-        "${compose[@]}" run --rm --no-deps -u root -v "$repo_root:/cleanup" app sh -c '
-            find /cleanup -path /cleanup/.git -prune -o ! -user "$1" -exec chown "$1:$2" {} +
-        ' sh "$CATCH_UID" "$CATCH_GID"
+        # Git cannot remove a worktree containing files the host user does not own.
+        fix_permissions
         ;;
     reset|destroy)
         if ! has_yes_flag "$@" && ! confirm "Delete all Docker volumes for $(env_value COMPOSE_PROJECT_NAME)?"; then
