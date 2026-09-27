@@ -7,28 +7,60 @@
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
+ * Neutrals carry a slight warm tint that matches the brand yellow.
  */
 :root {
   color-scheme: light dark;
   --radius: 0.75rem;
-  --background: light-dark(#fafafa, #121212);
-  --foreground: light-dark(#202124, #e8eaed);
-  --card: light-dark(#ffffff, #1e1e1e);
+  /*
+   * Graphite and legal-pad yellow: the pencil and paper a thought is caught with.
+   * Neutrals are cool pencil-lead greys rather than near-black or cream.
+   */
+  --background: light-dark(oklch(0.955 0.005 255), oklch(0.205 0.008 255));
+  --foreground: light-dark(oklch(0.24 0.015 255), oklch(0.95 0.005 255));
+  --card: light-dark(oklch(1 0 0), oklch(0.255 0.009 255));
   --card-foreground: var(--foreground);
-  --popover: var(--card);
+  --popover: light-dark(oklch(1 0 0), oklch(0.275 0.009 255));
   --popover-foreground: var(--foreground);
-  --primary: light-dark(#202124, #e8eaed);
-  --primary-foreground: light-dark(#ffffff, #121212);
-  --secondary: light-dark(#f1f3f4, #2a2a2a);
+  --primary: var(--foreground);
+  --primary-foreground: var(--background);
+  --secondary: light-dark(oklch(0.925 0.006 255), oklch(0.3 0.009 255));
   --secondary-foreground: var(--foreground);
-  --muted: light-dark(#f1f3f4, #2a2a2a);
-  --muted-foreground: light-dark(#5f6368, #9aa0a6);
-  --accent: light-dark(#fef7e0, #3b3320);
+  --muted: var(--secondary);
+  --muted-foreground: light-dark(oklch(0.52 0.014 255), oklch(0.72 0.01 255));
+  --accent: light-dark(oklch(0.925 0.006 255), oklch(0.32 0.009 255));
   --accent-foreground: var(--foreground);
-  --destructive: light-dark(#d93025, #f28b82);
-  --border: light-dark(#e0e0e0, #3c4043);
+  --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
+  --border: light-dark(oklch(0.885 0.007 255), oklch(0.34 0.009 255));
   --input: var(--border);
-  --ring: light-dark(#f6c343, #e0a800);
+  --ring: var(--brand);
+
+  /* The icon's yellow is the one accent color. */
+  --brand: oklch(0.84 0.155 84);
+  --brand-foreground: oklch(0.28 0.06 80);
+
+  /* Frosted material for the dock, the collapsed header and sheets. */
+  --glass: light-dark(oklch(0.99 0.003 255 / 0.66), oklch(0.29 0.009 255 / 0.6));
+  /* Menus, dialogs and sheets hold text over content, so they need to be thicker. */
+  --glass-thick: light-dark(oklch(0.99 0.003 255 / 0.9), oklch(0.27 0.009 255 / 0.92));
+  --glass-border: light-dark(oklch(0 0 0 / 0.07), oklch(1 0 0 / 0.1));
+  --glass-highlight: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.08));
+  --glass-shadow: light-dark(oklch(0.3 0.03 255 / 0.18), oklch(0.08 0.01 255 / 0.55));
+
+  /*
+   * System bar insets. Capacitor injects --safe-area-inset-* on Android (zero while the
+   * keyboard is open); browsers provide env() on edge-to-edge displays.
+   */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+
+  /* The dock floats above the gesture bar; pages leave room for it. */
+  --dock-height: 4rem;
+  --dock-bottom: calc(max(var(--safe-bottom), 0.75rem) + 0.5rem);
+  --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
+  --header-height: 3.25rem;
 }
 
 :root[data-theme="light"] {
@@ -39,42 +71,73 @@
   color-scheme: dark;
 }
 
-/* Note colors, set with data-note-color on a note card. Matches NOTE_COLORS in @catch/shared. */
+/*
+ * Note colors, set with data-note-color. Matches NOTE_COLORS in @catch/shared.
+ * Hues share one lightness and chroma per theme, so text contrast is the same on
+ * every color.
+ */
 [data-note-color] {
+  --note-bg: light-dark(oklch(0.925 0.06 var(--note-hue, 0)), oklch(0.35 0.07 var(--note-hue, 0)));
+}
+[data-note-color="default"] {
   --note-bg: var(--card);
 }
 [data-note-color="red"] {
-  --note-bg: light-dark(#faafa8, #77172e);
+  --note-hue: 25;
 }
 [data-note-color="orange"] {
-  --note-bg: light-dark(#f39f76, #692b17);
+  --note-hue: 50;
+}
+[data-note-color="amber"] {
+  --note-hue: 72;
 }
 [data-note-color="yellow"] {
-  --note-bg: light-dark(#fff8b8, #7c4a03);
+  --note-bg: light-dark(oklch(0.95 0.085 100), oklch(0.39 0.075 90));
+}
+[data-note-color="lime"] {
+  --note-hue: 125;
 }
 [data-note-color="green"] {
-  --note-bg: light-dark(#e2f6d3, #264d3b);
+  --note-hue: 150;
+}
+[data-note-color="mint"] {
+  --note-hue: 168;
 }
 [data-note-color="teal"] {
-  --note-bg: light-dark(#b4ddd3, #0c625d);
+  --note-hue: 190;
+}
+[data-note-color="cyan"] {
+  --note-hue: 215;
 }
 [data-note-color="blue"] {
-  --note-bg: light-dark(#d4e4ed, #256377);
+  --note-hue: 245;
 }
 [data-note-color="dark-blue"] {
-  --note-bg: light-dark(#aeccdc, #284255);
+  --note-hue: 270;
+}
+[data-note-color="violet"] {
+  --note-hue: 292;
 }
 [data-note-color="purple"] {
-  --note-bg: light-dark(#d3bfdb, #472e5b);
+  --note-hue: 312;
+}
+[data-note-color="magenta"] {
+  --note-hue: 334;
 }
 [data-note-color="pink"] {
-  --note-bg: light-dark(#f6e2dd, #6c394f);
+  --note-hue: 355;
 }
 [data-note-color="brown"] {
-  --note-bg: light-dark(#e9e3d4, #4b443a);
+  --note-bg: light-dark(oklch(0.91 0.03 70), oklch(0.34 0.035 60));
 }
 [data-note-color="gray"] {
-  --note-bg: light-dark(#efeff1, #232427);
+  --note-bg: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
+}
+
+@theme {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Titles: the one place the type is loud. */
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, sans-serif;
 }
 
 @theme inline {
@@ -101,14 +164,60 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-note: var(--note-bg);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+}
+
+@utility glass {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 10px 30px -10px var(--glass-shadow);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-thick {
+  background-color: var(--glass-thick);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 16px 40px -12px var(--glass-shadow);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+/* Glass for full-width bars: a hairline underneath instead of a border and shadow. */
+@utility glass-bar {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--background);
+    backdrop-filter: none;
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
+    overscroll-behavior-y: none;
   }
 }
 
@@ -119,9 +228,29 @@
 .bn-container.note-editor[data-color-scheme] {
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
+  --bn-font-family: var(--font-sans);
 }
 
-/* Room for the drag handle on the left without wasting space on phones. */
+/* The leading heading is the note's title, set like the cards' titles. */
+.bn-container.note-editor [data-content-type="heading"] {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Room for the drag handle, which only exists with a mouse. */
 .bn-container.note-editor .bn-editor {
   padding-inline: 3rem 1rem;
+}
+@media (pointer: coarse) {
+  .bn-container.note-editor .bn-editor {
+    padding-inline: 1.25rem;
+  }
+}
+.note-preview-editor {
+  padding-inline: 3rem 1rem;
+}
+@media (pointer: coarse) {
+  .note-preview-editor {
+    padding-inline: 1.25rem;
+  }
 }

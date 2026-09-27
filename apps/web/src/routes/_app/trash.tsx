@@ -1,7 +1,10 @@
 import { isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
+import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
+import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { notesCollection } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { deleteNoteForever } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
@@ -22,35 +26,43 @@ export const Route = createFileRoute('/_app/trash')({
 function TrashPage() {
   const { open } = useOpenNote();
   const [confirming, setConfirming] = useState(false);
-  const { data: notes = [] } = useLiveQuery({
+  const { data: notes = [], isLoading } = useLiveQuery({
     query: (q) =>
       q.from({ note: notesCollection }).where(({ note }) => not(isNull(note.deletedAt))),
   });
 
   function emptyTrash() {
+    haptics.warning();
     for (const note of notes) deleteNoteForever(note.id);
     setConfirming(false);
   }
 
   return (
-    <section aria-labelledby="trash-heading" className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 id="trash-heading" className="font-semibold text-lg">
-          Trash
-        </h1>
-        {notes.length > 0 && (
-          <Button variant="ghost" onClick={() => setConfirming(true)}>
-            Empty trash
-          </Button>
+    <>
+      <PageHeader
+        title="Trash"
+        leading={<BackToGallery />}
+        trailing={
+          notes.length > 0 && (
+            <Button
+              variant="ghost"
+              className="rounded-full text-destructive"
+              onClick={() => setConfirming(true)}
+            >
+              Empty trash
+            </Button>
+          )
+        }
+      />
+      <section aria-label="Trash" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
+        {isLoading ? null : notes.length > 0 ? (
+          <NoteGrid notes={sortNotes(notes)} onOpen={(note, card) => open(note.id, card)} />
+        ) : (
+          <EmptyState icon={Trash2} title="No notes in the trash.">
+            Notes you move to the trash can be restored until you empty it.
+          </EmptyState>
         )}
-      </div>
-      {notes.length > 0 ? (
-        <NoteGrid notes={sortNotes(notes)} onOpen={(note) => open(note.id)} />
-      ) : (
-        <p className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
-          No notes in the trash.
-        </p>
-      )}
+      </section>
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>
           <DialogTitle>Empty trash?</DialogTitle>
@@ -61,14 +73,16 @@ function TrashPage() {
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
-              <Button variant="ghost">Cancel</Button>
+              <Button variant="ghost" className="rounded-full">
+                Cancel
+              </Button>
             </DialogClose>
-            <Button variant="destructive" onClick={emptyTrash}>
+            <Button variant="destructive" className="rounded-full" onClick={emptyTrash}>
               Empty trash
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }

@@ -14,6 +14,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
+import { Route as AppDeckRouteImport } from './routes/_app/deck'
+import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
 
 const AppRoute = AppRouteImport.update({
@@ -40,6 +42,16 @@ const AppArchiveRoute = AppArchiveRouteImport.update({
   path: '/archive',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDeckRoute = AppDeckRouteImport.update({
+  id: '/deck',
+  path: '/deck',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSearchRoute = AppSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTrashRoute = AppTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
@@ -51,12 +63,16 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/archive': typeof AppArchiveRoute
+  '/deck': typeof AppDeckRoute
+  '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/archive': typeof AppArchiveRoute
+  '/deck': typeof AppDeckRoute
+  '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
   '/': typeof AppIndexRoute
 }
@@ -66,20 +82,25 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_app/archive': typeof AppArchiveRoute
+  '/_app/deck': typeof AppDeckRoute
+  '/_app/search': typeof AppSearchRoute
   '/_app/trash': typeof AppTrashRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/setup' | '/archive' | '/trash'
+  fullPaths:
+    '/' | '/login' | '/setup' | '/archive' | '/deck' | '/search' | '/trash'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/setup' | '/archive' | '/trash' | '/'
+  to: '/login' | '/setup' | '/archive' | '/deck' | '/search' | '/trash' | '/'
   id:
     | '__root__'
     | '/_app'
     | '/login'
     | '/setup'
     | '/_app/archive'
+    | '/_app/deck'
+    | '/_app/search'
     | '/_app/trash'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -127,6 +148,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppArchiveRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/deck': {
+      id: '/_app/deck'
+      path: '/deck'
+      fullPath: '/deck'
+      preLoaderRoute: typeof AppDeckRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/search': {
+      id: '/_app/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AppSearchRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/trash': {
       id: '/_app/trash'
       path: '/trash'
@@ -139,12 +174,16 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppArchiveRoute: typeof AppArchiveRoute
+  AppDeckRoute: typeof AppDeckRoute
+  AppSearchRoute: typeof AppSearchRoute
   AppTrashRoute: typeof AppTrashRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppArchiveRoute: AppArchiveRoute,
+  AppDeckRoute: AppDeckRoute,
+  AppSearchRoute: AppSearchRoute,
   AppTrashRoute: AppTrashRoute,
   AppIndexRoute: AppIndexRoute,
 }

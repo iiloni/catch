@@ -1,4 +1,4 @@
-import { DEFAULT_BOARD_STATUS, type Note, type NoteColor } from '@catch/shared';
+import { blocksHaveContent, DEFAULT_BOARD_STATUS, type Note, type NoteColor } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { notesCollection } from './collections';
@@ -60,8 +60,20 @@ export const deleteNoteForever = (id: string) => notesCollection.delete(id);
 
 export function trashNote(id: string) {
   const transaction = updateNote(id, { deletedAt: new Date() });
-  toast('Note moved to trash', {
+  toast('Moved to trash', {
     action: { label: 'Undo', onClick: () => restoreNote(id) },
   });
   return transaction;
+}
+
+/**
+ * Deletes a note left without content, as Keep does when an editor closes on an empty
+ * note. Returns whether it was discarded.
+ */
+export function discardIfEmpty(id: string) {
+  const note = notesCollection.get(id);
+  if (!note || note.deletedAt || blocksHaveContent(note.content)) return false;
+  notesCollection.delete(id);
+  toast('Empty note discarded');
+  return true;
 }

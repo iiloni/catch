@@ -43,7 +43,7 @@ describe('NoteCard', () => {
     const onOpen = vi.fn();
     renderCard({ onOpen });
     fireEvent.click(screen.getByRole('button', { name: 'Open note' }));
-    expect(onOpen).toHaveBeenCalledWith(note);
+    expect(onOpen).toHaveBeenCalledWith(note, expect.any(HTMLElement));
   });
 
   it('pins and trashes without opening the note', () => {

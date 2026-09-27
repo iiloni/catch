@@ -68,7 +68,9 @@ write routes that return `{ txid }`, then add a collection.
 - TypeScript strict everywhere. No `any`; validate unknown data with Zod.
 - Request and response shapes come from `packages/shared`. Do not redeclare them in an app.
 - Style with Tailwind utilities and the tokens in `apps/web/src/styles.css`. Tokens already
-  handle dark mode via `light-dark()`, so avoid `dark:` variants.
+  handle dark mode via `light-dark()`, so avoid `dark:` variants. The look and motion rules are
+  in `docs/decisions/0003-design-system-and-motion.md`.
+- Trigger haptics through the named events in `apps/web/src/lib/haptics.ts`.
 - Add UI primitives with `pnpm dlx shadcn@latest add <component>` from `apps/web`; they land
   in `src/components/ui` and are ours to edit.
 - Feature components go in `apps/web/src/components/<Name>/<Name>.tsx` with a
@@ -90,5 +92,10 @@ write routes that return `{ txid }`, then add a collection.
 - The Android app runs on `https://localhost`, a different origin than the server, so all
   clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not cookies.
 - Android blocks cleartext HTTP by default, so the Android app needs the server on HTTPS.
+- The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens and
+  leave `--dock-space` at the bottom of pages. A transform or filter on an ancestor breaks the
+  fixed page headers and dock.
+- The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
+  anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts` and route files so
   upgrades stay contained.

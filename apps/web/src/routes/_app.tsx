@@ -1,12 +1,13 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { z } from 'zod';
-import { AppHeader } from '@/components/AppHeader/AppHeader';
+import { Dock } from '@/components/Dock/Dock';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
-import { NoteEditorDialog } from '@/components/NoteEditorDialog/NoteEditorDialog';
+import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
+import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { getAuthToken } from '@/lib/auth';
 import { needsServerUrl } from '@/lib/serverUrl';
 
-/** Signed-in layout: header, page, and the note editor for `?note=<id>`. */
+/** Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`. */
 export const Route = createFileRoute('/_app')({
   validateSearch: z.object({ note: z.string().optional() }),
   beforeLoad: () => {
@@ -20,13 +21,16 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   const { note } = Route.useSearch();
+
   return (
-    <div className="min-h-dvh">
-      <AppHeader />
-      <main className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-6">
+    <>
+      {/* No transform or filter here: either would break the pages' fixed headers. */}
+      <div className="min-h-dvh pb-[var(--dock-space)]">
         <Outlet />
-      </main>
-      <NoteEditorDialog noteId={note} />
-    </div>
+      </div>
+      <QuickNote />
+      <Dock />
+      <NoteEditorOverlay noteId={note} />
+    </>
   );
 }

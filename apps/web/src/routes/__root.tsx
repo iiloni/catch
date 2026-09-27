@@ -1,7 +1,10 @@
 import { createRootRoute, type ErrorComponentProps, Outlet } from '@tanstack/react-router';
+import { MotionConfig } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useBackButton } from '@/lib/backButton';
+import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
 
 export const Route = createRootRoute({
@@ -21,12 +24,19 @@ function RootError({ error, reset }: ErrorComponentProps) {
   );
 }
 
+// Toasts sit just above the dock, near the thumb that triggered them.
+const toastOffset = { bottom: 'calc(var(--dock-bottom) + var(--dock-height) + 0.75rem)' };
+
 function Root() {
   useApplyTheme();
+  useSystemBarsStyle();
+  useBackButton();
   return (
-    <TooltipProvider>
-      <Outlet />
-      <Toaster position="bottom-left" />
-    </TooltipProvider>
+    <MotionConfig reducedMotion="user">
+      <TooltipProvider>
+        <Outlet />
+        <Toaster position="bottom-center" offset={toastOffset} mobileOffset={toastOffset} />
+      </TooltipProvider>
+    </MotionConfig>
   );
 }

@@ -10,9 +10,21 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [x] Gallery sorting by edited or created time.
 - [x] Masonry layout that preserves row-first ordering.
 
+## Done (Android-first redesign, see `docs/decisions/0003-design-system-and-motion.md`)
+- [x] Edge-to-edge layout that respects the status bar, gesture bar and keyboard.
+- [x] Glass dock with Gallery, Deck and Search tabs, a sliding indicator and scrubbing; the Search tab morphs into a search field.
+- [x] Quick-note window above the dock; saved notes fly into their new card.
+- [x] Full-screen editor that grows out of its card and shrinks back, with pull-down to dismiss.
+- [x] Gallery with Pinned and Others, sort options, and Archive and Trash in the title menu; Settings in a sheet behind the avatar.
+- [x] Deck as its own screen: a paged board on phones, with a "Send to gallery" target while dragging.
+- [x] Keyword search on the client, with a color filter and recent searches.
+- [x] 18 note colors on an OKLCH scale; graphite and legal-pad yellow theme.
+- [x] System haptics on Android.
+
 ## Next
 - [ ] Offline persistence for TanStack DB collections and queued offline writes.
-- [ ] Keyword search, then hybrid search (see `docs/decisions/0002-search.md`).
+- [ ] Hybrid search on the server (see `docs/decisions/0002-search.md`); keyword search runs on the client today.
+- [ ] Long-press to select several notes, with actions in the dock.
 - [ ] Markdown import and export.
 
 ## Later
@@ -24,4 +36,4 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [ ] Reorder notes by dragging within the gallery and within board columns.
 
 ## Not planned
-- Desktop app (the PWA covers it), iOS, biometrics, haptics.
+- Desktop app (the PWA covers it), iOS, biometrics.

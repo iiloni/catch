@@ -15,7 +15,7 @@ describe('createNoteSchema', () => {
   });
 
   it('rejects unknown colors', () => {
-    expect(() => createNoteSchema.parse({ id, content: [], color: 'magenta' })).toThrow();
+    expect(() => createNoteSchema.parse({ id, content: [], color: 'chartreuse' })).toThrow();
   });
 });
 

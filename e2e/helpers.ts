@@ -13,9 +13,9 @@ export async function signUp(page: Page) {
   return email;
 }
 
-/** Creates a note through the "Take a note…" composer. */
+/** Creates a note through the quick-note window above the dock. */
 export async function createNote(page: Page, title: string, body?: string) {
-  await page.getByRole('button', { name: 'Take a note…' }).click();
+  await page.getByRole('button', { name: 'New note' }).click();
   // The editor loads lazily; wait until it can take keystrokes.
   await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
   await page.keyboard.type(title);
@@ -23,26 +23,37 @@ export async function createNote(page: Page, title: string, body?: string) {
     await page.keyboard.press('Enter');
     await page.keyboard.type(body);
   }
-  await page
-    .getByRole('region', { name: 'New note' })
-    .getByRole('button', { name: 'Close' })
-    .click();
+  await page.getByRole('button', { name: 'Close new note' }).click();
   await expect(card(page, title)).toBeVisible();
+}
+
+/** Opens Archive or Trash from the Gallery title menu. */
+export async function openGalleryPage(page: Page, name: 'Archive' | 'Trash') {
+  await page.getByRole('button', { name: 'Gallery' }).click();
+  await page.getByRole('menuitem', { name }).click();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+}
+
+export async function backToGallery(page: Page) {
+  await page.getByRole('button', { name: 'Back to Gallery' }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
 }
 
 export function card(page: Page, title: string) {
   return page.getByRole('article').filter({ has: page.getByRole('heading', { name: title }) });
 }
 
-/** Opens a note in the editor dialog and returns the dialog. */
+/** Opens a note in the editor and returns it. */
 export async function openNote(page: Page, title: string) {
   await card(page, title).getByRole('button', { name: 'Open note' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
+  // The editor grows out of the card and swaps in BlockNote once the transition settles.
+  await expect(dialog.locator('[contenteditable]')).toBeVisible();
   return dialog;
 }
 
-/** Runs a toolbar action from the editor dialog, which works on touch and desktop. */
+/** Runs a toolbar action from the editor, which works on touch and desktop. */
 export async function noteAction(page: Page, title: string, action: string) {
   const dialog = await openNote(page, title);
   await dialog.getByRole('button', { name: action }).click();

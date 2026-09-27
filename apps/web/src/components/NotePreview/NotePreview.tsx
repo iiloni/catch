@@ -4,10 +4,17 @@ import { cn } from '@/lib/utils';
 
 type Json = Record<string, unknown>;
 
+type Variant = 'card' | 'editor';
+
 type Props = {
   content: readonly Json[];
   /** Blocks shown before the preview is cut off. */
   maxBlocks?: number;
+  /**
+   * `editor` matches BlockNote's typography, so the editor can show this while it
+   * animates open and swap in the real (heavier) editor once it settles.
+   */
+  variant?: Variant;
   className?: string;
 };
 
@@ -45,7 +52,15 @@ function renderInline(content: unknown, key = 0): ReactNode {
   );
 }
 
-function PreviewBlock({ block, isTitle }: { block: Json; isTitle: boolean }) {
+function PreviewBlock({
+  block,
+  isTitle,
+  variant,
+}: {
+  block: Json;
+  isTitle: boolean;
+  variant: Variant;
+}) {
   const props = isObject(block.props) ? block.props : {};
   const children = Array.isArray(block.children) ? block.children.filter(isObject) : [];
   const inline = renderInline(block.content);
@@ -54,9 +69,17 @@ function PreviewBlock({ block, isTitle }: { block: Json; isTitle: boolean }) {
   switch (block.type) {
     case 'heading':
       body = isTitle ? (
-        <h3 className="font-medium text-base">{inline}</h3>
+        <h3
+          className={cn(
+            variant === 'card'
+              ? 'font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]'
+              : 'font-bold font-display text-[1.3em] leading-normal tracking-[-0.01em]',
+          )}
+        >
+          {inline}
+        </h3>
       ) : (
-        <p className="font-medium">{inline}</p>
+        <p className="font-semibold">{inline}</p>
       );
       break;
     case 'checkListItem': {
@@ -106,7 +129,12 @@ function PreviewBlock({ block, isTitle }: { block: Json; isTitle: boolean }) {
       {children.length > 0 && (
         <div className="pl-4">
           {children.map((child, index) => (
-            <PreviewBlock key={String(child.id ?? index)} block={child} isTitle={false} />
+            <PreviewBlock
+              key={String(child.id ?? index)}
+              block={child}
+              isTitle={false}
+              variant={variant}
+            />
           ))}
         </div>
       )}
@@ -121,17 +149,26 @@ function isEmptyBlock(block: Json) {
 }
 
 /** Read-only rendering of a BlockNote document, light enough for a grid of cards. */
-export function NotePreview({ content, maxBlocks = 12, className }: Props) {
+export function NotePreview({ content, maxBlocks = 10, variant = 'card', className }: Props) {
   const blocks = content.filter((block) => !isEmptyBlock(block));
   const shown = blocks.slice(0, maxBlocks);
 
   return (
-    <div className={cn('flex flex-col gap-1 break-words text-sm', className)}>
+    <div
+      className={cn(
+        'flex flex-col break-words',
+        variant === 'card'
+          ? 'gap-1 text-sm leading-snug'
+          : 'note-preview-editor text-base leading-6 [&>*]:py-[3px]',
+        className,
+      )}
+    >
       {shown.map((block, index) => (
         <PreviewBlock
           key={String(block.id ?? index)}
           block={block}
           isTitle={index === 0 && block.type === 'heading'}
+          variant={variant}
         />
       ))}
       {blocks.length > shown.length && <p className="text-muted-foreground">…</p>}
