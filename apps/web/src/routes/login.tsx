@@ -12,6 +12,12 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 });
 
+// The seeded admin from apps/server/src/db/seed.ts, so dev builds (including the live-reload
+// Android app) sign in with one tap. Production builds strip this.
+const devCredentials = import.meta.env.DEV
+  ? { email: 'admin@example.com', password: 'adminadmin' }
+  : undefined;
+
 function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -45,12 +51,20 @@ function LoginPage() {
       >
         <h1 className="font-bold text-2xl">{mode === 'sign-in' ? 'Sign in' : 'Create account'}</h1>
         {mode === 'sign-up' && <Input name="name" placeholder="Name" aria-label="Name" />}
-        <Input name="email" type="email" required placeholder="Email" aria-label="Email" />
+        <Input
+          name="email"
+          type="email"
+          required
+          defaultValue={devCredentials?.email}
+          placeholder="Email"
+          aria-label="Email"
+        />
         <Input
           name="password"
           type="password"
           required
           minLength={8}
+          defaultValue={devCredentials?.password}
           placeholder="Password"
           aria-label="Password"
         />
