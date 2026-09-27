@@ -30,9 +30,29 @@ and [docs/decisions](docs/decisions) for why the stack looks the way it does.
 
 ## Android
 
+For day-to-day work, open the dev stack's URL in Chrome on the phone (over Tailscale). It is
+the same code the app runs, with hot reload, and `chrome://inspect` gives you DevTools.
+
+To test inside the native app, connect the phone with USB or wireless debugging and run:
+
+```bash
+./scripts/dev.sh up
+./scripts/dev.sh android         # the phone reaches the stack over Tailscale
+./scripts/dev.sh android --usb   # or through adb, without Tailscale on the phone
+```
+
+This installs a debug app whose WebView loads the worktree's Vite server, so web changes
+hot-reload on the phone. Rerun it only after native changes (Capacitor plugins or config,
+anything under `apps/web/android`) or to point the app at another worktree. The app needs the
+stack running (and, with `--usb`, the device connected) while you use it. `chrome://inspect`
+works here too.
+
+The requirements are a JDK 21 and the Android SDK on the host (`JAVA_HOME`, `ANDROID_HOME`).
+Use `adb pair` and `adb connect` for a wireless connection.
+
+A standalone build bundles the web app and asks for your server URL on first launch:
+
 ```bash
 pnpm --filter @catch/web android:sync
 pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDebug
 ```
-
-On first launch the app asks for your server URL.

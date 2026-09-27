@@ -29,6 +29,8 @@ checkout's stack. Never hard-code container or project names.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
 - `pnpm format` (host): apply Biome formatting and import sorting.
+- `./scripts/dev.sh android [--usb]` (host): install a live-reload debug app on a connected
+  phone. It loads this worktree's Vite server, so it only needs rerunning after native changes.
 - `pnpm --filter @catch/web android:sync` (host): build the web app into the Android project.
 
 Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.

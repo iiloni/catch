@@ -141,6 +141,30 @@ case "$command" in
         E2E_BASE_URL="http://localhost:$(env_value CATCH_PORT)" \
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
+    android)
+        # Installs a debug build whose WebView loads this stack's Vite server, so
+        # web changes hot-reload on the phone. Runs on the host (adb, JDK, SDK).
+        command -v adb >/dev/null || { echo "adb not found; install Android platform-tools." >&2; exit 1; }
+        if ! adb devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then
+            echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
+            exit 1
+        fi
+        port=$(env_value CATCH_PORT)
+        host=$(env_value CATCH_PUBLIC_HOST)
+        forward=()
+        if [[ "${1:-}" == "--usb" ]]; then
+            # Reach the dev server through adb instead of Tailscale.
+            shift
+            host=localhost
+            forward=(--forwardPorts "$port:$port")
+        fi
+        [[ -d "$repo_root/node_modules" ]] || pnpm --dir "$repo_root" install
+        # cap sync copies the web build into the APK. Live reload ignores it, so any build will do.
+        [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
+        echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
+        pnpm --dir "$repo_root/apps/web" exec cap run android \
+            --live-reload --host "$host" --port "$port" "${forward[@]}" "$@"
+        ;;
     shell)
         "${compose[@]}" exec app bash
         ;;
@@ -181,6 +205,8 @@ Usage: ./scripts/dev.sh <command>
   test [args]         Unit tests (in the container)
   build               Build all packages (in the container)
   e2e [args]          Playwright tests from the host against this stack
+  android [--usb]     Install a live-reload debug app on a connected Android device
+                      (--usb reaches the dev server via adb instead of Tailscale)
   shell               Open a shell in the app container
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user
