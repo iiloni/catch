@@ -39,6 +39,7 @@ async function ensureDemoNotes(userId: string) {
     DEMO_NOTES.map(({ lines, color, status, isPinned }) => {
       const content = lines.map((text, index) => ({
         type: index === 0 ? 'heading' : 'paragraph',
+        ...(index === 0 ? { props: { level: 3 } } : {}),
         content: [{ type: 'text', text, styles: {} }],
       }));
       return {

@@ -20,6 +20,8 @@ export const notesCollection = createCollection(
       url: `${getServerUrl()}/api/shapes/notes`,
       headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
       columnMapper: snakeCamelMapper(),
+      // Synced rows skip the collection schema, so parse timestamps here.
+      parser: { timestamptz: (value: string) => new Date(value) },
     },
     onInsert: async ({ transaction }) => {
       const results = await Promise.all(

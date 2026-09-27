@@ -52,6 +52,10 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
    REST API, and the API returns the Postgres `txid` so the optimistic state is dropped once
    Electric streams that transaction back.
 4. IDs are UUIDv7 and are generated **on the client** so notes can be created offline.
+5. Note content is BlockNote JSON (`blocks`). The server derives `searchText` from it on
+   write; Markdown only appears at import and export boundaries.
+6. Components call the note actions in `apps/web/src/lib/notes.ts` (pin, archive, trash, ...)
+   rather than mutating the collection directly.
 
 When adding a synced table: add it to the Drizzle schema, generate a migration, add a Zod
 schema to `packages/shared`, add a shape route with a user filter and a column allowlist, add
@@ -76,6 +80,10 @@ write routes that return `{ txid }`, then add a collection.
 - A new workspace package needs its own `node_modules` volume in `docker-compose.dev.yml`,
   or the container will install dependencies into the bind-mounted checkout.
 
+- Electric rows skip the collection's Zod schema, so column types that need parsing (such as
+  `timestamptz` into `Date`) go in the `parser` option in `collections.ts`.
+- BlockNote is lazy-loaded (`LazyNoteEditor`). E2E tests must wait for the editor to be
+  focused before typing.
 - `catch` is a Java keyword, so the Android application id is `org.iloni.catchnotes`.
 - The Android app runs on `https://localhost`, a different origin than the server, so all
   clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not cookies.

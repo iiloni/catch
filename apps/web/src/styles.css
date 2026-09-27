@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* BlockNote's shadcn UI is built from Tailwind classes. */
+@source "../node_modules/@blocknote/shadcn";
+
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
@@ -107,4 +110,18 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+}
+
+/*
+ * BlockNote sits on the note's own color. The extra attribute selector outranks
+ * BlockNote's per-theme variables, which load after this file.
+ */
+.bn-container.note-editor[data-color-scheme] {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: var(--foreground);
+}
+
+/* Room for the drag handle on the left without wasting space on phones. */
+.bn-container.note-editor .bn-editor {
+  padding-inline: 3rem 1rem;
 }
