@@ -3,7 +3,6 @@ import {
   type CollisionDetection,
   DndContext,
   type DragEndEvent,
-  type DragMoveEvent,
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
@@ -41,13 +40,9 @@ const PAGE_EDGE = 0.14;
 const FIRST_TURN_MS = 350;
 const NEXT_TURN_MS = 800;
 
-/** Where the drag's pointer started (touch or mouse); keyboard drags have none. */
-function startX(event: Event | null) {
-  if (event instanceof MouseEvent) return event.clientX;
-  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) {
-    return event.touches[0]?.clientX ?? null;
-  }
-  return null;
+/** The pointer's position on screen from a touch or mouse event. */
+function clientX(event: TouchEvent | MouseEvent) {
+  return 'touches' in event ? (event.touches[0]?.clientX ?? null) : event.clientX;
 }
 
 type Props = {
@@ -68,6 +63,8 @@ export function NoteBoard({ notes, onOpen }: Props) {
   const pageTarget = useRef(0);
   // Which edge the dragged card is held against, and the timer for the next page turn.
   const edge = useRef<{ side: -1 | 0 | 1; timer: number }>({ side: 0, timer: 0 });
+  // Removes the pointer listeners that follow a drag.
+  const unfollow = useRef<() => void>(null);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A long press before dragging keeps touch scrolling (and the pager) working.
@@ -84,6 +81,18 @@ export function NoteBoard({ notes, onOpen }: Props) {
     if (!note) return;
     haptics.longPress();
     setActive({ note, width: event.active.rect.current.initial?.width ?? 280 });
+    // Raw pointer events: dnd-kit's drag delta also counts the pager's own scrolling, so
+    // after a page turn it no longer says where the finger is.
+    const follow = (moveEvent: TouchEvent | MouseEvent) => {
+      const x = clientX(moveEvent);
+      if (x !== null) followPointer(x);
+    };
+    window.addEventListener('touchmove', follow, { passive: true });
+    window.addEventListener('mousemove', follow, { passive: true });
+    unfollow.current = () => {
+      window.removeEventListener('touchmove', follow);
+      window.removeEventListener('mousemove', follow);
+    };
   }
 
   function stopEdgeTurns() {
@@ -91,17 +100,28 @@ export function NoteBoard({ notes, onOpen }: Props) {
     edge.current = { side: 0, timer: 0 };
   }
 
-  // Unmounting mid-drag (say, the tab changes) must not leave a page turn pending.
-  useEffect(() => () => window.clearTimeout(edge.current.timer), []);
+  function endDrag() {
+    unfollow.current?.();
+    unfollow.current = null;
+    stopEdgeTurns();
+    setActive(null);
+  }
+
+  // Unmounting mid-drag (say, the tab changes) must not leave listeners or a turn behind.
+  useEffect(
+    () => () => {
+      unfollow.current?.();
+      window.clearTimeout(edge.current.timer);
+    },
+    [],
+  );
 
   // Holding a card against the pager's side turns one page after a pause, then one more
   // each NEXT_TURN_MS. (dnd-kit's own auto-scroll would race through every column.)
-  function handleDragMove(event: DragMoveEvent) {
+  function followPointer(pointer: number) {
     const element = pager.current;
-    const x = startX(event.activatorEvent);
-    if (!element || x === null || element.scrollWidth <= element.clientWidth) return;
+    if (!element || element.scrollWidth <= element.clientWidth) return;
     const box = element.getBoundingClientRect();
-    const pointer = x + event.delta.x;
     const zone = box.width * PAGE_EDGE;
     const side = pointer < box.left + zone ? -1 : pointer > box.right - zone ? 1 : 0;
     if (side === edge.current.side) return;
@@ -124,8 +144,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    stopEdgeTurns();
-    setActive(null);
+    endDrag();
     const note = notes.find((n) => n.id === event.active.id);
     const target = event.over?.id;
     if (!note || !target) return;
@@ -164,15 +183,11 @@ export function NoteBoard({ notes, onOpen }: Props) {
       sensors={sensors}
       collisionDetection={collisionDetection}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      // Columns turn one at a time (handleDragMove); still scroll up and down on their own.
+      // Columns turn one at a time (followPointer); still scroll up and down on their own.
       autoScroll={{ canScroll: (element) => element !== pager.current }}
       onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => {
-        stopEdgeTurns();
-        setActive(null);
-      }}
+      onDragCancel={endDrag}
     >
       <div
         role="tablist"
