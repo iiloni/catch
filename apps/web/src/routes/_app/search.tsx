@@ -3,7 +3,7 @@ import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Clock, Search, SearchX, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
@@ -53,9 +53,7 @@ function SearchPage() {
   return (
     <>
       <TabPageHeader title="Search" />
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 sm:px-6">
-        <ColorFilter value={color} onChange={setColor} />
-
+      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 pb-16 sm:px-6">
         {!searching ? (
           recent.length > 0 ? (
             <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
@@ -87,7 +85,7 @@ function SearchPage() {
               </ul>
             </section>
           ) : (
-            <EmptyState icon={Search} title="Search your notes">
+            <EmptyState icon={Search}>
               Type a word, or pick a color. Archived notes are included.
             </EmptyState>
           )
@@ -124,6 +122,14 @@ function SearchPage() {
           </EmptyState>
         )}
       </div>
+      <div className="pointer-events-none fixed right-[var(--note-pane)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] left-0 z-30 flex justify-center px-3">
+        <section
+          aria-label="Search filters"
+          className="glass pointer-events-auto min-w-0 w-full max-w-md overflow-hidden rounded-[var(--dock-radius)]"
+        >
+          <ColorFilter value={color} onChange={setColor} />
+        </section>
+      </div>
     </>
   );
 }
@@ -135,8 +141,61 @@ function ColorFilter({
   value: NoteColor | null;
   onChange: (color: NoteColor | null) => void;
 }) {
+  const drag = useRef<{ pointerId: number; x: number; scrollLeft: number; moved: boolean } | null>(
+    null,
+  );
+  const suppressClick = useRef(false);
+
+  function finishDrag() {
+    if (drag.current?.moved) {
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+    }
+    drag.current = null;
+  }
+
   return (
-    <fieldset className="-mx-3 flex min-w-0 items-center gap-1.5 overflow-x-auto px-3 py-1 [scrollbar-width:none]">
+    <fieldset
+      className="flex min-w-0 cursor-grab items-center gap-1.5 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&>button]:cursor-grab [&:active>button]:cursor-grabbing"
+      onPointerDown={(event) => {
+        if (event.pointerType !== 'mouse' || event.button !== 0) return;
+        drag.current = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          scrollLeft: event.currentTarget.scrollLeft,
+          moved: false,
+        };
+      }}
+      onPointerMove={(event) => {
+        const start = drag.current;
+        if (!start || event.pointerId !== start.pointerId) return;
+        if ((event.buttons & 1) === 0) {
+          drag.current = null;
+          return;
+        }
+        const distance = event.clientX - start.x;
+        if (!start.moved && Math.abs(distance) < 5) return;
+        if (!start.moved) {
+          start.moved = true;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        event.currentTarget.scrollLeft = start.scrollLeft - distance;
+        event.preventDefault();
+      }}
+      onPointerLeave={() => {
+        if (drag.current && !drag.current.moved) drag.current = null;
+      }}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onClickCapture={(event) => {
+        if (!suppressClick.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        suppressClick.current = false;
+      }}
+    >
       <legend className="sr-only">Filter by color</legend>
       <AnimatePresence initial={false}>
         {value && (
