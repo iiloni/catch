@@ -528,7 +528,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
         </div>
       </div>
       {/* Cancel sits between the dock and "Send to gallery", nearest the thumb. */}
-      <div className="pointer-events-none fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] left-3 z-50 mx-auto flex max-w-md flex-col gap-2">
+      <div className="pointer-events-none fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.5rem)] left-3 z-50 mx-auto flex max-w-md flex-col gap-2">
         <AnimatePresence>
           {active && (
             <DropZone
@@ -536,7 +536,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
               id={GALLERY_DROP_ID}
               label="Send to gallery"
               icon={LayoutGrid}
-              overClassName="bg-brand text-brand-foreground"
+              overClassName="bg-brand/25"
             />
           )}
           {active && (
@@ -545,7 +545,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
               id={CANCEL_DROP_ID}
               label="Cancel move"
               icon={X}
-              overClassName="bg-foreground text-background"
+              overClassName="bg-foreground/[0.08]"
             >
               Cancel
             </DropZone>
@@ -886,11 +886,24 @@ function DropZone({
       animate={{ opacity: 1, y: 0, scale: isOver ? 1.06 : 1 }}
       exit={{ opacity: 0, y: 24, scale: 0.9 }}
       transition={springs.bouncy}
-      className={cn(
-        'glass pointer-events-auto flex h-14 items-center justify-center gap-2 rounded-full font-medium text-sm',
-        isOver && overClassName,
-      )}
+      className="glass pointer-events-auto relative z-0 flex h-[var(--dock-height)] items-center justify-center gap-2 rounded-[var(--dock-radius)] font-medium text-sm"
     >
+      {/* Lit like the dock's selected tab, so the glass keeps blurring the page behind it. */}
+      <AnimatePresence>
+        {isOver && (
+          <motion.span
+            aria-hidden
+            className={cn(
+              '-z-10 absolute inset-1 rounded-[calc(var(--dock-radius)-0.25rem)] shadow-[inset_0_1px_0_var(--glass-highlight)]',
+              overClassName,
+            )}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={springs.snappy}
+          />
+        )}
+      </AnimatePresence>
       <Icon className="size-5" aria-hidden />
       {children ?? label}
     </motion.section>
