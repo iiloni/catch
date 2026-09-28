@@ -25,7 +25,8 @@ function AppLayout() {
   return (
     <>
       {/* No transform or filter here: either would break the pages' fixed headers. */}
-      <div className="min-h-dvh pb-[var(--dock-space)]">
+      {/* Inert under an open note: the editor is not a modal dialog (the dock stays usable). */}
+      <div className="min-h-dvh pb-[var(--dock-space)]" inert={Boolean(note)}>
         <Outlet />
       </div>
       <QuickNote />

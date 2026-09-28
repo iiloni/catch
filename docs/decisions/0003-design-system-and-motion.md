@@ -21,6 +21,10 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
 button. Archive and Trash live in the Gallery title menu; Settings is a sheet behind the avatar.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
+While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
+pin, deck, archive); the color button grows the dock upward into a palette, and trashing
+lives in the editor's top right. The editor therefore is a non-modal dialog, with the page
+behind it made `inert`.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel
@@ -55,7 +59,8 @@ handling is disabled.
 
 **Formatting on touch.** BlockNote's selection toolbar is turned off on coarse pointers (on
 Android it slides in from the top of the screen). `FormattingBar` takes its place: in the
-quick note's footer, and in the editor's footer while the keyboard is up. It formats through
+quick note's footer, and in the dock (in place of the note's actions) while the keyboard is
+up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
 focus, so the keyboard stays up.
 

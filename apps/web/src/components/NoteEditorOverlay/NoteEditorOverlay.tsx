@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { ChevronLeft, Pin } from 'lucide-react';
+import { ChevronLeft, Trash2 } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -12,19 +12,16 @@ import {
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
-import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
-import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
+import { editorControls, editorNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { useKeyboardOpen } from '@/lib/keyboard';
 import { curves, springs } from '@/lib/motion';
-import { discardIfEmpty, setNotePinned } from '@/lib/notes';
+import { deleteNoteForever, discardIfEmpty, trashNote } from '@/lib/notes';
 import {
   editorProgress,
   hideCard,
@@ -109,10 +106,15 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const targetRef = useRef(target);
   targetRef.current = target;
   const editable = !note.deletedAt;
-  const [controls, setControls] = useState<EditorControls | null>(null);
-  // While typing on a touch screen, the footer trades the note's actions for formatting.
-  const keyboardOpen = useKeyboardOpen();
-  const formatting = keyboardOpen && editable && controls !== null;
+
+  // The dock shows this note's actions (see NoteDock).
+  useEffect(() => editorNote.set(note), [note]);
+  useEffect(
+    () => () => {
+      if (editorNote.get()?.id === note.id) editorNote.set(null);
+    },
+    [note.id],
+  );
 
   // Where the surface morphs from (opening) or to (closing). Null means no card to
   // morph with, so the editor fades instead.
@@ -183,7 +185,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const scrollRef = usePullToDismiss({ dragY, onDismiss: requestClose, enabled: isPresent });
 
   return (
-    <DialogPrimitive.Root open onOpenChange={(open) => !open && requestClose()}>
+    // Not modal: the dock above the editor is its toolbar and must stay usable. The page
+    // behind is made inert instead (see routes/_app.tsx).
+    <DialogPrimitive.Root open modal={false} onOpenChange={(open) => !open && requestClose()}>
       <DialogPrimitive.Portal>
         <motion.div
           aria-hidden
@@ -195,6 +199,16 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           // Focusing the editor would raise the keyboard before the user asks for it.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
+          // Using the dock (or a toast) is not leaving the editor. On touch, Radix checks the
+          // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
+          // detached target counts as ours too.
+          onInteractOutside={(event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (!target.isConnected || target.closest('[data-dock], [data-sonner-toaster]')) {
+              event.preventDefault();
+            }
+          }}
         >
           <motion.div
             data-note-color={note.color}
@@ -244,31 +258,30 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 <div className="flex flex-1 justify-center">
                   <SaveStatus state={state} updatedAt={note.updatedAt} />
                 </div>
-                {editable && !note.isArchived ? (
-                  <IconButton
-                    label={note.isPinned ? 'Unpin' : 'Pin'}
-                    onClick={() => {
-                      haptics.toggle();
-                      setNotePinned(note.id, !note.isPinned);
-                    }}
-                    className="size-10 [&_svg]:size-5"
-                  >
-                    <Pin className={cn(note.isPinned && 'fill-current')} />
-                  </IconButton>
-                ) : (
-                  <span className="size-10" />
-                )}
+                <IconButton
+                  label={editable ? 'Move to trash' : 'Delete forever'}
+                  onClick={() => {
+                    haptics.warning();
+                    if (editable) trashNote(note.id);
+                    else deleteNoteForever(note.id);
+                    requestClose();
+                  }}
+                  className="size-10 text-destructive hover:text-destructive [&_svg]:size-6"
+                >
+                  <Trash2 />
+                </IconButton>
               </header>
 
               <div
                 ref={scrollRef}
-                className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 pb-6"
+                // Room to scroll the last lines clear of the dock (and keyboard) floating above.
+                className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 pb-[var(--dock-space)]"
               >
                 {settled ? (
                   <LazyNoteEditor
                     initialContent={note.content}
                     onChange={save}
-                    onControls={setControls}
+                    onControls={editorControls.set}
                     editable={editable}
                     fallback={
                       <NotePreview content={note.content} maxBlocks={200} variant="editor" />
@@ -278,46 +291,6 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   <NotePreview content={note.content} maxBlocks={200} variant="editor" />
                 )}
               </div>
-
-              <footer
-                className={cn(
-                  'relative flex h-[calc(2.875rem+var(--footer-inset))] shrink-0 items-start overflow-hidden border-foreground/10 border-t px-2 pt-1.5',
-                  // Rides on top of the keyboard, in step with it.
-                  target.radius === 0
-                    ? '[--footer-inset:calc(max(var(--safe-bottom),var(--keyboard),0.25rem)+0.25rem)]'
-                    : '[--footer-inset:0.375rem]',
-                )}
-              >
-                <AnimatePresence initial={false} mode="popLayout">
-                  {formatting ? (
-                    <motion.div
-                      key="format"
-                      className="flex w-full justify-center"
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 14 }}
-                      transition={springs.snappy}
-                    >
-                      <FormattingBar controls={controls} className="[&_button]:size-10" />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="actions"
-                      className="flex w-full"
-                      initial={{ opacity: 0, y: -14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -14 }}
-                      transition={springs.snappy}
-                    >
-                      <NoteToolbar
-                        note={note}
-                        onDone={requestClose}
-                        className="w-full justify-around [&_button]:size-10 [&_svg]:size-5"
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </footer>
             </motion.div>
           </motion.div>
         </DialogPrimitive.Content>

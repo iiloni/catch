@@ -1,3 +1,5 @@
+import type { Note } from '@catch/shared';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { createStore } from './store';
 
 /**
@@ -43,3 +45,10 @@ export function pageTransition(from: string | undefined, to: string): ['forward'
   if (quickNote.get() === 'open') return false;
   return [toOrder > fromOrder ? 'forward' : 'back'];
 }
+
+/**
+ * The note shown in the editor, and a handle on its editor. While a note is open the dock
+ * becomes its toolbar (and its formatting bar while typing); the editor publishes these.
+ */
+export const editorNote = createStore<Note | null>(null);
+export const editorControls = createStore<EditorControls | null>(null);

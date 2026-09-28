@@ -2,10 +2,10 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Check, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
+import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { useBackHandler } from '@/lib/backButton';
 import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { keyboardHeight } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
 import { cn } from '@/lib/utils';
@@ -18,16 +18,19 @@ const TABS = [
 
 /**
  * Floating glass tab bar with a detached compose button. On the Search tab the tabs
- * give way to a search field that fills the whole dock.
+ * give way to a search field that fills the whole dock; while a note is open they give way
+ * to the note's toolbar (NoteDock).
  */
 export function Dock() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const noteOpen = useRouterState({
+    select: (state) => Boolean((state.location.search as { note?: string }).note),
+  });
   const tab = tabFor(pathname);
-  const searching = tab === '/search';
+  const mode = noteOpen ? 'note' : tab === '/search' ? 'search' : 'tabs';
   const inputRef = useRef<HTMLInputElement>(null);
-  // The dock slides away while a note is open in the editor, from above the keyboard if
-  // that is where it sits.
-  const y = useTransform(() => editorProgress.get() * (160 + keyboardHeight.get()));
+  // Above the editor while it is open or animating, below sheets and menus otherwise.
+  const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
 
   useEffect(() => {
     if (tab !== '/search') lastBrowsingTab.set(tab);
@@ -36,15 +39,16 @@ export function Dock() {
 
   return (
     <motion.div
-      style={{ y }}
-      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-40 flex justify-center px-3 [view-transition-name:dock]"
+      data-dock
+      style={{ zIndex }}
+      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center px-3 [view-transition-name:dock]"
     >
       <LayoutGroup id="dock">
         <div className="pointer-events-auto flex w-full max-w-md items-center">
-          <div className="glass relative h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
-            <SearchField inputRef={inputRef} active={searching} />
+          <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
+            <SearchField inputRef={inputRef} active={mode === 'search'} />
             <AnimatePresence initial={false}>
-              {!searching && (
+              {mode === 'tabs' && (
                 <Tabs
                   key="tabs"
                   active={tab}
@@ -52,10 +56,11 @@ export function Dock() {
                   onSearch={() => inputRef.current?.focus()}
                 />
               )}
+              {mode === 'note' && <NoteDock key="note" />}
             </AnimatePresence>
           </div>
           <AnimatePresence initial={false}>
-            {!searching && <ComposeButton key="compose" />}
+            {mode === 'tabs' && <ComposeButton key="compose" />}
           </AnimatePresence>
         </div>
       </LayoutGroup>
@@ -131,7 +136,7 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
     <motion.nav
       ref={ref}
       aria-label="Main"
-      className="absolute inset-0 grid touch-none select-none grid-cols-3 p-1"
+      className="absolute inset-x-0 bottom-0 grid h-[var(--dock-height)] touch-none select-none grid-cols-3 p-1"
       style={{ pointerEvents: isPresent ? undefined : 'none' }}
       initial={{ opacity: 0, scale: 0.92, filter: 'blur(6px)' }}
       animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
@@ -212,7 +217,7 @@ function SearchField({
   return (
     <div
       className={cn(
-        'absolute inset-0 flex items-center gap-2 pr-1.5 pl-4',
+        'absolute inset-x-0 bottom-0 flex h-[var(--dock-height)] items-center gap-2 pr-1.5 pl-4',
         !active && 'pointer-events-none',
       )}
     >

@@ -53,10 +53,15 @@ export async function openNote(page: Page, title: string) {
   return dialog;
 }
 
-/** Runs a toolbar action from the editor, which works on touch and desktop. */
+/** The open note's toolbar, which the dock turns into while the editor is open. */
+export function noteToolbar(page: Page) {
+  return page.getByRole('toolbar', { name: 'Note actions' });
+}
+
+/** Runs a note action from the editor (its header) or the dock's note toolbar. */
 export async function noteAction(page: Page, title: string, action: string) {
   const dialog = await openNote(page, title);
-  await dialog.getByRole('button', { name: action }).click();
+  await dialog.or(noteToolbar(page)).getByRole('button', { name: action, exact: true }).click();
   return dialog;
 }
 

@@ -4,6 +4,7 @@ import {
   card,
   createNote,
   noteAction,
+  noteToolbar,
   openGalleryPage,
   openNote,
   signUp,
@@ -144,10 +145,11 @@ test('color and pin', async ({ page }) => {
   await createNote(page, 'Second');
 
   const dialog = await openNote(page, 'First');
-  await dialog.getByRole('button', { name: 'Background color' }).click();
+  // The palette grows out of the dock rather than opening a popup.
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
   await page.getByRole('button', { name: 'Teal' }).click();
-  await page.keyboard.press('Escape');
-  await dialog.getByRole('button', { name: 'Pin', exact: true }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(noteToolbar(page).getByRole('button', { name: 'Unpin' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
 
   await expect(card(page, 'First')).toHaveAttribute('data-note-color', 'teal');

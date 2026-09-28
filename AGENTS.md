@@ -100,5 +100,9 @@ write routes that return `{ txid }`, then add a collection.
   fixed page headers and dock.
 - The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
   anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
+- While a note is open, its actions live in the dock (`NoteDock`), outside the editor dialog.
+  The dialog is non-modal and ignores interactions inside `[data-dock]`; the page behind is
+  `inert`. The editor publishes its note and controls through `editorNote`/`editorControls`
+  in `lib/dockState.ts`.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts` and route files so
   upgrades stay contained.
