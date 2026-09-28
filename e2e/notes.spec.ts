@@ -743,3 +743,109 @@ test('archived and trashed notes are selected, unarchived, restored and deleted'
   await openGalleryPage(page, 'Archive');
   await expect(card(page, 'Two')).toBeVisible();
 });
+
+/** A deck card's draggable cell, which also holds the check that selects it. */
+function boardCell(page: Page, title: string) {
+  return page
+    .locator('[data-board-card]')
+    .filter({ has: page.getByRole('heading', { name: title }) });
+}
+
+test('selected deck notes move together as a stack, or stay put when cancelled', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Board drag uses a mouse; the touch version is below.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) {
+    await createNote(page, title);
+    await noteAction(page, title, 'Add to deck');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  }
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await waitForPageTransition(page);
+  const newColumn = page.getByRole('region', { name: 'New column' });
+  const holdColumn = page.getByRole('region', { name: 'On hold column' });
+  const order = (column: typeof newColumn) =>
+    column.locator('[data-board-card]:visible article').getByRole('heading').allTextContents();
+  await expect.poll(() => order(newColumn)).toEqual(['Three', 'Two', 'One']);
+
+  for (const title of ['Three', 'One']) {
+    await boardCell(page, title).hover();
+    await boardCell(page, title).getByRole('button', { name: 'Select note' }).click();
+  }
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  async function dragStack(to: () => Promise<{ x: number; y: number }>) {
+    const source = await boardCell(page, 'One').boundingBox();
+    if (!source) throw new Error('Missing source card');
+    await page.mouse.move(source.x + source.width / 2, source.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + 40, { steps: 5 });
+    await expect(page.getByLabel('2 notes', { exact: true })).toBeVisible();
+    // The rest of the selection leaves its column for the stack.
+    await expect.poll(() => order(newColumn)).toEqual(['Two']);
+    const point = await to();
+    await page.mouse.move(point.x, point.y, { steps: 15 });
+    await page.mouse.up();
+    await expect(page.getByRole('region', { name: 'Cancel move' })).toBeHidden();
+  }
+
+  const cancel = page.getByRole('region', { name: 'Cancel move' });
+  await dragStack(async () => {
+    const box = await cancel.boundingBox();
+    if (!box) throw new Error('Missing cancel target');
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  });
+  await expect.poll(() => order(newColumn)).toEqual(['Three', 'Two', 'One']);
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  await dragStack(async () => {
+    const box = await holdColumn.boundingBox();
+    if (!box) throw new Error('Missing destination');
+    return { x: box.x + box.width / 2, y: box.y + 80 };
+  });
+  await expect.poll(() => order(holdColumn)).toEqual(['Three', 'One']);
+  await expect.poll(() => order(newColumn)).toEqual(['Two']);
+  // Moving the stack is done with the selection.
+  await expect(toolbar).toBeHidden();
+  await page.reload();
+  await expect.poll(() => order(holdColumn)).toEqual(['Three', 'One']);
+
+  await boardCell(page, 'Three').hover();
+  await boardCell(page, 'Three').getByRole('button', { name: 'Select note' }).click();
+  await toolbar.getByRole('button', { name: 'Send to gallery' }).click();
+  await expect.poll(() => order(holdColumn)).toEqual(['One']);
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await expect(card(page, 'Three')).toBeVisible();
+});
+
+test('a long press selects deck notes, and taps add more', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Long press is a touch gesture.');
+  await signUp(page);
+  for (const title of ['One', 'Two']) {
+    await createNote(page, title);
+    await noteAction(page, title, 'Add to deck');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  }
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await waitForPageTransition(page);
+
+  const box = await boardCell(page, 'One').boundingBox();
+  if (!box) throw new Error('Missing card');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: box.x + box.width / 2, y: box.y + 20 }],
+  });
+  await page.waitForTimeout(400);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  await expect(page.getByLabel('1 selected')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  const two = card(page, 'Two').getByRole('button', { name: 'Select note' });
+  await two.tap();
+  await expect(two).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+});

@@ -6,6 +6,7 @@ import {
   deleteNotesForever,
   duplicateNotes,
   restoreNotes,
+  sendNotesToGallery,
   setNotesColor,
   trashNotes,
   unarchiveNotes,
@@ -72,6 +73,15 @@ describe('SelectionToolbar', () => {
       'aria-pressed',
       'false',
     );
+  });
+
+  it('sends deck notes back to the gallery', () => {
+    const onDone = vi.fn();
+    render(<SelectionToolbar notes={notes} place="deck" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send to gallery' }));
+    expect(sendNotesToGallery).toHaveBeenCalledWith(notes);
+    expect(onDone).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
   });
 
   it('unarchives in the archive', () => {

@@ -74,23 +74,40 @@ export function moveNote(id: string, others: readonly Note[], index: number) {
   });
 }
 
-function positionForMove(others: readonly Note[], index: number) {
+/** The positions a note moved to `index` among `others` must fall between. */
+function boundsForMove(others: readonly Note[], index: number): [string | null, string | null] {
   const before = others[index - 1]?.position ?? null;
   // Skip neighbours that share the position before (two devices can hand out the same one).
   const after =
     others.slice(index).find((note) => before === null || note.position > before)?.position ?? null;
-  return positionBetween(before, after);
+  return [before, after];
 }
 
-/** Places a deck note among its destination column's notes in one synced update. */
-export function moveDeckNote(id: string, status: string, others: readonly Note[], index: number) {
-  const position = positionForMove(others, index);
-  return notesCollection.update(id, (draft) => {
-    if (draft.status !== status) {
-      draft.status = status;
-      draft.updatedAt = new Date();
+function positionForMove(others: readonly Note[], index: number) {
+  return positionBetween(...boundsForMove(others, index));
+}
+
+/**
+ * Places deck notes, in the order given, together at `index` among their destination
+ * column's other notes, in one synced update.
+ */
+export function moveDeckNotes(
+  ids: readonly string[],
+  status: string,
+  others: readonly Note[],
+  index: number,
+) {
+  const positions = positionsBetween(...boundsForMove(others, index), ids.length);
+  const order = new Map(ids.map((id, i) => [id, i]));
+  const now = new Date();
+  return notesCollection.update([...ids], (drafts) => {
+    for (const draft of drafts) {
+      if (draft.status !== status) {
+        draft.status = status;
+        draft.updatedAt = now;
+      }
+      draft.position = positions[order.get(draft.id) ?? -1] ?? draft.position;
     }
-    draft.position = position;
   });
 }
 
@@ -105,6 +122,29 @@ export const setNoteArchived = (id: string, isArchived: boolean) =>
 export const moveNoteToDeck = (id: string) => updateNote(id, { status: DEFAULT_BOARD_STATUS });
 
 export const sendNoteToGallery = (id: string) => updateNote(id, { status: null });
+
+/** Takes deck notes out of the deck. Undo puts each back in its column. */
+export function sendNotesToGallery(notes: readonly Note[]) {
+  const now = new Date();
+  const transaction = notesCollection.update(
+    notes.map((note) => note.id),
+    (drafts) => {
+      for (const draft of drafts) {
+        draft.status = null;
+        draft.updatedAt = now;
+      }
+    },
+  );
+  toast(plural(notes.length, 'Note sent to gallery', 'notes sent to gallery'), {
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        for (const note of notes) updateNote(note.id, { status: note.status });
+      },
+    },
+  });
+  return transaction;
+}
 
 export const restoreNote = (id: string) => updateNote(id, { deletedAt: null });
 

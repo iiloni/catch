@@ -10,21 +10,18 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Check } from 'lucide-react';
-import { AnimatePresence, animate, type MotionValue, motion, motionValue } from 'motion/react';
-import {
-  type PointerEvent,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
+import { animate, type MotionValue, motion, motionValue } from 'motion/react';
+import { useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
+import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { SwipeArchiveCard } from '@/components/SwipeArchiveCard/SwipeArchiveCard';
 import { haptics } from '@/lib/haptics';
+import {
+  LONG_PRESS_MS,
+  LONG_PRESS_TOLERANCE,
+  swallowNextClick,
+  useLongPress,
+} from '@/lib/longPress';
 import { dropIndex, masonry, type Point } from '@/lib/masonry';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -33,12 +30,6 @@ const MIN_COLUMN_WIDTH = 220;
 const GAP = 12;
 /** A held card rides above the page header (30) and the dock (40), below sheets (50). */
 const LIFTED_Z = 45;
-/**
- * A touch held this long without moving further than the tolerance picks a card up and
- * selects it. Both happen together, as in Keep.
- */
-const LONG_PRESS_MS = 250;
-const LONG_PRESS_TOLERANCE = 8;
 
 type Props = {
   notes: Note[];
@@ -81,16 +72,6 @@ type Place = {
   /** Just let go of, so it springs to its slot even if that is where it started. */
   released?: boolean;
 };
-
-/** Stops the click that ends a mouse drag, or a long press without a move, from opening the note. */
-function swallowNextClick() {
-  const swallow = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  window.addEventListener('click', swallow, { capture: true, once: true });
-  window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300);
-}
 
 /**
  * Masonry grid: each note goes to the top of the shortest column, so reading order runs
@@ -391,94 +372,5 @@ function GridCard({
       {card}
       {onSelect && <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />}
     </motion.div>
-  );
-}
-
-/**
- * Pointer handlers that call `onLongPress` when a touch (or pen) is held still. The click
- * that ends the press is swallowed, so it does not also open or toggle the note.
- */
-function useLongPress(onLongPress: (() => void) | undefined) {
-  const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
-  const callback = useRef(onLongPress);
-  callback.current = onLongPress;
-
-  const cancel = useCallback(() => {
-    if (press.current) window.clearTimeout(press.current.timer);
-    press.current = null;
-  }, []);
-  useEffect(() => cancel, [cancel]);
-
-  if (!onLongPress) return {};
-  return {
-    onPointerDown(event: PointerEvent<HTMLElement>) {
-      if (event.pointerType === 'mouse' || !event.isPrimary) return;
-      cancel();
-      const timer = window.setTimeout(() => {
-        press.current = null;
-        swallowNextClick();
-        callback.current?.();
-      }, LONG_PRESS_MS);
-      press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
-    },
-    onPointerMove(event: PointerEvent<HTMLElement>) {
-      const state = press.current;
-      if (state?.pointerId !== event.pointerId) return;
-      const distance = Math.hypot(event.clientX - state.x, event.clientY - state.y);
-      if (distance > LONG_PRESS_TOLERANCE) cancel();
-    },
-    onPointerUp: cancel,
-    onPointerCancel: cancel,
-  };
-}
-
-const CHECK_CLASS =
-  'absolute -top-2 -left-2 z-10 flex size-6 items-center justify-center rounded-full ring-2 ring-background [&_svg]:size-3.5';
-
-/**
- * The check at a card's corner, shown while the note is selected. With a mouse it also
- * appears on hover, as a way to start selecting (touch uses a long press).
- */
-function SelectCheck({
-  selected,
-  onSelect,
-}: {
-  selected: boolean | undefined;
-  onSelect: () => void;
-}) {
-  return (
-    <>
-      {selected === undefined && (
-        <button
-          type="button"
-          aria-label="Select note"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect();
-          }}
-          className={cn(
-            CHECK_CLASS,
-            'cursor-pointer bg-background text-foreground/60 opacity-0 shadow-sm outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:ring-ring/50 group-hover/cell:opacity-100 pointer-coarse:hidden',
-          )}
-        >
-          <Check strokeWidth={3} aria-hidden />
-        </button>
-      )}
-      <AnimatePresence>
-        {selected && (
-          <motion.span
-            key="check"
-            aria-hidden
-            className={cn(CHECK_CLASS, 'pointer-events-none bg-foreground text-background')}
-            initial={{ scale: 0.4, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.4, opacity: 0 }}
-            transition={springs.bouncy}
-          >
-            <Check strokeWidth={3} />
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </>
   );
 }
