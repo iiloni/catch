@@ -11,6 +11,8 @@ export const springs = {
   smooth: { type: 'spring', visualDuration: 0.4, bounce: 0.15 },
   /** Things that should feel thrown, like the quick-note window opening. */
   bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
+  /** The note pane sliding in beside the page. No bounce, which would pull it off the edge. */
+  pane: { type: 'spring', visualDuration: 0.45, bounce: 0 },
 } satisfies Record<string, Transition>;
 
 /**

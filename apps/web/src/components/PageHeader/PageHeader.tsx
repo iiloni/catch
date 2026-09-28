@@ -26,7 +26,7 @@ export function PageHeader({ title, titleAccessory, leading, trailing }: Props) 
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-30 pt-[var(--safe-top)]">
+      <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
         <motion.div
           aria-hidden
           className="glass-bar absolute inset-0"
@@ -70,7 +70,7 @@ export function GalleryHeader({ trailing }: { trailing: ReactNode }) {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-30 pt-[var(--safe-top)]">
+      <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
           <motion.div
             className="absolute top-1 flex h-[50px] items-center"

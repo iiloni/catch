@@ -263,7 +263,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
         }
       }}
       className={cn(
-        'fixed inset-x-0 z-40 mx-auto flex w-[calc(100%-1.5rem)] max-w-md flex-col rounded-[28px] bg-note text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]',
+        'fixed right-[calc(var(--note-pane)+0.75rem)] left-3 z-40 mx-auto flex max-w-md flex-col rounded-[28px] bg-note text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]',
         'bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] max-h-[calc(100dvh-var(--safe-top)-var(--dock-bottom)-var(--dock-height)-2rem)]',
         !isPresent && 'pointer-events-none',
       )}

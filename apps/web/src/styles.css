@@ -70,6 +70,18 @@
   --dock-bottom: calc(max(var(--safe-bottom), var(--keyboard), 0.5rem) + 0.25rem);
   --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
   --header-height: 3.25rem;
+
+  /*
+   * How much of the screen the note pane beside the page covers on wide screens, following it
+   * as it slides (0 without one; src/lib/splitView.ts). Fixed UI over the page leaves it free
+   * with `right: var(--note-pane)` instead of `right: 0`.
+   */
+  --note-pane: 0px;
+}
+
+/* The page's scrollbar would sit at the screen's right edge, beside the note. */
+:root[data-note-pane] {
+  scrollbar-width: none;
 }
 
 :root[data-theme="light"] {

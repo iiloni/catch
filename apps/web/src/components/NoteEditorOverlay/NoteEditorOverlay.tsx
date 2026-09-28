@@ -6,6 +6,7 @@ import {
   animate,
   motion,
   useMotionValue,
+  useMotionValueEvent,
   usePresence,
   useTransform,
 } from 'motion/react';
@@ -19,7 +20,7 @@ import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { curves } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, trashNote } from '@/lib/notes';
 import {
   editorProgress,
@@ -30,6 +31,7 @@ import {
   takeOrigin,
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
+import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
@@ -39,8 +41,11 @@ type Props = {
 };
 
 /**
- * The open note, full screen on phones and a centered panel on wider screens. It grows
- * out of the card that opened it and shrinks back into that card when it closes.
+ * The open note: full screen on phones, a pane beside the page on tablets and unfolded
+ * foldables, and a centered panel on other wide screens. Full screen or as a panel, it grows
+ * out of the card that opened it and shrinks back into that card when it closes. As a pane it
+ * slides in from the screen's edge, and another note fades in over the one it replaces: the
+ * page narrows under the pane, so its cards move and a morph to or from them would chase them.
  */
 export function NoteEditorOverlay({ noteId }: Props) {
   const { close } = useOpenNote();
@@ -62,18 +67,12 @@ export function NoteEditorOverlay({ noteId }: Props) {
   );
 }
 
-/** The editor's rectangle: the whole screen on phones, a centered panel otherwise. */
-function useTargetRect(): Rect {
-  const [viewport, setViewport] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
-  useEffect(() => {
-    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
-
+/** The editor's rectangle: the whole screen on phones, the pane or a centered panel otherwise. */
+function targetRect({ split, listWidth, viewport }: NotePane): Rect {
+  if (split) {
+    const x = listWidth + GUTTER;
+    return { x, y: 0, width: viewport.width - x, height: viewport.height, radius: 0 };
+  }
   if (viewport.width < 640) return { x: 0, y: 0, ...viewport, radius: 0 };
   const width = Math.min(672, viewport.width - 64);
   const height = Math.min(Math.round(viewport.height * 0.85), 820);
@@ -88,6 +87,14 @@ function useTargetRect(): Rect {
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
 
+// Switching notes in the pane overlaps two surfaces, one closing and one opening. The newest
+// one drives `editorProgress`, which the dock follows.
+let leadSurface: object | null = null;
+// Panes sliding away. A note opened meanwhile takes the pane over, so they go at once.
+const leavingPanes = new Set<() => void>();
+/** How long a note takes to fade in over the one it replaces in the pane. */
+const SWAP_MS = 250;
+
 function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const [isPresent, safeToRemove] = usePresence();
   const [, rerender] = useState(0);
@@ -99,9 +106,13 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     onClose();
   };
   const { state, save, flush } = useNoteAutosave(note.id);
-  const target = useTargetRect();
+  const pane = useNotePane();
+  const split = pane.split;
+  const target = targetRect(pane);
   const targetRef = useRef(target);
   targetRef.current = target;
+  const splitRef = useRef(split);
+  splitRef.current = split;
   const editable = !note.deletedAt;
 
   // The dock shows this note's actions (see NoteDock).
@@ -113,38 +124,75 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     [note.id],
   );
 
+  useEffect(() => {
+    if (!split || !isPresent) return;
+    paneNoteId.set(note.id);
+    return () => {
+      if (paneNoteId.get() === note.id) paneNoteId.set(null);
+    };
+  }, [split, isPresent, note.id]);
+
   // Where the surface morphs from (opening) or to (closing). Null means no card to
-  // morph with, so the editor fades instead.
-  const [origin] = useState(() => takeOrigin(note.id));
+  // morph with, so the editor fades instead. A pane never morphs.
+  const [origin] = useState(() => {
+    const rect = takeOrigin(note.id);
+    return split ? null : rect;
+  });
   const cardRect = useRef<Rect | null>(origin);
   const [settled, setSettled] = useState(false);
 
-  const progress = editorProgress;
-  const fade = useMotionValue(origin ? 1 : 0);
+  const progress = useMotionValue(0);
+  const [self] = useState(() => ({}));
+  useMotionValueEvent(progress, 'change', (value) => {
+    if (leadSurface === self) editorProgress.set(value);
+  });
+  useLayoutEffect(() => {
+    leadSurface = self;
+    return () => {
+      if (leadSurface === self) leadSurface = null;
+    };
+  }, [self]);
+  const fade = useMotionValue(origin || split ? 1 : 0);
   const dragY = useMotionValue(0);
+  // In the pane: this note fading in over the one it replaces, and that one's text fading out.
+  const swap = useMotionValue(1);
+  const textFade = useMotionValue(1);
+  // Bumped when the layout changes, so the transforms below recompute at rest too.
+  const layoutTick = useMotionValue(0);
   const dragScale = useTransform(() => 1 - (Math.abs(dragY.get()) / MAX_DRAG) * 0.08);
   // Without a card to morph with, the whole surface (not just its content) fades and
   // settles in, or sinks away, so nothing opaque is left to vanish at the end.
-  const surfaceOpacity = useTransform(() => (cardRect.current ? 1 : fade.get()));
+  const surfaceOpacity = useTransform(() => (cardRect.current ? 1 : fade.get()) * swap.get());
   const scale = useTransform(
     () => dragScale.get() * (cardRect.current ? 1 : 0.94 + 0.06 * fade.get()),
   );
 
   // Container transform: translate the surface so its top-left sits on the card, and
-  // clip it to the card's size. Content is never scaled, so text stays crisp.
+  // clip it to the card's size. Content is never scaled, so text stays crisp. A pane
+  // slides in from the right edge instead. Every value is read up front, so each transform
+  // follows all of them whichever branch it takes.
   const x = useTransform(() => {
+    const p = progress.get();
+    const reveal = paneReveal.get();
+    layoutTick.get();
     const card = cardRect.current;
-    return card ? (1 - progress.get()) * (card.x - targetRef.current.x) : 0;
+    if (splitRef.current) return (1 - reveal) * targetRef.current.width;
+    return card ? (1 - p) * (card.x - targetRef.current.x) : 0;
   });
   const y = useTransform(() => {
+    const p = progress.get();
+    const drag = dragY.get();
+    const faded = fade.get();
+    layoutTick.get();
     const card = cardRect.current;
-    const offset = card ? (1 - progress.get()) * (card.y - targetRef.current.y) : 0;
-    return offset + dragY.get() + (1 - fade.get()) * 48;
+    const offset = card ? (1 - p) * (card.y - targetRef.current.y) : 0;
+    return offset + drag + (1 - faded) * 48;
   });
   const clipPath = useTransform(() => {
     const card = cardRect.current;
     const t = targetRef.current;
     const p = progress.get();
+    layoutTick.get();
     if (!card) return `inset(0px round ${t.radius}px)`;
     const right = Math.max(0, (1 - p) * (t.width - card.width));
     const bottom = Math.max(0, (1 - p) * (t.height - card.height));
@@ -152,20 +200,42 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     return `inset(0px ${right}px ${bottom}px 0px round ${radius}px)`;
   });
   const ghostOpacity = useTransform(() => (cardRect.current ? 1 - progress.get() / 0.35 : 0));
-  const contentOpacity = useTransform(() =>
-    cardRect.current ? (progress.get() - 0.25) / 0.45 : fade.get(),
+  const contentOpacity = useTransform(
+    () => (cardRect.current ? (progress.get() - 0.25) / 0.45 : fade.get()) * textFade.get(),
   );
+  const contentY = useTransform(() => (1 - swap.get()) * 12);
   const backdropOpacity = useTransform(() => progress.get() * 0.35);
 
-  // Open: grow out of the card, then swap the preview for the real editor.
+  // Open: grow out of the card (or slide in as a pane, or fade in over the pane's last note),
+  // then swap the preview for the real editor.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once; the key fixes the note
   useLayoutEffect(() => {
+    if (split) {
+      for (const leave of leavingPanes) leave();
+      progress.set(1);
+      const replacing = paneReveal.get() === 1;
+      if (replacing) swap.set(0);
+      const animation = replacing
+        ? animate(swap, 1, { duration: SWAP_MS / 1000, ease: 'easeOut' })
+        : animate(paneReveal, 1, springs.pane);
+      void animation.then(() => setSettled(true));
+      return;
+    }
     if (origin) hideCard(note.id);
-    progress.set(0);
     const animations = [animate(progress, 1, curves.expand)];
     if (!origin) animations.push(animate(fade, 1, curves.expand));
     void Promise.all(animations).then(() => setSettled(true));
   }, []);
+
+  // Unfolding a foldable with a note open turns it into a pane, which slides into place. Its
+  // card stays in view beside it, marked as open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: recompute when the layout changes
+  useEffect(() => {
+    layoutTick.set(layoutTick.get() + 1);
+    if (!settled || !split || !isPresent) return;
+    showCard(note.id);
+    if (leadSurface === self && paneReveal.get() < 1) animate(paneReveal, 1, springs.pane);
+  }, [settled, split, isPresent, note.id, self, layoutTick, target.x, target.width, target.height]);
 
   // Close (from any cause, including the back gesture): save, drop an empty note, then
   // shrink into the note's card, or fade out when it has none.
@@ -173,6 +243,27 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (isPresent) return;
     flush();
     const discarded = discardIfEmpty(note.id);
+
+    if (splitRef.current) {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        leavingPanes.delete(finish);
+        progress.set(0);
+        safeToRemove();
+      };
+      // Replaced by another note: its text fades out while the new note fades in on top.
+      if (leadSurface !== self) {
+        void animate(textFade, 0, { duration: SWAP_MS / 2000, ease: 'easeOut' });
+        const timer = window.setTimeout(finish, SWAP_MS);
+        return () => window.clearTimeout(timer);
+      }
+      leavingPanes.add(finish);
+      void animate(paneReveal, 0, springs.pane).then(finish);
+      return;
+    }
+
     // Measure a frame later: an action that closed the editor (trash, archive) may be about
     // to take the card off the page, and shrinking into a card that vanishes looks broken.
     const frame = requestAnimationFrame(() => {
@@ -187,24 +278,33 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       if (!cardRect.current) animations.push(animate(fade, 0, curves.collapse));
       void Promise.all(animations).then(() => {
         showCard(note.id);
+        // A pane folded away into full screen leaves no pane behind.
+        if (leadSurface === self) paneReveal.jump(0);
         safeToRemove();
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [isPresent, flush, note.id, dragY, fade, safeToRemove]);
+  }, [isPresent, flush, note.id, progress, dragY, fade, textFade, self, safeToRemove]);
 
-  const scrollRef = useSwipeToDismiss({ dragY, onDismiss: requestClose, enabled: isPresent });
+  // A pane is part of the layout, not a sheet over it, so it does not swipe away.
+  const scrollRef = useSwipeToDismiss({
+    dragY,
+    onDismiss: requestClose,
+    enabled: isPresent && !split,
+  });
 
   return (
     // Not modal: the dock above the editor is its toolbar and must stay usable. The page
     // behind is made inert instead (see routes/_app.tsx).
     <DialogPrimitive.Root open modal={false} onOpenChange={(open) => !open && requestClose()}>
       <DialogPrimitive.Portal>
-        <motion.div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 z-50 bg-black"
-          style={{ opacity: backdropOpacity }}
-        />
+        {!split && (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none fixed inset-0 z-50 bg-black"
+            style={{ opacity: backdropOpacity }}
+          />
+        )}
         <DialogPrimitive.Content
           asChild
           // Focusing the editor would raise the keyboard before the user asks for it.
@@ -212,8 +312,12 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           onCloseAutoFocus={(event) => event.preventDefault()}
           // Using the dock (or a toast) is not leaving the editor. On touch, Radix checks the
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
-          // detached target counts as ours too.
+          // detached target counts as ours too. Beside the page, the page is not outside.
           onInteractOutside={(event) => {
+            if (split) {
+              event.preventDefault();
+              return;
+            }
             const target = event.target;
             if (!(target instanceof Element)) return;
             if (!target.isConnected || target.closest('[data-dock], [data-sonner-toaster]')) {
@@ -256,7 +360,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
             <motion.div
               className="flex min-h-0 flex-1 flex-col"
-              style={{ opacity: contentOpacity }}
+              style={{ opacity: contentOpacity, y: contentY }}
             >
               <header
                 className={cn(

@@ -101,6 +101,10 @@ write routes that return `{ txid }`, then add a collection.
 - A `view-transition-name`, `filter` or `opacity` below 1 on the dock or its ancestors makes a
   backdrop root, and the dock's glass stops blurring the page behind it. The dock is named
   only during a transition (`html:active-view-transition [data-dock]` in `styles.css`).
+- On wide screens an open note sits in a pane beside the page (`lib/splitView.ts`, ADR 0003).
+  Fixed UI over the page spans `left-0 right-[var(--note-pane)]`, not `inset-x-0`, and layout
+  inside a page should follow its own width (container queries, `ResizeObserver`), not the
+  viewport's breakpoints.
 - The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
   anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
 - While a note is open, its actions live in the dock (`NoteDock`), outside the editor dialog.

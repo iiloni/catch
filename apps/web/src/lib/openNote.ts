@@ -16,7 +16,16 @@ export function useOpenNote() {
   /** Opens a note, growing the editor out of `source` (usually the note's card). */
   const open = useCallback(
     (id: string, source?: Element | Rect) => {
+      const current = new URLSearchParams(window.location.search).get('note');
+      if (current === id) return;
       if (source) setOrigin(id, source);
+      // Switching notes (in the pane beside the page) swaps the entry, so back still closes
+      // the note in one step and never walks through every note opened on the way.
+      if (current) {
+        if (current === pushedNoteId) pushedNoteId = id;
+        void navigate({ to: '.', search: (prev) => ({ ...prev, note: id }), replace: true });
+        return;
+      }
       pushedNoteId = id;
       void navigate({ to: '.', search: (prev) => ({ ...prev, note: id }) });
     },
