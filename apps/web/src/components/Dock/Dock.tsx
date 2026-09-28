@@ -37,7 +37,7 @@ export function Dock() {
   return (
     <motion.div
       style={{ y }}
-      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-40 flex justify-center px-3"
+      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-40 flex justify-center px-3 [view-transition-name:dock]"
     >
       <LayoutGroup id="dock">
         <div className="pointer-events-auto flex w-full max-w-md items-center">
@@ -73,6 +73,12 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
   const [pressed, setPressed] = useState<TabPath | null>(null);
   const [pending, setPending] = useState<TabPath | null>(null);
   const shown = pressed ?? pending ?? active;
+
+  // AnimatePresence brings the same instance back if search closes before the tabs finish
+  // leaving, so drop the hold on Search when they return.
+  useEffect(() => {
+    if (isPresent) setPending(null);
+  }, [isPresent]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   function tabAt(clientX: number): TabPath {

@@ -38,6 +38,13 @@ Transitions API, which cannot be interrupted or driven by a finger, and over Mot
 touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instead (its
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
+**Page transitions.** Moving between pages slides them a short way in the direction of
+travel (Gallery, Archive, Trash, Deck, Search, left to right) using the View Transitions API
+with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
+It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
+has its own `view-transition-name` and shows live, so its own animations play on top. Opening a
+note changes only the search params and gets no page transition.
+
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
 keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:
 the WebView never sees the keyboard inset (so it keeps its size), each keyboard animation is

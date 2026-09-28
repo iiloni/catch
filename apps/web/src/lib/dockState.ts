@@ -21,3 +21,25 @@ export function tabFor(pathname: string): TabPath {
 
 /** The tab to return to when search closes. */
 export const lastBrowsingTab = createStore<Exclude<TabPath, '/search'>>('/');
+
+/** Where each page sits left to right, so moving between pages slides the right way. */
+const PAGE_ORDER: Record<string, number> = {
+  '/': 0,
+  '/archive': 0.25,
+  '/trash': 0.5,
+  '/deck': 1,
+  '/search': 2,
+};
+
+/**
+ * The view transition for a navigation: `forward` when moving right through the pages,
+ * `back` when moving left, or false for no page transition (opening a note only changes the
+ * search params and has its own transition; the quick note should not slide with the page).
+ */
+export function pageTransition(from: string | undefined, to: string): ['forward' | 'back'] | false {
+  const fromOrder = from === undefined ? undefined : PAGE_ORDER[from];
+  const toOrder = PAGE_ORDER[to];
+  if (fromOrder === undefined || toOrder === undefined || fromOrder === toOrder) return false;
+  if (quickNote.get() === 'open') return false;
+  return [toOrder > fromOrder ? 'forward' : 'back'];
+}

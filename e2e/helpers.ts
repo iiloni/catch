@@ -59,3 +59,11 @@ export async function noteAction(page: Page, title: string, action: string) {
   await dialog.getByRole('button', { name: action }).click();
   return dialog;
 }
+
+/**
+ * Waits for a page slide to finish. While it runs, the transition's snapshots cover the
+ * page and take pointer input, which raw mouse gestures (unlike clicks) do not retry.
+ */
+export async function waitForPageTransition(page: Page) {
+  await page.waitForFunction(() => !document.documentElement.matches(':active-view-transition'));
+}

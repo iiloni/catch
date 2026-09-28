@@ -7,6 +7,7 @@ import {
   openGalleryPage,
   openNote,
   signUp,
+  waitForPageTransition,
 } from './helpers';
 
 test('notes are created, edited, and synced across tabs', async ({ page, context }) => {
@@ -168,6 +169,7 @@ test('deck board moves notes between columns and back to the gallery', async ({
   const newColumn = page.getByRole('region', { name: 'New column' });
   const holdColumn = page.getByRole('region', { name: 'On hold column' });
   await expect(newColumn.getByText('Ship it')).toBeVisible();
+  await waitForPageTransition(page);
 
   async function drag(from: typeof newColumn, to: typeof newColumn) {
     const source = await from.getByRole('article').first().boundingBox();

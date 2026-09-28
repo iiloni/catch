@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tabFor } from './dockState';
+import { pageTransition, quickNote, tabFor } from './dockState';
 
 describe('tabFor', () => {
   it('files Archive and Trash under the Gallery tab', () => {
@@ -8,5 +8,27 @@ describe('tabFor', () => {
     expect(tabFor('/trash')).toBe('/');
     expect(tabFor('/deck')).toBe('/deck');
     expect(tabFor('/search')).toBe('/search');
+  });
+});
+
+describe('pageTransition', () => {
+  it('slides in tab order', () => {
+    expect(pageTransition('/', '/deck')).toEqual(['forward']);
+    expect(pageTransition('/deck', '/search')).toEqual(['forward']);
+    expect(pageTransition('/search', '/')).toEqual(['back']);
+    expect(pageTransition('/', '/trash')).toEqual(['forward']);
+    expect(pageTransition('/archive', '/')).toEqual(['back']);
+  });
+
+  it('leaves note opens, first loads and other pages alone', () => {
+    expect(pageTransition('/', '/')).toBe(false);
+    expect(pageTransition(undefined, '/')).toBe(false);
+    expect(pageTransition('/login', '/')).toBe(false);
+  });
+
+  it('keeps still while the quick note is open', () => {
+    quickNote.set('open');
+    expect(pageTransition('/', '/deck')).toBe(false);
+    quickNote.set('closed');
   });
 });
