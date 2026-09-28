@@ -225,6 +225,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     const t = targetRef.current;
     const p = progress.get();
     layoutTick.get();
+    // The pane's toolbars and card sit on its left edge, so clipping would cut their shadows.
+    if (splitRef.current) return 'none';
     if (!card) return `inset(0px round ${t.radius}px)`;
     const right = Math.max(0, (1 - p) * (t.width - card.width));
     const bottom = Math.max(0, (1 - p) * (t.height - card.height));
@@ -360,8 +362,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           <motion.div
             data-note-color={note.color}
             className={cn(
-              'fixed z-50 flex flex-col overflow-hidden text-card-foreground outline-none',
-              !split && 'bg-note',
+              'fixed z-50 flex flex-col text-card-foreground outline-none',
+              !split && 'overflow-hidden bg-note',
             )}
             style={{
               left: target.x,
