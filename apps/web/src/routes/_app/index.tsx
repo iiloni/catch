@@ -73,7 +73,7 @@ function GalleryPage() {
       />
       <section
         aria-label="Gallery"
-        className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-3 sm:px-6"
+        className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
         {isLoading ? null : notes.length === 0 ? (
           <EmptyState icon={Lightbulb} title="Catch your first note">
