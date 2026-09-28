@@ -126,6 +126,12 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const fade = useMotionValue(origin ? 1 : 0);
   const dragY = useMotionValue(0);
   const dragScale = useTransform(dragY, [0, 700], [1, 0.72]);
+  // Without a card to morph with, the whole surface (not just its content) fades and
+  // settles in, or sinks away, so nothing opaque is left to vanish at the end.
+  const surfaceOpacity = useTransform(() => (cardRect.current ? 1 : fade.get()));
+  const scale = useTransform(
+    () => dragScale.get() * (cardRect.current ? 1 : 0.94 + 0.06 * fade.get()),
+  );
 
   // Container transform: translate the surface so its top-left sits on the card, and
   // clip it to the card's size. Content is never scaled, so text stays crisp.
@@ -160,7 +166,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (origin) hideCard(note.id);
     progress.set(0);
     const animations = [animate(progress, 1, curves.expand)];
-    if (!origin) animations.push(animate(fade, 1, springs.smooth));
+    if (!origin) animations.push(animate(fade, 1, curves.expand));
     void Promise.all(animations).then(() => setSettled(true));
   }, []);
 
@@ -170,16 +176,24 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (isPresent) return;
     flush();
     const discarded = discardIfEmpty(note.id);
-    cardRect.current = discarded ? null : measureCard(note.id);
-    if (cardRect.current) hideCard(note.id);
-    rerender((n) => n + 1);
+    // Measure a frame later: an action that closed the editor (trash, archive) may be about
+    // to take the card off the page, and shrinking into a card that vanishes looks broken.
+    const frame = requestAnimationFrame(() => {
+      cardRect.current = discarded ? null : measureCard(note.id);
+      if (cardRect.current) hideCard(note.id);
+      rerender((n) => n + 1);
 
-    const animations = [animate(progress, 0, curves.collapse), animate(dragY, 0, curves.collapse)];
-    if (!cardRect.current) animations.push(animate(fade, 0, springs.smooth));
-    void Promise.all(animations).then(() => {
-      showCard(note.id);
-      safeToRemove();
+      const animations = [
+        animate(progress, 0, curves.collapse),
+        animate(dragY, 0, curves.collapse),
+      ];
+      if (!cardRect.current) animations.push(animate(fade, 0, curves.collapse));
+      void Promise.all(animations).then(() => {
+        showCard(note.id);
+        safeToRemove();
+      });
     });
+    return () => cancelAnimationFrame(frame);
   }, [isPresent, flush, note.id, dragY, fade, safeToRemove]);
 
   const scrollRef = usePullToDismiss({ dragY, onDismiss: requestClose, enabled: isPresent });
@@ -221,7 +235,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
               x,
               y,
               clipPath,
-              scale: dragScale,
+              scale,
+              opacity: surfaceOpacity,
               transformOrigin: '50% 20%',
               pointerEvents: isPresent ? 'auto' : 'none',
             }}
