@@ -68,12 +68,28 @@ export function updateNote(id: string, changes: NoteChanges) {
  * without itself. Unlike an edit, this leaves `updatedAt` alone.
  */
 export function moveNote(id: string, others: readonly Note[], index: number) {
+  const position = positionForMove(others, index);
+  return notesCollection.update(id, (draft) => {
+    draft.position = position;
+  });
+}
+
+function positionForMove(others: readonly Note[], index: number) {
   const before = others[index - 1]?.position ?? null;
   // Skip neighbours that share the position before (two devices can hand out the same one).
   const after =
     others.slice(index).find((note) => before === null || note.position > before)?.position ?? null;
-  const position = positionBetween(before, after);
+  return positionBetween(before, after);
+}
+
+/** Places a deck note among its destination column's notes in one synced update. */
+export function moveDeckNote(id: string, status: string, others: readonly Note[], index: number) {
+  const position = positionForMove(others, index);
   return notesCollection.update(id, (draft) => {
+    if (draft.status !== status) {
+      draft.status = status;
+      draft.updatedAt = new Date();
+    }
     draft.position = position;
   });
 }

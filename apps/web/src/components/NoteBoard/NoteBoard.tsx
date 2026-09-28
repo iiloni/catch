@@ -1,8 +1,9 @@
-import { BOARD_COLUMNS, type Note } from '@catch/shared';
+import { BOARD_COLUMNS, comparePositions, type Note } from '@catch/shared';
 import {
   type CollisionDetection,
   DndContext,
   type DragEndEvent,
+  type DragMoveEvent,
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
@@ -22,7 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
-import { sendNoteToGallery, updateNote } from '@/lib/notes';
+import { moveDeckNote, sendNoteToGallery } from '@/lib/notes';
 import { cn } from '@/lib/utils';
 
 const GALLERY_DROP_ID = '__gallery__';
@@ -39,16 +40,36 @@ const PAGE_EDGE = 0.14;
 /** Hold at the edge this long before the first page turn, then between further turns. */
 const FIRST_TURN_MS = 350;
 const NEXT_TURN_MS = 800;
-
-/** The pointer's position on screen from a touch or mouse event. */
-function clientX(event: TouchEvent | MouseEvent) {
-  return 'touches' in event ? (event.touches[0]?.clientX ?? null) : event.clientX;
-}
+const DROP_ANIMATION_MS = 180;
 
 type Props = {
   notes: Note[];
   onOpen: (note: Note, card: HTMLElement) => void;
 };
+
+type Point = { x: number; y: number };
+type DropTarget = { column: string; index: number };
+
+function eventPoint(event: Event): Point | null {
+  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) {
+    const touch = event.touches[0] ?? event.changedTouches[0];
+    return touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+  if (event instanceof MouseEvent) return { x: event.clientX, y: event.clientY };
+  return null;
+}
+
+/** The slot before the first card whose midpoint is below the drag pointer. */
+function dropIndex(column: HTMLElement, y: number, activeId: string) {
+  const cards = [...column.querySelectorAll<HTMLElement>('[data-board-card]')].filter(
+    (card) => card.dataset.boardCard !== activeId,
+  );
+  const index = cards.findIndex((card) => {
+    const rect = card.getBoundingClientRect();
+    return y < rect.top + rect.height / 2;
+  });
+  return index < 0 ? cards.length : index;
+}
 
 /**
  * Kanban board of deck notes. When narrow, each column is a page of a horizontal pager;
@@ -56,7 +77,13 @@ type Props = {
  * gallery" target above the dock.
  */
 export function NoteBoard({ notes, onOpen }: Props) {
-  const [active, setActive] = useState<{ note: Note; width: number } | null>(null);
+  const [active, setActive] = useState<{ note: Note; width: number; height: number } | null>(null);
+  const activeNote = useRef<Note | null>(null);
+  const pointer = useRef<Point | null>(null);
+  const target = useRef<DropTarget | null>(null);
+  const [preview, setPreview] = useState<DropTarget | null>(null);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
+  const settlingTimer = useRef(0);
   const [page, setPage] = useState(0);
   const pager = useRef<HTMLDivElement>(null);
   // The page being shown or scrolled to; `page` lags behind while the pager scrolls.
@@ -76,16 +103,66 @@ export function NoteBoard({ notes, onOpen }: Props) {
   const columnOf = (note: Note) =>
     note.status && COLUMN_IDS.has(note.status) ? note.status : BOARD_COLUMNS[0].id;
 
+  // Position controls the order inside each column, including pinned notes.
+  const ordered = [...notes].sort(
+    (a, b) =>
+      comparePositions(a.position, b.position) || b.createdAt.getTime() - a.createdAt.getTime(),
+  );
+
+  function setDropTarget(next: DropTarget | null) {
+    if (target.current?.column === next?.column && target.current?.index === next?.index) return;
+    target.current = next;
+    setPreview(next);
+  }
+
+  function dropAtPoint(point: Point, note: Note): DropTarget | null {
+    const columns = pager.current?.querySelectorAll<HTMLElement>('[data-board-column]');
+    if (!columns) return null;
+    for (const column of columns) {
+      const rect = column.getBoundingClientRect();
+      if (
+        point.x < rect.left ||
+        point.x > rect.right ||
+        point.y < rect.top ||
+        point.y > rect.bottom
+      )
+        continue;
+      const id = column.dataset.boardColumn;
+      if (id) return { column: id, index: dropIndex(column, point.y, note.id) };
+    }
+    return null;
+  }
+
+  function updateDropTarget(point: Point, note: Note) {
+    setDropTarget(dropAtPoint(point, note));
+  }
+
   function handleDragStart(event: DragStartEvent) {
     const note = notes.find((n) => n.id === event.active.id);
     if (!note) return;
+    window.clearTimeout(settlingTimer.current);
+    setSettlingId(null);
     haptics.longPress();
-    setActive({ note, width: event.active.rect.current.initial?.width ?? 280 });
+    // dnd-kit can call onDragStart before its initial rectangle is measured.
+    const card = [
+      ...(pager.current?.querySelectorAll<HTMLElement>('[data-board-card]') ?? []),
+    ].find((element) => element.dataset.boardCard === note.id);
+    const rect = card?.getBoundingClientRect() ?? event.active.rect.current.initial;
+    setActive({ note, width: rect?.width ?? 280, height: rect?.height ?? 96 });
+    activeNote.current = note;
+    pointer.current = eventPoint(event.activatorEvent);
+    setDropTarget({
+      column: columnOf(note),
+      index: ordered.filter((other) => columnOf(other) === columnOf(note)).indexOf(note),
+    });
     // Raw pointer events: dnd-kit's drag delta also counts the pager's own scrolling, so
     // after a page turn it no longer says where the finger is.
     const follow = (moveEvent: TouchEvent | MouseEvent) => {
-      const x = clientX(moveEvent);
-      if (x !== null) followPointer(x);
+      const point = eventPoint(moveEvent);
+      if (!point) return;
+      pointer.current = point;
+      followPointer(point.x);
+      updateDropTarget(point, note);
     };
     window.addEventListener('touchmove', follow, { passive: true });
     window.addEventListener('mousemove', follow, { passive: true });
@@ -100,11 +177,31 @@ export function NoteBoard({ notes, onOpen }: Props) {
     edge.current = { side: 0, timer: 0 };
   }
 
-  function endDrag() {
+  function endDrag(id?: string) {
     unfollow.current?.();
     unfollow.current = null;
     stopEdgeTurns();
+    activeNote.current = null;
+    pointer.current = null;
+    setDropTarget(null);
     setActive(null);
+    if (id) {
+      // The overlay stays for its drop animation; keep the placed card's controls
+      // visible until hover has settled underneath it.
+      setSettlingId(id);
+      settlingTimer.current = window.setTimeout(() => setSettlingId(null), DROP_ANIMATION_MS + 60);
+    }
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    // Keyboard drags have no pointer events to follow.
+    if (pointer.current || !activeNote.current) return;
+    const rect = event.active.rect.current.translated;
+    if (rect)
+      updateDropTarget(
+        { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        activeNote.current,
+      );
   }
 
   // Unmounting mid-drag (say, the tab changes) must not leave listeners or a turn behind.
@@ -112,6 +209,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
     () => () => {
       unfollow.current?.();
       window.clearTimeout(edge.current.timer);
+      window.clearTimeout(settlingTimer.current);
     },
     [],
   );
@@ -144,16 +242,32 @@ export function NoteBoard({ notes, onOpen }: Props) {
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    endDrag();
     const note = notes.find((n) => n.id === event.active.id);
-    const target = event.over?.id;
-    if (!note || !target) return;
-    if (target === GALLERY_DROP_ID) {
+    const over = event.over?.id;
+    const point =
+      pointer.current ??
+      (event.active.rect.current.translated
+        ? {
+            x:
+              event.active.rect.current.translated.left +
+              event.active.rect.current.translated.width / 2,
+            y:
+              event.active.rect.current.translated.top +
+              event.active.rect.current.translated.height / 2,
+          }
+        : null);
+    const destination = note && point ? dropAtPoint(point, note) : target.current;
+    endDrag(note?.id);
+    if (!note || !over) return;
+    if (over === GALLERY_DROP_ID) {
       haptics.success();
       sendNoteToGallery(note.id);
-    } else if (target !== columnOf(note)) {
+    } else if (COLUMN_IDS.has(String(over)) && destination?.column === over) {
+      const others = ordered.filter((other) => other.id !== note.id && columnOf(other) === over);
+      const from = ordered.filter((other) => columnOf(other) === over).indexOf(note);
+      if (over === columnOf(note) && destination.index === from) return;
       haptics.success();
-      updateNote(note.id, { status: String(target) });
+      moveDeckNote(note.id, String(over), others, destination.index);
     }
   }
 
@@ -176,6 +290,8 @@ export function NoteBoard({ notes, onOpen }: Props) {
     }
     // While dragging, only page turns move the pager, and they set the target themselves.
     if (!active) pageTarget.current = next;
+    else if (pointer.current && activeNote.current)
+      updateDropTarget(pointer.current, activeNote.current);
   }
 
   return (
@@ -186,8 +302,9 @@ export function NoteBoard({ notes, onOpen }: Props) {
       // Columns turn one at a time (followPointer); still scroll up and down on their own.
       autoScroll={{ canScroll: (element) => element !== pager.current }}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
-      onDragCancel={endDrag}
+      onDragCancel={() => endDrag(activeNote.current?.id)}
     >
       {/* Sized by its own width, which a note open beside the page narrows. */}
       <div className="@container">
@@ -219,7 +336,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
               <span className="relative">
                 {column.name}
                 <span className="ml-1.5 text-muted-foreground tabular-nums">
-                  {notes.filter((note) => columnOf(note) === column.id).length}
+                  {ordered.filter((note) => columnOf(note) === column.id).length}
                 </span>
               </span>
             </button>
@@ -235,21 +352,20 @@ export function NoteBoard({ notes, onOpen }: Props) {
               key={column.id}
               id={column.id}
               name={column.name}
-              notes={notes.filter((note) => columnOf(note) === column.id)}
+              notes={ordered.filter((note) => columnOf(note) === column.id)}
+              active={active}
+              preview={preview}
+              settlingId={settlingId}
               onOpen={onOpen}
             />
           ))}
         </div>
       </div>
       <AnimatePresence>{active && <GalleryDropZone key="gallery" />}</AnimatePresence>
-      <DragOverlay dropAnimation={{ duration: 180 }}>
+      <DragOverlay dropAnimation={{ duration: DROP_ANIMATION_MS }}>
         {active && (
           <div style={{ width: active.width }}>
-            <NoteCard
-              note={active.note}
-              withActions={false}
-              className="rotate-2 scale-105 shadow-2xl"
-            />
+            <NoteCard note={active.note} pressable={false} forceHover />
           </div>
         )}
       </DragOverlay>
@@ -261,17 +377,34 @@ function BoardColumn({
   id,
   name,
   notes,
+  active,
+  preview,
+  settlingId,
   onOpen,
 }: {
   id: string;
   name: string;
   notes: Note[];
+  active: { note: Note; height: number } | null;
+  preview: DropTarget | null;
+  settlingId: string | null;
   onOpen: (note: Note, card: HTMLElement) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const shown = [...notes];
+  const activeInColumn = active && notes.some((note) => note.id === active.note.id);
+  if (activeInColumn && preview?.column === id) {
+    shown.splice(
+      shown.findIndex((note) => note.id === active.note.id),
+      1,
+    );
+    shown.splice(preview.index, 0, active.note);
+  }
+  const showPlaceholder = active && preview?.column === id && !activeInColumn;
   return (
     <section
       ref={setNodeRef}
+      data-board-column={id}
       aria-label={`${name} column`}
       className={cn(
         // Large-container radius matches dialogs and empty states; cards inside keep
@@ -287,10 +420,16 @@ function BoardColumn({
           {notes.length}
         </span>
       </h3>
-      {notes.map((note) => (
-        <DraggableNote key={note.id} note={note} onOpen={onOpen} />
+      {shown.map((note, index) => (
+        <div key={note.id}>
+          {showPlaceholder && preview.index === index && <DropPlaceholder height={active.height} />}
+          <DraggableNote note={note} settling={settlingId === note.id} onOpen={onOpen} />
+        </div>
       ))}
-      {notes.length === 0 && (
+      {showPlaceholder && preview.index === shown.length && (
+        <DropPlaceholder height={active.height} />
+      )}
+      {notes.length === 0 && !showPlaceholder && (
         <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
           Drop notes here
         </p>
@@ -299,22 +438,37 @@ function BoardColumn({
   );
 }
 
+function DropPlaceholder({ height }: { height: number }) {
+  return (
+    <div
+      aria-hidden
+      style={{ height }}
+      className="mb-2.5 rounded-2xl border-2 border-brand/60 border-dashed bg-brand/10"
+    />
+  );
+}
+
 function DraggableNote({
   note,
+  settling,
   onOpen,
 }: {
   note: Note;
+  settling: boolean;
   onOpen: (note: Note, card: HTMLElement) => void;
 }) {
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: note.id });
   return (
     <div
       ref={setNodeRef}
+      data-board-card={note.id}
       {...attributes}
       {...listeners}
-      className={cn('touch-manipulation transition-opacity', isDragging && 'opacity-30')}
+      // dnd-kit hides this node during the overlay's drop animation. An opacity
+      // transition would fade it out and back in after release, making it flash.
+      className={cn('touch-manipulation', isDragging && 'opacity-30')}
     >
-      <NoteCard note={note} onOpen={onOpen} />
+      <NoteCard note={note} onOpen={onOpen} forceHover={isDragging || settling} />
     </div>
   );
 }

@@ -16,6 +16,8 @@ type Props = {
   onOpen?: (note: Note, card: HTMLElement) => void;
   /** Hide actions, e.g. while the card is being dragged. */
   withActions?: boolean;
+  /** Keep desktop hover styling while a dragged card settles into place. */
+  forceHover?: boolean;
   /** Shrink slightly while pressed. Off while the card is lifted to be dragged. */
   pressable?: boolean;
   /**
@@ -40,6 +42,7 @@ export function NoteCard({
   note,
   onOpen,
   withActions = true,
+  forceHover = false,
   pressable = true,
   selected,
   onSelect,
@@ -61,6 +64,7 @@ export function NoteCard({
       transition={springs.snappy}
       className={cn(
         'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
+        forceHover && 'shadow-md',
         hidden && 'invisible',
         openBeside && 'ring-2 ring-brand ring-inset',
         className,
@@ -97,7 +101,9 @@ export function NoteCard({
             'absolute top-1.5 right-1.5 size-7 [&_svg]:size-3.5',
             // Only pinned notes show the pin on touch; with a mouse it appears on hover.
             !note.isPinned &&
-              'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden',
+              (forceHover
+                ? 'pointer-coarse:hidden'
+                : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden'),
           )}
         >
           <Pin className={cn(note.isPinned && 'fill-current')} />
@@ -106,7 +112,12 @@ export function NoteCard({
       {actions && (
         <NoteToolbar
           note={note}
-          className="px-2 pb-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:hidden"
+          className={cn(
+            'px-2 pb-1 transition-opacity pointer-coarse:hidden',
+            forceHover
+              ? 'opacity-100'
+              : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100',
+          )}
         />
       )}
     </motion.article>

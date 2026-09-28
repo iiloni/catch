@@ -361,6 +361,122 @@ test('deck board moves notes between columns and back to the gallery', async ({
   await expect(card(page, 'Ship it')).toBeVisible();
 });
 
+test('deck drag reorders within a column and places notes in another', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Board drag uses a mouse; touch dragging is covered manually.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) {
+    await createNote(page, title);
+    await noteAction(page, title, 'Add to deck');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  }
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await waitForPageTransition(page);
+  const newColumn = page.getByRole('region', { name: 'New column' });
+  const progressColumn = page.getByRole('region', { name: 'In progress column' });
+  const order = async (column: typeof newColumn) =>
+    column.getByRole('article').getByRole('heading').allTextContents();
+  await expect.poll(() => order(newColumn)).toEqual(['Three', 'Two', 'One']);
+
+  async function dragAbove(title: string, destination: typeof newColumn, above?: string) {
+    const source = await newColumn.getByRole('article').filter({ hasText: title }).boundingBox();
+    if (!source) throw new Error('Missing source card');
+    await page.mouse.move(source.x + source.width / 2, source.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + 40, { steps: 5 });
+    await expect.poll(() => page.getByRole('article').filter({ hasText: title }).count()).toBe(2);
+    const overlay = await page.getByRole('article').filter({ hasText: title }).last().boundingBox();
+    if (!overlay) throw new Error('Missing dragged card');
+    expect(Math.abs(overlay.width - source.width)).toBeLessThan(1);
+    expect(Math.abs(overlay.height - source.height)).toBeLessThan(1);
+    const held = page.getByRole('article').filter({ hasText: title }).last();
+    const actionsOpacity = () =>
+      held
+        .getByRole('button', { name: 'Send to gallery' })
+        .evaluate((button) => getComputedStyle(button.parentElement as HTMLElement).opacity);
+    await expect.poll(actionsOpacity).toBe('1');
+    expect(
+      await held
+        .getByRole('button', { name: 'Pin' })
+        .evaluate((button) => getComputedStyle(button).opacity),
+    ).toBe('1');
+    const box = above
+      ? await destination.getByRole('article').filter({ hasText: above }).boundingBox()
+      : await destination.boundingBox();
+    if (!box) throw new Error('Missing destination');
+    await page.mouse.move(box.x + box.width / 2, box.y + (above ? 8 : 80), { steps: 15 });
+    const heldShadow = await held.evaluate((article) => getComputedStyle(article).boxShadow);
+    await expect
+      .poll(() =>
+        newColumn
+          .locator('[data-board-card] article')
+          .filter({ hasText: title })
+          .evaluate((article) => getComputedStyle(article).boxShadow),
+      )
+      .toBe(heldShadow);
+    await page.mouse.up();
+    const placed = page.locator('[data-board-card] article').filter({ hasText: title });
+    await expect
+      .poll(() =>
+        placed
+          .getByRole('button', { name: 'Send to gallery' })
+          .evaluate((button) => getComputedStyle(button.parentElement as HTMLElement).opacity),
+      )
+      .toBe('1');
+    await expect
+      .poll(() => placed.evaluate((article) => getComputedStyle(article).boxShadow))
+      .toBe(heldShadow);
+    await expect(page.getByRole('region', { name: 'Send to gallery' })).toBeHidden();
+  }
+
+  await dragAbove('One', newColumn, 'Three');
+  await expect.poll(() => order(newColumn)).toEqual(['One', 'Three', 'Two']);
+  await dragAbove('Two', progressColumn);
+  await expect.poll(() => order(progressColumn)).toEqual(['Two']);
+  await dragAbove('One', progressColumn, 'Two');
+  await expect.poll(() => order(progressColumn)).toEqual(['One', 'Two']);
+  await page.reload();
+  await expect.poll(() => order(newColumn)).toEqual(['Three']);
+  await expect.poll(() => order(progressColumn)).toEqual(['One', 'Two']);
+});
+
+test('a long press reorders deck notes on touch', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Long press is a touch gesture.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) {
+    await createNote(page, title);
+    await noteAction(page, title, 'Add to deck');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  }
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await waitForPageTransition(page);
+  const column = page.getByRole('region', { name: 'New column' });
+  const order = () => column.getByRole('article').getByRole('heading').allTextContents();
+  await expect.poll(order).toEqual(['Three', 'Two', 'One']);
+  const source = await column.getByRole('article').filter({ hasText: 'One' }).boundingBox();
+  const destination = await column.getByRole('article').filter({ hasText: 'Three' }).boundingBox();
+  if (!source || !destination) throw new Error('Missing cards');
+  const from = { x: source.x + source.width / 2, y: source.y + 20 };
+  const to = { x: destination.x + destination.width / 2, y: destination.y + 8 };
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+  await page.waitForTimeout(400);
+  for (let step = 1; step <= 10; step++) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        { x: from.x + ((to.x - from.x) * step) / 10, y: from.y + ((to.y - from.y) * step) / 10 },
+      ],
+    });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(order).toEqual(['One', 'Three', 'Two']);
+  await page.reload();
+  await expect.poll(order).toEqual(['One', 'Three', 'Two']);
+});
+
 /** Gallery card titles in reading order: top to bottom, then left to right. */
 async function galleryOrder(page: Page) {
   const cards = await page.getByRole('article').all();

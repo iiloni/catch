@@ -6,7 +6,6 @@ import { NoteBoard } from '@/components/NoteBoard/NoteBoard';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { notesCollection } from '@/lib/collections';
 import { useOpenNote } from '@/lib/openNote';
-import { sortNotes } from '@/lib/sortNotes';
 
 export const Route = createFileRoute('/_app/deck')({
   component: DeckPage,
@@ -29,7 +28,7 @@ function DeckPage() {
       <PageHeader title="Deck" />
       <div className="mx-auto max-w-7xl pt-3">
         {isLoading ? null : notes.length > 0 ? (
-          <NoteBoard notes={sortNotes(notes)} onOpen={(note, card) => open(note.id, card)} />
+          <NoteBoard notes={notes} onOpen={(note, card) => open(note.id, card)} />
         ) : (
           <EmptyState icon={Columns3} title="No notes in the deck">
             Notes you are working on live here. Choose Deck when catching a note, or add one from

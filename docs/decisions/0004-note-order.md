@@ -32,9 +32,16 @@ reserves the slot nearest to the card's centre (`dropIndex` in `lib/masonry.ts`)
 little hysteresis so it does not flicker between two slots. The held card rides above the
 header and dock and drops back once it lands.
 
+**Deck.** Each column shows notes by position, including pinned notes. The board's existing
+drag gesture also chooses an insertion slot within the destination column. Moving across
+columns updates status and position together; reordering within one column updates position
+only. The same fractional keys work independently in each column because only that column's
+neighbours bound a move.
+
 ## Consequences
 
-- Anything that shows notes in "the user's order" sorts with `sortNotes(notes, 'position')`.
+- The Gallery's custom order uses `sortNotes(notes, 'position')`; the Deck sorts by position
+  without putting pinned notes first, so every card can be rearranged in its column.
 - Keys grow by about one character per six moves into the same gap. `notePositionSchema`
   caps them at 1024 characters, far beyond real use.
 - Cards are absolutely positioned, so nothing in the grid can rely on normal flow; its height
