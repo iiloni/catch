@@ -4,7 +4,9 @@ import { Archive } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
+import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { notesCollection } from '@/lib/collections';
+import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 
@@ -20,13 +22,24 @@ function ArchivePage() {
         .from({ note: notesCollection })
         .where(({ note }) => and(isNull(note.deletedAt), eq(note.isArchived, true))),
   });
+  const sorted = sortNotes(notes);
+  const selection = useNoteSelection(sorted);
 
   return (
     <>
-      <PageHeader title="Archive" leading={<BackToGallery />} />
+      <PageHeader
+        title="Archive"
+        leading={<BackToGallery />}
+        selection={selectionHeader(selection, 'archive')}
+      />
       <section aria-label="Archive" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
         {isLoading ? null : notes.length > 0 ? (
-          <NoteGrid notes={sortNotes(notes)} onOpen={(note, card) => open(note.id, card)} />
+          <NoteGrid
+            notes={sorted}
+            onOpen={(note, card) => open(note.id, card)}
+            selected={selection.ids}
+            onSelect={selection.select}
+          />
         ) : (
           <EmptyState icon={Archive} title="No archived notes">
             Archive a note to keep it out of the gallery without deleting it.

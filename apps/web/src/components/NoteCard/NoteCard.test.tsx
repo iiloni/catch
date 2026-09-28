@@ -57,6 +57,18 @@ describe('NoteCard', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it('toggles selection instead of opening while notes are selected', () => {
+    const onOpen = vi.fn();
+    const onSelect = vi.fn();
+    renderCard({ onOpen, onSelect, selected: false });
+    const card = screen.getByRole('button', { name: 'Select note' });
+    expect(card).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(card);
+    expect(onSelect).toHaveBeenCalledWith(note);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument();
+  });
+
   it('offers restore instead of editing actions for trashed notes', () => {
     renderCard({ note: { ...note, deletedAt: new Date() } });
     expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();

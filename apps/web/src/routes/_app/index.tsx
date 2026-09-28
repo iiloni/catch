@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { GalleryHeader } from '@/components/PageHeader/PageHeader';
+import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { SettingsButton } from '@/components/SettingsSheet/SettingsSheet';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { notesCollection } from '@/lib/collections';
+import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
@@ -55,9 +57,12 @@ function GalleryPage() {
   // Notes can only be dragged into place while they are shown in that order.
   const onMove = sort.field === 'position' ? moveNote : undefined;
 
+  const selection = useNoteSelection(sorted);
+
   return (
     <>
       <GalleryHeader
+        selection={selectionHeader(selection, 'gallery')}
         trailing={
           <>
             <ViewOptions sort={sort} onChange={setSort} />
@@ -82,6 +87,8 @@ function GalleryPage() {
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
                   onMove={onMove}
+                  selected={selection.ids}
+                  onSelect={selection.select}
                 />
               </NoteSection>
             )}
@@ -92,6 +99,8 @@ function GalleryPage() {
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
                   onMove={onMove}
+                  selected={selection.ids}
+                  onSelect={selection.select}
                 />
               </NoteSection>
             )}

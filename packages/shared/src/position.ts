@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
 /**
  * Notes are arranged by `position`, a fractional index: a base-62 string that sorts
@@ -18,4 +18,14 @@ export function comparePositions(a: string, b: string) {
 export function positionBetween(before: string | null, after: string | null): string {
   if (before !== null && after !== null && before >= after) after = null;
   return generateKeyBetween(before, after);
+}
+
+/** `count` positions in order, all between `before` and `after` (as `positionBetween`). */
+export function positionsBetween(
+  before: string | null,
+  after: string | null,
+  count: number,
+): string[] {
+  if (before !== null && after !== null && before >= after) after = null;
+  return generateNKeysBetween(before, after, count);
 }

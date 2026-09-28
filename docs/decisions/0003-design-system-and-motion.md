@@ -31,6 +31,19 @@ pin, deck, archive); the color button grows the dock upward into a palette, and 
 lives in the editor's top right. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
 
+**Header toolbars.** Page controls sit in glass toolbars in the header's top corners (the
+Gallery's sort and settings, Archive and Trash's back button and Empty trash). A toolbar
+grows out of its corner when it gets controls, and when its controls change it animates its
+width (never scale) to fit the new ones while the old ones fade out.
+
+**Selection.** As in Keep, a long press on a card in the Gallery, Archive or Trash selects it
+(in the Gallery, the same press picks it up to rearrange it), and while any note is selected
+a tap selects or deselects one instead of opening it. With a mouse, a check at the card's
+corner appears on hover. A close button with the count takes the top left, and the
+selection's actions (`SelectionToolbar`) take the top right toolbar: color, archive, move to
+trash and copy, with Unarchive in the Archive, and Restore and Delete forever in the Trash.
+Back and Escape end selecting.
+
 **Wide screens.** On tablets and unfolded foldables (at least 672 × 480 px) an open note
 opens in a pane beside the page instead of covering it, as in a list-detail layout. The page
 stays usable: it keeps its own dock (tabs and compose), the note gets a second dock under its

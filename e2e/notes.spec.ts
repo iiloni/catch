@@ -429,3 +429,131 @@ test('a long press picks up a gallery note to move it', async ({ page, isMobile 
   await page.reload();
   await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
 });
+
+/** A card's grid cell, which also holds the check that selects it. */
+function cell(page: Page, title: string) {
+  return page
+    .locator('[data-note-cell]')
+    .filter({ has: page.getByRole('heading', { name: title }) });
+}
+
+/** Selects a note with the check that appears when hovering its card. */
+async function hoverSelect(page: Page, title: string) {
+  await cell(page, title).hover();
+  await cell(page, title).getByRole('button', { name: 'Select note' }).click();
+}
+
+test('a long press starts selecting notes, and taps add more', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Long press is a touch gesture.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+
+  const point = await centerOf(page, 'One');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+  await page.waitForTimeout(400);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByLabel('1 selected')).toBeVisible();
+  // Letting go does not open the note.
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  const two = card(page, 'Two').getByRole('button', { name: 'Select note' });
+  await two.tap();
+  await expect(two).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  await toolbar.getByRole('button', { name: 'Make a copy' }).tap();
+  await expect(toolbar).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
+  await expect(card(page, 'One')).toHaveCount(2);
+  await expect(card(page, 'Two')).toHaveCount(2);
+  await expect(card(page, 'Three')).toHaveCount(1);
+});
+
+test('selected notes are recolored, archived and trashed together', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'The check that starts selecting appears on hover.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+
+  await hoverSelect(page, 'One');
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await expect(toolbar).toBeVisible();
+  await card(page, 'Two').getByRole('button', { name: 'Select note' }).click();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  await toolbar.getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Red' }).click();
+  await expect(card(page, 'One')).toHaveAttribute('data-note-color', 'red');
+  await expect(card(page, 'Two')).toHaveAttribute('data-note-color', 'red');
+  await expect(card(page, 'Three')).toHaveAttribute('data-note-color', 'default');
+  // Escape closes the palette first, and only then ends selecting.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Red' })).toBeHidden();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  await toolbar.getByRole('button', { name: 'Archive' }).click();
+  await expect(card(page, 'One')).toBeHidden();
+  await expect(card(page, 'Two')).toBeHidden();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(card(page, 'One')).toBeVisible();
+  await expect(card(page, 'Two')).toBeVisible();
+
+  await hoverSelect(page, 'Three');
+  await expect(page.getByLabel('1 selected')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(toolbar).toBeHidden();
+
+  await hoverSelect(page, 'Three');
+  await toolbar.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(card(page, 'Three')).toBeHidden();
+  await openGalleryPage(page, 'Trash');
+  await expect(card(page, 'Three')).toBeVisible();
+});
+
+test('archived and trashed notes are selected, unarchived, restored and deleted', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The check that starts selecting appears on hover.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  for (const title of ['One', 'Two']) await hoverSelect(page, title);
+  await toolbar.getByRole('button', { name: 'Archive' }).click();
+  await hoverSelect(page, 'Three');
+  await toolbar.getByRole('button', { name: 'Move to trash' }).click();
+
+  await openGalleryPage(page, 'Archive');
+  await hoverSelect(page, 'One');
+  // Selecting swaps the back button for the count, and grows a toolbar at the top right.
+  await expect(page.getByRole('button', { name: 'Back to Gallery' })).toBeHidden();
+  await toolbar.getByRole('button', { name: 'Unarchive' }).click();
+  await expect(card(page, 'One')).toBeHidden();
+  await expect(toolbar).toBeHidden();
+  await hoverSelect(page, 'Two');
+  await toolbar.getByRole('button', { name: 'Move to trash' }).click();
+  await expect(card(page, 'Two')).toBeHidden();
+
+  await backToGallery(page);
+  await expect(card(page, 'One')).toBeVisible();
+  await openGalleryPage(page, 'Trash');
+  await hoverSelect(page, 'Two');
+  await expect(page.getByRole('button', { name: 'Empty trash' })).toBeHidden();
+  await toolbar.getByRole('button', { name: 'Restore' }).click();
+  await expect(card(page, 'Two')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Empty trash' })).toBeVisible();
+
+  await hoverSelect(page, 'Three');
+  await toolbar.getByRole('button', { name: 'Delete forever' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete forever' }).click();
+  await expect(card(page, 'Three')).toBeHidden();
+  await expect(page.getByText('No notes in the trash.')).toBeVisible();
+
+  // Restoring put the archived note back in the archive.
+  await backToGallery(page);
+  await openGalleryPage(page, 'Archive');
+  await expect(card(page, 'Two')).toBeVisible();
+});

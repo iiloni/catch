@@ -10,8 +10,18 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { animate, type MotionValue, motion, motionValue } from 'motion/react';
-import { useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import { AnimatePresence, animate, type MotionValue, motion, motionValue } from 'motion/react';
+import {
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SwipeArchiveCard } from '@/components/SwipeArchiveCard/SwipeArchiveCard';
 import { haptics } from '@/lib/haptics';
@@ -23,6 +33,12 @@ const MIN_COLUMN_WIDTH = 220;
 const GAP = 12;
 /** A held card rides above the page header (30) and the dock (40), below sheets (50). */
 const LIFTED_Z = 45;
+/**
+ * A touch held this long without moving further than the tolerance picks a card up and
+ * selects it. Both happen together, as in Keep.
+ */
+const LONG_PRESS_MS = 250;
+const LONG_PRESS_TOLERANCE = 8;
 
 type Props = {
   notes: Note[];
@@ -33,6 +49,12 @@ type Props = {
    * other notes, in order, and the index the note was dropped at among them.
    */
   onMove?: (id: string, others: Note[], index: number) => void;
+  /**
+   * The selected notes' ids. With `onSelect`, a long press selects a note and, while any
+   * note is selected, a tap selects or deselects one instead of opening it.
+   */
+  selected?: ReadonlySet<string>;
+  onSelect?: (note: Note, selected: boolean) => void;
 };
 
 /** Two columns on phones (as in Keep), more as space allows. */
@@ -75,7 +97,7 @@ function swallowNextClick() {
  * across rows (first note top-left), as in Keep. Cards are positioned absolutely from
  * their measured heights, which lets them spring out of the way while one is dragged.
  */
-export function NoteGrid({ notes, onOpen, onArchive, onMove }: Props) {
+export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const heights = useRef(new Map<string, number>());
@@ -89,9 +111,13 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove }: Props) {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A long press before dragging keeps touch scrolling (and swiping to archive) working.
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: LONG_PRESS_MS, tolerance: LONG_PRESS_TOLERANCE },
+    }),
     useSensor(KeyboardSensor),
   );
+
+  const selecting = Boolean(onSelect && selected && selected.size > 0);
 
   const columns = columnsFor(width);
   const columnWidth = Math.max(0, (width - GAP * (columns - 1)) / columns);
@@ -253,6 +279,8 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove }: Props) {
             placed={layout !== null}
             lifted={note.id === drag?.id}
             movable={Boolean(onMove)}
+            selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
+            onSelect={onSelect}
             register={register}
             onOpen={onOpen}
             onArchive={onArchive}
@@ -270,6 +298,8 @@ function GridCard({
   placed,
   lifted,
   movable,
+  selected,
+  onSelect,
   register,
   onOpen,
   onArchive,
@@ -280,6 +310,9 @@ function GridCard({
   placed: boolean;
   lifted: boolean;
   movable: boolean;
+  /** Undefined unless notes are being selected. */
+  selected: boolean | undefined;
+  onSelect?: (note: Note, selected: boolean) => void;
   register: (id: string, element: HTMLElement | null) => void;
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive?: (note: Note) => void;
@@ -298,21 +331,48 @@ function GridCard({
     },
     [note.id, register, setNodeRef, setActivatorNodeRef],
   );
-  // dnd-kit re-renders every draggable as the pointer moves; the card itself need not.
-  const card = useMemo(
-    () =>
-      onArchive ? (
-        <SwipeArchiveCard note={note} onOpen={onOpen} onArchive={onArchive} lifted={lifted} />
-      ) : (
-        <NoteCard note={note} onOpen={onOpen} pressable={!lifted} />
-      ),
-    [note, onOpen, onArchive, lifted],
+  const longPress = useLongPress(
+    onSelect &&
+      (() => {
+        // On a movable card the same press picks it up, and that buzzes already.
+        if (!movable) haptics.longPress();
+        onSelect(note, true);
+      }),
   );
+  // dnd-kit re-renders every draggable as the pointer moves; the card itself need not.
+  const card = useMemo(() => {
+    const toggle =
+      onSelect &&
+      ((note: Note) => {
+        haptics.selection();
+        onSelect(note, !selected);
+      });
+    return onArchive ? (
+      <SwipeArchiveCard
+        note={note}
+        onOpen={onOpen}
+        onArchive={onArchive}
+        lifted={lifted}
+        selected={selected}
+        onSelect={toggle}
+      />
+    ) : (
+      <NoteCard
+        note={note}
+        onOpen={onOpen}
+        pressable={!lifted}
+        selected={selected}
+        onSelect={toggle}
+      />
+    );
+  }, [note, onOpen, onArchive, lifted, selected, onSelect]);
 
   return (
     <motion.div
       ref={ref}
+      data-note-cell={note.id}
       {...(movable ? { ...attributes, ...listeners, 'aria-label': 'Move note' } : {})}
+      {...longPress}
       style={{
         x: place.x,
         y: place.y,
@@ -323,12 +383,102 @@ function GridCard({
       animate={{ scale: lifted ? 1.04 : 1 }}
       transition={springs.snappy}
       className={cn(
-        'absolute top-0 left-0 rounded-2xl outline-none transition-shadow focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        movable && 'touch-manipulation select-none [-webkit-touch-callout:none]',
+        'group/cell absolute top-0 left-0 rounded-2xl outline-none transition-shadow focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        (movable || onSelect) && 'touch-manipulation select-none [-webkit-touch-callout:none]',
         lifted && 'shadow-xl',
       )}
     >
       {card}
+      {onSelect && <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />}
     </motion.div>
+  );
+}
+
+/**
+ * Pointer handlers that call `onLongPress` when a touch (or pen) is held still. The click
+ * that ends the press is swallowed, so it does not also open or toggle the note.
+ */
+function useLongPress(onLongPress: (() => void) | undefined) {
+  const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
+  const callback = useRef(onLongPress);
+  callback.current = onLongPress;
+
+  const cancel = useCallback(() => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  }, []);
+  useEffect(() => cancel, [cancel]);
+
+  if (!onLongPress) return {};
+  return {
+    onPointerDown(event: PointerEvent<HTMLElement>) {
+      if (event.pointerType === 'mouse' || !event.isPrimary) return;
+      cancel();
+      const timer = window.setTimeout(() => {
+        press.current = null;
+        swallowNextClick();
+        callback.current?.();
+      }, LONG_PRESS_MS);
+      press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
+    },
+    onPointerMove(event: PointerEvent<HTMLElement>) {
+      const state = press.current;
+      if (state?.pointerId !== event.pointerId) return;
+      const distance = Math.hypot(event.clientX - state.x, event.clientY - state.y);
+      if (distance > LONG_PRESS_TOLERANCE) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+  };
+}
+
+const CHECK_CLASS =
+  'absolute -top-2 -left-2 z-10 flex size-6 items-center justify-center rounded-full ring-2 ring-background [&_svg]:size-3.5';
+
+/**
+ * The check at a card's corner, shown while the note is selected. With a mouse it also
+ * appears on hover, as a way to start selecting (touch uses a long press).
+ */
+function SelectCheck({
+  selected,
+  onSelect,
+}: {
+  selected: boolean | undefined;
+  onSelect: () => void;
+}) {
+  return (
+    <>
+      {selected === undefined && (
+        <button
+          type="button"
+          aria-label="Select note"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
+          className={cn(
+            CHECK_CLASS,
+            'cursor-pointer bg-background text-foreground/60 opacity-0 shadow-sm outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:ring-ring/50 group-hover/cell:opacity-100 pointer-coarse:hidden',
+          )}
+        >
+          <Check strokeWidth={3} aria-hidden />
+        </button>
+      )}
+      <AnimatePresence>
+        {selected && (
+          <motion.span
+            key="check"
+            aria-hidden
+            className={cn(CHECK_CLASS, 'pointer-events-none bg-foreground text-background')}
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.4, opacity: 0 }}
+            transition={springs.bouncy}
+          >
+            <Check strokeWidth={3} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

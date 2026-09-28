@@ -14,6 +14,9 @@ type Props = {
   onArchive: (note: Note) => void;
   /** The card has been picked up to be rearranged, so it no longer swipes. */
   lifted?: boolean;
+  /** Set while notes are being selected, when cards do not swipe (see `NoteCard`). */
+  selected?: boolean;
+  onSelect?: (note: Note) => void;
 };
 
 type Swipe = {
@@ -28,7 +31,15 @@ const MAX_SWIPE = 96;
 const ARCHIVE_THRESHOLD = MAX_SWIPE / 2;
 
 /** A gallery card follows a sideways touch, then archives after crossing the edge cue. */
-export function SwipeArchiveCard({ note, onOpen, onArchive, lifted = false }: Props) {
+export function SwipeArchiveCard({
+  note,
+  onOpen,
+  onArchive,
+  lifted = false,
+  selected,
+  onSelect,
+}: Props) {
+  const swipeable = !lifted && selected === undefined;
   const x = useMotionValue(0);
   const cueOpacity = useMotionValue(0);
   const swipe = useRef<Swipe | null>(null);
@@ -38,17 +49,17 @@ export function SwipeArchiveCard({ note, onOpen, onArchive, lifted = false }: Pr
   const hidden = useIsCardHidden(note.id);
   const bare = lifted || hidden;
 
-  // A held finger that starts dragging the card must not also swipe it.
+  // A held finger that starts dragging (or selecting) the card must not also swipe it.
   useEffect(() => {
-    if (lifted) swipe.current = null;
-  }, [lifted]);
+    if (!swipeable) swipe.current = null;
+  }, [swipeable]);
 
   function setCue(active: boolean) {
     animate(cueOpacity, active ? 1 : 0, { duration: 0.14, ease: 'easeOut' });
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'touch' || committing.current || lifted) return;
+    if (event.pointerType !== 'touch' || committing.current || !swipeable) return;
     const button = (event.target as Element).closest('button');
     if (button && button.getAttribute('aria-label') !== 'Open note') return;
     x.stop();
@@ -64,7 +75,7 @@ export function SwipeArchiveCard({ note, onOpen, onArchive, lifted = false }: Pr
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const state = swipe.current;
-    if (!state || state.pointerId !== event.pointerId || lifted) return;
+    if (!state || state.pointerId !== event.pointerId || !swipeable) return;
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
     if (!state.locked) {
@@ -155,7 +166,13 @@ export function SwipeArchiveCard({ note, onOpen, onArchive, lifted = false }: Pr
         <Archive className="size-5" />
       </motion.div>
       <motion.div style={{ x }}>
-        <NoteCard note={note} onOpen={onOpen} pressable={!lifted} />
+        <NoteCard
+          note={note}
+          onOpen={onOpen}
+          pressable={!lifted}
+          selected={selected}
+          onSelect={onSelect}
+        />
       </motion.div>
     </div>
   );

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
+import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,7 +16,8 @@ import {
 } from '@/components/ui/dialog';
 import { notesCollection } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
-import { deleteNoteForever } from '@/lib/notes';
+import { useNoteSelection } from '@/lib/noteSelection';
+import { deleteNotesForever } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 
@@ -30,10 +32,12 @@ function TrashPage() {
     query: (q) =>
       q.from({ note: notesCollection }).where(({ note }) => not(isNull(note.deletedAt))),
   });
+  const sorted = sortNotes(notes);
+  const selection = useNoteSelection(sorted);
 
   function emptyTrash() {
     haptics.warning();
-    for (const note of notes) deleteNoteForever(note.id);
+    deleteNotesForever(notes.map((note) => note.id));
     setConfirming(false);
   }
 
@@ -46,17 +50,23 @@ function TrashPage() {
           notes.length > 0 && (
             <Button
               variant="ghost"
-              className="rounded-full text-destructive"
+              className="h-10 rounded-full px-4 text-[1.0625rem] text-destructive"
               onClick={() => setConfirming(true)}
             >
               Empty trash
             </Button>
           )
         }
+        selection={selectionHeader(selection, 'trash')}
       />
       <section aria-label="Trash" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
         {isLoading ? null : notes.length > 0 ? (
-          <NoteGrid notes={sortNotes(notes)} onOpen={(note, card) => open(note.id, card)} />
+          <NoteGrid
+            notes={sorted}
+            onOpen={(note, card) => open(note.id, card)}
+            selected={selection.ids}
+            onSelect={selection.select}
+          />
         ) : (
           <EmptyState icon={Trash2} title="No notes in the trash.">
             Notes you move to the trash can be restored until you empty it.

@@ -33,13 +33,21 @@ type Props = {
   onChange: (color: NoteColor) => void;
 };
 
-/** Every note color as a swatch, in a wrapping grid or one scrolling row. */
+/**
+ * Every note color as a swatch, in a wrapping grid or one scrolling row. A null value
+ * (notes of different colors) checks no swatch.
+ */
 export function ColorSwatches({
   value,
   onChange,
   layout = 'grid',
   className,
-}: Props & { layout?: 'grid' | 'row'; className?: string }) {
+}: {
+  value: NoteColor | null;
+  onChange: (color: NoteColor) => void;
+  layout?: 'grid' | 'row';
+  className?: string;
+}) {
   return (
     <fieldset
       className={cn(
