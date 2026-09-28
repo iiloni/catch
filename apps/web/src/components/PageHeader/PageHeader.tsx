@@ -79,7 +79,7 @@ type GalleryHeaderProps = {
   selection?: HeaderSelection | null;
 };
 
-/** Gallery's large title gives way to a compact title as it scrolls past the header. */
+/** Gallery's title moves into the corner when it reaches the top of the page. */
 export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
   const { scrollY } = useScroll();
   const collapseAt = 64;
@@ -87,36 +87,55 @@ export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
     typeof window === 'undefined' ? false : window.scrollY >= collapseAt,
   );
   useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= collapseAt));
-  const fade = { duration: 0.22, ease: 'easeInOut' } as const;
+  // The expanded title follows the page; only the move into the corner is animated.
+  const titleScrollY = useTransform(scrollY, [0, collapseAt], [66, 2]);
+  const slide = { ...springs.smooth, visualDuration: 0.3 };
 
   return (
     <>
       <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
+        <motion.div
+          aria-hidden
+          className="gallery-top-blur pointer-events-none absolute inset-x-0 top-0 h-[calc(var(--safe-top)+8rem)]"
+          initial={false}
+          animate={{ opacity: collapsed ? 1 : 0 }}
+          transition={{ duration: 0.2 }}
+        />
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
           <motion.div
-            aria-hidden
-            className="glass pointer-events-none absolute top-1 left-3 flex h-[50px] items-center rounded-[var(--dock-radius)] px-[14px] sm:left-4"
-            initial={false}
-            animate={{ opacity: collapsed && !selection ? 1 : 0 }}
-            transition={fade}
+            className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
+            style={{ y: titleScrollY }}
           >
-            <span className="whitespace-nowrap font-display font-extrabold text-[17px] leading-none tracking-[-0.03em]">
-              Gallery
-            </span>
+            <motion.div
+              className="absolute flex h-full items-center rounded-[var(--dock-radius)]"
+              initial={false}
+              animate={{
+                left: collapsed ? '0%' : '50%',
+                x: collapsed ? '0%' : '-50%',
+                marginLeft: collapsed ? 12 : 0,
+                y: collapsed ? -2 : 0,
+                fontSize: collapsed ? 17 : 42,
+                paddingInline: collapsed ? 14 : 0,
+                opacity: selection ? 0 : 1,
+              }}
+              transition={slide}
+            >
+              <motion.span
+                aria-hidden
+                className="glass absolute inset-0 rounded-[var(--dock-radius)]"
+                initial={false}
+                animate={{ opacity: collapsed ? 1 : 0 }}
+                transition={slide}
+              />
+              <h1 className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
+                Gallery
+              </h1>
+            </motion.div>
           </motion.div>
           <HeaderToolbars trailing={trailing} selection={selection} />
         </div>
       </header>
-      <div className="mx-auto flex h-[calc(var(--safe-top)+var(--header-height)+4rem)] max-w-7xl items-end justify-center">
-        <motion.h1
-          className="whitespace-nowrap font-display font-extrabold text-[42px] leading-none tracking-[-0.03em]"
-          initial={false}
-          animate={{ opacity: collapsed || selection ? 0 : 1 }}
-          transition={fade}
-        >
-          Gallery
-        </motion.h1>
-      </div>
+      <div aria-hidden className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
     </>
   );
 }
