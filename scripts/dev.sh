@@ -149,6 +149,7 @@ case "$command" in
             echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
             exit 1
         fi
+        "$repo_root/scripts/dev.sh" up
         port=$(env_value CATCH_PORT)
         host=$(env_value CATCH_PUBLIC_HOST)
         forward=()
@@ -205,7 +206,7 @@ Usage: ./scripts/dev.sh <command>
   test [args]         Unit tests (in the container)
   build               Build all packages (in the container)
   e2e [args]          Playwright tests from the host against this stack
-  android [--usb]     Install a live-reload debug app on a connected Android device
+  android [--usb]     Start the stack and install a live-reload debug app on Android
                       (--usb reaches the dev server via adb instead of Tailscale)
   shell               Open a shell in the app container
   psql [args]         Open psql against this worktree's database
