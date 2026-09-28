@@ -1,7 +1,22 @@
 import '@blocknote/shadcn/style.css';
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core';
+import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
-import { useCreateBlockNote } from '@blocknote/react';
+import {
+  BlockColorsItem,
+  DragHandleButton,
+  RemoveBlockItem,
+  SideMenu,
+  SideMenuController,
+  TableColumnHeaderItem,
+  TableRowHeaderItem,
+  useBlockNoteEditor,
+  useComponentsContext,
+  useCreateBlockNote,
+  useDictionary,
+  useExtension,
+  useExtensionState,
+} from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Note } from '@catch/shared';
 import { type MouseEvent, useEffect, useState } from 'react';
@@ -87,10 +102,59 @@ export function NoteEditor({
       editable={editable}
       theme={theme}
       formattingToolbar={!coarsePointer}
+      sideMenu={false}
       className={cn('note-editor min-h-full', className)}
       onClick={focusAboveBlankSpace}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
-    />
+    >
+      <SideMenuController sideMenu={NoteSideMenu} />
+    </BlockNoteView>
+  );
+}
+
+function NoteSideMenu() {
+  const dict = useDictionary();
+
+  return (
+    <SideMenu>
+      <DragHandleButton>
+        <AddBlockMenuItem />
+        <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
+        <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
+        <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
+        <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
+      </DragHandleButton>
+    </SideMenu>
+  );
+}
+
+function AddBlockMenuItem() {
+  const Components = useComponentsContext();
+  const dict = useDictionary();
+  const editor = useBlockNoteEditor();
+  const suggestionMenu = useExtension(SuggestionMenu);
+  const block = useExtensionState(SideMenuExtension, {
+    selector: (state) => state?.block,
+  });
+
+  if (!Components || !block) return null;
+
+  return (
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={() => {
+        const isEmpty = Array.isArray(block.content) && block.content.length === 0;
+        const target = isEmpty
+          ? block
+          : editor.insertBlocks([{ type: 'paragraph' }], block, 'after')[0];
+        if (!target) return;
+        editor.setTextCursorPosition(target);
+        // Closing the drag menu restores focus; open suggestions after that finishes.
+        requestAnimationFrame(() => suggestionMenu.openSuggestionMenu('/'));
+      }}
+    >
+      {dict.side_menu.add_block_label}
+    </Components.Generic.Menu.Item>
   );
 }
 

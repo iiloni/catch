@@ -202,25 +202,27 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
 
   useBackHandler(isPresent, () => quickNote.set('closed'));
 
-  // Swiping the grab handle down closes (and saves), like a sheet. The drag is
-  // capped so the window stops instead of following the finger off screen.
-  const DISMISS_DISTANCE = 90;
-  const MAX_DRAG = 160;
+  // The handle can save downward or expand upward. A short, resistant pull
+  // signals the action without moving the window far from the dock.
+  const RELEASE_DISTANCE = 90;
+  const MAX_UP_DRAG = 56;
+  const MAX_DOWN_DRAG = 100;
   const swipe = useRef<{
     startY: number;
     lastY: number;
     lastTime: number;
     velocity: number;
-    armed: boolean;
+    armed: -1 | 0 | 1;
   }>(null);
   function onHandleDown(event: PointerEvent<HTMLDivElement>) {
+    y.stop();
     event.currentTarget.setPointerCapture(event.pointerId);
     swipe.current = {
       startY: event.clientY,
       lastY: event.clientY,
       lastTime: event.timeStamp,
       velocity: 0,
-      armed: false,
+      armed: 0,
     };
   }
   function onHandleMove(event: PointerEvent<HTMLDivElement>) {
@@ -230,26 +232,29 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     state.lastY = event.clientY;
     state.lastTime = event.timeStamp;
     const delta = event.clientY - state.startY;
-    if (delta < 0) {
-      // Resist upward pulls; follow downward ones, up to the cap.
-      y.set(delta * 0.1);
-      if (state.armed) state.armed = false;
-      return;
-    }
-    y.set(Math.min(delta * 0.8, MAX_DRAG));
-    const past = delta > DISMISS_DISTANCE;
-    if (past !== state.armed) {
-      state.armed = past;
-      if (past) haptics.threshold();
+    y.set(delta < 0 ? Math.max(delta * 0.3, -MAX_UP_DRAG) : Math.min(delta * 0.5, MAX_DOWN_DRAG));
+    const armed = delta > RELEASE_DISTANCE ? 1 : delta < -RELEASE_DISTANCE ? -1 : 0;
+    if (armed !== state.armed) {
+      state.armed = armed;
+      if (armed) haptics.threshold();
     }
   }
   function onHandleUp(event: PointerEvent<HTMLDivElement>) {
     const state = swipe.current;
     swipe.current = null;
     if (!state) return;
-    if (event.clientY - state.startY > DISMISS_DISTANCE || state.velocity > 0.6)
+    if (event.type === 'pointercancel') {
+      animate(y, 0, springs.snappy);
+    } else if (event.clientY - state.startY < -RELEASE_DISTANCE) {
+      expand();
+    } else if (
+      event.clientY - state.startY > RELEASE_DISTANCE ||
+      (event.clientY > state.startY && state.velocity > 0.6)
+    ) {
       quickNote.set('closed');
-    else animate(y, 0, springs.snappy);
+    } else {
+      animate(y, 0, springs.snappy);
+    }
   }
 
   return (
@@ -279,6 +284,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     >
       <div
         aria-hidden
+        data-testid="quick-note-handle"
         className="flex shrink-0 cursor-grab touch-none justify-center pt-2.5 pb-1"
         onPointerDown={onHandleDown}
         onPointerMove={onHandleMove}

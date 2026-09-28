@@ -94,9 +94,10 @@ export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
   return (
     <>
       <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
+        {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
         <motion.div
           aria-hidden
-          className="gallery-top-blur pointer-events-none absolute inset-x-0 top-0 h-[calc(var(--safe-top)+8rem)]"
+          className="gallery-top-blur pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0 }}
           transition={{ duration: 0.2 }}
