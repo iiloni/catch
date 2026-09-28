@@ -188,6 +188,35 @@ test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
   await expect(card(page, 'Swipe me')).toBeVisible();
 });
 
+test('swiping the open note down or up closes it', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'The editor swipe is a touch gesture.');
+  await signUp(page);
+  await createNote(page, 'Swipe to close');
+  const cdp = await page.context().newCDPSession(page);
+
+  for (const direction of [1, -1]) {
+    const dialog = await openNote(page, 'Swipe to close');
+    const scroll = dialog.locator('[data-note-scroll]');
+    await scroll.evaluate((element, toward) => {
+      element.scrollTop = toward > 0 ? 0 : element.scrollHeight;
+    }, direction);
+    const bounds = await scroll.boundingBox();
+    if (!bounds) throw new Error('Missing note scroll area');
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + direction * 300 }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(dialog).toBeHidden();
+  }
+});
+
 test('color and pin', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'First');

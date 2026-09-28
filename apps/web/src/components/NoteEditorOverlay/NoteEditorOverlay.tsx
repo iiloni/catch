@@ -4,7 +4,6 @@ import { ChevronLeft, Trash2 } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
-  type MotionValue,
   motion,
   useMotionValue,
   usePresence,
@@ -20,7 +19,7 @@ import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { curves, springs } from '@/lib/motion';
+import { curves } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, trashNote } from '@/lib/notes';
 import {
   editorProgress,
@@ -33,11 +32,7 @@ import {
 import { useOpenNote } from '@/lib/openNote';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
-
-/** Pulling the editor down this far (in px) closes it on release. */
-const DISMISS_DISTANCE = 110;
-/** The drag stops here, so the surface can't be pulled off the screen. */
-const MAX_DRAG = 180;
+import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 type Props = {
   noteId: string | undefined;
@@ -127,7 +122,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const progress = editorProgress;
   const fade = useMotionValue(origin ? 1 : 0);
   const dragY = useMotionValue(0);
-  const dragScale = useTransform(dragY, [0, MAX_DRAG], [1, 0.92]);
+  const dragScale = useTransform(() => 1 - (Math.abs(dragY.get()) / MAX_DRAG) * 0.08);
   // Without a card to morph with, the whole surface (not just its content) fades and
   // settles in, or sinks away, so nothing opaque is left to vanish at the end.
   const surfaceOpacity = useTransform(() => (cardRect.current ? 1 : fade.get()));
@@ -153,7 +148,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (!card) return `inset(0px round ${t.radius}px)`;
     const right = Math.max(0, (1 - p) * (t.width - card.width));
     const bottom = Math.max(0, (1 - p) * (t.height - card.height));
-    const radius = lerp(card.radius, t.radius || 28 * Math.min(1, dragY.get() / 80), p);
+    const radius = lerp(card.radius, t.radius || 28 * Math.min(1, Math.abs(dragY.get()) / 80), p);
     return `inset(0px ${right}px ${bottom}px 0px round ${radius}px)`;
   });
   const ghostOpacity = useTransform(() => (cardRect.current ? 1 - progress.get() / 0.35 : 0));
@@ -198,7 +193,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     return () => cancelAnimationFrame(frame);
   }, [isPresent, flush, note.id, dragY, fade, safeToRemove]);
 
-  const scrollRef = usePullToDismiss({ dragY, onDismiss: requestClose, enabled: isPresent });
+  const scrollRef = useSwipeToDismiss({ dragY, onDismiss: requestClose, enabled: isPresent });
 
   return (
     // Not modal: the dock above the editor is its toolbar and must stay usable. The page
@@ -299,6 +294,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
               <div
                 ref={scrollRef}
+                data-note-scroll
                 // Room to scroll the last lines clear of the dock (and keyboard) floating above.
                 className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 pb-[var(--dock-space)]"
               >
@@ -322,90 +318,4 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
-}
-
-/**
- * Pulling down on the editor while it is scrolled to the top drags it toward its card;
- * letting go past DISMISS_DISTANCE closes it. Touch events (rather than pointer events)
- * let the gesture take over from scrolling mid-drag.
- */
-function usePullToDismiss({
-  dragY,
-  onDismiss,
-  enabled,
-}: {
-  dragY: MotionValue<number>;
-  onDismiss: () => void;
-  enabled: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const onDismissRef = useRef(onDismiss);
-  onDismissRef.current = onDismiss;
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element || !enabled) return;
-    let startY: number | null = null;
-    let dragging = false;
-    let armed = false;
-    let lastY = 0;
-    let lastTime = 0;
-    let velocity = 0;
-
-    function onStart(event: TouchEvent) {
-      if (!element || element.scrollTop > 0 || event.touches.length > 1) return;
-      startY = event.touches[0]?.clientY ?? null;
-      dragging = false;
-      armed = false;
-    }
-
-    function onMove(event: TouchEvent) {
-      const touch = event.touches[0];
-      if (startY === null || !touch || !element) return;
-      const delta = touch.clientY - startY;
-      if (!dragging) {
-        if (delta < 8 || element.scrollTop > 0) {
-          if (delta < 0) startY = null;
-          return;
-        }
-        dragging = true;
-        // Typing into a note while pulling it away would be surprising.
-        (document.activeElement as HTMLElement | null)?.blur();
-      }
-      event.preventDefault();
-      const now = performance.now();
-      velocity = (touch.clientY - lastY) / Math.max(1, now - lastTime);
-      lastY = touch.clientY;
-      lastTime = now;
-      // Rubber-band: the surface follows the finger less the further it goes,
-      // then stops at the cap instead of sliding off the screen.
-      const distance = delta - 8;
-      dragY.set(distance < 0 ? 0 : Math.min(distance * 0.75, MAX_DRAG));
-      const past = distance > DISMISS_DISTANCE;
-      if (past !== armed) {
-        armed = past;
-        if (past) haptics.threshold();
-      }
-    }
-
-    function onEnd() {
-      if (dragging && (armed || velocity > 0.6)) onDismissRef.current();
-      else if (dragging) animate(dragY, 0, springs.snappy);
-      startY = null;
-      dragging = false;
-    }
-
-    element.addEventListener('touchstart', onStart, { passive: true });
-    element.addEventListener('touchmove', onMove, { passive: false });
-    element.addEventListener('touchend', onEnd);
-    element.addEventListener('touchcancel', onEnd);
-    return () => {
-      element.removeEventListener('touchstart', onStart);
-      element.removeEventListener('touchmove', onMove);
-      element.removeEventListener('touchend', onEnd);
-      element.removeEventListener('touchcancel', onEnd);
-    };
-  }, [dragY, enabled]);
-
-  return ref;
 }
