@@ -4,7 +4,7 @@ import { ArrowDownUp, Lightbulb } from 'lucide-react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
-import { GalleryHeader } from '@/components/PageHeader/PageHeader';
+import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { SettingsButton } from '@/components/SettingsSheet/SettingsSheet';
 import {
@@ -61,7 +61,8 @@ function GalleryPage() {
 
   return (
     <>
-      <GalleryHeader
+      <TabPageHeader
+        title="Gallery"
         selection={selectionHeader(selection, 'gallery')}
         trailing={
           <>
