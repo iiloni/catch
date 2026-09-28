@@ -5,6 +5,7 @@ import { type PointerEvent, useEffect, useRef } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { useIsCardHidden } from '@/lib/noteTransition';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -44,6 +45,9 @@ export function SwipeArchiveCard({
   const swipe = useRef<Swipe | null>(null);
   const suppressClick = useRef(false);
   const committing = useRef(false);
+  // No backing under a card that is lifted into the editor: its slot reads as empty.
+  const hidden = useIsCardHidden(note.id);
+  const bare = lifted || hidden;
 
   // A held finger that starts dragging (or selecting) the card must not also swipe it.
   useEffect(() => {
@@ -129,7 +133,7 @@ export function SwipeArchiveCard({
       data-swipe-archive
       className={cn(
         'relative overflow-hidden rounded-2xl touch-pan-y',
-        !lifted && 'bg-foreground/[0.07]',
+        !bare && 'bg-foreground/[0.07]',
       )}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -146,7 +150,7 @@ export function SwipeArchiveCard({
         aria-hidden
         className={cn(
           'absolute inset-0 flex items-center justify-between px-5 text-foreground/60',
-          lifted && 'invisible',
+          bare && 'invisible',
         )}
       >
         <Archive className="size-5" />

@@ -11,9 +11,11 @@ layout.
 
 ## Decisions
 
-**Look.** Graphite and a soft apricot: the pencil and paper a thought is caught with.
-Neutrals are cool pencil-lead greys (not near-black, not cream); the apricot `--brand` is the
-only accent, a softer, more orange take on the icon's yellow that is easier on the eye. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
+**Look.** The original Catch hand-and-note mark supplies a yellow-to-orange sunrise (`#ffdc5c`
+to `#ff930f`). The icon is redrawn as a simpler vector for small launchers, with one note fold
+and fewer hand details. A solid golden middle tone (`--brand`) colors controls and focus while
+the gradient marks the icon and compose button. Warm graphite neutrals give both light and dark
+themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
 offline. Note colors are generated in OKLCH with one lightness and chroma per theme, so text
 contrast is the same on every color. Menus, sheets and the dock use frosted glass
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
@@ -41,6 +43,21 @@ corner appears on hover. A close button with the count takes the top left, and t
 selection's actions (`SelectionToolbar`) take the top right toolbar: color, archive, move to
 trash and copy, with Unarchive in the Archive, and Restore and Delete forever in the Trash.
 Back and Escape end selecting.
+
+**Wide screens.** On tablets and unfolded foldables (at least 672 × 480 px) an open note
+opens in a pane beside the page instead of covering it, as in a list-detail layout. The page
+stays usable: it keeps its own dock (tabs and compose), the note gets a second dock under its
+pane, and tapping another card swaps the pane's note in place (replacing the history entry, so
+back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
+at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
+saved so it survives rotation and unfolding. The pane does not use the container transform:
+opening it narrows the page, which moves the card it would grow from, so a morph chases a moving
+target and two morphs cross when switching notes. Instead the pane slides in from the screen's
+edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.
+The page takes its new width at once, so its cards reshuffle once under the moving pane, while
+fixed UI over the page follows the pane's edge through `--note-pane` (`src/lib/splitView.ts`).
+The deck's columns switch on container width rather than the viewport. Landscape phones are too short for two panes and keep the centered
+panel.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel

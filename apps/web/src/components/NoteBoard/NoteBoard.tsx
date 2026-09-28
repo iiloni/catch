@@ -51,8 +51,8 @@ type Props = {
 };
 
 /**
- * Kanban board of deck notes. On phones each column is a page of a horizontal pager;
- * wider screens show all columns side by side. Dragging a card reveals a "Send to
+ * Kanban board of deck notes. When narrow, each column is a page of a horizontal pager;
+ * wider boards show all columns side by side. Dragging a card reveals a "Send to
  * gallery" target above the dock.
  */
 export function NoteBoard({ notes, onOpen }: Props) {
@@ -189,54 +189,57 @@ export function NoteBoard({ notes, onOpen }: Props) {
       onDragEnd={handleDragEnd}
       onDragCancel={endDrag}
     >
-      <div
-        role="tablist"
-        aria-label="Columns"
-        className="mx-3 mb-3 flex gap-1 rounded-2xl bg-foreground/[0.05] p-1 md:hidden"
-      >
-        {BOARD_COLUMNS.map((column, index) => (
-          <button
-            key={column.id}
-            type="button"
-            role="tab"
-            aria-selected={page === index}
-            onClick={() => showPage(index)}
-            className={cn(
-              'relative flex-1 rounded-xl py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
-              page === index ? 'text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {page === index && (
-              <motion.span
-                layoutId="board-page"
-                aria-hidden
-                className="absolute inset-0 rounded-xl bg-background shadow-sm"
-                transition={springs.snappy}
-              />
-            )}
-            <span className="relative">
-              {column.name}
-              <span className="ml-1.5 text-muted-foreground tabular-nums">
-                {notes.filter((note) => columnOf(note) === column.id).length}
+      {/* Sized by its own width, which a note open beside the page narrows. */}
+      <div className="@container">
+        <div
+          role="tablist"
+          aria-label="Columns"
+          className="mx-3 mb-3 flex gap-1 rounded-2xl bg-foreground/[0.05] p-1 @3xl:hidden"
+        >
+          {BOARD_COLUMNS.map((column, index) => (
+            <button
+              key={column.id}
+              type="button"
+              role="tab"
+              aria-selected={page === index}
+              onClick={() => showPage(index)}
+              className={cn(
+                'relative flex-1 rounded-xl py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
+                page === index ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {page === index && (
+                <motion.span
+                  layoutId="board-page"
+                  aria-hidden
+                  className="absolute inset-0 rounded-xl bg-background shadow-sm"
+                  transition={springs.snappy}
+                />
+              )}
+              <span className="relative">
+                {column.name}
+                <span className="ml-1.5 text-muted-foreground tabular-nums">
+                  {notes.filter((note) => columnOf(note) === column.id).length}
+                </span>
               </span>
-            </span>
-          </button>
-        ))}
-      </div>
-      <div
-        ref={pager}
-        onScroll={onPagerScroll}
-        className="flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto px-3 [scrollbar-width:none] md:grid md:snap-none md:grid-cols-3 md:overflow-visible md:px-6"
-      >
-        {BOARD_COLUMNS.map((column) => (
-          <BoardColumn
-            key={column.id}
-            id={column.id}
-            name={column.name}
-            notes={notes.filter((note) => columnOf(note) === column.id)}
-            onOpen={onOpen}
-          />
-        ))}
+            </button>
+          ))}
+        </div>
+        <div
+          ref={pager}
+          onScroll={onPagerScroll}
+          className="flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto px-3 [scrollbar-width:none] @3xl:grid @3xl:snap-none @3xl:grid-cols-3 @3xl:overflow-visible @3xl:px-6"
+        >
+          {BOARD_COLUMNS.map((column) => (
+            <BoardColumn
+              key={column.id}
+              id={column.id}
+              name={column.name}
+              notes={notes.filter((note) => columnOf(note) === column.id)}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
       </div>
       <AnimatePresence>{active && <GalleryDropZone key="gallery" />}</AnimatePresence>
       <DragOverlay dropAnimation={{ duration: 180 }}>
@@ -274,11 +277,11 @@ function BoardColumn({
         // Large-container radius matches dialogs and empty states; cards inside keep
         // the card radius (rounded-2xl). The height fills the viewport down to the
         // dock so the column lands on the page's dock-space padding.
-        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] w-[86%] max-w-sm shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] p-2.5 transition-colors md:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)] md:w-auto md:max-w-none',
+        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] w-[86%] max-w-sm shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] p-2.5 transition-colors @3xl:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)] @3xl:w-auto @3xl:max-w-none',
         isOver && 'bg-brand/15 ring-2 ring-brand/60',
       )}
     >
-      <h3 className="hidden items-center justify-between px-2 pt-1 font-semibold text-sm md:flex">
+      <h3 className="hidden items-center justify-between px-2 pt-1 font-semibold text-sm @3xl:flex">
         {name}
         <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
           {notes.length}
@@ -327,7 +330,7 @@ function GalleryDropZone() {
       exit={{ opacity: 0, y: 24, scale: 0.9 }}
       transition={springs.bouncy}
       className={cn(
-        'glass fixed inset-x-0 bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] z-50 mx-auto flex h-16 w-[calc(100%-1.5rem)] max-w-md items-center justify-center gap-2 rounded-full font-medium text-sm',
+        'glass fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] left-3 z-50 mx-auto flex h-16 max-w-md items-center justify-center gap-2 rounded-full font-medium text-sm',
         isOver && 'bg-brand text-brand-foreground',
       )}
     >

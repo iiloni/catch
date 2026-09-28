@@ -7,6 +7,7 @@ import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
 import { useIsCardHidden } from '@/lib/noteTransition';
+import { paneNoteId } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -48,6 +49,7 @@ export function NoteCard({
   const actions = withActions && !selecting;
   const canPin = actions && !note.deletedAt && !note.isArchived;
   const hidden = useIsCardHidden(note.id);
+  const openBeside = paneNoteId.use() === note.id;
 
   return (
     <motion.article
@@ -60,6 +62,7 @@ export function NoteCard({
       className={cn(
         'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
         hidden && 'invisible',
+        openBeside && 'ring-2 ring-brand ring-inset',
         className,
       )}
     >

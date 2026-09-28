@@ -11,6 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
+import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -29,7 +30,8 @@ function asGalleryPage(pathname: string): GalleryPage | null {
 /**
  * Floating glass tab bar with a detached compose button. On the Search tab the tabs
  * give way to a search field that fills the whole dock; while a note is open they give way
- * to the note's toolbar (NoteDock).
+ * to the note's toolbar (NoteDock). With the note in a pane beside the page, the page keeps
+ * its dock and the note gets one of its own.
  */
 export function Dock() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -37,8 +39,9 @@ export function Dock() {
     select: (state) => Boolean((state.location.search as { note?: string }).note),
   });
   const keyboardOpen = useKeyboardOpen();
+  const pane = useNotePane();
   const tab = tabFor(pathname);
-  const mode = noteOpen ? 'note' : tab === '/search' ? 'search' : 'tabs';
+  const mode = noteOpen && !pane.shown ? 'note' : tab === '/search' ? 'search' : 'tabs';
   const inputRef = useRef<HTMLInputElement>(null);
   // Above the editor while it is open or animating, below sheets and menus otherwise.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
@@ -75,48 +78,81 @@ export function Dock() {
   }, [tab]);
 
   return (
-    <motion.div
-      ref={dockRef}
-      data-dock
-      style={{ zIndex }}
-      className={cn(
-        'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
-        noteOpen && keyboardOpen ? 'px-1' : 'px-3',
-      )}
-    >
-      <LayoutGroup id="dock">
-        {/* Bottom-aligned: the palette grows the dock upward; the switcher floats above it. */}
-        <div className="pointer-events-auto relative flex w-full max-w-md items-end">
-          <GallerySwitcher
-            open={switcherOpen}
-            current={asGalleryPage(pathname)}
-            hovered={switcherHover}
-            onSelect={selectGalleryPage}
-          />
-          <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
-            <SearchField inputRef={inputRef} active={mode === 'search'} />
+    <>
+      <motion.div
+        ref={dockRef}
+        data-dock
+        style={{ zIndex }}
+        className={cn(
+          'pointer-events-none fixed right-[var(--note-pane)] bottom-[var(--dock-bottom)] left-0 flex justify-center',
+          mode === 'note' && keyboardOpen ? 'px-1' : 'px-3',
+        )}
+      >
+        <LayoutGroup id="dock">
+          {/* Bottom-aligned: the palette grows the dock upward; the switcher floats above it. */}
+          <div className="pointer-events-auto relative flex w-full max-w-md items-end">
+            <GallerySwitcher
+              open={switcherOpen}
+              current={asGalleryPage(pathname)}
+              hovered={switcherHover}
+              onSelect={selectGalleryPage}
+            />
+            <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
+              <SearchField inputRef={inputRef} active={mode === 'search'} />
+              <AnimatePresence initial={false}>
+                {mode === 'tabs' && (
+                  <Tabs
+                    key="tabs"
+                    active={tab}
+                    // Focusing inside the tap keeps Android willing to raise the keyboard.
+                    onSearch={() => inputRef.current?.focus()}
+                    switcherOpen={switcherOpen}
+                    onSwitcher={setSwitcher}
+                    onSwitcherHover={setSwitcherHover}
+                    onSwitcherSelect={selectGalleryPage}
+                  />
+                )}
+                {mode === 'note' && <NoteDock key="note" />}
+              </AnimatePresence>
+            </div>
             <AnimatePresence initial={false}>
-              {mode === 'tabs' && (
-                <Tabs
-                  key="tabs"
-                  active={tab}
-                  // Focusing inside the tap keeps Android willing to raise the keyboard.
-                  onSearch={() => inputRef.current?.focus()}
-                  switcherOpen={switcherOpen}
-                  onSwitcher={setSwitcher}
-                  onSwitcherHover={setSwitcherHover}
-                  onSwitcherSelect={selectGalleryPage}
-                />
-              )}
-              {mode === 'note' && <NoteDock key="note" />}
+              {mode === 'tabs' && <ComposeButton key="compose" />}
             </AnimatePresence>
           </div>
-          <AnimatePresence initial={false}>
-            {mode === 'tabs' && <ComposeButton key="compose" />}
-          </AnimatePresence>
-        </div>
-      </LayoutGroup>
-    </motion.div>
+        </LayoutGroup>
+      </motion.div>
+      <AnimatePresence>
+        {pane.shown && noteOpen && (
+          <PaneDock key="pane" width={pane.noteWidth} compact={keyboardOpen} />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/**
+ * The note's dock under its pane, sliding in and out with it. Not `data-dock`: that name is
+ * for the page's dock (the page transition names it), and the editor ignores every
+ * interaction outside it in a pane.
+ */
+function PaneDock({ width, compact }: { width: number; compact: boolean }) {
+  return (
+    <div
+      className={cn(
+        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center',
+        compact ? 'pr-1' : 'pr-3',
+      )}
+      style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
+    >
+      <motion.div
+        className="glass pointer-events-auto relative min-h-[var(--dock-height)] w-full max-w-md rounded-[var(--dock-radius)]"
+        initial={false}
+        exit={{ opacity: 0 }}
+        transition={springs.pane}
+      >
+        <NoteDock />
+      </motion.div>
+    </div>
   );
 }
 
@@ -424,7 +460,7 @@ function ComposeButton() {
         <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
         <motion.span
           aria-hidden
-          className="absolute inset-0 rounded-[var(--dock-radius)] bg-brand shadow-[0_8px_24px_-6px_oklch(0.68_0.11_68/0.55),inset_0_1px_0_oklch(1_0_0/0.45)]"
+          className="absolute inset-0 rounded-[var(--dock-radius)] bg-[image:var(--brand-gradient)] shadow-[0_8px_24px_-6px_rgb(213_123_20/0.4),inset_0_1px_0_rgb(255_255_255/0.45)]"
           animate={{ opacity: open ? 0 : 1, scale: open ? 0.85 : 1 }}
           transition={springs.snappy}
         />

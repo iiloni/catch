@@ -1,13 +1,19 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { AnimatePresence } from 'motion/react';
 import { z } from 'zod';
 import { Dock } from '@/components/Dock/Dock';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
+import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { getAuthToken } from '@/lib/auth';
 import { needsServerUrl } from '@/lib/serverUrl';
+import { useNotePaneLayout } from '@/lib/splitView';
 
-/** Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`. */
+/**
+ * Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`.
+ * On wide screens the editor is a pane beside the page rather than covering it.
+ */
 export const Route = createFileRoute('/_app')({
   validateSearch: z.object({ note: z.string().optional() }),
   beforeLoad: () => {
@@ -21,17 +27,27 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   const { note } = Route.useSearch();
+  const pane = useNotePaneLayout();
 
   return (
     <>
       {/* No transform or filter here: either would break the pages' fixed headers. */}
       {/* Inert under an open note: the editor is not a modal dialog (the dock stays usable). */}
-      <div className="min-h-dvh pb-[var(--dock-space)]" inert={Boolean(note)}>
+      <div
+        className="min-h-dvh pb-[var(--dock-space)]"
+        style={{ marginRight: pane.shown ? pane.noteWidth : 0 }}
+        inert={Boolean(note) && !pane.split}
+      >
         <Outlet />
       </div>
       <QuickNote />
       <Dock />
       <NoteEditorOverlay noteId={note} />
+      <AnimatePresence>
+        {pane.shown && note && (
+          <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />
+        )}
+      </AnimatePresence>
     </>
   );
 }

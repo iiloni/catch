@@ -1,7 +1,8 @@
-import { type ComponentProps, lazy, type ReactNode, Suspense } from 'react';
+import { type ComponentProps, lazy, memo, type ReactNode, Suspense } from 'react';
 
 const load = () => import('./NoteEditor');
-const NoteEditor = lazy(() => load().then((module) => ({ default: module.NoteEditor })));
+// Memoized: resizing the note pane re-renders the editor's surface on every pointer move.
+const NoteEditor = memo(lazy(() => load().then((module) => ({ default: module.NoteEditor }))));
 
 /** Starts downloading the editor so it is ready by the time a note opens. */
 export function preloadNoteEditor() {
