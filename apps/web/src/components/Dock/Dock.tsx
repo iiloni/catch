@@ -62,6 +62,12 @@ export function Dock() {
 
   useBackHandler(switcherOpen, () => setSwitcherOn(null));
 
+  // The quick note opens where the switcher floats, so it folds the switcher away.
+  const quickNoteOpen = quickNote.use() === 'open';
+  useEffect(() => {
+    if (quickNoteOpen) setSwitcherOn(null);
+  }, [quickNoteOpen]);
+
   // A tap anywhere outside the dock folds the switcher away.
   useEffect(() => {
     if (!switcherOpen) return;

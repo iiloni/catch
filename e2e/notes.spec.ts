@@ -40,6 +40,18 @@ test('an empty quick note creates nothing', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(0);
 });
 
+test('opening a quick note folds the gallery switcher away', async ({ page }) => {
+  await signUp(page);
+  const switcher = page.getByRole('navigation', { name: 'Gallery pages' });
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await expect(switcher).toBeVisible();
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.getByRole('region', { name: 'New note' })).toBeVisible();
+  await expect(switcher).toBeHidden();
+  await page.getByRole('button', { name: 'Close new note' }).click();
+  await expect(switcher).toBeHidden();
+});
+
 test('a quick note can go straight to the deck', async ({ page }) => {
   await signUp(page);
   await page.getByRole('button', { name: 'New note' }).click();

@@ -68,55 +68,48 @@ export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
   return (
     <AnimatePresence initial={false}>
       {open && (
-        <motion.div
+        // No `filter` in this animation, and the glass on the animated element itself: a
+        // filter on an ancestor makes a backdrop root, so the glass would stop blurring the
+        // page behind it and look flatter than the dock.
+        <motion.nav
           key="switcher"
-          className="absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10"
-          initial={{ opacity: 0, y: 16, scale: 0.94, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-          exit={{
-            opacity: 0,
-            y: 12,
-            scale: 0.96,
-            filter: 'blur(6px)',
-            transition: { duration: 0.16 },
-          }}
+          aria-label="Gallery pages"
+          data-gallery-switcher
+          className="glass absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10 grid touch-none select-none grid-cols-3 rounded-[var(--dock-radius)] p-1 [-webkit-touch-callout:none]"
+          initial={{ opacity: 0, y: 16, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.16 } }}
           transition={springs.snappy}
         >
-          <nav
-            aria-label="Gallery pages"
-            data-gallery-switcher
-            className="glass grid touch-none select-none grid-cols-3 rounded-[var(--dock-radius)] p-1 [-webkit-touch-callout:none]"
-          >
-            {PAGES.map((page) => {
-              const Icon = page.icon;
-              const selected = shown === page.path;
-              return (
-                <button
-                  key={page.path}
-                  type="button"
-                  data-gallery-page={page.path}
-                  aria-current={current === page.path ? 'page' : undefined}
-                  onClick={() => onSelect(page.path)}
-                  className={cn(
-                    'relative z-0 flex h-12 items-center justify-center gap-1.5 rounded-[calc(var(--dock-radius)-0.25rem)] font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-                    selected ? 'text-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {selected && (
-                    <motion.span
-                      layoutId="gallery-page"
-                      aria-hidden
-                      className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                      transition={springs.snappy}
-                    />
-                  )}
-                  <Icon className="size-4" aria-hidden />
-                  {page.label}
-                </button>
-              );
-            })}
-          </nav>
-        </motion.div>
+          {PAGES.map((page) => {
+            const Icon = page.icon;
+            const selected = shown === page.path;
+            return (
+              <button
+                key={page.path}
+                type="button"
+                data-gallery-page={page.path}
+                aria-current={current === page.path ? 'page' : undefined}
+                onClick={() => onSelect(page.path)}
+                className={cn(
+                  'relative z-0 flex h-12 items-center justify-center gap-1.5 rounded-[calc(var(--dock-radius)-0.25rem)] font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                  selected ? 'text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {selected && (
+                  <motion.span
+                    layoutId="gallery-page"
+                    aria-hidden
+                    className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                    transition={springs.snappy}
+                  />
+                )}
+                <Icon className="size-4" aria-hidden />
+                {page.label}
+              </button>
+            );
+          })}
+        </motion.nav>
       )}
     </AnimatePresence>
   );
