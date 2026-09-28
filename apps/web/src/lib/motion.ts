@@ -11,8 +11,18 @@ export const springs = {
   smooth: { type: 'spring', visualDuration: 0.4, bounce: 0.15 },
   /** Things that should feel thrown, like the quick-note window opening. */
   bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
-  /** A card opening into the editor: lively enough to pop past full size and settle. */
-  expand: { type: 'spring', visualDuration: 0.5, bounce: 0.28 },
-  /** The editor landing back in its card, with a small squash as it arrives. */
-  collapse: { type: 'spring', visualDuration: 0.42, bounce: 0.2 },
+} satisfies Record<string, Transition>;
+
+/** Fast out of the gate, long gentle landing, no overshoot (an exponential ease-out). */
+export const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
+
+/**
+ * Eased curves for full-screen transitions, where a spring's overshoot would push the
+ * surface past the screen edge. CSS uses the same curve as `--ease-out-expo`.
+ */
+export const curves = {
+  /** A card opening into the editor. */
+  expand: { duration: 0.5, ease: EASE_OUT_EXPO },
+  /** The editor settling back into its card. */
+  collapse: { duration: 0.45, ease: EASE_OUT_EXPO },
 } satisfies Record<string, Transition>;

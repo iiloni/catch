@@ -274,61 +274,29 @@
 ::view-transition {
   background: var(--background);
 }
-/* A spring (damping ratio 0.78) sampled into linear(); it overshoots by 2% and settles. */
+/* Fast start, long gentle finish, no overshoot. Matches EASE_OUT_EXPO in lib/motion.ts. */
 :root {
-  --ease-page-spring: linear(
-    0,
-    0.034,
-    0.116,
-    0.225,
-    0.344,
-    0.462,
-    0.573,
-    0.671,
-    0.755,
-    0.825,
-    0.881,
-    0.925,
-    0.958,
-    0.982,
-    0.999,
-    1.009,
-    1.016,
-    1.019,
-    1.02,
-    1.019,
-    1.018,
-    1.015,
-    1.013,
-    1.011,
-    1.008,
-    1.007,
-    1.005,
-    1.003,
-    1.002,
-    1.001,
-    1
-  );
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* Position rides the spring; opacity fades quickly so the two pages barely overlap. */
+/* Position eases out; opacity fades quickly so the two pages barely overlap. */
 html:active-view-transition-type(forward)::view-transition-old(root) {
   animation:
-    600ms var(--ease-page-spring) both page-to-left,
+    500ms var(--ease-out-expo) both page-to-left,
     180ms ease-out both page-fade-out;
 }
 html:active-view-transition-type(forward)::view-transition-new(root) {
   animation:
-    600ms var(--ease-page-spring) both page-from-right,
+    500ms var(--ease-out-expo) both page-from-right,
     260ms ease-out 60ms both page-fade-in;
 }
 html:active-view-transition-type(back)::view-transition-old(root) {
   animation:
-    600ms var(--ease-page-spring) both page-to-right,
+    500ms var(--ease-out-expo) both page-to-right,
     180ms ease-out both page-fade-out;
 }
 html:active-view-transition-type(back)::view-transition-new(root) {
   animation:
-    600ms var(--ease-page-spring) both page-from-left,
+    500ms var(--ease-out-expo) both page-from-left,
     260ms ease-out 60ms both page-fade-in;
 }
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
