@@ -265,28 +265,36 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             >
               <header
                 className={cn(
-                  'flex shrink-0 items-center gap-1 px-2',
-                  target.radius === 0 ? 'pt-[var(--safe-top)]' : 'pt-2',
+                  'flex shrink-0 items-center gap-2 px-3 pb-1 sm:px-4',
+                  target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
                 )}
               >
-                <IconButton label="Close" onClick={requestClose} className="size-10 [&_svg]:size-6">
-                  <ChevronLeft />
-                </IconButton>
-                <div className="flex flex-1 justify-center">
+                <div className="glass flex shrink-0 rounded-full p-1">
+                  <IconButton
+                    label="Close"
+                    onClick={requestClose}
+                    className="size-10 rounded-full [&_svg]:size-6"
+                  >
+                    <ChevronLeft />
+                  </IconButton>
+                </div>
+                <div className="flex min-w-0 flex-1 justify-center">
                   <SaveStatus state={state} updatedAt={note.updatedAt} />
                 </div>
-                <IconButton
-                  label={editable ? 'Move to trash' : 'Delete forever'}
-                  onClick={() => {
-                    haptics.warning();
-                    if (editable) trashNote(note.id);
-                    else deleteNoteForever(note.id);
-                    requestClose();
-                  }}
-                  className="size-10 text-destructive hover:text-destructive [&_svg]:size-6"
-                >
-                  <Trash2 />
-                </IconButton>
+                <div className="glass flex shrink-0 rounded-full p-1">
+                  <IconButton
+                    label={editable ? 'Move to trash' : 'Delete forever'}
+                    onClick={() => {
+                      haptics.warning();
+                      if (editable) trashNote(note.id);
+                      else deleteNoteForever(note.id);
+                      requestClose();
+                    }}
+                    className="size-10 rounded-full text-destructive hover:text-destructive [&_svg]:size-6"
+                  >
+                    <Trash2 />
+                  </IconButton>
+                </div>
               </header>
 
               <div
