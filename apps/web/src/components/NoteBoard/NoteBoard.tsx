@@ -595,6 +595,15 @@ function BoardColumn({
   onOpen: (note: Note, card: HTMLElement) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  // Content swapped in by collapsing or expanding fades in once the column has mostly
+  // resized, so cards are not seen squeezed into its collapsed width. On first render
+  // it just appears.
+  const [wasCollapsed, setWasCollapsed] = useState(collapsed);
+  const [toggled, setToggled] = useState(false);
+  if (collapsed !== wasCollapsed) {
+    setWasCollapsed(collapsed);
+    setToggled(true);
+  }
   const shown = [...notes];
   // A single card moves within its own column; a stack leaves a slot wherever it goes.
   const activeInColumn =
@@ -642,62 +651,72 @@ function BoardColumn({
         // Large-container radius matches dialogs and empty states; cards inside keep
         // the card radius (rounded-2xl). The height fills the viewport down to the
         // dock so the column lands on the page's dock-space padding.
-        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] transition-[width,background-color] @3xl:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)]',
+        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] transition-[width,flex-grow,flex-basis,padding,background-color] duration-500 ease-[var(--ease-emphasized)] @3xl:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)]',
+        // Both states size with the same properties, in units CSS can interpolate, so
+        // collapsing and expanding animate instead of snapping between keywords.
         collapsed
-          ? 'w-14 p-1.5'
-          : 'w-[86%] max-w-sm p-2.5 @3xl:w-[min(28vw,22rem)] @3xl:min-w-[16rem] @3xl:flex-1 @3xl:max-w-none',
+          ? 'w-14 p-1.5 @3xl:grow-0 @3xl:basis-14'
+          : 'w-[min(86%,24rem)] p-2.5 @3xl:grow @3xl:basis-64',
         isOver && 'bg-brand/15 ring-2 ring-brand/60',
       )}
     >
       <div aria-hidden className="mx-2 h-1 shrink-0 rounded-full bg-[var(--column-accent)]" />
-      {collapsed ? (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
+      <motion.div
+        key={collapsed ? 'collapsed' : 'expanded'}
+        className="flex flex-1 flex-col gap-2.5"
+        initial={toggled ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25, delay: 0.15, ease: 'easeOut' }}
+      >
+        {collapsed ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Expand ${name} column`}
+                  onClick={onToggleCollapsed}
+                  className="flex min-h-48 flex-1 flex-col items-center gap-3 rounded-2xl px-1 py-3 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
+                    {notes.length}
+                  </span>
+                  <span className="[writing-mode:vertical-rl]">{name}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{name}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <>
+            <h3 className="px-2 pt-1">
               <button
                 type="button"
-                aria-label={`Expand ${name} column`}
+                aria-label={`Collapse ${name} column`}
+                title={`Collapse ${name}`}
                 onClick={onToggleCollapsed}
-                className="flex min-h-48 flex-1 flex-col items-center gap-3 rounded-2xl px-1 py-3 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
-                  {notes.length}
+                <span className="truncate font-semibold text-sm">{name}</span>
+                <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                  <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-xs tabular-nums">
+                    {notes.length}
+                  </span>
+                  <span aria-hidden className="px-1.5">
+                    −
+                  </span>
                 </span>
-                <span className="[writing-mode:vertical-rl]">{name}</span>
               </button>
-            </TooltipTrigger>
-            <TooltipContent>{name}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ) : (
-        <>
-          <h3 className="px-2 pt-1">
-            <button
-              type="button"
-              aria-label={`Collapse ${name} column`}
-              title={`Collapse ${name}`}
-              onClick={onToggleCollapsed}
-              className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="truncate font-semibold text-sm">{name}</span>
-              <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
-                <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-xs tabular-nums">
-                  {notes.length}
-                </span>
-                <span aria-hidden className="px-1.5">
-                  −
-                </span>
-              </span>
-            </button>
-          </h3>
-          {items}
-          {visible === 0 && placeholderAt === null && (
-            <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
-              Drop notes here
-            </p>
-          )}
-        </>
-      )}
+            </h3>
+            {items}
+            {visible === 0 && placeholderAt === null && (
+              <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
+                Drop notes here
+              </p>
+            )}
+          </>
+        )}
+      </motion.div>
     </section>
   );
 }
