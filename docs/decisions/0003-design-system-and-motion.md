@@ -25,6 +25,8 @@ button. Tapping Gallery while on a gallery page shows a separate segmented contr
 floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment. Settings is a sheet behind the gear in the
 page header.
+Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
+all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 pin, deck, archive); the color button grows the dock upward into a palette, and trashing
@@ -110,6 +112,8 @@ focus, so the keyboard stays up.
   so e2e tests wait for `[contenteditable]` before typing.
 - Safe-area insets come from `--safe-*` tokens, which read the variables injected by
   `KeyboardInsetsPlugin` and fall back to `env()`.
-- The page is not resized for the keyboard. UI pinned to the bottom clears it with
-  `var(--keyboard)` (`--dock-bottom` and `--dock-space` already do), and the browser no longer
+- The page is not resized for the keyboard. UI pinned to the bottom, including sheets,
+  clears it with `var(--keyboard)` (`--dock-bottom` and `--dock-space` already do). Sheets
+  also limit their height to the space above the keyboard and scroll focused fields into view.
+  The browser no longer
   scrolls focused fields above it on its own.

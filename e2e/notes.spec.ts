@@ -356,7 +356,7 @@ test('deck board moves notes between columns and back to the gallery', async ({
   await expect(holdColumn.getByText('Ship it')).toBeVisible();
 
   await drag(holdColumn, page.getByRole('region', { name: 'Send to gallery' }));
-  await expect(page.getByText('No notes in the deck')).toBeVisible();
+  await expect(newColumn.getByText('Drop notes here')).toBeVisible();
   await page.getByRole('link', { name: 'Gallery' }).click();
   await expect(card(page, 'Ship it')).toBeVisible();
 });

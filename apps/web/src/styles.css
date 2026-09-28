@@ -158,6 +158,29 @@
   --note-bg: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
 }
 
+/* Deck colors mark a column's edge and controls; note colors remain independent. */
+[data-column-color="amber"] {
+  --column-accent: light-dark(#b56a12, #ffc247);
+}
+[data-column-color="red"] {
+  --column-accent: light-dark(#c75248, #ed8a7e);
+}
+[data-column-color="green"] {
+  --column-accent: light-dark(#428661, #7fc99b);
+}
+[data-column-color="teal"] {
+  --column-accent: light-dark(#288b91, #76cad0);
+}
+[data-column-color="blue"] {
+  --column-accent: light-dark(#5279b8, #91b4ec);
+}
+[data-column-color="violet"] {
+  --column-accent: light-dark(#8964ad, #b9a0d8);
+}
+[data-column-color="gray"] {
+  --column-accent: light-dark(#797672, #aaa8a3);
+}
+
 @theme {
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   /* Titles: the one place the type is loud. */
@@ -254,6 +277,10 @@
   body {
     @apply bg-background font-sans text-foreground antialiased;
     overscroll-behavior-y: none;
+  }
+  button:not(:disabled),
+  a[href] {
+    cursor: pointer;
   }
 }
 

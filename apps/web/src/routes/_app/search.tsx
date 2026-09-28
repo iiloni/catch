@@ -1,4 +1,4 @@
-import { BOARD_COLUMNS, NOTE_COLORS, type NoteColor } from '@catch/shared';
+import { type BoardColumn, NOTE_COLORS, type NoteColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Clock, Search, SearchX, X } from 'lucide-react';
@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
-import { notesCollection } from '@/lib/collections';
+import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { searchQuery } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -33,6 +33,9 @@ function SearchPage() {
   const { open } = useOpenNote();
   const { data: notes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
+  });
+  const { data: columns = [] } = useLiveQuery({
+    query: (q) => q.from({ column: boardColumnsCollection }),
   });
 
   const results = useMemo(
@@ -106,7 +109,7 @@ function SearchPage() {
                     exit={{ opacity: 0, scale: 0.97 }}
                     transition={springs.smooth}
                   >
-                    <ResultCard result={result} onOpen={openResult} />
+                    <ResultCard result={result} columns={columns} onOpen={openResult} />
                   </motion.li>
                 ))}
               </AnimatePresence>
@@ -192,14 +195,16 @@ function Highlighted({ segments }: { segments: Segment[] }) {
 
 function ResultCard({
   result,
+  columns,
   onOpen,
 }: {
   result: SearchResult;
+  columns: BoardColumn[];
   onOpen: (result: SearchResult, card: HTMLElement) => void;
 }) {
   const { note } = result;
   const hidden = useIsCardHidden(note.id);
-  const column = BOARD_COLUMNS.find((c) => c.id === note.status);
+  const column = columns.find((c) => c.id === note.status);
 
   return (
     <article

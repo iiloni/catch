@@ -1,4 +1,9 @@
-import { BOARD_COLUMNS, comparePositions, type Note } from '@catch/shared';
+import {
+  type BoardColumn as BoardColumnData,
+  comparePositions,
+  DEFAULT_BOARD_STATUS,
+  type Note,
+} from '@catch/shared';
 import {
   type CollisionDetection,
   DndContext,
@@ -20,14 +25,17 @@ import {
 import { LayoutGrid } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { sortBoardColumns } from '@/lib/boardColumns';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { moveDeckNote, sendNoteToGallery } from '@/lib/notes';
+import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
 const GALLERY_DROP_ID = '__gallery__';
-const COLUMN_IDS = new Set<string>(BOARD_COLUMNS.map((column) => column.id));
 
 // Drop where the pointer is; keyboard drags have no pointer, so fall back to overlap.
 const collisionDetection: CollisionDetection = (args) => {
@@ -44,6 +52,7 @@ const DROP_ANIMATION_MS = 180;
 
 type Props = {
   notes: Note[];
+  columns: BoardColumnData[];
   onOpen: (note: Note, card: HTMLElement) => void;
 };
 
@@ -76,7 +85,19 @@ function dropIndex(column: HTMLElement, y: number, activeId: string) {
  * wider boards show all columns side by side. Dragging a card reveals a "Send to
  * gallery" target above the dock.
  */
-export function NoteBoard({ notes, onOpen }: Props) {
+export function NoteBoard({ notes, columns, onOpen }: Props) {
+  const orderedColumns = sortBoardColumns(columns);
+  const columnIds = new Set(orderedColumns.map((column) => column.id));
+  const [collapsed, setCollapsed] = usePersistentState(
+    `catch-deck-collapsed:${orderedColumns[0]?.userId ?? ''}`,
+    z.array(z.string()),
+    [],
+  );
+  const collapsedIds = new Set(collapsed);
+  const toggleCollapsed = (id: string) =>
+    setCollapsed(
+      collapsedIds.has(id) ? collapsed.filter((item) => item !== id) : [...collapsed, id],
+    );
   const [active, setActive] = useState<{ note: Note; width: number; height: number } | null>(null);
   const activeNote = useRef<Note | null>(null);
   const pointer = useRef<Point | null>(null);
@@ -88,6 +109,11 @@ export function NoteBoard({ notes, onOpen }: Props) {
   const pager = useRef<HTMLDivElement>(null);
   // The page being shown or scrolled to; `page` lags behind while the pager scrolls.
   const pageTarget = useRef(0);
+  useEffect(() => {
+    const last = Math.max(0, orderedColumns.length - 1);
+    if (page > last) setPage(last);
+    if (pageTarget.current > last) pageTarget.current = last;
+  }, [orderedColumns.length, page]);
   // Which edge the dragged card is held against, and the timer for the next page turn.
   const edge = useRef<{ side: -1 | 0 | 1; timer: number }>({ side: 0, timer: 0 });
   // Removes the pointer listeners that follow a drag.
@@ -99,9 +125,9 @@ export function NoteBoard({ notes, onOpen }: Props) {
     useSensor(KeyboardSensor),
   );
 
-  // Notes with a status the board does not know about show in the first column.
+  // A deleted column can remain in a pending local note write until sync catches up.
   const columnOf = (note: Note) =>
-    note.status && COLUMN_IDS.has(note.status) ? note.status : BOARD_COLUMNS[0].id;
+    note.status && columnIds.has(note.status) ? note.status : DEFAULT_BOARD_STATUS;
 
   // Position controls the order inside each column, including pinned notes.
   const ordered = [...notes].sort(
@@ -231,7 +257,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
         side,
         timer: window.setTimeout(() => {
           const next = pageTarget.current + side;
-          if (next < 0 || next >= BOARD_COLUMNS.length) return;
+          if (next < 0 || next >= orderedColumns.length) return;
           haptics.selection();
           showPage(next);
           turn(NEXT_TURN_MS);
@@ -262,7 +288,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
     if (over === GALLERY_DROP_ID) {
       haptics.success();
       sendNoteToGallery(note.id);
-    } else if (COLUMN_IDS.has(String(over)) && destination?.column === over) {
+    } else if (columnIds.has(String(over)) && destination?.column === over) {
       const others = ordered.filter((other) => other.id !== note.id && columnOf(other) === over);
       const from = ordered.filter((other) => columnOf(other) === over).indexOf(note);
       if (over === columnOf(note) && destination.index === from) return;
@@ -272,6 +298,8 @@ export function NoteBoard({ notes, onOpen }: Props) {
   }
 
   function showPage(index: number) {
+    const selected = orderedColumns[index];
+    if (selected && collapsedIds.has(selected.id)) toggleCollapsed(selected.id);
     pageTarget.current = index;
     const element = pager.current;
     const column = element?.children[index] as HTMLElement | undefined;
@@ -280,9 +308,16 @@ export function NoteBoard({ notes, onOpen }: Props) {
 
   function onPagerScroll() {
     const element = pager.current;
-    const first = element?.children[0] as HTMLElement | undefined;
-    if (!element || !first) return;
-    const next = Math.round(element.scrollLeft / (first.offsetWidth + 12));
+    if (!element) return;
+    const children = [...element.children] as HTMLElement[];
+    const next = children.reduce(
+      (best, child, index) =>
+        Math.abs(child.offsetLeft - element.scrollLeft - 12) <
+        Math.abs((children[best]?.offsetLeft ?? 0) - element.scrollLeft - 12)
+          ? index
+          : best,
+      0,
+    );
     if (next !== page) {
       // Page turns during a drag already tick when they start.
       if (!active) haptics.selection();
@@ -311,9 +346,9 @@ export function NoteBoard({ notes, onOpen }: Props) {
         <div
           role="tablist"
           aria-label="Columns"
-          className="mx-3 mb-3 flex gap-1 rounded-2xl bg-foreground/[0.05] p-1 @3xl:hidden"
+          className="mx-3 mb-3 flex gap-1 overflow-x-auto rounded-2xl bg-foreground/[0.05] p-1 [scrollbar-width:none] @3xl:hidden"
         >
-          {BOARD_COLUMNS.map((column, index) => (
+          {orderedColumns.map((column, index) => (
             <button
               key={column.id}
               type="button"
@@ -321,7 +356,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
               aria-selected={page === index}
               onClick={() => showPage(index)}
               className={cn(
-                'relative flex-1 rounded-xl py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
+                'relative shrink-0 rounded-xl px-3 py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
                 page === index ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -333,7 +368,11 @@ export function NoteBoard({ notes, onOpen }: Props) {
                   transition={springs.snappy}
                 />
               )}
-              <span className="relative">
+              <span
+                className="relative inline-flex items-center gap-1.5"
+                data-column-color={column.color}
+              >
+                <span className="size-1.5 shrink-0 rounded-full bg-[var(--column-accent)]" />
                 {column.name}
                 <span className="ml-1.5 text-muted-foreground tabular-nums">
                   {ordered.filter((note) => columnOf(note) === column.id).length}
@@ -345,13 +384,16 @@ export function NoteBoard({ notes, onOpen }: Props) {
         <div
           ref={pager}
           onScroll={onPagerScroll}
-          className="flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto px-3 [scrollbar-width:none] @3xl:grid @3xl:snap-none @3xl:grid-cols-3 @3xl:overflow-visible @3xl:px-6"
+          className="flex snap-x snap-mandatory scroll-px-3 gap-3 overflow-x-auto px-3 [scrollbar-width:none] @3xl:snap-none @3xl:px-6"
         >
-          {BOARD_COLUMNS.map((column) => (
+          {orderedColumns.map((column) => (
             <BoardColumn
               key={column.id}
               id={column.id}
               name={column.name}
+              color={column.color}
+              collapsed={collapsedIds.has(column.id)}
+              onToggleCollapsed={() => toggleCollapsed(column.id)}
               notes={ordered.filter((note) => columnOf(note) === column.id)}
               active={active}
               preview={preview}
@@ -376,6 +418,9 @@ export function NoteBoard({ notes, onOpen }: Props) {
 function BoardColumn({
   id,
   name,
+  color,
+  collapsed,
+  onToggleCollapsed,
   notes,
   active,
   preview,
@@ -384,6 +429,9 @@ function BoardColumn({
 }: {
   id: string;
   name: string;
+  color: BoardColumnData['color'];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   notes: Note[];
   active: { note: Note; height: number } | null;
   preview: DropTarget | null;
@@ -405,34 +453,77 @@ function BoardColumn({
     <section
       ref={setNodeRef}
       data-board-column={id}
+      data-column-color={color}
       aria-label={`${name} column`}
       className={cn(
         // Large-container radius matches dialogs and empty states; cards inside keep
         // the card radius (rounded-2xl). The height fills the viewport down to the
         // dock so the column lands on the page's dock-space padding.
-        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] w-[86%] max-w-sm shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] p-2.5 transition-colors @3xl:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)] @3xl:w-auto @3xl:max-w-none',
+        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] transition-[width,background-color] @3xl:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)]',
+        collapsed
+          ? 'w-14 p-1.5'
+          : 'w-[86%] max-w-sm p-2.5 @3xl:w-[min(28vw,22rem)] @3xl:min-w-[16rem] @3xl:flex-1 @3xl:max-w-none',
         isOver && 'bg-brand/15 ring-2 ring-brand/60',
       )}
     >
-      <h3 className="hidden items-center justify-between px-2 pt-1 font-semibold text-sm @3xl:flex">
-        {name}
-        <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-muted-foreground text-xs tabular-nums">
-          {notes.length}
-        </span>
-      </h3>
-      {shown.map((note, index) => (
-        <div key={note.id}>
-          {showPlaceholder && preview.index === index && <DropPlaceholder height={active.height} />}
-          <DraggableNote note={note} settling={settlingId === note.id} onOpen={onOpen} />
-        </div>
-      ))}
-      {showPlaceholder && preview.index === shown.length && (
-        <DropPlaceholder height={active.height} />
-      )}
-      {notes.length === 0 && !showPlaceholder && (
-        <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
-          Drop notes here
-        </p>
+      <div aria-hidden className="mx-2 h-1 shrink-0 rounded-full bg-[var(--column-accent)]" />
+      {collapsed ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Expand ${name} column`}
+                onClick={onToggleCollapsed}
+                className="flex min-h-48 flex-1 flex-col items-center gap-3 rounded-2xl px-1 py-3 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-xs tabular-nums">
+                  {notes.length}
+                </span>
+                <span className="[writing-mode:vertical-rl]">{name}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{name}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <>
+          <h3 className="px-2 pt-1">
+            <button
+              type="button"
+              aria-label={`Collapse ${name} column`}
+              title={`Collapse ${name}`}
+              onClick={onToggleCollapsed}
+              className="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="truncate font-semibold text-sm">{name}</span>
+              <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-xs tabular-nums">
+                  {notes.length}
+                </span>
+                <span aria-hidden className="px-1.5">
+                  −
+                </span>
+              </span>
+            </button>
+          </h3>
+          {shown.map((note, index) => (
+            <div key={note.id}>
+              {showPlaceholder && preview.index === index && (
+                <DropPlaceholder height={active.height} />
+              )}
+              <DraggableNote note={note} settling={settlingId === note.id} onOpen={onOpen} />
+            </div>
+          ))}
+          {showPlaceholder && preview.index === shown.length && (
+            <DropPlaceholder height={active.height} />
+          )}
+          {notes.length === 0 && !showPlaceholder && (
+            <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
+              Drop notes here
+            </p>
+          )}
+        </>
       )}
     </section>
   );

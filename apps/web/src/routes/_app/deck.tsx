@@ -1,10 +1,10 @@
 import { and, eq, isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { Columns3 } from 'lucide-react';
-import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { useState } from 'react';
+import { ColumnManager } from '@/components/NoteBoard/ColumnManager';
 import { NoteBoard } from '@/components/NoteBoard/NoteBoard';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
-import { notesCollection } from '@/lib/collections';
+import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { useOpenNote } from '@/lib/openNote';
 
 export const Route = createFileRoute('/_app/deck')({
@@ -13,7 +13,11 @@ export const Route = createFileRoute('/_app/deck')({
 
 /** Notes being actively worked on: the ones with a board status. */
 function DeckPage() {
+  const [managing, setManaging] = useState(false);
   const { open } = useOpenNote();
+  const { data: columns = [], isLoading: columnsLoading } = useLiveQuery({
+    query: (q) => q.from({ column: boardColumnsCollection }),
+  });
   const { data: notes = [], isLoading } = useLiveQuery({
     query: (q) =>
       q
@@ -25,15 +29,22 @@ function DeckPage() {
 
   return (
     <>
-      <PageHeader title="Deck" />
+      <PageHeader
+        title="Deck"
+        titleAccessory={
+          <button
+            type="button"
+            onClick={() => setManaging(true)}
+            className="rounded-full px-3 py-2 font-medium text-sm text-brand-link outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Edit columns
+          </button>
+        }
+      />
+      <ColumnManager columns={columns} open={managing} onOpenChange={setManaging} />
       <div className="mx-auto max-w-7xl pt-3">
-        {isLoading ? null : notes.length > 0 ? (
-          <NoteBoard notes={notes} onOpen={(note, card) => open(note.id, card)} />
-        ) : (
-          <EmptyState icon={Columns3} title="No notes in the deck">
-            Notes you are working on live here. Choose Deck when catching a note, or add one from
-            its toolbar.
-          </EmptyState>
+        {isLoading || columnsLoading ? null : (
+          <NoteBoard notes={notes} columns={columns} onOpen={(note, card) => open(note.id, card)} />
         )}
       </div>
     </>

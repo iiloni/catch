@@ -19,11 +19,16 @@ const NOTE_COLUMNS = [
   'deleted_at',
 ];
 
+const BOARD_COLUMN_COLUMNS = ['id', 'user_id', 'name', 'color', 'position'];
+
 /**
  * Auth proxy in front of Electric. Clients never talk to Electric directly;
  * the server decides which table and rows each user can sync.
  */
-export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/notes', async (c) => {
+export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/:shape', async (c) => {
+  const shape = c.req.param('shape');
+  if (shape !== 'notes' && shape !== 'board-columns')
+    return c.json({ error: 'Shape not found' }, 404);
   const user = c.get('user')!;
   const incoming = new URL(c.req.url);
   const upstream = new URL('/v1/shape', env.ELECTRIC_URL);
@@ -31,8 +36,11 @@ export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/notes', asy
   for (const [key, value] of incoming.searchParams) {
     if (ELECTRIC_PROTOCOL_QUERY_PARAMS.includes(key)) upstream.searchParams.set(key, value);
   }
-  upstream.searchParams.set('table', 'notes');
-  upstream.searchParams.set('columns', NOTE_COLUMNS.join(','));
+  upstream.searchParams.set('table', shape === 'notes' ? 'notes' : 'board_columns');
+  upstream.searchParams.set(
+    'columns',
+    (shape === 'notes' ? NOTE_COLUMNS : BOARD_COLUMN_COLUMNS).join(','),
+  );
   upstream.searchParams.set('where', 'user_id = $1');
   upstream.searchParams.set('params[1]', user.id);
   if (env.ELECTRIC_SECRET) upstream.searchParams.set('secret', env.ELECTRIC_SECRET);

@@ -1,4 +1,4 @@
-import type { CreateNote, UpdateNote } from '@catch/shared';
+import type { CreateBoardColumn, CreateNote, UpdateBoardColumn, UpdateNote } from '@catch/shared';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
 
@@ -34,4 +34,10 @@ export const api = {
   updateNote: (id: string, body: UpdateNote) =>
     request<TxidResponse>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteNote: (id: string) => request<TxidResponse>(`/notes/${id}`, { method: 'DELETE' }),
+  createBoardColumn: (body: CreateBoardColumn) =>
+    request<TxidResponse>('/board-columns', { method: 'POST', body: JSON.stringify(body) }),
+  updateBoardColumn: (id: string, body: UpdateBoardColumn) =>
+    request<TxidResponse>(`/board-columns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteBoardColumn: (id: string) =>
+    request<TxidResponse>(`/board-columns/${id}`, { method: 'DELETE' }),
 };

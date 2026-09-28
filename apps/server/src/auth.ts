@@ -1,3 +1,4 @@
+import { BOARD_COLUMNS } from '@catch/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
@@ -29,6 +30,15 @@ export const auth = betterAuth({
         before: async (user) => {
           const [row] = await db.select({ total: count() }).from(schema.user);
           return { data: { ...user, role: row?.total === 0 ? 'admin' : 'user' } };
+        },
+        after: async (user) => {
+          await db.insert(schema.boardColumns).values(
+            BOARD_COLUMNS.map((column, index) => ({
+              ...column,
+              userId: user.id,
+              position: `a${index}`,
+            })),
+          );
         },
       },
     },

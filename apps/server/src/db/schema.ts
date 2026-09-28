@@ -5,6 +5,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -117,4 +118,18 @@ export const notes = pgTable(
     index().on(table.userId, table.updatedAt),
     index('notes_search_idx').using('gin', table.search),
   ],
+);
+
+export const boardColumns = pgTable(
+  'board_columns',
+  {
+    id: text().notNull(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    color: text().notNull(),
+    position: text().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.id] })],
 );

@@ -1,13 +1,35 @@
-/**
- * Board columns for notes in the deck. A note's `status` is one of these ids;
- * a null status means the note lives in the gallery.
- */
+import { z } from 'zod';
+import { notePositionSchema } from './notes';
+
+export const DEFAULT_BOARD_STATUS = 'new';
+
 export const BOARD_COLUMNS = [
-  { id: 'new', name: 'New' },
-  { id: 'in_progress', name: 'In progress' },
-  { id: 'hold', name: 'On hold' },
+  { id: 'new', name: 'New', color: 'amber' },
+  { id: 'in_progress', name: 'In progress', color: 'blue' },
+  { id: 'hold', name: 'On hold', color: 'violet' },
 ] as const;
 
-export type BoardColumnId = (typeof BOARD_COLUMNS)[number]['id'];
+export const COLUMN_COLORS = ['amber', 'red', 'green', 'teal', 'blue', 'violet', 'gray'] as const;
+export const columnColorSchema = z.enum(COLUMN_COLORS);
+export type ColumnColor = z.infer<typeof columnColorSchema>;
 
-export const DEFAULT_BOARD_STATUS: BoardColumnId = 'new';
+export const boardColumnSchema = z.object({
+  id: z.string().min(1).max(64),
+  userId: z.string(),
+  name: z.string().trim().min(1).max(40),
+  color: columnColorSchema,
+  position: notePositionSchema,
+});
+export type BoardColumn = z.infer<typeof boardColumnSchema>;
+
+export const createBoardColumnSchema = boardColumnSchema.pick({
+  id: true,
+  name: true,
+  color: true,
+  position: true,
+});
+export type CreateBoardColumn = z.infer<typeof createBoardColumnSchema>;
+export const updateBoardColumnSchema = boardColumnSchema
+  .pick({ name: true, color: true, position: true })
+  .partial();
+export type UpdateBoardColumn = z.infer<typeof updateBoardColumnSchema>;

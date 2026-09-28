@@ -43,7 +43,7 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2.5 rounded-xl px-3 py-2 text-sm outline-hidden pointer-coarse:py-2.5 pointer-coarse:text-base focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[variant=destructive]:text-destructive data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "relative flex cursor-pointer select-none items-center gap-2.5 rounded-xl px-3 py-2 text-sm outline-hidden pointer-coarse:py-2.5 pointer-coarse:text-base focus:bg-accent focus:text-accent-foreground data-[disabled]:cursor-default data-[disabled]:pointer-events-none data-[variant=destructive]:text-destructive data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       {...props}
@@ -66,7 +66,7 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2.5 rounded-xl py-2 pr-3 pl-9 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 pointer-coarse:py-2.5 pointer-coarse:text-base [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "relative flex cursor-pointer select-none items-center gap-2.5 rounded-xl py-2 pr-3 pl-9 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground data-[disabled]:cursor-default data-[disabled]:pointer-events-none data-[disabled]:opacity-50 pointer-coarse:py-2.5 pointer-coarse:text-base [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       {...props}

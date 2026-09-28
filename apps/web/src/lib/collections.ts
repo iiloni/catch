@@ -1,4 +1,11 @@
-import { createNoteSchema, noteSchema, updateNoteSchema } from '@catch/shared';
+import {
+  boardColumnSchema,
+  createBoardColumnSchema,
+  createNoteSchema,
+  noteSchema,
+  updateBoardColumnSchema,
+  updateNoteSchema,
+} from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { createCollection } from '@tanstack/react-db';
@@ -40,6 +47,41 @@ export const notesCollection = createCollection(
     onDelete: async ({ transaction }) => {
       const results = await Promise.all(
         transaction.mutations.map((m) => api.deleteNote(String(m.key))),
+      );
+      return { txid: results.map((r) => r.txid) };
+    },
+  }),
+);
+
+export const boardColumnsCollection = createCollection(
+  electricCollectionOptions({
+    id: 'board-columns',
+    schema: boardColumnSchema,
+    getKey: (column) => column.id,
+    shapeOptions: {
+      url: `${getServerUrl()}/api/shapes/board-columns`,
+      headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+      columnMapper: snakeCamelMapper(),
+    },
+    onInsert: async ({ transaction }) => {
+      const results = await Promise.all(
+        transaction.mutations.map((m) =>
+          api.createBoardColumn(createBoardColumnSchema.parse(m.modified)),
+        ),
+      );
+      return { txid: results.map((r) => r.txid) };
+    },
+    onUpdate: async ({ transaction }) => {
+      const results = await Promise.all(
+        transaction.mutations.map((m) =>
+          api.updateBoardColumn(String(m.key), updateBoardColumnSchema.parse(m.changes)),
+        ),
+      );
+      return { txid: results.map((r) => r.txid) };
+    },
+    onDelete: async ({ transaction }) => {
+      const results = await Promise.all(
+        transaction.mutations.map((m) => api.deleteBoardColumn(String(m.key))),
       );
       return { txid: results.map((r) => r.txid) };
     },
