@@ -87,9 +87,14 @@ export function Dock() {
         ref={dockRef}
         data-dock
         style={{ zIndex }}
+        // Spans the whole width and pads the pane away rather than ending at it: a page
+        // transition sizes the dock's snapshot once, as it starts, while a pane closing with
+        // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
-          'pointer-events-none fixed right-[var(--note-pane)] bottom-[var(--dock-bottom)] left-0 flex justify-center',
-          mode === 'note' && keyboardOpen ? 'px-1' : 'px-3',
+          'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
+          mode === 'note' && keyboardOpen
+            ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
+            : 'pr-[calc(var(--note-pane)+0.75rem)] pl-3',
         )}
       >
         <LayoutGroup id="dock">
