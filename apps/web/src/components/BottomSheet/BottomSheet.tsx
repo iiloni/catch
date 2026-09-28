@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useBackHandler } from '@/lib/backButton';
@@ -10,11 +10,19 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
+  dragHandleOnly?: boolean;
 };
 
 /** A frosted sheet that slides up from the bottom and is swiped down to dismiss. */
-export function BottomSheet({ open, onOpenChange, title, children }: Props) {
+export function BottomSheet({
+  open,
+  onOpenChange,
+  title,
+  children,
+  dragHandleOnly = false,
+}: Props) {
   useBackHandler(open, () => onOpenChange(false));
+  const dragControls = useDragControls();
   const scrollArea = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,13 +72,20 @@ export function BottomSheet({ open, onOpenChange, title, children }: Props) {
                 exit={{ y: '110%' }}
                 transition={springs.smooth}
                 drag="y"
+                dragControls={dragControls}
+                dragListener={!dragHandleOnly}
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.6 }}
                 onDragEnd={(_, info) => {
                   if (info.offset.y > 100 || info.velocity.y > 500) onOpenChange(false);
                 }}
               >
-                <div aria-hidden className="flex justify-center pt-2.5 pb-1">
+                <div
+                  aria-hidden
+                  data-sheet-grip
+                  className="flex cursor-grab touch-none justify-center pt-2.5 pb-1 active:cursor-grabbing"
+                  onPointerDown={dragHandleOnly ? (event) => dragControls.start(event) : undefined}
+                >
                   <span className="h-1 w-9 rounded-full bg-foreground/20" />
                 </div>
                 <DialogPrimitive.Title className="px-5 pt-1 pb-3 font-display font-semibold text-xl tracking-[-0.01em]">

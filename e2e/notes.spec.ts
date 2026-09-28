@@ -40,6 +40,64 @@ test('an empty quick note creates nothing', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(0);
 });
 
+test('swiping the quick-note handle up expands after the release threshold', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Checks the touch gesture.');
+  await signUp(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
+  await page.keyboard.type('Swipe to expand');
+
+  const window = page.getByRole('region', { name: 'New note' });
+  const handle = page.getByTestId('quick-note-handle');
+  const touch = await page.context().newCDPSession(page);
+  async function pullUp(distance: number, checkCap = false) {
+    const box = await handle.boundingBox();
+    if (!box) throw new Error('Missing quick-note handle');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y, id: 1 }],
+    });
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y - distance, id: 1 }],
+    });
+    if (checkCap) {
+      await expect
+        .poll(async () => {
+          const moved = await handle.boundingBox();
+          return moved ? box.y - moved.y : 0;
+        })
+        .toBeGreaterThan(40);
+      const moved = await handle.boundingBox();
+      if (!moved) throw new Error('Missing dragged quick-note handle');
+      expect(box.y - moved.y).toBeLessThanOrEqual(60);
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    return box.y;
+  }
+
+  const restingY = await pullUp(50);
+  await expect(window).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const box = await handle.boundingBox();
+      return box ? Math.abs(box.y - restingY) : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(2);
+
+  await pullUp(240, true);
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Swipe to expand');
+  await expect(window).toBeHidden();
+});
+
 test('opening a quick note folds the gallery switcher away', async ({ page }) => {
   await signUp(page);
   const switcher = page.getByRole('navigation', { name: 'Gallery pages' });
