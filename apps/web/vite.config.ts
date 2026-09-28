@@ -16,8 +16,8 @@ export default defineConfig({
         name: 'Catch',
         short_name: 'Catch',
         description: 'Self-hosted notes that work offline.',
-        theme_color: '#edb06d',
-        background_color: '#ffffff',
+        theme_color: '#ffc247',
+        background_color: '#f7f6f2',
         display: 'standalone',
         start_url: '/',
         icons: [
@@ -51,5 +51,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Worktree stacks often run together; keep test forks within host memory.
+    maxWorkers: 2,
   },
 });

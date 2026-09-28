@@ -104,6 +104,16 @@ refuse those too. It then deletes that worktree's Compose volumes (asking first 
 and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
 non-forced `git branch -d`, so unmerged work is never deleted.
 
+To remove every non-main worktree, run this from the primary checkout while it is on `main`:
+
+```bash
+./scripts/worktree.sh remove-all [-y] [--delete-branch]
+```
+
+It uses the same safety checks and volume cleanup for each worktree. Without `-y`, it asks
+before deleting each initialized worktree's volumes. `--delete-branch` also deletes each
+merged branch with `git branch -d`; an unmerged branch is preserved.
+
 ## Parallel migrations
 
 Worktrees isolate databases, not Git history. Drizzle numbers migrations sequentially and

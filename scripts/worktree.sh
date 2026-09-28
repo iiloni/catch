@@ -217,6 +217,27 @@ self_remove_worktree() {
     exec "$primary/scripts/worktree.sh" remove "$repo_root" "$@"
 }
 
+remove_all_worktrees() {
+    local option target
+    local -a targets=()
+    [[ "$repo_root" == "$(primary_worktree)" && "$(git branch --show-current)" == main ]] || {
+        echo "Run remove-all from the primary worktree on main." >&2
+        exit 1
+    }
+    for option in "$@"; do
+        case "$option" in
+            --delete-branch|-y|--yes|--strict) ;;
+            *) echo "Unknown remove-all option: $option" >&2; exit 2 ;;
+        esac
+    done
+
+    mapfile -t targets < <(git worktree list --porcelain | sed -n 's/^worktree //p')
+    for target in "${targets[@]}"; do
+        [[ "$target" == "$repo_root" ]] && continue
+        remove_worktree "$target" "$@"
+    done
+}
+
 list_worktrees() {
     local worktree env_file
     while IFS= read -r worktree; do
@@ -237,6 +258,7 @@ Usage:
   ./scripts/worktree.sh create <branch> [target-directory]
   ./scripts/worktree.sh list
   ./scripts/worktree.sh remove <branch-or-path> [--delete-branch] [-y|--yes] [--strict]
+  ./scripts/worktree.sh remove-all [--delete-branch] [-y|--yes] [--strict]
   ./scripts/worktree.sh self-remove [--delete-branch] [-y|--yes] [--strict]
 USAGE
 }
@@ -246,6 +268,7 @@ case "${1:-}" in
     create) [[ $# -ge 2 ]] || { usage >&2; exit 1; }; create_worktree "$2" "${3:-}" ;;
     list) list_worktrees ;;
     remove) [[ $# -ge 2 ]] || { usage >&2; exit 1; }; shift; remove_worktree "$@" ;;
+    remove-all) shift; remove_all_worktrees "$@" ;;
     self-remove) shift; self_remove_worktree "$@" ;;
     *) usage >&2; exit 1 ;;
 esac

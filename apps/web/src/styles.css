@@ -7,45 +7,46 @@
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
- * Neutrals carry a slight warm tint that matches the brand apricot.
+ * Neutrals carry a slight warm tint that supports the sunrise brand colors.
  */
 :root {
   color-scheme: light dark;
   --radius: 0.75rem;
   /*
-   * Graphite and legal-pad yellow: the pencil and paper a thought is caught with.
-   * Neutrals are cool pencil-lead greys rather than near-black or cream.
+   * Warm graphite gives the old yellow-to-orange mark a quiet canvas.
    */
-  --background: light-dark(oklch(0.955 0.005 255), oklch(0.205 0.008 255));
-  --foreground: light-dark(oklch(0.24 0.015 255), oklch(0.95 0.005 255));
-  --card: light-dark(oklch(1 0 0), oklch(0.255 0.009 255));
+  --background: light-dark(oklch(0.965 0.008 85), oklch(0.205 0.01 70));
+  --foreground: light-dark(oklch(0.24 0.016 70), oklch(0.95 0.007 85));
+  --card: light-dark(oklch(1 0 0), oklch(0.255 0.012 70));
   --card-foreground: var(--foreground);
-  --popover: light-dark(oklch(1 0 0), oklch(0.275 0.009 255));
+  --popover: light-dark(oklch(1 0 0), oklch(0.275 0.012 70));
   --popover-foreground: var(--foreground);
-  --primary: var(--foreground);
-  --primary-foreground: var(--background);
-  --secondary: light-dark(oklch(0.925 0.006 255), oklch(0.3 0.009 255));
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: light-dark(oklch(0.93 0.009 85), oklch(0.3 0.012 70));
   --secondary-foreground: var(--foreground);
   --muted: var(--secondary);
-  --muted-foreground: light-dark(oklch(0.52 0.014 255), oklch(0.72 0.01 255));
-  --accent: light-dark(oklch(0.925 0.006 255), oklch(0.32 0.009 255));
+  --muted-foreground: light-dark(oklch(0.52 0.014 70), oklch(0.72 0.01 85));
+  --accent: light-dark(oklch(0.93 0.012 85), oklch(0.32 0.015 70));
   --accent-foreground: var(--foreground);
   --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
-  --border: light-dark(oklch(0.885 0.007 255), oklch(0.34 0.009 255));
+  --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
   --input: var(--border);
   --ring: var(--brand);
 
-  /* The one accent color: a soft apricot, softer and more orange than the icon's yellow. */
-  --brand: oklch(0.8 0.11 68);
-  --brand-foreground: oklch(0.3 0.06 60);
+  /* The old mark's sunrise, with a solid middle tone for controls and focus. */
+  --brand: #ffc247;
+  --brand-foreground: #452904;
+  --brand-link: light-dark(#955000, #ffd278);
+  --brand-gradient: linear-gradient(45deg, #ffdc5c, #ff930f);
 
   /* Frosted material for the dock, the collapsed header and sheets. */
-  --glass: light-dark(oklch(0.99 0.003 255 / 0.66), oklch(0.29 0.009 255 / 0.6));
+  --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));
   /* Menus, dialogs and sheets hold text over content, so they need to be thicker. */
-  --glass-thick: light-dark(oklch(0.99 0.003 255 / 0.9), oklch(0.27 0.009 255 / 0.92));
+  --glass-thick: light-dark(oklch(0.99 0.005 85 / 0.9), oklch(0.27 0.012 70 / 0.92));
   --glass-border: light-dark(oklch(0 0 0 / 0.07), oklch(1 0 0 / 0.1));
   --glass-highlight: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.08));
-  --glass-shadow: light-dark(oklch(0.3 0.03 255 / 0.18), oklch(0.08 0.01 255 / 0.55));
+  --glass-shadow: light-dark(oklch(0.3 0.025 70 / 0.18), oklch(0.08 0.01 70 / 0.55));
 
   /*
    * System bar insets. Capacitor injects --safe-area-inset-* on Android (zero while the

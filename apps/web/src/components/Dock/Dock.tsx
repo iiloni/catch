@@ -460,7 +460,7 @@ function ComposeButton() {
         <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
         <motion.span
           aria-hidden
-          className="absolute inset-0 rounded-[var(--dock-radius)] bg-brand shadow-[0_8px_24px_-6px_oklch(0.68_0.11_68/0.55),inset_0_1px_0_oklch(1_0_0/0.45)]"
+          className="absolute inset-0 rounded-[var(--dock-radius)] bg-[image:var(--brand-gradient)] shadow-[0_8px_24px_-6px_rgb(213_123_20/0.4),inset_0_1px_0_rgb(255_255_255/0.45)]"
           animate={{ opacity: open ? 0 : 1, scale: open ? 0.85 : 1 }}
           transition={springs.snappy}
         />
