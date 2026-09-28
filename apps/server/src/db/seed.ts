@@ -1,4 +1,4 @@
-import { blocksToPlainText, type NoteColor } from '@catch/shared';
+import { blocksToPlainText, type NoteColor, positionBetween } from '@catch/shared';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { auth } from '../auth';
@@ -35,8 +35,10 @@ async function ensureAccount(account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) 
 async function ensureDemoNotes(userId: string) {
   const [existing] = await db.select({ id: notes.id }).from(notes).where(eq(notes.userId, userId));
   if (existing) return;
+  let position: string | null = null;
   await db.insert(notes).values(
     DEMO_NOTES.map(({ lines, color, status, isPinned }) => {
+      position = positionBetween(position, null);
       const content = lines.map((text, index) => ({
         type: index === 0 ? 'heading' : 'paragraph',
         ...(index === 0 ? { props: { level: 3 } } : {}),
@@ -50,6 +52,7 @@ async function ensureDemoNotes(userId: string) {
         color,
         status: status ?? null,
         isPinned: isPinned ?? false,
+        position,
       };
     }),
   );

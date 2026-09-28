@@ -106,6 +106,8 @@ export const notes = pgTable(
     status: text(),
     isPinned: boolean().notNull().default(false),
     isArchived: boolean().notNull().default(false),
+    /** Fractional index of the note in the user's arrangement (see `positionBetween`). */
+    position: text().notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     /** Set when a note is moved to the trash. DELETE removes it for good. */

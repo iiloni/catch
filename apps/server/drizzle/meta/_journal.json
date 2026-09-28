@@ -8,6 +8,13 @@
       "when": 1790530890123,
       "tag": "0000_wild_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790574448125,
+      "tag": "0001_note_positions",
+      "breakpoints": true
     }
   ]
 }

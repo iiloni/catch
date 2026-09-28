@@ -1,15 +1,18 @@
 import type { Note } from '@catch/shared';
 import { Archive } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
-import { type PointerEvent, useRef } from 'react';
+import { type PointerEvent, useEffect, useRef } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { cn } from '@/lib/utils';
 
 type Props = {
   note: Note;
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive: (note: Note) => void;
+  /** The card has been picked up to be rearranged, so it no longer swipes. */
+  lifted?: boolean;
 };
 
 type Swipe = {
@@ -24,19 +27,24 @@ const MAX_SWIPE = 96;
 const ARCHIVE_THRESHOLD = MAX_SWIPE / 2;
 
 /** A gallery card follows a sideways touch, then archives after crossing the edge cue. */
-export function SwipeArchiveCard({ note, onOpen, onArchive }: Props) {
+export function SwipeArchiveCard({ note, onOpen, onArchive, lifted = false }: Props) {
   const x = useMotionValue(0);
   const cueOpacity = useMotionValue(0);
   const swipe = useRef<Swipe | null>(null);
   const suppressClick = useRef(false);
   const committing = useRef(false);
 
+  // A held finger that starts dragging the card must not also swipe it.
+  useEffect(() => {
+    if (lifted) swipe.current = null;
+  }, [lifted]);
+
   function setCue(active: boolean) {
     animate(cueOpacity, active ? 1 : 0, { duration: 0.14, ease: 'easeOut' });
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'touch' || committing.current) return;
+    if (event.pointerType !== 'touch' || committing.current || lifted) return;
     const button = (event.target as Element).closest('button');
     if (button && button.getAttribute('aria-label') !== 'Open note') return;
     x.stop();
@@ -52,7 +60,7 @@ export function SwipeArchiveCard({ note, onOpen, onArchive }: Props) {
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const state = swipe.current;
-    if (!state || state.pointerId !== event.pointerId) return;
+    if (!state || state.pointerId !== event.pointerId || lifted) return;
     const dx = event.clientX - state.startX;
     const dy = event.clientY - state.startY;
     if (!state.locked) {
@@ -108,7 +116,10 @@ export function SwipeArchiveCard({ note, onOpen, onArchive }: Props) {
   return (
     <div
       data-swipe-archive
-      className="relative overflow-hidden rounded-2xl bg-foreground/[0.07] touch-pan-y"
+      className={cn(
+        'relative overflow-hidden rounded-2xl touch-pan-y',
+        !lifted && 'bg-foreground/[0.07]',
+      )}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -122,7 +133,10 @@ export function SwipeArchiveCard({ note, onOpen, onArchive }: Props) {
     >
       <div
         aria-hidden
-        className="absolute inset-0 flex items-center justify-between px-5 text-foreground/60"
+        className={cn(
+          'absolute inset-0 flex items-center justify-between px-5 text-foreground/60',
+          lifted && 'invisible',
+        )}
       >
         <Archive className="size-5" />
         <Archive className="size-5" />
@@ -137,7 +151,7 @@ export function SwipeArchiveCard({ note, onOpen, onArchive }: Props) {
         <Archive className="size-5" />
       </motion.div>
       <motion.div style={{ x }}>
-        <NoteCard note={note} onOpen={onOpen} />
+        <NoteCard note={note} onOpen={onOpen} pressable={!lifted} />
       </motion.div>
     </div>
   );

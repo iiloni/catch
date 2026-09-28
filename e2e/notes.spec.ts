@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import {
   backToGallery,
   card,
@@ -358,4 +358,73 @@ test('deck board moves notes between columns and back to the gallery', async ({
   await expect(page.getByText('No notes in the deck')).toBeVisible();
   await page.getByRole('link', { name: 'Gallery' }).click();
   await expect(card(page, 'Ship it')).toBeVisible();
+});
+
+/** Gallery card titles in reading order: top to bottom, then left to right. */
+async function galleryOrder(page: Page) {
+  const cards = await page.getByRole('article').all();
+  const placed = await Promise.all(
+    cards.map(async (element) => ({
+      title: (await element.getByRole('heading').first().textContent()) ?? '',
+      box: await element.boundingBox(),
+    })),
+  );
+  return placed
+    .sort((a, b) => (a.box?.y ?? 0) - (b.box?.y ?? 0) || (a.box?.x ?? 0) - (b.box?.x ?? 0))
+    .map((entry) => entry.title);
+}
+
+async function centerOf(page: Page, title: string) {
+  const box = await card(page, title).boundingBox();
+  if (!box) throw new Error(`Missing card ${title}`);
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+test('gallery notes are rearranged by dragging', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'The touch version is below.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  // New notes go first.
+  await expect.poll(() => galleryOrder(page)).toEqual(['Three', 'Two', 'One']);
+
+  const from = await centerOf(page, 'One');
+  const to = await centerOf(page, 'Three');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 12 });
+  // The other cards make room while the note is still held.
+  await expect.poll(async () => (await centerOf(page, 'Three')).x).toBeGreaterThan(to.x + 50);
+  await page.mouse.up();
+
+  await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
+  // Letting go does not open the note.
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.reload();
+  await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
+});
+
+test('a long press picks up a gallery note to move it', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Long press is a touch gesture.');
+  await signUp(page);
+  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await expect.poll(() => galleryOrder(page)).toEqual(['Three', 'Two', 'One']);
+
+  const from = await centerOf(page, 'One');
+  const to = await centerOf(page, 'Three');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+  await page.waitForTimeout(400);
+  for (let step = 1; step <= 10; step++) {
+    const point = {
+      x: from.x + ((to.x - from.x) * step) / 10,
+      y: from.y + ((to.y - from.y) * step) / 10,
+    };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [point] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.reload();
+  await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
 });

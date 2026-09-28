@@ -107,5 +107,7 @@ write routes that return `{ txid }`, then add a collection.
   The dialog is non-modal and ignores interactions inside `[data-dock]`; the page behind is
   `inert`. The editor publishes its note and controls through `editorNote`/`editorControls`
   in `lib/dockState.ts`.
+- Notes are ordered by `position`, a fractional index (ADR 0004). Compare positions with
+  `comparePositions` (code units); `localeCompare` and Postgres collations order them wrongly.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts` and route files so
   upgrades stay contained.

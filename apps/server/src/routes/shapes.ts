@@ -13,6 +13,7 @@ const NOTE_COLUMNS = [
   'status',
   'is_pinned',
   'is_archived',
+  'position',
   'created_at',
   'updated_at',
   'deleted_at',

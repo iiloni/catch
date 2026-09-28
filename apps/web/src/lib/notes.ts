@@ -1,4 +1,10 @@
-import { blocksHaveContent, DEFAULT_BOARD_STATUS, type Note, type NoteColor } from '@catch/shared';
+import {
+  blocksHaveContent,
+  DEFAULT_BOARD_STATUS,
+  type Note,
+  type NoteColor,
+  positionBetween,
+} from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { notesCollection } from './collections';
@@ -6,6 +12,15 @@ import { notesCollection } from './collections';
 type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
 >;
+
+/** A position ahead of every note, so new notes land first, as in Keep. */
+function firstPosition() {
+  let first: string | null = null;
+  for (const note of notesCollection.values()) {
+    if (first === null || note.position < first) first = note.position;
+  }
+  return positionBetween(null, first);
+}
 
 /**
  * Note mutations. Each applies optimistically to the synced collection and
@@ -28,6 +43,7 @@ export function createNote(input: {
     status: input.status ?? null,
     isPinned: false,
     isArchived: false,
+    position: firstPosition(),
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
@@ -39,6 +55,21 @@ export function updateNote(id: string, changes: NoteChanges) {
   return notesCollection.update(id, (draft) => {
     Object.assign(draft, changes);
     draft.updatedAt = new Date();
+  });
+}
+
+/**
+ * Moves a note to `index` among `others`, the notes it is shown with, in order and
+ * without itself. Unlike an edit, this leaves `updatedAt` alone.
+ */
+export function moveNote(id: string, others: readonly Note[], index: number) {
+  const before = others[index - 1]?.position ?? null;
+  // Skip neighbours that share the position before (two devices can hand out the same one).
+  const after =
+    others.slice(index).find((note) => before === null || note.position > before)?.position ?? null;
+  const position = positionBetween(before, after);
+  return notesCollection.update(id, (draft) => {
+    draft.position = position;
   });
 }
 

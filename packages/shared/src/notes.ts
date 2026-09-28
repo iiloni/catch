@@ -14,6 +14,12 @@ export const noteStatusSchema = z.string().min(1).max(64).nullable();
  */
 export const noteContentSchema = z.array(z.record(z.string(), z.unknown()));
 
+/** Where a note sits in the user's arrangement; see `positionBetween`. */
+export const notePositionSchema = z
+  .string()
+  .max(1024)
+  .regex(/^[0-9A-Za-z]+$/);
+
 export const noteSchema = z.object({
   id: z.uuid({ version: 'v7' }),
   userId: z.string(),
@@ -22,6 +28,7 @@ export const noteSchema = z.object({
   status: noteStatusSchema,
   isPinned: z.boolean(),
   isArchived: z.boolean(),
+  position: notePositionSchema,
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   deletedAt: z.coerce.date().nullable(),
@@ -29,10 +36,13 @@ export const noteSchema = z.object({
 
 export type Note = z.infer<typeof noteSchema>;
 
-/** Clients generate the UUIDv7 so notes can be created offline. */
+/**
+ * Clients generate the UUIDv7 so notes can be created offline. Without a position, the
+ * server puts the note first.
+ */
 export const createNoteSchema = noteSchema
-  .pick({ id: true, content: true, color: true, status: true, isPinned: true })
-  .partial({ color: true, status: true, isPinned: true });
+  .pick({ id: true, content: true, color: true, status: true, isPinned: true, position: true })
+  .partial({ color: true, status: true, isPinned: true, position: true });
 
 export type CreateNote = z.infer<typeof createNoteSchema>;
 
@@ -43,6 +53,7 @@ export const updateNoteSchema = noteSchema
     status: true,
     isPinned: true,
     isArchived: true,
+    position: true,
     deletedAt: true,
   })
   .partial();

@@ -1,4 +1,9 @@
-import { blocksToPlainText, createNoteSchema, updateNoteSchema } from '@catch/shared';
+import {
+  blocksToPlainText,
+  createNoteSchema,
+  positionBetween,
+  updateNoteSchema,
+} from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
 import { and, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -21,6 +26,16 @@ async function currentTxid(tx: Tx): Promise<number> {
   return Number(row?.txid);
 }
 
+/** A position before all of the user's notes, for clients that do not send one. */
+async function firstPosition(tx: Tx, userId: string) {
+  // The "C" collation compares by byte, as positions require.
+  const [row] = await tx
+    .select({ first: sql<string | null>`min(${notes.position} collate "C")` })
+    .from(notes)
+    .where(eq(notes.userId, userId));
+  return positionBetween(null, row?.first ?? null);
+}
+
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
 export const notesRoutes = new Hono<AppEnv>()
@@ -31,6 +46,7 @@ export const notesRoutes = new Hono<AppEnv>()
     const txid = await db.transaction(async (tx) => {
       await tx.insert(notes).values({
         ...body,
+        position: body.position ?? (await firstPosition(tx, user.id)),
         userId: user.id,
         searchText: blocksToPlainText(body.content),
       });
@@ -42,12 +58,15 @@ export const notesRoutes = new Hono<AppEnv>()
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
+    // Rearranging notes is not editing them, so it leaves "Last edited" alone.
+    const moveOnly = Object.keys(body).every((key) => key === 'position');
     const result = await db.transaction(async (tx) => {
       const updated = await tx
         .update(notes)
         .set({
           ...body,
           ...(body.content ? { searchText: blocksToPlainText(body.content) } : {}),
+          ...(moveOnly ? { updatedAt: sql`${notes.updatedAt}` } : {}),
         })
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });

@@ -19,6 +19,7 @@ const note: Note = {
   status: null,
   isPinned: false,
   isArchived: false,
+  position: 'a0',
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,

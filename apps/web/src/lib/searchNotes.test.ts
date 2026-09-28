@@ -16,6 +16,7 @@ function note(title: string, body: string[], overrides: Partial<Note> = {}): Not
     status: null,
     isPinned: false,
     isArchived: false,
+    position: 'a0',
     createdAt: new Date(2026, 0, counter),
     updatedAt: new Date(2026, 0, counter),
     deletedAt: null,

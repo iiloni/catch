@@ -15,6 +15,8 @@ type Props = {
   onOpen?: (note: Note, card: HTMLElement) => void;
   /** Hide actions, e.g. while the card is being dragged. */
   withActions?: boolean;
+  /** Shrink slightly while pressed. Off while the card is lifted to be dragged. */
+  pressable?: boolean;
   className?: string;
 };
 
@@ -27,7 +29,7 @@ export function NoteCardFace({ note }: { note: Note }) {
   );
 }
 
-export function NoteCard({ note, onOpen, withActions = true, className }: Props) {
+export function NoteCard({ note, onOpen, withActions = true, pressable = true, className }: Props) {
   const canPin = withActions && !note.deletedAt && !note.isArchived;
   const hidden = useIsCardHidden(note.id);
 
@@ -36,7 +38,8 @@ export function NoteCard({ note, onOpen, withActions = true, className }: Props)
       data-note-card={note.id}
       data-note-color={note.color}
       aria-label={note.deletedAt ? 'Trashed note' : 'Note'}
-      whileTap={{ scale: 0.97 }}
+      // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
+      whileTap={{ scale: pressable ? 0.97 : 1 }}
       transition={springs.snappy}
       className={cn(
         'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',

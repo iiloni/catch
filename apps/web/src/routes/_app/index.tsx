@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { notesCollection } from '@/lib/collections';
-import { setNoteArchived } from '@/lib/notes';
+import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 import { usePersistentState } from '@/lib/storage';
@@ -26,7 +26,7 @@ export const Route = createFileRoute('/_app/')({
 });
 
 const sortSchema = z.object({
-  field: z.enum(['updatedAt', 'createdAt']),
+  field: z.enum(['position', 'updatedAt', 'createdAt']),
   direction: z.enum(['desc', 'asc']),
 });
 
@@ -35,8 +35,9 @@ type Sort = z.infer<typeof sortSchema>;
 /** Every note that is not in the deck, archived or trashed. */
 function GalleryPage() {
   const { open } = useOpenNote();
-  const [sort, setSort] = usePersistentState('catch-gallery-sort', sortSchema, {
-    field: 'updatedAt',
+  // A new key, so galleries saved with the old "last edited" default start arranged by hand.
+  const [sort, setSort] = usePersistentState('catch-gallery-order', sortSchema, {
+    field: 'position',
     direction: 'desc',
   });
   const { data: notes = [], isLoading } = useLiveQuery({
@@ -51,6 +52,8 @@ function GalleryPage() {
   const sorted = sortNotes(notes, sort.field, sort.direction);
   const pinned = sorted.filter((note) => note.isPinned);
   const others = sorted.filter((note) => !note.isPinned);
+  // Notes can only be dragged into place while they are shown in that order.
+  const onMove = sort.field === 'position' ? moveNote : undefined;
 
   return (
     <>
@@ -75,6 +78,7 @@ function GalleryPage() {
                   notes={pinned}
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
+                  onMove={onMove}
                 />
               </NoteSection>
             )}
@@ -84,6 +88,7 @@ function GalleryPage() {
                   notes={others}
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
+                  onMove={onMove}
                 />
               </NoteSection>
             )}
@@ -118,19 +123,24 @@ function ViewOptions({ sort, onChange }: { sort: Sort; onChange: (sort: Sort) =>
           value={sort.field}
           onValueChange={(field) => onChange({ ...sort, field: field as Sort['field'] })}
         >
+          <DropdownMenuRadioItem value="position">Custom</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="updatedAt">Last edited</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="createdAt">Date created</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup
-          value={sort.direction}
-          onValueChange={(direction) =>
-            onChange({ ...sort, direction: direction as Sort['direction'] })
-          }
-        >
-          <DropdownMenuRadioItem value="desc">Newest first</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="asc">Oldest first</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        {sort.field !== 'position' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup
+              value={sort.direction}
+              onValueChange={(direction) =>
+                onChange({ ...sort, direction: direction as Sort['direction'] })
+              }
+            >
+              <DropdownMenuRadioItem value="desc">Newest first</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="asc">Oldest first</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
