@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { notesCollection } from '@/lib/collections';
+import { setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 import { usePersistentState } from '@/lib/storage';
@@ -70,12 +71,20 @@ function GalleryPage() {
           <>
             {pinned.length > 0 && (
               <NoteSection label="Pinned">
-                <NoteGrid notes={pinned} onOpen={(note, card) => open(note.id, card)} />
+                <NoteGrid
+                  notes={pinned}
+                  onOpen={(note, card) => open(note.id, card)}
+                  onArchive={(note) => setNoteArchived(note.id, true)}
+                />
               </NoteSection>
             )}
             {others.length > 0 && (
               <NoteSection label={pinned.length > 0 ? 'Others' : undefined}>
-                <NoteGrid notes={others} onOpen={(note, card) => open(note.id, card)} />
+                <NoteGrid
+                  notes={others}
+                  onOpen={(note, card) => open(note.id, card)}
+                  onArchive={(note) => setNoteArchived(note.id, true)}
+                />
               </NoteSection>
             )}
           </>

@@ -139,6 +139,55 @@ test('archive and unarchive', async ({ page }) => {
   await expect(card(page, 'Old receipts')).toBeVisible();
 });
 
+test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Gallery swipe is a touch gesture.');
+  await signUp(page);
+  await createNote(page, 'Swipe me');
+
+  const bounds = await card(page, 'Swipe me').boundingBox();
+  if (!bounds) throw new Error('Missing gallery card');
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  const surface = page.locator('[data-swipe-archive]').filter({ has: card(page, 'Swipe me') });
+  const cue = surface.locator('[data-swipe-archive-cue]');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: x + 40, y }],
+  });
+  await expect(cue).toHaveCSS('opacity', '0');
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: x + 200, y }],
+  });
+  await expect(cue).toHaveCSS('opacity', '1');
+  await expect
+    .poll(async () => (await card(page, 'Swipe me').boundingBox())?.x ?? 0)
+    .toBeGreaterThan(bounds.x + 75);
+  const dragged = await card(page, 'Swipe me').boundingBox();
+  if (!dragged) throw new Error('Missing dragged card');
+  expect(dragged.x - bounds.x).toBeLessThanOrEqual(100);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: x + 40, y }],
+  });
+  await expect(cue).toHaveCSS('opacity', '0');
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: x + 200, y }],
+  });
+  await expect(cue).toHaveCSS('opacity', '1');
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  await expect(card(page, 'Swipe me')).toBeHidden();
+  await openGalleryPage(page, 'Archive');
+  await expect(card(page, 'Swipe me')).toBeVisible();
+});
+
 test('color and pin', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'First');
