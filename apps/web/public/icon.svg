@@ -1,6 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#f6c343"/>
-  <path d="M148 132h216a20 20 0 0 1 20 20v156L292 400H148a20 20 0 0 1-20-20V152a20 20 0 0 1 20-20z" fill="#fff8e1"/>
-  <path d="M292 400v-72a20 20 0 0 1 20-20h72z" fill="#e0a800"/>
-  <path d="M176 196h160M176 244h160M176 292h96" stroke="#5f4b12" stroke-width="22" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="sunrise" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#ffdc5c"/>
+      <stop offset="1" stop-color="#ff930f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#sunrise)"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(0 -17)">
+      <path stroke-width="18" d="M215 251V119c0-11 9-20 20-20h66l48 48v104c0 11-9 20-20 20h-94c-11 0-20-9-20-20Z"/>
+      <path stroke-width="18" d="M301 102v33c0 8 6 14 14 14h32"/>
+      <path stroke-width="16" d="M244 180h64m-64 34h64"/>
+    </g>
+    <g transform="translate(0 8)">
+      <path stroke-width="18" d="M133 304c34-27 62-32 91-17l32 14c21 9 37 9 54-2l39-25c13-8 25-7 33 1m-249 92c35-14 55-10 91 3l32 11c24 8 44 3 64-11l102-68c14-9 16-23 8-33-10-11-22-12-35-4l-71 45"/>
+      <path stroke-width="18" d="M224 337h73c15 0 26-10 26-23s-10-24-26-24h-36"/>
+      <rect x="91" y="291" width="42" height="101" rx="12" stroke-width="18"/>
+    </g>
+  </g>
 </svg>

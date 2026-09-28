@@ -11,9 +11,11 @@ layout.
 
 ## Decisions
 
-**Look.** Graphite and a soft apricot: the pencil and paper a thought is caught with.
-Neutrals are cool pencil-lead greys (not near-black, not cream); the apricot `--brand` is the
-only accent, a softer, more orange take on the icon's yellow that is easier on the eye. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
+**Look.** The original Catch hand-and-note mark supplies a yellow-to-orange sunrise (`#ffdc5c`
+to `#ff930f`). The icon is redrawn as a simpler vector for small launchers, with one note fold
+and fewer hand details. A solid golden middle tone (`--brand`) colors controls and focus while
+the gradient marks the icon and compose button. Warm graphite neutrals give both light and dark
+themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
 offline. Note colors are generated in OKLCH with one lightness and chroma per theme, so text
 contrast is the same on every color. Menus, sheets and the dock use frosted glass
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
