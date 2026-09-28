@@ -4,6 +4,7 @@ import {
   type Note,
   type NoteColor,
   positionBetween,
+  positionsBetween,
 } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
@@ -13,13 +14,17 @@ type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
 >;
 
-/** A position ahead of every note, so new notes land first, as in Keep. */
-function firstPosition() {
+function firstExistingPosition() {
   let first: string | null = null;
   for (const note of notesCollection.values()) {
     if (first === null || note.position < first) first = note.position;
   }
-  return positionBetween(null, first);
+  return first;
+}
+
+/** A position ahead of every note, so new notes land first, as in Keep. */
+function firstPosition() {
+  return positionBetween(null, firstExistingPosition());
 }
 
 /**
@@ -95,6 +100,134 @@ export function trashNote(id: string) {
     action: { label: 'Undo', onClick: () => restoreNote(id) },
   });
   return transaction;
+}
+
+const plural = (count: number, one: string, many: string) =>
+  count === 1 ? one : `${count} ${many}`;
+
+/** Changes the color of several notes in one transaction. */
+export function setNotesColor(ids: readonly string[], color: NoteColor) {
+  const now = new Date();
+  return notesCollection.update([...ids], (drafts) => {
+    for (const draft of drafts) {
+      draft.color = color;
+      draft.updatedAt = now;
+    }
+  });
+}
+
+/** Puts notes back as they were: in place, pinned or not. */
+function undoFor(notes: readonly Note[]) {
+  return () => {
+    for (const note of notes) {
+      updateNote(note.id, {
+        isArchived: note.isArchived,
+        isPinned: note.isPinned,
+        deletedAt: note.deletedAt,
+      });
+    }
+  };
+}
+
+/**
+ * Archives several notes, taking any out of the trash. Undo puts them back where they
+ * were, with the pins that archiving removed.
+ */
+export function archiveNotes(notes: readonly Note[]) {
+  const now = new Date();
+  const transaction = notesCollection.update(
+    notes.map((note) => note.id),
+    (drafts) => {
+      for (const draft of drafts) {
+        draft.isArchived = true;
+        draft.isPinned = false;
+        draft.deletedAt = null;
+        draft.updatedAt = now;
+      }
+    },
+  );
+  toast(plural(notes.length, 'Note archived', 'notes archived'), {
+    action: { label: 'Undo', onClick: undoFor(notes) },
+  });
+  return transaction;
+}
+
+export function unarchiveNotes(notes: readonly Note[]) {
+  const now = new Date();
+  const transaction = notesCollection.update(
+    notes.map((note) => note.id),
+    (drafts) => {
+      for (const draft of drafts) {
+        draft.isArchived = false;
+        draft.updatedAt = now;
+      }
+    },
+  );
+  toast(plural(notes.length, 'Note unarchived', 'notes unarchived'), {
+    action: { label: 'Undo', onClick: undoFor(notes) },
+  });
+  return transaction;
+}
+
+/** Takes notes out of the trash, back to the gallery or archive they were in. */
+export function restoreNotes(notes: readonly Note[]) {
+  const now = new Date();
+  const transaction = notesCollection.update(
+    notes.map((note) => note.id),
+    (drafts) => {
+      for (const draft of drafts) {
+        draft.deletedAt = null;
+        draft.updatedAt = now;
+      }
+    },
+  );
+  toast(plural(notes.length, 'Note restored', 'notes restored'), {
+    action: { label: 'Undo', onClick: undoFor(notes) },
+  });
+  return transaction;
+}
+
+export const deleteNotesForever = (ids: readonly string[]) => notesCollection.delete([...ids]);
+
+export function trashNotes(ids: readonly string[]) {
+  const now = new Date();
+  const transaction = notesCollection.update([...ids], (drafts) => {
+    for (const draft of drafts) {
+      draft.deletedAt = now;
+      draft.updatedAt = now;
+    }
+  });
+  toast(plural(ids.length, 'Moved to trash', 'notes moved to trash'), {
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        for (const id of ids) restoreNote(id);
+      },
+    },
+  });
+  return transaction;
+}
+
+/**
+ * Copies notes, in the order given, ahead of every other note. A copy keeps the original's
+ * content, color, pin and place (gallery, deck, archive or trash), but is a new note with
+ * its own dates.
+ */
+export function duplicateNotes(notes: readonly Note[]) {
+  const now = new Date();
+  const positions = positionsBetween(null, firstExistingPosition(), notes.length);
+  const copies = notes.map((note, index) => ({
+    ...note,
+    id: uuidv7(),
+    content: structuredClone(note.content),
+    position: positions[index] ?? firstPosition(),
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: note.deletedAt ? now : null,
+  }));
+  const transaction = notesCollection.insert(copies);
+  toast(plural(notes.length, 'Note copied', 'notes copied'));
+  return { ids: copies.map((copy) => copy.id), transaction };
 }
 
 /**

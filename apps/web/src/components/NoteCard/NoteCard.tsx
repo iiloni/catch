@@ -17,6 +17,12 @@ type Props = {
   withActions?: boolean;
   /** Shrink slightly while pressed. Off while the card is lifted to be dragged. */
   pressable?: boolean;
+  /**
+   * Set while notes are being selected: a tap then toggles the note through `onSelect`
+   * instead of opening it, and the card's own actions step aside.
+   */
+  selected?: boolean;
+  onSelect?: (note: Note) => void;
   className?: string;
 };
 
@@ -29,8 +35,18 @@ export function NoteCardFace({ note }: { note: Note }) {
   );
 }
 
-export function NoteCard({ note, onOpen, withActions = true, pressable = true, className }: Props) {
-  const canPin = withActions && !note.deletedAt && !note.isArchived;
+export function NoteCard({
+  note,
+  onOpen,
+  withActions = true,
+  pressable = true,
+  selected,
+  onSelect,
+  className,
+}: Props) {
+  const selecting = selected !== undefined;
+  const actions = withActions && !selecting;
+  const canPin = actions && !note.deletedAt && !note.isArchived;
   const hidden = useIsCardHidden(note.id);
 
   return (
@@ -50,14 +66,26 @@ export function NoteCard({ note, onOpen, withActions = true, pressable = true, c
       <button
         type="button"
         onClick={(event) => {
+          if (selecting) {
+            onSelect?.(note);
+            return;
+          }
           const card = event.currentTarget.closest('article');
           if (card) onOpen?.(note, card);
         }}
         className="min-h-12 cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        aria-label="Open note"
+        aria-label={selecting ? 'Select note' : 'Open note'}
+        aria-pressed={selecting ? selected : undefined}
       >
         <NoteCardFace note={note} />
       </button>
+      <motion.span
+        aria-hidden
+        className="-inset-px pointer-events-none absolute rounded-2xl border-2 border-foreground"
+        initial={false}
+        animate={{ opacity: selected ? 1 : 0 }}
+        transition={{ duration: 0.15 }}
+      />
       {canPin && (
         <IconButton
           label={note.isPinned ? 'Unpin' : 'Pin'}
@@ -72,7 +100,7 @@ export function NoteCard({ note, onOpen, withActions = true, pressable = true, c
           <Pin className={cn(note.isPinned && 'fill-current')} />
         </IconButton>
       )}
-      {withActions && (
+      {actions && (
         <NoteToolbar
           note={note}
           className="px-2 pb-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:hidden"

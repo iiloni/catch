@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { notePositionSchema } from './notes';
-import { comparePositions, positionBetween } from './position';
+import { comparePositions, positionBetween, positionsBetween } from './position';
 
 describe('positionBetween', () => {
   it('sorts between its bounds by code unit', () => {
@@ -28,5 +28,14 @@ describe('positionBetween', () => {
     let high = 'a1';
     for (let i = 0; i < 200; i++) high = positionBetween(low, high);
     expect(comparePositions(low, high)).toBe(-1);
+  });
+});
+
+describe('positionsBetween', () => {
+  it('hands out ordered positions before the first note', () => {
+    const first = positionBetween(null, null);
+    const keys = positionsBetween(null, first, 3);
+    expect(keys).toHaveLength(3);
+    expect([...keys, first].sort(comparePositions)).toEqual([...keys, first]);
   });
 });
