@@ -216,7 +216,8 @@ test('archive and unarchive', async ({ page }) => {
   await noteAction(page, 'Old receipts', 'Archive');
   await expect(card(page, 'Old receipts')).toBeHidden();
   await openGalleryPage(page, 'Archive');
-  await noteAction(page, 'Old receipts', 'Unarchive');
+  const dialog = await noteAction(page, 'Old receipts', 'Unarchive');
+  await dialog.getByRole('button', { name: 'Close' }).click();
   await backToGallery(page);
   await expect(card(page, 'Old receipts')).toBeVisible();
 });

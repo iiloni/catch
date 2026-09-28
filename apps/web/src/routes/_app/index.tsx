@@ -4,7 +4,7 @@ import { ArrowDownUp, Lightbulb } from 'lucide-react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
-import { PageHeader } from '@/components/PageHeader/PageHeader';
+import { GalleryHeader } from '@/components/PageHeader/PageHeader';
 import { SettingsButton } from '@/components/SettingsSheet/SettingsSheet';
 import {
   DropdownMenu,
@@ -57,10 +57,13 @@ function GalleryPage() {
 
   return (
     <>
-      <PageHeader
-        title="Gallery"
-        titleAccessory={<ViewOptions sort={sort} onChange={setSort} />}
-        trailing={<SettingsButton />}
+      <GalleryHeader
+        trailing={
+          <>
+            <ViewOptions sort={sort} onChange={setSort} />
+            <SettingsButton />
+          </>
+        }
       />
       <section
         aria-label="Gallery"

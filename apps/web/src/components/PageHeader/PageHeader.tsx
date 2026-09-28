@@ -57,6 +57,52 @@ export function PageHeader({ title, titleAccessory, leading, trailing }: Props) 
   );
 }
 
+/** Gallery's title travels from the centered page heading into the left corner control. */
+export function GalleryHeader({ trailing }: { trailing: ReactNode }) {
+  const { scrollY } = useScroll();
+  const left = useTransform(scrollY, [0, 32], ['50%', '0%']);
+  const x = useTransform(scrollY, [0, 32], ['-50%', '0%']);
+  const y = useTransform(scrollY, [0, 32], [52, 0]);
+  const fontSize = useTransform(scrollY, [0, 32], [36, 17]);
+  const titlePadding = useTransform(scrollY, [0, 32], [0, 14]);
+  const cornerInset = useTransform(scrollY, [0, 32], [0, 12]);
+  const glassOpacity = useTransform(scrollY, [4, 24], [0, 1]);
+
+  return (
+    <>
+      <header className="fixed inset-x-0 top-0 z-30 pt-[var(--safe-top)]">
+        <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
+          <motion.div
+            className="absolute top-1 flex h-[50px] items-center"
+            style={{ left, x, y, marginLeft: cornerInset }}
+          >
+            <motion.div
+              className="relative flex h-full items-center rounded-[var(--dock-radius)]"
+              style={{ paddingInline: titlePadding }}
+            >
+              <motion.span
+                aria-hidden
+                className="glass absolute inset-0 rounded-[var(--dock-radius)]"
+                style={{ opacity: glassOpacity }}
+              />
+              <motion.h1
+                className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
+                style={{ fontSize }}
+              >
+                Gallery
+              </motion.h1>
+            </motion.div>
+          </motion.div>
+          <div className="glass absolute top-1 right-3 flex rounded-[var(--dock-radius)] p-1 sm:right-4">
+            {trailing}
+          </div>
+        </div>
+      </header>
+      <div aria-hidden className="h-[calc(var(--safe-top)+var(--header-height)+3rem)]" />
+    </>
+  );
+}
+
 /** Returns to the Gallery, the parent of every page that shows one. */
 export function BackToGallery() {
   const goToGalleryPage = useGalleryPages();
