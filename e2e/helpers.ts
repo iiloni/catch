@@ -27,10 +27,13 @@ export async function createNote(page: Page, title: string, body?: string) {
   await expect(card(page, title)).toBeVisible();
 }
 
-/** Opens Archive or Trash from the Gallery title menu. */
+/** Opens Archive or Trash from the switcher the Gallery tab grows out of the dock. */
 export async function openGalleryPage(page: Page, name: 'Archive' | 'Trash') {
-  await page.getByRole('button', { name: 'Gallery' }).click();
-  await page.getByRole('menuitem', { name }).click();
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await page
+    .getByRole('navigation', { name: 'Gallery pages' })
+    .getByRole('button', { name })
+    .click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 }
 

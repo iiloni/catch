@@ -19,7 +19,10 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
 
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
-button. Archive and Trash live in the Gallery title menu; Settings is a sheet behind the avatar.
+button. Tapping Gallery while on a gallery page grows the dock upward into a segmented
+control for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
+lets the finger slide straight onto a segment. Settings is a sheet behind the gear in the
+page header.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 pin, deck, archive); the color button grows the dock upward into a palette, and trashing
@@ -46,7 +49,9 @@ touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instea
 travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
-has its own `view-transition-name` and shows live, so its own animations play on top. Opening a
+gets a `view-transition-name` only while a transition runs and shows live, so its own
+animations play on top. A named element is a backdrop root, so a permanent name would stop
+the dock's glass from blurring the page behind it. Opening a
 note changes only the search params and gets no page transition.
 
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the

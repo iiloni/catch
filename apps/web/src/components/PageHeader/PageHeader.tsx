@@ -1,12 +1,12 @@
-import { useRouter } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
 import type { ReactNode } from 'react';
+import { useGalleryPages } from '@/lib/galleryPages';
 
 type Props = {
   title: string;
-  /** Replaces the large title's text, e.g. with a menu trigger. Keep `title` as its text. */
-  largeTitle?: ReactNode;
+  /** Controls on the large title's line, at its right edge (such as sorting). */
+  titleAccessory?: ReactNode;
   /** Controls at the bar's left edge, such as a back button. */
   leading?: ReactNode;
   /** Controls at the bar's right edge. */
@@ -17,7 +17,7 @@ type Props = {
  * iOS-style large title. The bar above it starts transparent and turns to frosted glass,
  * with a small centered title, once the large title scrolls under it.
  */
-export function PageHeader({ title, largeTitle, leading, trailing }: Props) {
+export function PageHeader({ title, titleAccessory, leading, trailing }: Props) {
   const { scrollY } = useScroll();
   const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
   const smallTitleOpacity = useTransform(scrollY, [36, 56], [0, 1]);
@@ -45,12 +45,13 @@ export function PageHeader({ title, largeTitle, leading, trailing }: Props) {
         </div>
       </header>
       <motion.div
-        className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height))] sm:px-6"
+        className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 pt-[calc(var(--safe-top)+var(--header-height))] sm:px-6"
         style={{ opacity: largeTitleOpacity }}
       >
-        <h1 className="font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
-          {largeTitle ?? title}
+        <h1 className="min-w-0 truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
+          {title}
         </h1>
+        {titleAccessory && <div className="-mr-2 flex items-center gap-1">{titleAccessory}</div>}
       </motion.div>
     </>
   );
@@ -58,17 +59,13 @@ export function PageHeader({ title, largeTitle, leading, trailing }: Props) {
 
 /** Returns to the Gallery, the parent of every page that shows one. */
 export function BackToGallery() {
-  const router = useRouter();
+  const goToGalleryPage = useGalleryPages();
   return (
     <motion.button
       type="button"
       aria-label="Back to Gallery"
       whileTap={{ scale: 0.9 }}
-      onClick={() => {
-        // Archive and Trash are opened from the Gallery, so going back keeps history tidy.
-        if (router.history.canGoBack()) router.history.back();
-        else void router.navigate({ to: '/', replace: true });
-      }}
+      onClick={() => goToGalleryPage('/')}
       className="flex h-10 items-center gap-0.5 rounded-full pr-2 font-medium text-[1.0625rem] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       <ChevronLeft className="size-7" aria-hidden />

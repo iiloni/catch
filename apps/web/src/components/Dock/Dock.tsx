@@ -2,9 +2,11 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Check, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
+import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { useBackHandler } from '@/lib/backButton';
 import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
+import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
@@ -15,6 +17,13 @@ const TABS = [
   { path: '/', label: 'Gallery', icon: LayoutGrid },
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
+
+/** Holding the Gallery tab this long opens the Gallery switcher under the finger. */
+const HOLD_MS = 380;
+
+function asGalleryPage(pathname: string): GalleryPage | null {
+  return GALLERY_PAGES.find((page) => page === pathname) ?? null;
+}
 
 /**
  * Floating glass tab bar with a detached compose button. On the Search tab the tabs
@@ -31,6 +40,32 @@ export function Dock() {
   const inputRef = useRef<HTMLInputElement>(null);
   // Above the editor while it is open or animating, below sheets and menus otherwise.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
+  const dockRef = useRef<HTMLDivElement>(null);
+
+  // The Gallery switcher belongs to the page it was opened on, so navigating closes it.
+  const [switcherOn, setSwitcherOn] = useState<string | null>(null);
+  const [switcherHover, setSwitcherHover] = useState<GalleryPage | null>(null);
+  const switcherOpen = switcherOn === pathname && mode === 'tabs';
+  const goToGalleryPage = useGalleryPages();
+  const setSwitcher = (open: boolean) => setSwitcherOn(open ? pathname : null);
+
+  function selectGalleryPage(page: GalleryPage) {
+    haptics.selection();
+    setSwitcherOn(null);
+    goToGalleryPage(page);
+  }
+
+  useBackHandler(switcherOpen, () => setSwitcherOn(null));
+
+  // A tap anywhere outside the dock folds the switcher away.
+  useEffect(() => {
+    if (!switcherOpen) return;
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!dockRef.current?.contains(event.target as Node)) setSwitcherOn(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [switcherOpen]);
 
   useEffect(() => {
     if (tab !== '/search') lastBrowsingTab.set(tab);
@@ -39,13 +74,21 @@ export function Dock() {
 
   return (
     <motion.div
+      ref={dockRef}
       data-dock
       style={{ zIndex }}
-      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center px-3 [view-transition-name:dock]"
+      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center px-3"
     >
       <LayoutGroup id="dock">
-        <div className="pointer-events-auto flex w-full max-w-md items-center">
+        {/* Bottom-aligned: the dock grows upward (switcher, palette), the compose button stays. */}
+        <div className="pointer-events-auto flex w-full max-w-md items-end">
           <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
+            <GallerySwitcher
+              open={switcherOpen}
+              current={asGalleryPage(pathname)}
+              hovered={switcherHover}
+              onSelect={selectGalleryPage}
+            />
             <SearchField inputRef={inputRef} active={mode === 'search'} />
             <AnimatePresence initial={false}>
               {mode === 'tabs' && (
@@ -54,6 +97,10 @@ export function Dock() {
                   active={tab}
                   // Focusing inside the tap keeps Android willing to raise the keyboard.
                   onSearch={() => inputRef.current?.focus()}
+                  switcherOpen={switcherOpen}
+                  onSwitcher={setSwitcher}
+                  onSwitcherHover={setSwitcherHover}
+                  onSwitcherSelect={selectGalleryPage}
                 />
               )}
               {mode === 'note' && <NoteDock key="note" />}
@@ -68,7 +115,23 @@ export function Dock() {
   );
 }
 
-function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
+type TabsProps = {
+  active: TabPath;
+  onSearch: () => void;
+  switcherOpen: boolean;
+  onSwitcher: (open: boolean) => void;
+  onSwitcherHover: (page: GalleryPage | null) => void;
+  onSwitcherSelect: (page: GalleryPage) => void;
+};
+
+function Tabs({
+  active,
+  onSearch,
+  switcherOpen,
+  onSwitcher,
+  onSwitcherHover,
+  onSwitcherSelect,
+}: TabsProps) {
   const navigate = useNavigate();
   const ref = useRef<HTMLElement>(null);
   // The tabs linger while they fade out; they must not catch taps meant for the search field.
@@ -93,7 +156,28 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
     return TABS[Math.min(TABS.length - 1, Math.max(0, index))]?.path ?? active;
   }
 
+  // Holding the Gallery tab opens the switcher; the same finger then slides onto a segment
+  // and lets go to pick it.
+  const hold = useRef<{ timer: number; holding: boolean; page: GalleryPage | null }>({
+    timer: 0,
+    holding: false,
+    page: null,
+  });
+  useEffect(() => () => window.clearTimeout(hold.current.timer), []);
+
+  function endHold() {
+    window.clearTimeout(hold.current.timer);
+    hold.current = { timer: 0, holding: false, page: null };
+    onSwitcherHover(null);
+  }
+
   function go(path: TabPath) {
+    // On a Gallery page, the Gallery tab opens (or folds) the switcher instead.
+    if (path === '/' && active === '/') {
+      haptics.toggle();
+      onSwitcher(!switcherOpen);
+      return;
+    }
     if (path === '/search') {
       onSearch();
       haptics.toggle();
@@ -113,13 +197,31 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
     // take it away from the search field (closing the keyboard it just opened).
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setPressed(tabAt(event.clientX));
+    const tab = tabAt(event.clientX);
+    setPressed(tab);
+    if (tab === '/') {
+      hold.current.timer = window.setTimeout(() => {
+        hold.current.holding = true;
+        haptics.longPress();
+        onSwitcher(true);
+      }, HOLD_MS);
+    }
   }
 
   function onPointerMove(event: PointerEvent<HTMLElement>) {
     if (!pressed) return;
+    if (hold.current.holding) {
+      const page = galleryPageAt(event.clientX, event.clientY);
+      if (page !== hold.current.page) {
+        hold.current.page = page;
+        if (page) haptics.selection();
+        onSwitcherHover(page);
+      }
+      return;
+    }
     const next = tabAt(event.clientX);
     if (next !== pressed) {
+      window.clearTimeout(hold.current.timer);
       haptics.selection();
       setPressed(next);
     }
@@ -129,6 +231,14 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
     if (!pressed) return;
     const target = pressed;
     setPressed(null);
+    if (hold.current.holding) {
+      // Letting go on a segment picks it; anywhere else leaves the switcher open to tap.
+      const page = hold.current.page;
+      endHold();
+      if (page) onSwitcherSelect(page);
+      return;
+    }
+    endHold();
     go(target);
   }
 
@@ -145,7 +255,10 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => setPressed(null)}
+      onPointerCancel={() => {
+        endHold();
+        setPressed(null);
+      }}
     >
       {TABS.map((tab) => {
         const Icon = tab.icon;

@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { LogOut, Monitor, Moon, Server, Sun } from 'lucide-react';
+import { LogOut, Monitor, Moon, Server, Settings, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { BottomSheet } from '@/components/BottomSheet/BottomSheet';
@@ -25,11 +25,9 @@ export function initials(name: string, email: string) {
     .join('');
 }
 
-/** The avatar in the Gallery header. Opens Settings. */
-export function AccountButton() {
-  const { data: session } = authClient.useSession();
+/** The gear in the Gallery header. Opens Settings, which also shows the account. */
+export function SettingsButton() {
   const [open, setOpen] = useState(false);
-  const user = session?.user;
 
   return (
     <>
@@ -39,9 +37,9 @@ export function AccountButton() {
         onClick={() => setOpen(true)}
         whileTap={{ scale: 0.9 }}
         transition={springs.snappy}
-        className="flex size-9 items-center justify-center rounded-full bg-brand font-semibold text-brand-foreground text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        {user ? initials(user.name, user.email) : ''}
+        <Settings className="size-[22px]" aria-hidden />
       </motion.button>
       <SettingsSheet open={open} onOpenChange={setOpen} />
     </>

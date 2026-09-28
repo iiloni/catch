@@ -98,6 +98,9 @@ write routes that return `{ txid }`, then add a collection.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens and
   leave `--dock-space` at the bottom of pages. A transform or filter on an ancestor breaks the
   fixed page headers and dock.
+- A `view-transition-name`, `filter` or `opacity` below 1 on the dock or its ancestors makes a
+  backdrop root, and the dock's glass stops blurring the page behind it. The dock is named
+  only during a transition (`html:active-view-transition [data-dock]` in `styles.css`).
 - The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
   anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
 - While a note is open, its actions live in the dock (`NoteDock`), outside the editor dialog.

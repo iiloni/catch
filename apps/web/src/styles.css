@@ -301,6 +301,14 @@ html:active-view-transition-type(back)::view-transition-new(root) {
     500ms var(--ease-emphasized) both page-from-left,
     260ms ease-out 60ms both page-fade-in;
 }
+/*
+ * The dock animates itself; show it live rather than cross-fading two copies. It is named
+ * only while a transition runs: a view-transition-name makes an element a backdrop root,
+ * which would stop the dock's glass from blurring the page behind it.
+ */
+html:active-view-transition [data-dock] {
+  view-transition-name: dock;
+}
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-old(dock) {
   display: none;

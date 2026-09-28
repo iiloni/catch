@@ -1,15 +1,14 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { Archive, ArrowDownUp, ChevronDown, Lightbulb, Trash2 } from 'lucide-react';
+import { createFileRoute } from '@tanstack/react-router';
+import { ArrowDownUp, Lightbulb } from 'lucide-react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
-import { AccountButton } from '@/components/SettingsSheet/SettingsSheet';
+import { SettingsButton } from '@/components/SettingsSheet/SettingsSheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -56,13 +55,8 @@ function GalleryPage() {
     <>
       <PageHeader
         title="Gallery"
-        largeTitle={<GalleryMenu />}
-        trailing={
-          <>
-            <ViewOptions sort={sort} onChange={setSort} />
-            <AccountButton />
-          </>
-        }
+        titleAccessory={<ViewOptions sort={sort} onChange={setSort} />}
+        trailing={<SettingsButton />}
       />
       <section
         aria-label="Gallery"
@@ -97,32 +91,6 @@ function NoteSection({ label, children }: { label?: string; children: React.Reac
       {label && <h2 className="px-1 font-medium text-muted-foreground text-sm">{label}</h2>}
       {children}
     </div>
-  );
-}
-
-/** The large title doubles as a menu to the gallery's quieter corners. */
-function GalleryMenu() {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="-mx-1 flex items-center gap-1 rounded-xl px-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-        Gallery
-        <ChevronDown className="mt-1 size-6 text-muted-foreground" aria-hidden />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={8}>
-        <DropdownMenuItem asChild>
-          <Link to="/archive">
-            <Archive />
-            Archive
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/trash">
-            <Trash2 />
-            Trash
-          </Link>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
