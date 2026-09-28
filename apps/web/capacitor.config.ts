@@ -6,10 +6,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   plugins: {
     SystemBars: {
-      // The app draws edge to edge (index.html sets viewport-fit=cover) and pads itself with
-      // the injected --safe-area-inset-* variables, which stay correct on older WebViews.
-      insetsHandling: 'css',
-      initialViewportFitValueHint: 'cover',
+      // KeyboardInsetsPlugin.java owns the insets instead: it keeps the WebView full size when
+      // the keyboard opens (so the page can animate with it) and injects the safe-area variables.
+      insetsHandling: 'disable',
     },
   },
 };

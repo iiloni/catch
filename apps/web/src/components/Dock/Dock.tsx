@@ -1,10 +1,11 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Check, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
-import { AnimatePresence, LayoutGroup, motion, useTransform } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { useBackHandler } from '@/lib/backButton';
 import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { keyboardHeight } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
 import { cn } from '@/lib/utils';
@@ -24,8 +25,9 @@ export function Dock() {
   const tab = tabFor(pathname);
   const searching = tab === '/search';
   const inputRef = useRef<HTMLInputElement>(null);
-  // The dock slides away while a note is open in the editor.
-  const y = useTransform(editorProgress, [0, 1], [0, 160]);
+  // The dock slides away while a note is open in the editor, from above the keyboard if
+  // that is where it sits.
+  const y = useTransform(() => editorProgress.get() * (160 + keyboardHeight.get()));
 
   useEffect(() => {
     if (tab !== '/search') lastBrowsingTab.set(tab);
@@ -64,6 +66,8 @@ export function Dock() {
 function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
   const navigate = useNavigate();
   const ref = useRef<HTMLElement>(null);
+  // The tabs linger while they fade out; they must not catch taps meant for the search field.
+  const isPresent = useIsPresent();
   // While a finger is down the indicator follows it (scrubbing); `pending` holds the
   // indicator on Search while the dock morphs.
   const [pressed, setPressed] = useState<TabPath | null>(null);
@@ -94,6 +98,9 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
 
   function onPointerDown(event: PointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
+    // Suppresses the follow-up mousedown, which would move focus onto the tapped link and
+    // take it away from the search field (closing the keyboard it just opened).
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setPressed(tabAt(event.clientX));
   }
@@ -119,6 +126,7 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
       ref={ref}
       aria-label="Main"
       className="absolute inset-0 grid touch-none select-none grid-cols-3 p-1"
+      style={{ pointerEvents: isPresent ? undefined : 'none' }}
       initial={{ opacity: 0, scale: 0.92, filter: 'blur(6px)' }}
       animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
       exit={{ opacity: 0, scale: 0.92, filter: 'blur(6px)', transition: { duration: 0.16 } }}

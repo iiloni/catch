@@ -92,6 +92,9 @@ write routes that return `{ txid }`, then add a collection.
 - The Android app runs on `https://localhost`, a different origin than the server, so all
   clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not cookies.
 - Android blocks cleartext HTTP by default, so the Android app needs the server on HTTPS.
+- The on-screen keyboard overlays the page instead of resizing it (see ADR 0003). Keep fixed
+  bottom UI above it with `var(--keyboard)`, and keep focus in editors by calling
+  `preventDefault()` on `pointerdown` in buttons that act on them.
 - The app draws edge to edge. Pad fixed UI with the `--safe-top` / `--safe-bottom` tokens and
   leave `--dock-space` at the bottom of pages. A transform or filter on an ancestor breaks the
   fixed page headers and dock.

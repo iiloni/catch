@@ -1,6 +1,6 @@
 import { blocksHaveContent, DEFAULT_BOARD_STATUS, type Note, type NoteColor } from '@catch/shared';
 import { useRouterState } from '@tanstack/react-router';
-import { Columns3, LayoutGrid, Maximize2 } from 'lucide-react';
+import { Columns3, LayoutGrid, Maximize2, Palette, Type } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -11,7 +11,9 @@ import {
 } from 'motion/react';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
+import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { authClient } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
@@ -68,6 +70,9 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
 
   const [content, setContent] = useState<Note['content']>([]);
   const [color, setColor] = useState<NoteColor>('default');
+  const [controls, setControls] = useState<EditorControls | null>(null);
+  // The footer's tool row shows either formatting or the color swatches.
+  const [tools, setTools] = useState<'format' | 'color'>('format');
   const [destination, setDestination] = useState<Destination>(
     tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
   );
@@ -251,37 +256,80 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...springs.smooth, delay: 0.06 }}
         >
-          <LazyNoteEditor onChange={setContent} autoFocus />
+          <LazyNoteEditor onChange={setContent} onControls={setControls} autoFocus />
         </motion.div>
         <motion.footer
-          className="flex shrink-0 items-center gap-2 px-3 pt-1 pb-3"
+          className="flex shrink-0 items-center gap-1.5 px-3 pt-1 pb-3"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...springs.smooth, delay: 0.12 }}
         >
-          <ColorSwatches
-            value={color}
-            onChange={setColor}
-            layout="row"
-            className="min-w-0 flex-1"
-          />
-          <button
+          <motion.button
             type="button"
+            aria-label={tools === 'format' ? 'Colors' : 'Formatting'}
+            // Keeps the keyboard up, like the formatting buttons.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => {
+              haptics.toggle();
+              setTools(tools === 'format' ? 'color' : 'format');
+            }}
+            whileTap={{ scale: 0.86 }}
+            transition={springs.snappy}
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground/[0.07] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+          >
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.span
+                key={tools}
+                initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
+                animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
+                transition={springs.snappy}
+              >
+                {tools === 'format' ? (
+                  <Palette className="size-[18px]" aria-hidden />
+                ) : (
+                  <Type className="size-[18px]" aria-hidden />
+                )}
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
+          <div className="relative flex min-w-0 flex-1 items-center overflow-hidden">
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.div
+                key={tools}
+                className="flex min-w-0 flex-1"
+                // Picking a color keeps the keyboard up too.
+                onPointerDown={(event) => event.preventDefault()}
+                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+                transition={springs.snappy}
+              >
+                {tools === 'format' ? (
+                  <FormattingBar controls={controls} className="flex-1" />
+                ) : (
+                  <ColorSwatches
+                    value={color}
+                    onChange={setColor}
+                    layout="row"
+                    className="min-w-0 flex-1"
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          <IconButton
+            label={`Save to ${destination === 'gallery' ? 'Gallery' : 'Deck'}`}
+            onPointerDown={(event) => event.preventDefault()}
             onClick={() => {
               haptics.selection();
               setDestination(destination === 'gallery' ? 'deck' : 'gallery');
             }}
-            aria-label={`Save to ${destination === 'gallery' ? 'Gallery' : 'Deck'}`}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-foreground/[0.07] px-3 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+            className="size-9 shrink-0 rounded-xl bg-foreground/[0.07]"
           >
-            {destination === 'gallery' ? (
-              <LayoutGrid className="size-3.5" aria-hidden />
-            ) : (
-              <Columns3 className="size-3.5" aria-hidden />
-            )}
-            {destination === 'gallery' ? 'Gallery' : 'Deck'}
-          </button>
-          <IconButton label="Expand" onClick={expand} className="shrink-0">
+            {destination === 'gallery' ? <LayoutGrid /> : <Columns3 />}
+          </IconButton>
+          <IconButton label="Expand" onClick={expand} className="size-9 shrink-0 rounded-xl">
             <Maximize2 />
           </IconButton>
         </motion.footer>

@@ -38,10 +38,27 @@ Transitions API, which cannot be interrupted or driven by a finger, and over Mot
 touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instead (its
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
+**Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
+keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:
+the WebView never sees the keyboard inset (so it keeps its size), each keyboard animation is
+reported once with its duration and sampled easing curve, and `src/lib/keyboard.ts` replays
+it on the `--keyboard` variable. Chromium browsers get the same with the VirtualKeyboard API.
+The plugin also injects the `--safe-area-inset-*` variables, so Capacitor's SystemBars inset
+handling is disabled.
+
+**Formatting on touch.** BlockNote's selection toolbar is turned off on coarse pointers (on
+Android it slides in from the top of the screen). `FormattingBar` takes its place: in the
+quick note's footer, and in the editor's footer while the keyboard is up. It formats through
+a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
+focus, so the keyboard stays up.
+
 ## Consequences
 
 - Pages must not put a transform or filter on an ancestor of their fixed header or the dock.
 - The editor shows a static preview while it animates and mounts BlockNote once it settles,
   so e2e tests wait for `[contenteditable]` before typing.
-- Safe-area insets come from `--safe-*` tokens, which read Capacitor's injected variables and
-  fall back to `env()`.
+- Safe-area insets come from `--safe-*` tokens, which read the variables injected by
+  `KeyboardInsetsPlugin` and fall back to `env()`.
+- The page is not resized for the keyboard. UI pinned to the bottom clears it with
+  `var(--keyboard)` (`--dock-bottom` and `--dock-space` already do), and the browser no longer
+  scrolls focused fields above it on its own.

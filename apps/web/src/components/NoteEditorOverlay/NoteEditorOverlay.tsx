@@ -12,14 +12,17 @@ import {
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardOpen } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
 import { discardIfEmpty, setNotePinned } from '@/lib/notes';
 import {
@@ -106,6 +109,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const targetRef = useRef(target);
   targetRef.current = target;
   const editable = !note.deletedAt;
+  const [controls, setControls] = useState<EditorControls | null>(null);
+  // While typing on a touch screen, the footer trades the note's actions for formatting.
+  const keyboardOpen = useKeyboardOpen();
+  const formatting = keyboardOpen && editable && controls !== null;
 
   // Where the surface morphs from (opening) or to (closing). Null means no card to
   // morph with, so the editor fades instead.
@@ -261,6 +268,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   <LazyNoteEditor
                     initialContent={note.content}
                     onChange={save}
+                    onControls={setControls}
                     editable={editable}
                     fallback={
                       <NotePreview content={note.content} maxBlocks={200} variant="editor" />
@@ -273,17 +281,42 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
               <footer
                 className={cn(
-                  'flex shrink-0 items-center border-foreground/10 border-t px-2 pt-1.5',
+                  'relative flex h-[calc(2.875rem+var(--footer-inset))] shrink-0 items-start overflow-hidden border-foreground/10 border-t px-2 pt-1.5',
+                  // Rides on top of the keyboard, in step with it.
                   target.radius === 0
-                    ? 'pb-[calc(max(var(--safe-bottom),0.25rem)+0.25rem)]'
-                    : 'pb-1.5',
+                    ? '[--footer-inset:calc(max(var(--safe-bottom),var(--keyboard),0.25rem)+0.25rem)]'
+                    : '[--footer-inset:0.375rem]',
                 )}
               >
-                <NoteToolbar
-                  note={note}
-                  onDone={requestClose}
-                  className="w-full justify-around [&_button]:size-10 [&_svg]:size-5"
-                />
+                <AnimatePresence initial={false} mode="popLayout">
+                  {formatting ? (
+                    <motion.div
+                      key="format"
+                      className="flex w-full justify-center"
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 14 }}
+                      transition={springs.snappy}
+                    >
+                      <FormattingBar controls={controls} className="[&_button]:size-10" />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="actions"
+                      className="flex w-full"
+                      initial={{ opacity: 0, y: -14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -14 }}
+                      transition={springs.snappy}
+                    >
+                      <NoteToolbar
+                        note={note}
+                        onDone={requestClose}
+                        className="w-full justify-around [&_button]:size-10 [&_svg]:size-5"
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </footer>
             </motion.div>
           </motion.div>

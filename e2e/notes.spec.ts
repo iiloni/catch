@@ -50,6 +50,26 @@ test('a quick note can go straight to the deck', async ({ page }) => {
   await expect(card(page, 'Refactor sync')).toBeVisible();
 });
 
+test('the quick note formats text without leaving the editor', async ({ page }) => {
+  await signUp(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  const editor = page.getByRole('textbox').and(page.locator('[contenteditable]'));
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Plan');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Checklist' }).click();
+  await page.getByRole('button', { name: 'Bold' }).click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Book flights');
+  await expect(editor.locator('[data-content-type="checkListItem"] strong')).toHaveText(
+    'Book flights',
+  );
+  await expect(page.getByRole('button', { name: 'Checklist' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
+
 test('search finds notes by any word, including archived ones', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Groceries', 'Oat milk');
@@ -57,6 +77,10 @@ test('search finds notes by any word, including archived ones', async ({ page })
   await noteAction(page, 'Old receipts', 'Archive');
 
   await page.getByRole('link', { name: 'Search' }).click();
+  // Focused within the tap, so a phone raises its keyboard straight away.
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toBeFocused();
+  await page.getByRole('textbox', { name: 'Search notes' }).click();
+  await expect(page).toHaveURL(/\/search$/);
   await page.getByRole('textbox', { name: 'Search notes' }).fill('milk');
   const results = page.getByRole('region', { name: 'Results' });
   await expect(results.getByRole('article')).toHaveCount(2);

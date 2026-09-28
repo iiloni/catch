@@ -56,9 +56,16 @@
   --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 
-  /* The dock floats above the gesture bar; pages leave room for it. */
+  /*
+   * Height of the on-screen keyboard, animated in step with it (src/lib/keyboard.ts).
+   * On Android the page is not resized for the keyboard, so anything pinned to the bottom
+   * must clear it.
+   */
+  --keyboard: 0px;
+
+  /* The dock floats above the gesture bar (or the keyboard); pages leave room for it. */
   --dock-height: 4rem;
-  --dock-bottom: calc(max(var(--safe-bottom), 0.75rem) + 0.5rem);
+  --dock-bottom: calc(max(var(--safe-bottom), var(--keyboard), 0.75rem) + 0.5rem);
   --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
   --header-height: 3.25rem;
 }
