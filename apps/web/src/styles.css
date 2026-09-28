@@ -7,7 +7,7 @@
 /*
  * Theme tokens use light-dark(), so switching theme only means changing
  * `color-scheme` on <html>. Prefer these tokens over `dark:` variants.
- * Neutrals carry a slight warm tint that matches the brand yellow.
+ * Neutrals carry a slight warm tint that matches the brand apricot.
  */
 :root {
   color-scheme: light dark;
@@ -35,9 +35,9 @@
   --input: var(--border);
   --ring: var(--brand);
 
-  /* The icon's yellow is the one accent color. */
-  --brand: oklch(0.84 0.155 84);
-  --brand-foreground: oklch(0.28 0.06 80);
+  /* The one accent color: a soft apricot, softer and more orange than the icon's yellow. */
+  --brand: oklch(0.8 0.11 68);
+  --brand-foreground: oklch(0.3 0.06 60);
 
   /* Frosted material for the dock, the collapsed header and sheets. */
   --glass: light-dark(oklch(0.99 0.003 255 / 0.66), oklch(0.29 0.009 255 / 0.6));
@@ -65,6 +65,8 @@
 
   /* The dock floats above the gesture bar (or the keyboard); pages leave room for it. */
   --dock-height: 4rem;
+  /* Rounded rectangle rather than a pill; controls inside are inset to stay concentric. */
+  --dock-radius: 1.375rem;
   --dock-bottom: calc(max(var(--safe-bottom), var(--keyboard), 0.75rem) + 0.5rem);
   --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
   --header-height: 3.25rem;

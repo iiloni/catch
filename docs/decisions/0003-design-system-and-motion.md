@@ -11,14 +11,14 @@ layout.
 
 ## Decisions
 
-**Look.** Graphite and legal-pad yellow: the pencil and paper a thought is caught with.
-Neutrals are cool pencil-lead greys (not near-black, not cream); the icon's yellow is the only
-accent. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
+**Look.** Graphite and a soft apricot: the pencil and paper a thought is caught with.
+Neutrals are cool pencil-lead greys (not near-black, not cream); the apricot `--brand` is the
+only accent, a softer, more orange take on the icon's yellow that is easier on the eye. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
 offline. Note colors are generated in OKLCH with one lightness and chroma per theme, so text
 contrast is the same on every color. Menus, sheets and the dock use frosted glass
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
 
-**Navigation.** A floating dock with three tabs (Gallery, Deck, Search) and a detached compose
+**Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
 button. Archive and Trash live in the Gallery title menu; Settings is a sheet behind the avatar.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 
@@ -39,7 +39,7 @@ touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instea
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
 **Page transitions.** Moving between pages slides them a short way in the direction of
-travel (Gallery, Archive, Trash, Deck, Search, left to right) using the View Transitions API
+travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
 has its own `view-transition-name` and shows live, so its own animations play on top. Opening a

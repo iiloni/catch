@@ -9,7 +9,7 @@ export const quickNote = createStore<'closed' | 'open' | 'saved'>('closed');
 /** The search text, kept when leaving the Search tab so returning restores it. */
 export const searchQuery = createStore('');
 
-export const TAB_PATHS = ['/', '/deck', '/search'] as const;
+export const TAB_PATHS = ['/deck', '/', '/search'] as const;
 export type TabPath = (typeof TAB_PATHS)[number];
 
 /** The tab a page belongs to. Archive and Trash live under the Gallery. */
@@ -24,10 +24,10 @@ export const lastBrowsingTab = createStore<Exclude<TabPath, '/search'>>('/');
 
 /** Where each page sits left to right, so moving between pages slides the right way. */
 const PAGE_ORDER: Record<string, number> = {
-  '/': 0,
-  '/archive': 0.25,
-  '/trash': 0.5,
-  '/deck': 1,
+  '/deck': 0,
+  '/': 1,
+  '/archive': 1.25,
+  '/trash': 1.5,
   '/search': 2,
 };
 

@@ -16,7 +16,7 @@ export default defineConfig({
         name: 'Catch',
         short_name: 'Catch',
         description: 'Self-hosted notes that work offline.',
-        theme_color: '#f6c343',
+        theme_color: '#edb06d',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',

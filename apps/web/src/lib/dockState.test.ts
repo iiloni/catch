@@ -13,7 +13,8 @@ describe('tabFor', () => {
 
 describe('pageTransition', () => {
   it('slides in tab order', () => {
-    expect(pageTransition('/', '/deck')).toEqual(['forward']);
+    expect(pageTransition('/deck', '/')).toEqual(['forward']);
+    expect(pageTransition('/', '/deck')).toEqual(['back']);
     expect(pageTransition('/deck', '/search')).toEqual(['forward']);
     expect(pageTransition('/search', '/')).toEqual(['back']);
     expect(pageTransition('/', '/trash')).toEqual(['forward']);
@@ -28,7 +29,7 @@ describe('pageTransition', () => {
 
   it('keeps still while the quick note is open', () => {
     quickNote.set('open');
-    expect(pageTransition('/', '/deck')).toBe(false);
+    expect(pageTransition('/deck', '/')).toBe(false);
     quickNote.set('closed');
   });
 });

@@ -11,8 +11,8 @@ import { editorProgress } from '@/lib/noteTransition';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { path: '/', label: 'Gallery', icon: LayoutGrid },
   { path: '/deck', label: 'Deck', icon: Columns3 },
+  { path: '/', label: 'Gallery', icon: LayoutGrid },
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
 
@@ -41,7 +41,7 @@ export function Dock() {
     >
       <LayoutGroup id="dock">
         <div className="pointer-events-auto flex w-full max-w-md items-center">
-          <div className="glass relative h-[var(--dock-height)] min-w-0 flex-1 rounded-full">
+          <div className="glass relative h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
             <SearchField inputRef={inputRef} active={searching} />
             <AnimatePresence initial={false}>
               {!searching && (
@@ -149,6 +149,7 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
           <Link
             key={tab.path}
             to={tab.path}
+            aria-label={tab.label}
             aria-current={active === tab.path ? 'page' : undefined}
             // Pointer taps are handled by the nav's pointer events (so scrubbing works);
             // this path is for keyboard activation.
@@ -157,7 +158,7 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
               if (event.detail === 0) go(tab.path);
             }}
             className={cn(
-              'relative z-0 flex flex-col items-center justify-center gap-0.5 rounded-full font-medium text-[11px] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+              'relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
               current ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
@@ -165,24 +166,23 @@ function Tabs({ active, onSearch }: { active: TabPath; onSearch: () => void }) {
               <motion.span
                 layoutId="dock-indicator"
                 aria-hidden
-                className="-z-10 absolute inset-0 rounded-full bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
                 animate={{ scale: pressed ? 1.06 : 1 }}
                 transition={springs.snappy}
               />
             )}
             {tab.path === '/search' ? (
               <motion.span layoutId="dock-search-icon" transition={springs.smooth}>
-                <Icon className="size-[22px]" aria-hidden />
+                <Icon className="size-6" aria-hidden />
               </motion.span>
             ) : (
               <motion.span
                 animate={{ scale: pressed === tab.path ? 1.12 : 1 }}
                 transition={springs.snappy}
               >
-                <Icon className="size-[22px]" aria-hidden />
+                <Icon className="size-6" aria-hidden />
               </motion.span>
             )}
-            {tab.label}
           </Link>
         );
       })}
@@ -218,10 +218,10 @@ function SearchField({
     >
       {active ? (
         <motion.span layoutId="dock-search-icon" transition={springs.smooth}>
-          <Search className="size-[22px] text-muted-foreground" aria-hidden />
+          <Search className="size-6 text-muted-foreground" aria-hidden />
         </motion.span>
       ) : (
-        <span className="size-[22px]" />
+        <span className="size-6" />
       )}
       <motion.input
         ref={inputRef}
@@ -254,7 +254,7 @@ function SearchField({
             exit={{ opacity: 0, scale: 0.5 }}
             whileTap={{ scale: 0.88 }}
             transition={{ ...springs.snappy, delay: 0.1 }}
-            className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+            className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           >
             <X className="size-5" aria-hidden />
           </motion.button>
@@ -287,14 +287,14 @@ function ComposeButton() {
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
-          'relative flex size-[var(--dock-height)] items-center justify-center rounded-full outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
+          'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
           open ? 'text-foreground' : 'text-brand-foreground',
         )}
       >
-        <span aria-hidden className="glass absolute inset-0 rounded-full" />
+        <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
         <motion.span
           aria-hidden
-          className="absolute inset-0 rounded-full bg-brand shadow-[0_8px_24px_-6px_oklch(0.7_0.15_84/0.6),inset_0_1px_0_oklch(1_0_0/0.45)]"
+          className="absolute inset-0 rounded-[var(--dock-radius)] bg-brand shadow-[0_8px_24px_-6px_oklch(0.68_0.11_68/0.55),inset_0_1px_0_oklch(1_0_0/0.45)]"
           animate={{ opacity: open ? 0 : 1, scale: open ? 0.85 : 1 }}
           transition={springs.snappy}
         />
