@@ -1,4 +1,4 @@
-# Catch
+# <img src="apps/web/public/icon.svg" alt="" width="40" height="40" /> Catch
 
 A self-hosted, offline-first note-taking app in the spirit of Google Keep, available as a
 web app (installable PWA) and a native Android app.
@@ -36,16 +36,15 @@ the same code the app runs, with hot reload, and `chrome://inspect` gives you De
 To test inside the native app, connect the phone with USB or wireless debugging and run:
 
 ```bash
-./scripts/dev.sh up
 ./scripts/dev.sh android         # the phone reaches the stack over Tailscale
 ./scripts/dev.sh android --usb   # or through adb, without Tailscale on the phone
 ```
 
-This installs a debug app whose WebView loads the worktree's Vite server, so web changes
-hot-reload on the phone. Rerun it only after native changes (Capacitor plugins or config,
-anything under `apps/web/android`) or to point the app at another worktree. The app needs the
-stack running (and, with `--usb`, the device connected) while you use it. `chrome://inspect`
-works here too.
+The command starts this worktree's stack and installs a debug app whose WebView loads its
+Vite server, so web changes hot-reload on the phone. Rerun it only after native changes
+(Capacitor plugins or config, anything under `apps/web/android`) or to point the app at
+another worktree. The app needs the stack running (and, with `--usb`, the device connected)
+while you use it. `chrome://inspect` works here too.
 
 The requirements are a JDK 21 and the Android SDK on the host (`JAVA_HOME`, `ANDROID_HOME`).
 Use `adb pair` and `adb connect` for a wireless connection.
@@ -56,3 +55,7 @@ A standalone build bundles the web app and asks for your server URL on first lau
 pnpm --filter @catch/web android:sync
 pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDebug
 ```
+
+The folded-note mark lives in `apps/web/public/icon.svg`. To regenerate the repo and browser
+favicons, Android launcher icons, and splash images from it, run
+`./scripts/generate-brand-assets.sh` with ImageMagick installed.

@@ -61,7 +61,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
         </IconButton>
       )}
       {note.isArchived ? (
-        <IconButton label="Unarchive" onClick={then(() => setNoteArchived(note.id, false))}>
+        <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
           <ArchiveRestore />
         </IconButton>
       ) : (

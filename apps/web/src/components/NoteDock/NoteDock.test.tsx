@@ -57,6 +57,13 @@ describe('NoteDock', () => {
     expect(close).toHaveBeenCalled();
   });
 
+  it('keeps the editor open after unarchiving', () => {
+    renderDock({ isArchived: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }));
+    expect(setNoteArchived).toHaveBeenCalledWith(note.id, false);
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('only offers restoring a trashed note', () => {
     renderDock({ deletedAt: new Date() });
     expect(screen.queryByRole('button', { name: 'Background color' })).toBeNull();

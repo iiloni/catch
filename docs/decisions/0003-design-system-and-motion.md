@@ -19,8 +19,8 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
 
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
-button. Tapping Gallery while on a gallery page grows the dock upward into a segmented
-control for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
+button. Tapping Gallery while on a gallery page shows a separate segmented control
+floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment. Settings is a sheet behind the gear in the
 page header.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
@@ -36,7 +36,8 @@ native; CSS `linear()` springs can mimic the curve but not the interruption.
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor is translated onto the card and
 clipped to its size, then both animate to full screen. Content is never scaled, so text stays
-crisp, and the same progress value drives pull-to-dismiss. We chose this over the View
+crisp. A capped vertical drag dismisses the editor when the note is scrolled to the matching
+edge, with a haptic tick at the release threshold. We chose this over the View
 Transitions API, which cannot be interrupted or driven by a finger, and over Motion's
 `layoutId`, whose scale-based projection distorts text between a card and a full screen.
 

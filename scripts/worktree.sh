@@ -149,7 +149,7 @@ resolve_worktree() {
 
 # Ignored paths that are safe to discard when removing a worktree: dependencies,
 # build output, test artifacts and Android build products.
-DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|apps/web/android/app/src/main/assets/public/|\.(tsbuildinfo|log|apk)$'
+DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|apps/web/android/app/src/main/assets/|(^|/)res/xml/config\.xml$|\.(tsbuildinfo|log|apk)$'
 
 remove_worktree() {
     local query=$1

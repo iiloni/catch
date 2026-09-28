@@ -56,7 +56,7 @@ export function NoteDock() {
   const formatting = keyboardOpen && editable && controls !== null;
   const showPalette = palette && editable && !formatting && isPresent;
 
-  // Actions that take the note out of this view also close the editor.
+  // Actions that remove the note from view close the editor; unarchiving keeps it open.
   const then = (action: () => unknown) => () => {
     action();
     close();
@@ -123,7 +123,9 @@ export function NoteDock() {
             id: 'archive',
             label: 'Unarchive',
             icon: ArchiveRestore,
-            onPress: then(() => setNoteArchived(note.id, false)),
+            onPress: () => {
+              setNoteArchived(note.id, false);
+            },
           }
         : {
             id: 'archive',
@@ -157,7 +159,7 @@ export function NoteDock() {
             <ColorSwatches
               value={note.color}
               onChange={(color) => setNoteColor(note.id, color)}
-              className="mx-auto w-fit px-3 pt-4 pb-1"
+              className="w-full justify-items-center px-3 pt-4 pb-1 [&_button]:size-10"
             />
           </motion.div>
         )}

@@ -12,9 +12,41 @@ const PAGES = [
 
 /** The Gallery page under a point on screen, for a finger sliding up from the dock. */
 export function galleryPageAt(x: number, y: number): GalleryPage | null {
-  const element = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-gallery-page]');
-  const page = element?.dataset.galleryPage;
-  return PAGES.find((item) => item.path === page)?.path ?? null;
+  // Map the finger to the nearest segment while it is anywhere near the bar, so the
+  // gesture does not need fingertip precision (the finger itself covers the bar).
+  // Pointer capture sits on the tab bar and native overlays come and go, so this is a
+  // geometric hit test rather than elementFromPoint.
+  const bar = document.querySelector<HTMLElement>('[data-gallery-switcher]');
+  if (bar) {
+    const rect = bar.getBoundingClientRect();
+    if (
+      x >= rect.left - 16 &&
+      x <= rect.right + 16 &&
+      y >= rect.top - 56 &&
+      y <= rect.bottom + 16
+    ) {
+      const index = Math.floor(((x - rect.left) / rect.width) * PAGES.length);
+      return PAGES[Math.min(PAGES.length - 1, Math.max(0, index))]?.path ?? null;
+    }
+    return null;
+  }
+  // Fallback while the bar itself is not in the DOM: the buttons, with tolerance.
+  const tolerance = 12;
+  const elements = document.querySelectorAll<HTMLElement>('[data-gallery-page]');
+  for (const element of elements) {
+    const page = element.dataset.galleryPage;
+    if (!PAGES.some((item) => item.path === page)) continue;
+    const rect = element.getBoundingClientRect();
+    if (
+      x >= rect.left - tolerance &&
+      x <= rect.right + tolerance &&
+      y >= rect.top - tolerance &&
+      y <= rect.bottom + tolerance
+    ) {
+      return page as GalleryPage;
+    }
+  }
+  return null;
 }
 
 type Props = {
@@ -27,8 +59,8 @@ type Props = {
 };
 
 /**
- * A segmented control for the Gallery, Archive and Trash that grows the dock upward. It sits
- * above the tabs row, so its bottom margin leaves that row room.
+ * A segmented control for the Gallery, Archive and Trash. It floats as its own glass
+ * bar above the dock with a gap, rather than growing the dock itself.
  */
 export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
   const shown = hovered ?? current;
@@ -38,15 +70,22 @@ export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
       {open && (
         <motion.div
           key="switcher"
-          className="mb-[var(--dock-height)] overflow-hidden"
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={springs.smooth}
+          className="absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10"
+          initial={{ opacity: 0, y: 16, scale: 0.94, filter: 'blur(6px)' }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          exit={{
+            opacity: 0,
+            y: 12,
+            scale: 0.96,
+            filter: 'blur(6px)',
+            transition: { duration: 0.16 },
+          }}
+          transition={springs.snappy}
         >
           <nav
             aria-label="Gallery pages"
-            className="mx-1.5 mt-1.5 grid grid-cols-3 rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.06] p-1"
+            data-gallery-switcher
+            className="glass grid touch-none select-none grid-cols-3 rounded-[var(--dock-radius)] p-1 [-webkit-touch-callout:none]"
           >
             {PAGES.map((page) => {
               const Icon = page.icon;
@@ -59,7 +98,7 @@ export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
                   aria-current={current === page.path ? 'page' : undefined}
                   onClick={() => onSelect(page.path)}
                   className={cn(
-                    'relative z-0 flex h-10 items-center justify-center gap-1.5 rounded-[calc(var(--dock-radius)-0.625rem)] font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                    'relative z-0 flex h-12 items-center justify-center gap-1.5 rounded-[calc(var(--dock-radius)-0.25rem)] font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
                     selected ? 'text-foreground' : 'text-muted-foreground',
                   )}
                 >
@@ -67,7 +106,7 @@ export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
                     <motion.span
                       layoutId="gallery-page"
                       aria-hidden
-                      className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.625rem)] bg-card shadow-[0_1px_3px_oklch(0_0_0/0.18),inset_0_1px_0_var(--glass-highlight)]"
+                      className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
                       transition={springs.snappy}
                     />
                   )}

@@ -192,7 +192,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
       <div
         role="tablist"
         aria-label="Columns"
-        className="mx-3 mb-3 flex gap-1 rounded-full bg-foreground/[0.05] p-1 md:hidden"
+        className="mx-3 mb-3 flex gap-1 rounded-2xl bg-foreground/[0.05] p-1 md:hidden"
       >
         {BOARD_COLUMNS.map((column, index) => (
           <button
@@ -202,7 +202,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
             aria-selected={page === index}
             onClick={() => showPage(index)}
             className={cn(
-              'relative flex-1 rounded-full py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
+              'relative flex-1 rounded-xl py-1.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70',
               page === index ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
@@ -210,7 +210,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
               <motion.span
                 layoutId="board-page"
                 aria-hidden
-                className="absolute inset-0 rounded-full bg-background shadow-sm"
+                className="absolute inset-0 rounded-xl bg-background shadow-sm"
                 transition={springs.snappy}
               />
             )}
@@ -271,7 +271,10 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={`${name} column`}
       className={cn(
-        'flex min-h-[55dvh] w-[86%] max-w-sm shrink-0 snap-start flex-col gap-2.5 rounded-[28px] bg-foreground/[0.035] p-2.5 transition-colors md:w-auto md:max-w-none',
+        // Large-container radius matches dialogs and empty states; cards inside keep
+        // the card radius (rounded-2xl). The height fills the viewport down to the
+        // dock so the column lands on the page's dock-space padding.
+        'flex min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-11rem)] w-[86%] max-w-sm shrink-0 snap-start flex-col gap-2.5 rounded-3xl bg-foreground/[0.035] p-2.5 transition-colors md:min-h-[calc(100dvh-var(--safe-top)-var(--dock-space)-8rem)] md:w-auto md:max-w-none',
         isOver && 'bg-brand/15 ring-2 ring-brand/60',
       )}
     >
@@ -285,7 +288,7 @@ function BoardColumn({
         <DraggableNote key={note.id} note={note} onOpen={onOpen} />
       ))}
       {notes.length === 0 && (
-        <p className="flex flex-1 items-center justify-center rounded-3xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
+        <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
           Drop notes here
         </p>
       )}
