@@ -13,16 +13,19 @@ export const springs = {
   bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
 } satisfies Record<string, Transition>;
 
-/** Fast out of the gate, long gentle landing, no overshoot (an exponential ease-out). */
-export const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
+/**
+ * A brief, gentle acceleration, then a long soft landing with no overshoot (Material's
+ * "emphasized" curve). Starts calmer than a pure ease-out, which lurches off the mark.
+ */
+export const EASE_EMPHASIZED = [0.2, 0, 0, 1] as const;
 
 /**
  * Eased curves for full-screen transitions, where a spring's overshoot would push the
- * surface past the screen edge. CSS uses the same curve as `--ease-out-expo`.
+ * surface past the screen edge. CSS uses the same curve as `--ease-emphasized`.
  */
 export const curves = {
   /** A card opening into the editor. */
-  expand: { duration: 0.5, ease: EASE_OUT_EXPO },
+  expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
-  collapse: { duration: 0.45, ease: EASE_OUT_EXPO },
+  collapse: { duration: 0.5, ease: EASE_EMPHASIZED },
 } satisfies Record<string, Transition>;
