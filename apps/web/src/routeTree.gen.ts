@@ -16,7 +16,11 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppDeckRouteImport } from './routes/_app/deck'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -52,10 +56,30 @@ const AppSearchRoute = AppSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTrashRoute = AppTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
   getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => AppSettingsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -65,7 +89,11 @@ export interface FileRoutesByFullPath {
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/search': typeof AppSearchRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -75,6 +103,9 @@ export interface FileRoutesByTo {
   '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
   '/': typeof AppIndexRoute
+  '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings': typeof AppSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,15 +115,39 @@ export interface FileRoutesById {
   '/_app/archive': typeof AppArchiveRoute
   '/_app/deck': typeof AppDeckRoute
   '/_app/search': typeof AppSearchRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/trash': typeof AppTrashRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/general': typeof AppSettingsGeneralRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/setup' | '/archive' | '/deck' | '/search' | '/trash'
+    | '/'
+    | '/login'
+    | '/setup'
+    | '/archive'
+    | '/deck'
+    | '/search'
+    | '/settings'
+    | '/trash'
+    | '/settings/account'
+    | '/settings/general'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/setup' | '/archive' | '/deck' | '/search' | '/trash' | '/'
+  to:
+    | '/login'
+    | '/setup'
+    | '/archive'
+    | '/deck'
+    | '/search'
+    | '/trash'
+    | '/'
+    | '/settings/account'
+    | '/settings/general'
+    | '/settings'
   id:
     | '__root__'
     | '/_app'
@@ -101,8 +156,12 @@ export interface FileRouteTypes {
     | '/_app/archive'
     | '/_app/deck'
     | '/_app/search'
+    | '/_app/settings'
     | '/_app/trash'
     | '/_app/'
+    | '/_app/settings/account'
+    | '/_app/settings/general'
+    | '/_app/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -162,6 +221,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSearchRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/trash': {
       id: '/_app/trash'
       path: '/trash'
@@ -169,13 +235,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTrashRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/account': {
+      id: '/_app/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof AppSettingsAccountRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/general': {
+      id: '/_app/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof AppSettingsGeneralRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
   }
 }
+
+interface AppSettingsRouteChildren {
+  AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsGeneralRoute: AppSettingsGeneralRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
 
 interface AppRouteChildren {
   AppArchiveRoute: typeof AppArchiveRoute
   AppDeckRoute: typeof AppDeckRoute
   AppSearchRoute: typeof AppSearchRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppTrashRoute: typeof AppTrashRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -184,6 +288,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppArchiveRoute: AppArchiveRoute,
   AppDeckRoute: AppDeckRoute,
   AppSearchRoute: AppSearchRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppTrashRoute: AppTrashRoute,
   AppIndexRoute: AppIndexRoute,
 }

@@ -1,9 +1,13 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Check, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
+import {
+  SettingsTabPicker,
+  SettingsTabSelector,
+} from '@/components/SettingsTabPicker/SettingsTabPicker';
 import { useBackHandler } from '@/lib/backButton';
 import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
@@ -12,6 +16,13 @@ import { useKeyboardOpen } from '@/lib/keyboard';
 import { HOLD_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
+import {
+  isSettingsPath,
+  type SettingsPath,
+  settingsTabFor,
+  useSettingsNavigation,
+  useWideSettings,
+} from '@/lib/settings';
 import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +40,9 @@ function asGalleryPage(pathname: string): GalleryPage | null {
  * Floating glass tab bar with a detached compose button. On the Search tab the tabs
  * give way to a search field that fills the whole dock; while a note is open they give way
  * to the note's toolbar (NoteDock). With the note in a pane beside the page, the page keeps
- * its dock and the note gets one of its own.
+ * its dock and the note gets one of its own. In Settings the tabs become a picker for its
+ * pages and the compose button a back button; wide Settings lists its pages itself, so the
+ * dock steps aside.
  */
 export function Dock() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -39,16 +52,27 @@ export function Dock() {
   const keyboardOpen = useKeyboardOpen();
   const pane = useNotePane();
   const tab = tabFor(pathname);
-  const mode = noteOpen && !pane.shown ? 'note' : tab === '/search' ? 'search' : 'tabs';
+  const inSettings = isSettingsPath(pathname);
+  const hidden = useWideSettings() && inSettings;
+  const mode =
+    noteOpen && !pane.shown
+      ? 'note'
+      : inSettings
+        ? 'settings'
+        : tab === '/search'
+          ? 'search'
+          : 'tabs';
   const inputRef = useRef<HTMLInputElement>(null);
   // Above the editor while it is open or animating, below sheets and menus otherwise.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
   const dockRef = useRef<HTMLDivElement>(null);
 
-  // The Gallery switcher belongs to the page it was opened on, so navigating closes it.
+  // The Gallery switcher (or, in Settings, the page picker) belongs to the page it was opened
+  // on, so navigating closes it.
   const [switcherOn, setSwitcherOn] = useState<string | null>(null);
   const [switcherHover, setSwitcherHover] = useState<GalleryPage | null>(null);
-  const switcherOpen = switcherOn === pathname && mode === 'tabs';
+  const [settingsHover, setSettingsHover] = useState<SettingsPath | null>(null);
+  const switcherOpen = switcherOn === pathname && (mode === 'tabs' || mode === 'settings');
   const goToGalleryPage = useGalleryPages();
   const setSwitcher = (open: boolean) => setSwitcherOn(open ? pathname : null);
 
@@ -56,6 +80,15 @@ export function Dock() {
     haptics.selection();
     setSwitcherOn(null);
     goToGalleryPage(page);
+  }
+
+  const settings = useSettingsNavigation();
+  const settingsTab = settingsTabFor(pathname);
+
+  function selectSettingsTab(path: SettingsPath) {
+    haptics.selection();
+    setSwitcherOn(null);
+    settings.select(path);
   }
 
   useBackHandler(switcherOpen, () => setSwitcherOn(null));
@@ -93,36 +126,69 @@ export function Dock() {
         )}
       >
         <LayoutGroup id="dock">
-          {/* Bottom-aligned: the palette grows the dock upward; the switcher floats above it. */}
-          <div className="pointer-events-auto relative flex w-full max-w-md items-end">
-            <GallerySwitcher
-              open={switcherOpen}
-              current={asGalleryPage(pathname)}
-              hovered={switcherHover}
-              onSelect={selectGalleryPage}
-            />
-            <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
-              <SearchField inputRef={inputRef} active={mode === 'search'} />
-              <AnimatePresence initial={false}>
-                {mode === 'tabs' && (
-                  <Tabs
-                    key="tabs"
-                    active={tab}
-                    // Focusing inside the tap keeps Android willing to raise the keyboard.
-                    onSearch={() => inputRef.current?.focus()}
-                    switcherOpen={switcherOpen}
-                    onSwitcher={setSwitcher}
-                    onSwitcherHover={setSwitcherHover}
-                    onSwitcherSelect={selectGalleryPage}
-                  />
-                )}
-                {mode === 'note' && <NoteDock key="note" />}
-              </AnimatePresence>
-            </div>
-            <AnimatePresence initial={false}>
-              {mode === 'tabs' && <ComposeButton key="compose" />}
-            </AnimatePresence>
-          </div>
+          <AnimatePresence initial={false}>
+            {!hidden && (
+              // Bottom-aligned: the palette grows the dock upward; the switcher floats above it.
+              <motion.div
+                key="dock"
+                className="pointer-events-auto relative flex w-full max-w-md items-end"
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 24 }}
+                transition={springs.smooth}
+              >
+                <GallerySwitcher
+                  open={switcherOpen && mode === 'tabs'}
+                  current={asGalleryPage(pathname)}
+                  hovered={switcherHover}
+                  onSelect={selectGalleryPage}
+                />
+                <SettingsTabPicker
+                  open={switcherOpen && mode === 'settings'}
+                  current={settingsTab}
+                  hovered={settingsHover}
+                  onSelect={selectSettingsTab}
+                />
+                <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
+                  <SearchField inputRef={inputRef} active={mode === 'search'} />
+                  <AnimatePresence initial={false}>
+                    {mode === 'tabs' && (
+                      <Tabs
+                        key="tabs"
+                        active={tab}
+                        // Focusing inside the tap keeps Android willing to raise the keyboard.
+                        onSearch={() => inputRef.current?.focus()}
+                        switcherOpen={switcherOpen}
+                        onSwitcher={setSwitcher}
+                        onSwitcherHover={setSwitcherHover}
+                        onSwitcherSelect={selectGalleryPage}
+                      />
+                    )}
+                    {mode === 'settings' && (
+                      <SettingsTabSelector
+                        key="settings"
+                        current={settingsTab}
+                        open={switcherOpen}
+                        onOpenChange={setSwitcher}
+                        onHover={setSettingsHover}
+                        onSelect={selectSettingsTab}
+                        pickerRoot={() => dockRef.current}
+                      />
+                    )}
+                    {mode === 'note' && <NoteDock key="note" />}
+                  </AnimatePresence>
+                </div>
+                <AnimatePresence initial={false}>
+                  {(mode === 'tabs' || mode === 'settings') && (
+                    <ComposeButton
+                      key="compose"
+                      onBack={mode === 'settings' ? settings.leave : undefined}
+                    />
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </LayoutGroup>
       </motion.div>
       <AnimatePresence>
@@ -434,9 +500,14 @@ function SearchField({
   );
 }
 
-function ComposeButton() {
+/**
+ * The compose button beside the tabs. With `onBack` (in Settings) it turns into a back
+ * button in place.
+ */
+function ComposeButton({ onBack }: { onBack?: () => void }) {
   const state = quickNote.use();
   const open = state === 'open';
+  const back = onBack !== undefined;
 
   return (
     <motion.div
@@ -448,28 +519,40 @@ function ComposeButton() {
     >
       <motion.button
         type="button"
-        aria-label={open ? 'Close new note' : 'New note'}
-        aria-expanded={open}
+        aria-label={back ? 'Back' : open ? 'Close new note' : 'New note'}
+        aria-expanded={back ? undefined : open}
         onClick={() => {
           haptics.toggle();
-          quickNote.set(open ? 'closed' : 'open');
+          if (onBack) onBack();
+          else quickNote.set(open ? 'closed' : 'open');
         }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
           'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-          open ? 'text-foreground' : 'text-brand-foreground',
+          open || back ? 'text-foreground' : 'text-brand-foreground',
         )}
       >
         <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
         <motion.span
           aria-hidden
           className="absolute inset-0 rounded-[var(--dock-radius)] bg-[image:var(--brand-gradient)] shadow-[0_8px_24px_-6px_rgb(213_123_20/0.4),inset_0_1px_0_rgb(255_255_255/0.45)]"
-          animate={{ opacity: open ? 0 : 1, scale: open ? 0.85 : 1 }}
+          animate={{ opacity: open || back ? 0 : 1, scale: open || back ? 0.85 : 1 }}
           transition={springs.snappy}
         />
         <AnimatePresence initial={false} mode="popLayout">
-          {state === 'saved' ? (
+          {back ? (
+            <motion.span
+              key="back"
+              className="relative"
+              initial={{ scale: 0.4, opacity: 0, x: 8 }}
+              animate={{ scale: 1, opacity: 1, x: 0 }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              transition={springs.bouncy}
+            >
+              <ChevronLeft className="size-7" strokeWidth={2.25} aria-hidden />
+            </motion.span>
+          ) : state === 'saved' ? (
             <motion.span
               key="saved"
               className="relative"

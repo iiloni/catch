@@ -23,8 +23,16 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
 button. Tapping Gallery while on a gallery page shows a separate segmented control
 floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
-lets the finger slide straight onto a segment. Settings is a sheet behind the gear in the
-page header.
+lets the finger slide straight onto a segment.
+Settings is a page of its own (`/settings/<page>`) behind the gear in the Gallery's header,
+split into pages listed in `SETTINGS_TABS` (`src/lib/settings.ts`), each a route file under
+`routes/_app/settings/`. On phones it shows one page at a time: the dock's tabs become a
+selector naming the open page and the compose button becomes a back button. Tapping the
+selector floats a card of the pages above the dock (`SettingsTabPicker`), and holding it (or
+sliding off it) opens the card under the finger, so letting go on a page picks it. From 768 px
+the pages are listed in a column beside the open one, the dock steps aside, and the header
+holds the back button. Opening Settings pushes a history entry and switching pages replaces
+it, so back leaves Settings in one step.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.

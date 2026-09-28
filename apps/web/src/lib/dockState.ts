@@ -1,5 +1,6 @@
 import type { Note } from '@catch/shared';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
+import { isSettingsPath, isWideSettings, SETTINGS_TABS } from './settings';
 import { createStore } from './store';
 
 /**
@@ -31,6 +32,7 @@ const PAGE_ORDER: Record<string, number> = {
   '/archive': 1.25,
   '/trash': 1.5,
   '/search': 2,
+  ...Object.fromEntries(SETTINGS_TABS.map((tab, index) => [tab.path, 3 + index / 10])),
 };
 
 /**
@@ -43,6 +45,10 @@ export function pageTransition(from: string | undefined, to: string): ['forward'
   const toOrder = PAGE_ORDER[to];
   if (fromOrder === undefined || toOrder === undefined || fromOrder === toOrder) return false;
   if (quickNote.get() === 'open') return false;
+  // Side by side, Settings' page list stays put while the page beside it changes.
+  if (from && isSettingsPath(from) && isSettingsPath(to) && isWideSettings(window.innerWidth)) {
+    return false;
+  }
   return [toOrder > fromOrder ? 'forward' : 'back'];
 }
 
