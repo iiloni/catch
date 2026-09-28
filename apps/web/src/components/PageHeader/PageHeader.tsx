@@ -61,7 +61,7 @@ export function PageHeader({ title, titleAccessory, leading, trailing, selection
         </div>
       </header>
       <motion.div
-        className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 pt-[calc(var(--safe-top)+var(--header-height))] sm:px-6"
+        className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
         style={{ opacity: largeTitleOpacity }}
       >
         <h1 className="min-w-0 truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
