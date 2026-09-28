@@ -84,9 +84,9 @@ type TabPageHeaderProps = {
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
   const { scrollY } = useScroll();
   const collapseAt = 64;
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window === 'undefined' ? false : window.scrollY >= collapseAt,
-  );
+  // Not `window.scrollY`: on mount it still holds the previous page's scroll until the router
+  // resets it, and `scrollY` would never report a change to correct it.
+  const [collapsed, setCollapsed] = useState(() => scrollY.get() >= collapseAt);
   useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= collapseAt));
   // The expanded title follows the page; only the move into the corner is animated.
   const titleScrollY = useTransform(scrollY, [0, collapseAt], [66, 2]);
