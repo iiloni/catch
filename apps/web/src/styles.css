@@ -68,7 +68,9 @@
   --dock-height: 4rem;
   /* Rounded rectangle rather than a pill; controls inside are inset to stay concentric. */
   --dock-radius: 1.375rem;
-  --dock-bottom: calc(max(var(--safe-bottom), var(--keyboard), 0.5rem) + 0.25rem);
+  --dock-bottom: max(var(--dock-rest-bottom), calc(var(--keyboard) + 0.25rem));
+  /* Where the dock sits with the keyboard down, which the note's panel stays above. */
+  --dock-rest-bottom: calc(max(var(--safe-bottom), 0.5rem) + 0.25rem);
   --dock-space: calc(var(--dock-height) + var(--dock-bottom) + 1.5rem);
   --header-height: 3.25rem;
 

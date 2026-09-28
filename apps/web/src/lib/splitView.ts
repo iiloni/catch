@@ -13,14 +13,20 @@ const MIN_HEIGHT = 480;
 export const LIST_MIN = 280;
 export const NOTE_MIN = 340;
 /** Space between the page and the note, which holds the resize handle. */
-export const GUTTER = 12;
+export const GUTTER = 24;
 const DEFAULT_RATIO = 0.42;
 const STORAGE_KEY = 'catch-split';
 
 export type Viewport = { width: number; height: number };
 
-export function canSplit({ width, height }: Viewport) {
-  return width >= MIN_WIDTH && height >= MIN_HEIGHT;
+/**
+ * The Deck's columns need the whole width to be worth having, so a note opened there pops up
+ * over it instead. The Gallery pages and Search are lists to pick from, which suit a split.
+ */
+const UNSPLIT_PAGES = new Set(['/deck']);
+
+export function canSplit({ width, height }: Viewport, pathname: string) {
+  return width >= MIN_WIDTH && height >= MIN_HEIGHT && !UNSPLIT_PAGES.has(pathname);
 }
 
 /** How wide the page may be beside a note, in CSS pixels. */
@@ -86,10 +92,14 @@ export type NotePane = {
 export function useNotePane(): NotePane {
   const viewport = useViewport();
   const ratio = listRatio.use();
+  // The page as rendered: `location` runs ahead of it while a navigation resolves, and a note
+  // leaving for the Deck must still be closing in a pane when the Deck's path arrives.
   const noteOpen = useRouterState({
-    select: (state) => Boolean((state.location.search as { note?: string }).note),
+    select: (state) =>
+      Boolean((state.matches.at(-1)?.search as { note?: string } | undefined)?.note),
   });
-  const split = canSplit(viewport);
+  const pathname = useRouterState({ select: (state) => state.matches.at(-1)?.pathname ?? '/' });
+  const split = canSplit(viewport, pathname);
   const listWidth = listWidthFor(ratio, viewport.width);
   return {
     split,

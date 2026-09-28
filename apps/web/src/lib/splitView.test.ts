@@ -3,11 +3,19 @@ import { canSplit, GUTTER, LIST_MIN, listWidthFor, listWidthLimits, NOTE_MIN } f
 
 describe('splitView', () => {
   it('splits on tablets and unfolded foldables, not on phones', () => {
-    expect(canSplit({ width: 412, height: 915 })).toBe(false);
+    expect(canSplit({ width: 412, height: 915 }, '/')).toBe(false);
     // A phone on its side is wide but too short for two panes.
-    expect(canSplit({ width: 915, height: 412 })).toBe(false);
-    expect(canSplit({ width: 690, height: 830 })).toBe(true);
-    expect(canSplit({ width: 1180, height: 820 })).toBe(true);
+    expect(canSplit({ width: 915, height: 412 }, '/')).toBe(false);
+    expect(canSplit({ width: 690, height: 830 }, '/')).toBe(true);
+    expect(canSplit({ width: 1180, height: 820 }, '/')).toBe(true);
+  });
+
+  it('splits beside the Gallery pages and Search, not the Deck', () => {
+    const tablet = { width: 1180, height: 820 };
+    for (const page of ['/', '/archive', '/trash', '/search']) {
+      expect(canSplit(tablet, page)).toBe(true);
+    }
+    expect(canSplit(tablet, '/deck')).toBe(false);
   });
 
   it('leaves both panes their minimum width', () => {

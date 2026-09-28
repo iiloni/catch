@@ -16,7 +16,7 @@ describe('SplitHandle', () => {
     const handle = screen.getByRole('separator', { name: 'Resize note' });
     expect(handle).toHaveAttribute('aria-valuenow', '40');
     expect(handle).toHaveAttribute('aria-valuemin', '28');
-    expect(handle).toHaveAttribute('aria-valuemax', '65');
+    expect(handle).toHaveAttribute('aria-valuemax', '64');
   });
 
   it('moves with the arrow keys and saves the split', () => {
