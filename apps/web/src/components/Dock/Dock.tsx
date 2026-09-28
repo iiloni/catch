@@ -80,15 +80,15 @@ export function Dock() {
       className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center px-3"
     >
       <LayoutGroup id="dock">
-        {/* Bottom-aligned: the dock grows upward (switcher, palette), the compose button stays. */}
-        <div className="pointer-events-auto flex w-full max-w-md items-end">
+        {/* Bottom-aligned: the palette grows the dock upward; the switcher floats above it. */}
+        <div className="pointer-events-auto relative flex w-full max-w-md items-end">
+          <GallerySwitcher
+            open={switcherOpen}
+            current={asGalleryPage(pathname)}
+            hovered={switcherHover}
+            onSelect={selectGalleryPage}
+          />
           <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
-            <GallerySwitcher
-              open={switcherOpen}
-              current={asGalleryPage(pathname)}
-              hovered={switcherHover}
-              onSelect={selectGalleryPage}
-            />
             <SearchField inputRef={inputRef} active={mode === 'search'} />
             <AnimatePresence initial={false}>
               {mode === 'tabs' && (
@@ -227,13 +227,15 @@ function Tabs({
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(event: PointerEvent<HTMLElement>) {
     if (!pressed) return;
     const target = pressed;
     setPressed(null);
     if (hold.current.holding) {
       // Letting go on a segment picks it; anywhere else leaves the switcher open to tap.
-      const page = hold.current.page;
+      // Hit-test at release: the last move may have missed or been swallowed by a
+      // native drag, so don't rely on it alone.
+      const page = galleryPageAt(event.clientX, event.clientY) ?? hold.current.page;
       endHold();
       if (page) onSwitcherSelect(page);
       return;
@@ -246,7 +248,7 @@ function Tabs({
     <motion.nav
       ref={ref}
       aria-label="Main"
-      className="absolute inset-x-0 bottom-0 grid h-[var(--dock-height)] touch-none select-none grid-cols-3 p-1"
+      className="absolute inset-0 grid touch-none select-none grid-cols-3 p-1 [-webkit-touch-callout:none]"
       style={{ pointerEvents: isPresent ? undefined : 'none' }}
       initial={{ opacity: 0, scale: 0.92, filter: 'blur(6px)' }}
       animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
@@ -255,6 +257,7 @@ function Tabs({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onContextMenu={(event) => event.preventDefault()}
       onPointerCancel={() => {
         endHold();
         setPressed(null);
@@ -269,6 +272,10 @@ function Tabs({
             to={tab.path}
             aria-label={tab.label}
             aria-current={active === tab.path ? 'page' : undefined}
+            draggable={false}
+            // Native link dragging hijacks a hold-and-slide gesture (the URL preview
+            // in the video) and swallows the pointer moves the switcher needs.
+            onDragStart={(event) => event.preventDefault()}
             // Pointer taps are handled by the nav's pointer events (so scrubbing works);
             // this path is for keyboard activation.
             onClick={(event) => {

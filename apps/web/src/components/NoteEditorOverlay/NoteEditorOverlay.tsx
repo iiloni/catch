@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils';
 
 /** Pulling the editor down this far (in px) closes it on release. */
 const DISMISS_DISTANCE = 110;
+/** The drag stops here, so the surface can't be pulled off the screen. */
+const MAX_DRAG = 180;
 
 type Props = {
   noteId: string | undefined;
@@ -125,7 +127,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const progress = editorProgress;
   const fade = useMotionValue(origin ? 1 : 0);
   const dragY = useMotionValue(0);
-  const dragScale = useTransform(dragY, [0, 700], [1, 0.72]);
+  const dragScale = useTransform(dragY, [0, MAX_DRAG], [1, 0.92]);
   // Without a card to morph with, the whole surface (not just its content) fades and
   // settles in, or sinks away, so nothing opaque is left to vanish at the end.
   const surfaceOpacity = useTransform(() => (cardRect.current ? 1 : fade.get()));
@@ -367,9 +369,10 @@ function usePullToDismiss({
       velocity = (touch.clientY - lastY) / Math.max(1, now - lastTime);
       lastY = touch.clientY;
       lastTime = now;
-      // Rubber-band: the surface follows the finger less the further it goes.
+      // Rubber-band: the surface follows the finger less the further it goes,
+      // then stops at the cap instead of sliding off the screen.
       const distance = delta - 8;
-      dragY.set(distance < 0 ? 0 : distance * 0.75);
+      dragY.set(distance < 0 ? 0 : Math.min(distance * 0.75, MAX_DRAG));
       const past = distance > DISMISS_DISTANCE;
       if (past !== armed) {
         armed = past;

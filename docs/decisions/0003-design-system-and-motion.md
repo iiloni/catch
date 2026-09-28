@@ -19,8 +19,8 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 (`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
 
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
-button. Tapping Gallery while on a gallery page grows the dock upward into a segmented
-control for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
+button. Tapping Gallery while on a gallery page shows a separate segmented control
+floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment. Settings is a sheet behind the gear in the
 page header.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.

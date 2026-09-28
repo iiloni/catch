@@ -46,7 +46,9 @@ export function QuickNote() {
           <motion.div
             key="scrim"
             aria-hidden
-            className="fixed inset-0 z-30 bg-black/25"
+            // touch-none: swipes starting on the scrim never become a scroll or
+            // overscroll, so the page behind can't stretch while the window is up.
+            className="fixed inset-0 z-30 touch-none bg-black/25"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -175,6 +177,21 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     animate(opacity, 1, { duration: 0.18 });
   }, [scale, opacity]);
 
+  // The gallery behind stays put while the window is up (including its exit
+  // animation); the editor inside still scrolls. Cleanup restores the overflow.
+  useEffect(() => {
+    const body = document.body;
+    const html = document.documentElement;
+    const prevBody = body.style.overflow;
+    const prevHtml = html.style.overflow;
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = prevBody;
+      html.style.overflow = prevHtml;
+    };
+  }, []);
+
   function shrinkIntoButton() {
     return Promise.all([
       animate(scale, 0.3, springs.smooth),
@@ -185,8 +202,17 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
 
   useBackHandler(isPresent, () => quickNote.set('closed'));
 
-  // Swiping the grab handle down closes (and saves), like a sheet.
-  const swipe = useRef<{ startY: number; lastY: number; lastTime: number; velocity: number }>(null);
+  // Swiping the grab handle down closes (and saves), like a sheet. The drag is
+  // capped so the window stops instead of following the finger off screen.
+  const DISMISS_DISTANCE = 90;
+  const MAX_DRAG = 160;
+  const swipe = useRef<{
+    startY: number;
+    lastY: number;
+    lastTime: number;
+    velocity: number;
+    armed: boolean;
+  }>(null);
   function onHandleDown(event: PointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
     swipe.current = {
@@ -194,6 +220,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
       lastY: event.clientY,
       lastTime: event.timeStamp,
       velocity: 0,
+      armed: false,
     };
   }
   function onHandleMove(event: PointerEvent<HTMLDivElement>) {
@@ -203,14 +230,25 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     state.lastY = event.clientY;
     state.lastTime = event.timeStamp;
     const delta = event.clientY - state.startY;
-    // Resist upward pulls; follow downward ones.
-    y.set(delta < 0 ? delta * 0.1 : delta * 0.8);
+    if (delta < 0) {
+      // Resist upward pulls; follow downward ones, up to the cap.
+      y.set(delta * 0.1);
+      if (state.armed) state.armed = false;
+      return;
+    }
+    y.set(Math.min(delta * 0.8, MAX_DRAG));
+    const past = delta > DISMISS_DISTANCE;
+    if (past !== state.armed) {
+      state.armed = past;
+      if (past) haptics.threshold();
+    }
   }
   function onHandleUp(event: PointerEvent<HTMLDivElement>) {
     const state = swipe.current;
     swipe.current = null;
     if (!state) return;
-    if (event.clientY - state.startY > 90 || state.velocity > 0.6) quickNote.set('closed');
+    if (event.clientY - state.startY > DISMISS_DISTANCE || state.velocity > 0.6)
+      quickNote.set('closed');
     else animate(y, 0, springs.snappy);
   }
 
