@@ -306,7 +306,7 @@
 
 /* Room for the drag handle, which only exists with a mouse. */
 .bn-container.note-editor .bn-editor {
-  padding-inline: 3rem 1rem;
+  padding-inline: 2.25rem 1rem;
 }
 @media (pointer: coarse) {
   .bn-container.note-editor .bn-editor {
@@ -314,7 +314,7 @@
   }
 }
 .note-preview-editor {
-  padding-inline: 3rem 1rem;
+  padding-inline: 2.25rem 1rem;
 }
 @media (pointer: coarse) {
   .note-preview-editor {
