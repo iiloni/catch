@@ -8,6 +8,7 @@ import { useBackHandler } from '@/lib/backButton';
 import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardOpen } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,7 @@ export function Dock() {
   const noteOpen = useRouterState({
     select: (state) => Boolean((state.location.search as { note?: string }).note),
   });
+  const keyboardOpen = useKeyboardOpen();
   const tab = tabFor(pathname);
   const mode = noteOpen ? 'note' : tab === '/search' ? 'search' : 'tabs';
   const inputRef = useRef<HTMLInputElement>(null);
@@ -77,7 +79,10 @@ export function Dock() {
       ref={dockRef}
       data-dock
       style={{ zIndex }}
-      className="pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center px-3"
+      className={cn(
+        'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
+        noteOpen && keyboardOpen ? 'px-1' : 'px-3',
+      )}
     >
       <LayoutGroup id="dock">
         {/* Bottom-aligned: the dock grows upward (switcher, palette), the compose button stays. */}

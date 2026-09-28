@@ -12,13 +12,14 @@ import {
   Underline,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useSyncExternalStore } from 'react';
+import { type PointerEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type {
   BlockKind,
   EditorControls,
   FormattingState,
   TextStyle,
 } from '@/components/NoteEditor/editorControls';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,7 @@ const TOOLS: Tool[] = [
 
 const noSubscribe = () => () => {};
 const noState = () => null;
+const HOLD_MS = 500;
 
 function isActive(tool: Tool, state: FormattingState | null) {
   if (!state) return undefined;
@@ -92,30 +94,100 @@ export function FormattingBar({
         className,
       )}
     >
-      {TOOLS.map((tool) => {
-        const Icon = tool.icon;
-        const active = isActive(tool, state);
-        return (
-          <motion.button
-            key={tool.label}
-            type="button"
-            aria-label={tool.label}
-            aria-pressed={active}
-            disabled={!isEnabled(tool, state)}
-            // Keeps focus (and the keyboard) in the editor.
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => run(tool)}
-            whileTap={{ scale: 0.86 }}
-            transition={springs.snappy}
-            className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-xl outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-35',
-              active ? 'bg-foreground/[0.12] text-foreground' : 'text-foreground/75',
-            )}
-          >
-            <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden />
-          </motion.button>
-        );
-      })}
+      {TOOLS.map((tool) => (
+        <FormattingButton
+          key={tool.label}
+          tool={tool}
+          active={isActive(tool, state)}
+          enabled={isEnabled(tool, state)}
+          onPress={() => run(tool)}
+        />
+      ))}
     </div>
+  );
+}
+
+function FormattingButton({
+  tool,
+  active,
+  enabled,
+  onPress,
+}: {
+  tool: Tool;
+  active: boolean | undefined;
+  enabled: boolean;
+  onPress: () => void;
+}) {
+  const Icon = tool.icon;
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  const start = useRef({ x: 0, y: 0 });
+  const held = useRef(false);
+
+  function stopHold() {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+    setOpen(false);
+  }
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  function pointerDown(event: PointerEvent<HTMLButtonElement>) {
+    // Keeps focus (and the keyboard) in the editor.
+    event.preventDefault();
+    held.current = false;
+    if (event.pointerType !== 'touch' || !enabled) return;
+    start.current = { x: event.clientX, y: event.clientY };
+    timer.current = window.setTimeout(() => {
+      held.current = true;
+      setOpen(true);
+    }, HOLD_MS);
+  }
+
+  function pointerMove(event: PointerEvent<HTMLButtonElement>) {
+    if (
+      timer.current !== undefined &&
+      Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10
+    ) {
+      stopHold();
+    }
+  }
+
+  return (
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <motion.button
+          type="button"
+          aria-label={tool.label}
+          aria-pressed={active}
+          disabled={!enabled}
+          onPointerDown={pointerDown}
+          onPointerMove={pointerMove}
+          onPointerUp={stopHold}
+          onPointerCancel={stopHold}
+          onPointerLeave={stopHold}
+          onContextMenu={(event) => event.preventDefault()}
+          onClick={(event) => {
+            if (held.current && event.detail !== 0) {
+              event.preventDefault();
+              held.current = false;
+              return;
+            }
+            onPress();
+          }}
+          whileTap={{ scale: 0.86 }}
+          transition={springs.snappy}
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-xl outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-35',
+            active ? 'bg-foreground/[0.12] text-foreground' : 'text-foreground/75',
+          )}
+        >
+          <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden />
+        </motion.button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={16} className="z-[70]">
+        {tool.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

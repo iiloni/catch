@@ -72,6 +72,88 @@ test('the quick note formats text without leaving the editor', async ({ page }) 
   );
 });
 
+test('holding a formatting button on Android shows its label', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Requires a touch pointer.');
+  await signUp(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  const bold = page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', {
+    name: 'Bold',
+  });
+  await expect(bold).toBeEnabled();
+  const box = await bold.boundingBox();
+  if (!box) throw new Error('Missing formatting button layout');
+  const touch = await page.context().newCDPSession(page);
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ ...point, id: 1 }],
+  });
+  await expect(page.getByRole('tooltip')).toHaveText('Bold');
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.getByRole('tooltip')).toBeHidden();
+  await expect(bold).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('the editor dock keeps held labels above its edge', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Checks the touch toolbar layout.');
+  await signUp(page);
+  await createNote(page, 'Groceries', 'Oat milk');
+  await openNote(page, 'Groceries');
+  // Chromium emulation has no on-screen keyboard; report its height as Android does.
+  await page.evaluate(async () => {
+    const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+    keyboardHeight.jump(320);
+  });
+  const dock = page.locator('[data-dock] .glass').first();
+  const bold = page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', {
+    name: 'Bold',
+  });
+  await expect(bold).toBeVisible();
+  const dockBox = await dock.boundingBox();
+  const boldBox = await bold.boundingBox();
+  if (!dockBox || !boldBox) throw new Error('Missing dock layout');
+  const checklistBox = await page
+    .getByRole('toolbar', { name: 'Formatting' })
+    .getByRole('button', { name: 'Checklist' })
+    .boundingBox();
+  if (!checklistBox) throw new Error('Missing checklist layout');
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('Missing viewport');
+  expect(dockBox.x).toBeLessThan(6);
+  expect(viewport.width - dockBox.x - dockBox.width).toBeLessThan(6);
+  expect(boldBox.x + boldBox.width / 2 - dockBox.x).toBeGreaterThan(24);
+  expect(dockBox.x + dockBox.width - checklistBox.x - checklistBox.width / 2).toBeGreaterThan(24);
+
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: boldBox.x + boldBox.width / 2, y: boldBox.y + boldBox.height / 2, id: 1 }],
+  });
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toHaveText('Bold');
+  const tipBox = await tooltip.boundingBox();
+  if (!tipBox) throw new Error('Missing tooltip layout');
+  expect(tipBox.y + tipBox.height).toBeLessThanOrEqual(dockBox.y);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+});
+
+test('tapping blank space below a short note focuses its last block', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Checks the touch editing surface.');
+  await signUp(page);
+  await createNote(page, 'Groceries', 'Oat milk');
+  const dialog = await openNote(page, 'Groceries');
+  const lastBlock = dialog.locator('[data-content-type="paragraph"]').last();
+  const box = await lastBlock.boundingBox();
+  if (!box) throw new Error('Missing last block layout');
+  await page.touchscreen.tap(box.x + 40, box.y + box.height + 100);
+  await expect(dialog.locator('[contenteditable]')).toBeFocused();
+  await page.keyboard.type('!');
+  await expect(lastBlock).toContainText('Oat milk!');
+});
+
 test('search finds notes by any word, including archived ones', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Groceries', 'Oat milk');

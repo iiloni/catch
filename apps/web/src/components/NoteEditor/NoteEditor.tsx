@@ -4,7 +4,7 @@ import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Note } from '@catch/shared';
-import { useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -63,13 +63,32 @@ export function NoteEditor({
 
   useCaretAboveKeyboard(editor);
 
+  function focusAboveBlankSpace(event: MouseEvent<HTMLDivElement>) {
+    if (!editable || !(event.target instanceof Element)) return;
+    // A tap inside a block belongs to BlockNote, which places the caret at the tapped text.
+    if (event.target.closest('[data-node-type="blockContainer"]')) return;
+
+    const blocks = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        '[data-node-type="blockContainer"][data-id]',
+      ),
+    );
+    const above = blocks.findLast((block) => block.getBoundingClientRect().top <= event.clientY);
+    const id = (above ?? blocks[0])?.dataset.id;
+    const block = id ? editor.getBlock(id) : editor.document.at(-1);
+    if (!block) return;
+    editor.setTextCursorPosition(block, 'end');
+    editor.focus();
+  }
+
   return (
     <BlockNoteView
       editor={editor}
       editable={editable}
       theme={theme}
       formattingToolbar={!coarsePointer}
-      className={cn('note-editor', className)}
+      className={cn('note-editor min-h-full', className)}
+      onClick={focusAboveBlankSpace}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     />
   );
