@@ -255,8 +255,8 @@
   }
 }
 
-/* Blur scrolling notes behind the Gallery controls without a visible bar edge. */
-.gallery-top-blur {
+/* Blur scrolling notes behind a tab page's header controls without a visible bar edge. */
+.page-top-blur {
   background-color: var(--glass);
   backdrop-filter: blur(24px) saturate(150%);
   mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);

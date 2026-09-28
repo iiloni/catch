@@ -35,10 +35,14 @@ holding it (or sliding off it) grows the dock upward into the Deck's columns, an
 on one puts the note there. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
 
-**Header toolbars.** Page controls sit in glass toolbars in the header's top corners (the
-Gallery's sort and settings, Archive and Trash's back button and Empty trash). A toolbar
-grows out of its corner when it gets controls, and when its controls change it animates its
-width (never scale) to fit the new ones while the old ones fade out.
+**Header toolbars.** Page controls sit in toolbars in the header's top corners (the
+Gallery's sort and settings, the Deck's column editor, Archive and Trash's back button and
+Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
+change it animates its width (never scale) to fit the new ones while the old ones fade out.
+The dock's pages (Gallery, Deck, Search) share `TabPageHeader`: a large centered title that
+moves into the top left corner as a glass pill once the page scrolls under it. Until then
+their top right controls are flat buttons on the page, and they gain the same glass as the
+title does. Selecting notes always shows the glass.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash
 selects it (in the Gallery and Deck, the same press picks it up to rearrange it), and while

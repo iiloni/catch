@@ -7,7 +7,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
-import { PageHeader } from '@/components/PageHeader/PageHeader';
+import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { searchQuery } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
@@ -52,7 +52,7 @@ function SearchPage() {
 
   return (
     <>
-      <PageHeader title="Search" />
+      <TabPageHeader title="Search" />
       <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 sm:px-6">
         <ColorFilter value={color} onChange={setColor} />
 

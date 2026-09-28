@@ -1,12 +1,15 @@
 import { comparePositions } from '@catch/shared';
 import { and, eq, isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
+import { Columns3Cog } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useState } from 'react';
 import { ColumnManager } from '@/components/NoteBoard/ColumnManager';
 import { NoteBoard } from '@/components/NoteBoard/NoteBoard';
-import { PageHeader } from '@/components/PageHeader/PageHeader';
+import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { boardColumnsCollection, notesCollection } from '@/lib/collections';
+import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 
@@ -35,17 +38,20 @@ function DeckPage() {
 
   return (
     <>
-      <PageHeader
+      <TabPageHeader
         title="Deck"
         selection={selectionHeader(selection, 'deck')}
-        titleAccessory={
-          <button
+        trailing={
+          <motion.button
             type="button"
+            aria-label="Edit columns"
             onClick={() => setManaging(true)}
-            className="rounded-full px-3 py-2 font-medium text-sm text-brand-link outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            whileTap={{ scale: 0.9 }}
+            transition={springs.snappy}
+            className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            Edit columns
-          </button>
+            <Columns3Cog className="size-[22px]" aria-hidden />
+          </motion.button>
         }
       />
       <ColumnManager columns={columns} open={managing} onOpenChange={setManaging} />

@@ -21,8 +21,6 @@ export type HeaderSelection = { count: number; onClose: () => void; actions: Rea
 
 type Props = {
   title: string;
-  /** Controls on the large title's line, at its right edge (such as sorting). */
-  titleAccessory?: ReactNode;
   /** Controls in a glass toolbar at the top left, such as a back button. */
   leading?: ReactNode;
   /** Controls in a glass toolbar at the top right. */
@@ -34,7 +32,7 @@ type Props = {
  * iOS-style large title. The bar above it starts transparent and turns to frosted glass,
  * with a small centered title, once the large title scrolls under it.
  */
-export function PageHeader({ title, titleAccessory, leading, trailing, selection }: Props) {
+export function PageHeader({ title, leading, trailing, selection }: Props) {
   const { scrollY } = useScroll();
   const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
   const smallTitleOpacity = useTransform(scrollY, [36, 56], [0, 1]);
@@ -61,26 +59,29 @@ export function PageHeader({ title, titleAccessory, leading, trailing, selection
         </div>
       </header>
       <motion.div
-        className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
+        className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
         style={{ opacity: largeTitleOpacity }}
       >
-        <h1 className="min-w-0 truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
+        <h1 className="truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
           {title}
         </h1>
-        {titleAccessory && <div className="-mr-2 flex items-center gap-1">{titleAccessory}</div>}
       </motion.div>
     </>
   );
 }
 
-type GalleryHeaderProps = {
-  /** The controls in the top right toolbar. */
-  trailing: ReactNode;
+type TabPageHeaderProps = {
+  title: string;
+  /** Controls at the top right, which turn into a glass toolbar along with the title. */
+  trailing?: ReactNode;
   selection?: HeaderSelection | null;
 };
 
-/** Gallery's title moves into the corner when it reaches the top of the page. */
-export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
+/**
+ * The header of the pages in the dock. The large title moves into the top left corner as a
+ * glass pill when it reaches the top of the page.
+ */
+export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
   const { scrollY } = useScroll();
   const collapseAt = 64;
   const [collapsed, setCollapsed] = useState(() =>
@@ -97,7 +98,7 @@ export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
         {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
         <motion.div
           aria-hidden
-          className="gallery-top-blur pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
+          className="page-top-blur pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
           initial={false}
           animate={{ opacity: collapsed ? 1 : 0 }}
           transition={{ duration: 0.2 }}
@@ -129,11 +130,11 @@ export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
                 transition={slide}
               />
               <h1 className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
-                Gallery
+                {title}
               </h1>
             </motion.div>
           </motion.div>
-          <HeaderToolbars trailing={trailing} selection={selection} />
+          <HeaderToolbars trailing={trailing} selection={selection} flat={!collapsed} />
         </div>
       </header>
       <div aria-hidden className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
@@ -141,27 +142,33 @@ export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
   );
 }
 
-/** The glass toolbars in the header's top corners, and what selecting turns them into. */
+/**
+ * The toolbars in the header's top corners, and what selecting turns them into. While `flat`,
+ * the page's own controls sit on the page without glass; selecting always shows the glass.
+ */
 function HeaderToolbars({
   leading,
   trailing,
   selection,
+  flat = false,
 }: {
   leading?: ReactNode;
   trailing?: ReactNode;
   selection?: HeaderSelection | null;
+  flat?: boolean;
 }) {
   const mode = selection ? 'selection' : 'page';
+  const glass = !flat || Boolean(selection);
   return (
     <>
-      <HeaderToolbar side="left" mode={mode}>
+      <HeaderToolbar side="left" mode={mode} glass={glass}>
         {selection ? (
           <SelectionCount count={selection.count} onClose={selection.onClose} />
         ) : (
           leading
         )}
       </HeaderToolbar>
-      <HeaderToolbar side="right" mode={mode}>
+      <HeaderToolbar side="right" mode={mode} glass={glass}>
         {selection ? selection.actions : trailing}
       </HeaderToolbar>
     </>
@@ -212,17 +219,19 @@ type Side = 'left' | 'right';
 function HeaderToolbar({
   side,
   mode,
+  glass,
   children,
 }: {
   side: Side;
   mode: string;
+  glass: boolean;
   children: ReactNode;
 }) {
   const present = children !== null && children !== undefined && children !== false;
   return (
     <AnimatePresence initial={false}>
       {present && (
-        <MorphingPill key="pill" side={side} mode={mode}>
+        <MorphingPill key="pill" side={side} mode={mode} glass={glass}>
           {children}
         </MorphingPill>
       )}
@@ -230,16 +239,24 @@ function HeaderToolbar({
   );
 }
 
-function MorphingPill({ side, mode, children }: { side: Side; mode: string; children: ReactNode }) {
+function MorphingPill({
+  side,
+  mode,
+  glass,
+  children,
+}: {
+  side: Side;
+  mode: string;
+  glass: boolean;
+  children: ReactNode;
+}) {
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
   const measure = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return;
       const update = () => {
-        const pill = element.parentElement;
-        const border = pill ? pill.offsetWidth - pill.clientWidth : 0;
-        const next = element.offsetWidth + border;
+        const next = element.offsetWidth;
         if (width.get() === 'auto') width.jump(next);
         else animate(width, next, springs.smooth);
       };
@@ -255,7 +272,7 @@ function MorphingPill({ side, mode, children }: { side: Side; mode: string; chil
   return (
     <motion.div
       className={cn(
-        'glass absolute top-1 h-[50px] overflow-hidden rounded-[var(--dock-radius)]',
+        'absolute top-1 h-[50px] overflow-hidden rounded-[var(--dock-radius)]',
         side === 'left' ? 'left-3 origin-left sm:left-4' : 'right-3 origin-right sm:right-4',
       )}
       style={{ width }}
@@ -265,6 +282,13 @@ function MorphingPill({ side, mode, children }: { side: Side; mode: string; chil
       exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.16 } }}
       transition={springs.smooth}
     >
+      <motion.span
+        aria-hidden
+        className="glass absolute inset-0 rounded-[var(--dock-radius)]"
+        initial={false}
+        animate={{ opacity: glass ? 1 : 0 }}
+        transition={{ ...springs.smooth, visualDuration: 0.3 }}
+      />
       <AnimatePresence initial={false}>
         <motion.div
           key={mode}
