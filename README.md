@@ -1,4 +1,4 @@
-# Catch
+# <img src="apps/web/public/icon.svg" alt="" width="40" height="40" /> Catch
 
 A self-hosted, offline-first note-taking app in the spirit of Google Keep, available as a
 web app (installable PWA) and a native Android app.
@@ -56,3 +56,7 @@ A standalone build bundles the web app and asks for your server URL on first lau
 pnpm --filter @catch/web android:sync
 pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDebug
 ```
+
+The folded-note mark lives in `apps/web/public/icon.svg`. To regenerate the repo and browser
+favicons, Android launcher icons, and splash images from it, run
+`./scripts/generate-brand-assets.sh` with ImageMagick installed.
