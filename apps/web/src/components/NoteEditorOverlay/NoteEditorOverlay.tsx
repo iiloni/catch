@@ -269,11 +269,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
                 )}
               >
-                <div className="glass flex shrink-0 rounded-full p-1">
+                <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
                   <IconButton
                     label="Close"
                     onClick={requestClose}
-                    className="size-10 rounded-full [&_svg]:size-6"
+                    className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
                   >
                     <ChevronLeft />
                   </IconButton>
@@ -281,7 +281,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 <div className="flex min-w-0 flex-1 justify-center">
                   <SaveStatus state={state} updatedAt={note.updatedAt} />
                 </div>
-                <div className="glass flex shrink-0 rounded-full p-1">
+                <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
                   <IconButton
                     label={editable ? 'Move to trash' : 'Delete forever'}
                     onClick={() => {
@@ -290,7 +290,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       else deleteNoteForever(note.id);
                       requestClose();
                     }}
-                    className="size-10 rounded-full text-destructive hover:text-destructive [&_svg]:size-6"
+                    className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] text-destructive hover:text-destructive [&_svg]:size-6"
                   >
                     <Trash2 />
                   </IconButton>
