@@ -9,6 +9,7 @@ import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
+import { HOLD_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
 import { GUTTER, useNotePane } from '@/lib/splitView';
@@ -19,9 +20,6 @@ const TABS = [
   { path: '/', label: 'Gallery', icon: LayoutGrid },
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
-
-/** Holding the Gallery tab this long opens the Gallery switcher under the finger. */
-const HOLD_MS = 380;
 
 function asGalleryPage(pathname: string): GalleryPage | null {
   return GALLERY_PAGES.find((page) => page === pathname) ?? null;

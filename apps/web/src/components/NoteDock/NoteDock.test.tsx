@@ -1,11 +1,23 @@
-import type { Note } from '@catch/shared';
+import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { editorNote } from '@/lib/dockState';
-import { restoreNote, setNoteArchived, setNoteColor, setNotePinned } from '@/lib/notes';
+import { HOLD_MS } from '@/lib/longPress';
+import {
+  moveNoteToDeck,
+  restoreNote,
+  setNoteArchived,
+  setNoteColor,
+  setNotePinned,
+} from '@/lib/notes';
 import { NoteDock } from './NoteDock';
 
 vi.mock('@/lib/notes');
+const columns: BoardColumn[] = [
+  { id: 'in_progress', userId: 'user-1', name: 'In progress', color: 'blue', position: 'a1' },
+  { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
+];
+vi.mock('@/lib/collections', () => ({ useBoardColumns: () => columns }));
 const close = vi.fn();
 vi.mock('@/lib/openNote', () => ({ useOpenNote: () => ({ open: vi.fn(), close }) }));
 
@@ -31,6 +43,7 @@ function renderDock(overrides: Partial<Note> = {}) {
 afterEach(() => {
   act(() => editorNote.set(null));
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe('NoteDock', () => {
@@ -49,6 +62,33 @@ describe('NoteDock', () => {
     expect(colors).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Teal' }));
     expect(setNoteColor).toHaveBeenCalledWith(note.id, 'teal');
+  });
+
+  it('adds a tapped note to the default column', () => {
+    renderDock();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to deck' }));
+    expect(moveNoteToDeck).toHaveBeenCalledWith(note.id);
+    expect(screen.queryByRole('region', { name: 'Deck columns' })).toBeNull();
+  });
+
+  it('opens the columns when the deck button is held', () => {
+    vi.useFakeTimers();
+    renderDock();
+    const deck = screen.getByRole('button', { name: 'Add to deck' });
+    fireEvent.pointerDown(deck, { button: 0, pointerId: 1 });
+    act(() => vi.advanceTimersByTime(HOLD_MS));
+    fireEvent.pointerUp(deck, { button: 0, pointerId: 1 });
+    fireEvent.click(deck);
+    expect(moveNoteToDeck).not.toHaveBeenCalled();
+
+    const names = screen
+      .getAllByRole('button')
+      .filter((button) => button.dataset.deckColumn)
+      .map((button) => button.textContent);
+    expect(names).toEqual(['NewDefault', 'In progress']);
+    fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
+    expect(moveNoteToDeck).toHaveBeenCalledWith(note.id, 'in_progress');
+    expect(close).not.toHaveBeenCalled();
   });
 
   it('closes the editor after archiving', () => {

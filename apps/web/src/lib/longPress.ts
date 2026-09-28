@@ -7,6 +7,9 @@ import { type PointerEvent, useCallback, useEffect, useRef } from 'react';
 export const LONG_PRESS_MS = 250;
 export const LONG_PRESS_TOLERANCE = 8;
 
+/** Holding a dock button this long opens its menu under the finger. */
+export const HOLD_MS = 380;
+
 /** Stops the click that ends a mouse drag, or a long press without a move, from opening the note. */
 export function swallowNextClick() {
   const swallow = (event: MouseEvent) => {
