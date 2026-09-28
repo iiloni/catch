@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
-import { SettingsButton } from '@/components/SettingsSheet/SettingsSheet';
+import { SettingsButton } from '@/components/SettingsButton/SettingsButton';
 import {
   DropdownMenu,
   DropdownMenuContent,

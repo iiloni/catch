@@ -71,6 +71,9 @@ write routes that return `{ txid }`, then add a collection.
   handle dark mode via `light-dark()`, so avoid `dark:` variants. The look and motion rules are
   in `docs/decisions/0003-design-system-and-motion.md`.
 - Trigger haptics through the named events in `apps/web/src/lib/haptics.ts`.
+- A new Settings page is an entry in `SETTINGS_TABS` (`apps/web/src/lib/settings.ts`) plus a
+  route file in `apps/web/src/routes/_app/settings/`, built from `SettingsSection` and
+  `SettingsRow`. The desktop list and the dock's picker both read `SETTINGS_TABS`.
 - Add UI primitives with `pnpm dlx shadcn@latest add <component>` from `apps/web`; they land
   in `src/components/ui` and are ours to edit.
 - Feature components go in `apps/web/src/components/<Name>/<Name>.tsx` with a

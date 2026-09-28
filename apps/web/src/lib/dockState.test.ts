@@ -21,6 +21,16 @@ describe('pageTransition', () => {
     expect(pageTransition('/archive', '/')).toEqual(['back']);
   });
 
+  it('slides Settings in from the right, and its pages past each other on narrow screens', () => {
+    expect(pageTransition('/', '/settings/general')).toEqual(['forward']);
+    expect(pageTransition('/settings/account', '/')).toEqual(['back']);
+    window.innerWidth = 400;
+    expect(pageTransition('/settings/general', '/settings/account')).toEqual(['forward']);
+    expect(pageTransition('/settings/account', '/settings/general')).toEqual(['back']);
+    window.innerWidth = 1024;
+    expect(pageTransition('/settings/general', '/settings/account')).toBe(false);
+  });
+
   it('leaves note opens, first loads and other pages alone', () => {
     expect(pageTransition('/', '/')).toBe(false);
     expect(pageTransition(undefined, '/')).toBe(false);
