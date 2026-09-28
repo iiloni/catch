@@ -4,10 +4,11 @@ import {
   animate,
   motion,
   useMotionValue,
+  useMotionValueEvent,
   useScroll,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -78,53 +79,44 @@ type GalleryHeaderProps = {
   selection?: HeaderSelection | null;
 };
 
-/** Gallery's title travels from the centered page heading into the left corner control. */
+/** Gallery's large title gives way to a compact title as it scrolls past the header. */
 export function GalleryHeader({ trailing, selection }: GalleryHeaderProps) {
   const { scrollY } = useScroll();
-  const left = useTransform(scrollY, [0, 32], ['50%', '0%']);
-  const x = useTransform(scrollY, [0, 32], ['-50%', '0%']);
-  const y = useTransform(scrollY, [0, 32], [52, 0]);
-  const fontSize = useTransform(scrollY, [0, 32], [36, 17]);
-  const titlePadding = useTransform(scrollY, [0, 32], [0, 14]);
-  const cornerInset = useTransform(scrollY, [0, 32], [0, 12]);
-  const glassOpacity = useTransform(scrollY, [4, 24], [0, 1]);
+  const collapseAt = 64;
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window === 'undefined' ? false : window.scrollY >= collapseAt,
+  );
+  useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= collapseAt));
+  const fade = { duration: 0.22, ease: 'easeInOut' } as const;
 
   return (
     <>
       <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
           <motion.div
-            className="absolute top-1 flex h-[50px] items-center"
-            style={{ left, x, y, marginLeft: cornerInset }}
+            aria-hidden
+            className="glass pointer-events-none absolute top-1 left-3 flex h-[50px] items-center rounded-[var(--dock-radius)] px-[14px] sm:left-4"
             initial={false}
-            animate={
-              selection
-                ? { opacity: 0, filter: 'blur(6px)', pointerEvents: 'none' }
-                : { opacity: 1, filter: 'blur(0px)', pointerEvents: 'auto' }
-            }
-            transition={springs.smooth}
+            animate={{ opacity: collapsed && !selection ? 1 : 0 }}
+            transition={fade}
           >
-            <motion.div
-              className="relative flex h-full items-center rounded-[var(--dock-radius)]"
-              style={{ paddingInline: titlePadding }}
-            >
-              <motion.span
-                aria-hidden
-                className="glass absolute inset-0 rounded-[var(--dock-radius)]"
-                style={{ opacity: glassOpacity }}
-              />
-              <motion.h1
-                className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
-                style={{ fontSize }}
-              >
-                Gallery
-              </motion.h1>
-            </motion.div>
+            <span className="whitespace-nowrap font-display font-extrabold text-[17px] leading-none tracking-[-0.03em]">
+              Gallery
+            </span>
           </motion.div>
           <HeaderToolbars trailing={trailing} selection={selection} />
         </div>
       </header>
-      <div aria-hidden className="h-[calc(var(--safe-top)+var(--header-height)+3rem)]" />
+      <div className="mx-auto flex h-[calc(var(--safe-top)+var(--header-height)+4rem)] max-w-7xl items-end justify-center">
+        <motion.h1
+          className="whitespace-nowrap font-display font-extrabold text-[42px] leading-none tracking-[-0.03em]"
+          initial={false}
+          animate={{ opacity: collapsed || selection ? 0 : 1 }}
+          transition={fade}
+        >
+          Gallery
+        </motion.h1>
+      </div>
     </>
   );
 }
