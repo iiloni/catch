@@ -14,7 +14,7 @@ CMD ["sh", "scripts/dev-entrypoint.sh"]
 FROM base AS build
 COPY . .
 RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
-    export npm_config_store_dir=/pnpm-store \
+    export PNPM_CONFIG_STORE_DIR=/pnpm-store \
     && pnpm install --frozen-lockfile \
     && pnpm --filter @catch/web build \
     && pnpm --filter @catch/server build \

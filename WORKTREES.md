@@ -8,6 +8,8 @@ at the same time without touching each other's data.
 Only the app is published to the host, on one port per worktree. Postgres and Electric stay
 on the stack's private network. The pnpm download cache (`catch-pnpm-store`) is the only
 volume shared between worktrees.
+Each worktree also keeps its own pnpm metadata cache, so repeated `up` runs can reuse
+lockfile supply-chain verification results.
 
 ## Start a checkout
 

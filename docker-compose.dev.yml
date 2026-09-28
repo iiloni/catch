@@ -18,7 +18,9 @@ services:
       CATCH_SEED_PROFILE: ${CATCH_SEED_PROFILE:-demo}
       CATCH_DEV_HOST: 0.0.0.0
       CATCH_DEV_ALLOWED_HOSTS: ${CATCH_PUBLIC_HOST:-localhost},.ts.net
-      npm_config_store_dir: /pnpm-store
+      PNPM_CONFIG_STORE_DIR: /pnpm-store
+      # `dev.sh up` installs in a disposable container; retain lockfile verification.
+      PNPM_CONFIG_CACHE_DIR: /pnpm-cache
     ports: !override
       - '${CATCH_DEV_BIND_ADDRESS:-127.0.0.1}:${CATCH_PORT:-5173}:5173'
     healthcheck:
@@ -39,12 +41,14 @@ services:
       - server_node_modules:/workspace/apps/server/node_modules
       - shared_node_modules:/workspace/packages/shared/node_modules
       - pnpm_store:/pnpm-store
+      - pnpm_cache:/pnpm-cache
 
 volumes:
   node_modules:
   web_node_modules:
   server_node_modules:
   shared_node_modules:
+  pnpm_cache:
   # Shared by every worktree as a download cache; created by scripts/dev.sh.
   pnpm_store:
     name: catch-pnpm-store
