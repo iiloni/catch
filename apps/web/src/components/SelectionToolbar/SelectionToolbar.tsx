@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
+  LayoutGrid,
   type LucideIcon,
   Palette,
   RotateCcw,
@@ -30,12 +31,13 @@ import {
   deleteNotesForever,
   duplicateNotes,
   restoreNotes,
+  sendNotesToGallery,
   setNotesColor,
   trashNotes,
   unarchiveNotes,
 } from '@/lib/notes';
 
-type Place = 'gallery' | 'archive' | 'trash';
+type Place = 'gallery' | 'deck' | 'archive' | 'trash';
 
 type Props = {
   /** The selected notes, in the order they are shown. */
@@ -92,6 +94,16 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
           <ColorSwatches value={sharedColor} onChange={(color) => setNotesColor(ids, color)} />
         </PopoverContent>
       </Popover>
+      {place === 'deck' && (
+        <ToolbarButton
+          label="Send to gallery"
+          icon={LayoutGrid}
+          onClick={then(() => {
+            haptics.success();
+            sendNotesToGallery(notes);
+          })}
+        />
+      )}
       {place === 'archive' ? (
         <ToolbarButton
           label="Unarchive"
