@@ -47,7 +47,8 @@ Back and Escape end selecting.
 **Wide screens.** On tablets and unfolded foldables (at least 672 × 480 px) an open note
 opens in a pane beside the page instead of covering it, as in a list-detail layout. The page
 stays usable: it keeps its own dock (tabs and compose), the note gets a second dock under its
-pane, and tapping another card swaps the pane's note in place (replacing the history entry, so
+pane, and the note itself is a large rounded card between its back and trash toolbars at the
+top and that dock at the bottom, so it reads as the page's card opened up. Tapping another card swaps the pane's note in place (replacing the history entry, so
 back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
 at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
 saved so it survives rotation and unfolding. The pane does not use the container transform:
@@ -56,7 +57,9 @@ target and two morphs cross when switching notes. Instead the pane slides in fro
 edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.
 The page takes its new width at once, so its cards reshuffle once under the moving pane, while
 fixed UI over the page follows the pane's edge through `--note-pane` (`src/lib/splitView.ts`).
-The deck's columns switch on container width rather than the viewport. Landscape phones are too short for two panes and keep the centered
+The Deck does not split: its columns need the whole width, so a note opened there pops up
+over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
+The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered
 panel.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in

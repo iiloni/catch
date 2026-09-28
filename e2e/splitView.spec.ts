@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, createNote, noteToolbar, openNote, signUp } from './helpers';
+import { card, createNote, noteAction, noteToolbar, openNote, signUp } from './helpers';
 
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
@@ -18,6 +18,11 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   await expect(page.getByRole('link', { name: 'Deck' })).toBeVisible();
   await expect(noteToolbar(page)).toBeVisible();
 
+  // The note is a card that ends above its toolbar rather than running under it.
+  const noteCard = await dialog.locator('[data-note-scroll]').boundingBox();
+  const toolbar = await noteToolbar(page).boundingBox();
+  expect(noteCard && toolbar && noteCard.y + noteCard.height <= toolbar.y).toBe(true);
+
   // Opening another note swaps the pane's note in place.
   await card(page, 'Beta').getByRole('button', { name: 'Open note' }).click();
   // The new note fades in over the old one.
@@ -31,6 +36,27 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByRole('separator', { name: 'Resize note' })).toBeHidden();
   await expect(page).toHaveURL(/\/$/);
+});
+
+test('on the deck a note pops up over the board instead', async ({ page }) => {
+  await signUp(page);
+  await createNote(page, 'Ship it');
+  await noteAction(page, 'Ship it', 'Add to deck');
+
+  // The page beside the pane stays usable, and leaving for the deck closes the note.
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  const dialog = await openNote(page, 'Ship it');
+  await expect(page.getByRole('separator', { name: 'Resize note' })).toBeHidden();
+  const box = await dialog.boundingBox();
+  expect(box && Math.abs(box.x + box.width / 2 - 1180 / 2)).toBeLessThan(2);
+  // The page's dock turns into the note's toolbar, as on a phone.
+  await expect(noteToolbar(page)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Deck' })).toBeHidden();
+  // The panel ends above the toolbar rather than running under it.
+  const toolbar = await noteToolbar(page).boundingBox();
+  expect(box && toolbar && box.y + box.height <= toolbar.y).toBe(true);
 });
 
 test('the split is resized by dragging the handle, within limits', async ({ page }) => {
