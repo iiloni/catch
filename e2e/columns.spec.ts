@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { card, createNote, noteAction, signUp, waitForPageTransition } from './helpers';
+import {
+  card,
+  createNote,
+  noteAction,
+  noteToolbar,
+  openNote,
+  signUp,
+  waitForPageTransition,
+} from './helpers';
 
 test('columns can be added, reordered and deleted without losing notes', async ({
   page,
@@ -180,4 +188,78 @@ test('column handles reorder independently of the sheet grip on touch', async ({
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await session.detach();
   await expect(sheet).toHaveCount(0);
+});
+
+test('holding the deck button drops the open note into a chosen column', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await createNote(page, 'Hold me');
+  await createNote(page, 'Tap me');
+
+  // A tap still uses the default column.
+  await noteAction(page, 'Tap me', 'Add to deck');
+  await expect(noteToolbar(page).getByRole('button', { name: 'Send to gallery' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await openNote(page, 'Hold me');
+  const deck = await noteToolbar(page).getByRole('button', { name: 'Add to deck' }).boundingBox();
+  if (!deck) throw new Error('Missing deck button');
+  const start = { x: deck.x + deck.width / 2, y: deck.y + deck.height / 2 };
+  const session = isMobile ? await page.context().newCDPSession(page) : null;
+  async function press(type: 'down' | 'move' | 'up', point = start) {
+    if (session) {
+      const touch = { down: 'touchStart', move: 'touchMove', up: 'touchEnd' }[type];
+      await session.send('Input.dispatchTouchEvent', {
+        type: touch,
+        touchPoints: type === 'up' ? [] : [point],
+      });
+    } else if (type === 'move') await page.mouse.move(point.x, point.y);
+    else if (type === 'down') {
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.down();
+    } else await page.mouse.up();
+  }
+
+  await press('down');
+  const columns = page.getByRole('region', { name: 'Deck columns' });
+  await expect(columns).toBeVisible();
+  await expect(columns.getByRole('button')).toHaveText(['NewDefault', 'In progress', 'On hold']);
+  // The dock grows upward, carrying the rows with it; aim once it has settled.
+  const row = columns.getByRole('button', { name: 'In progress' });
+  let settled = await row.boundingBox();
+  await expect
+    .poll(async () => {
+      const previous = settled;
+      settled = await row.boundingBox();
+      return previous !== null && settled !== null && previous.y === settled.y;
+    })
+    .toBe(true);
+  const target = settled;
+  if (!target) throw new Error('Missing column');
+  const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  for (let step = 1; step <= 10; step++) {
+    await press('move', {
+      x: start.x + ((end.x - start.x) * step) / 10,
+      y: start.y + ((end.y - start.y) * step) / 10,
+    });
+    await page.waitForTimeout(16);
+  }
+  await page.screenshot({ path: `test-results/deck-hold-${isMobile ? 'touch' : 'mouse'}.png` });
+  await press('up', end);
+  await session?.detach();
+
+  await expect(columns).toHaveCount(0);
+  await expect(noteToolbar(page).getByRole('button', { name: 'Send to gallery' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await waitForPageTransition(page);
+  if (isMobile) await page.getByRole('tab', { name: /In progress/ }).click();
+  await expect(
+    page.getByRole('region', { name: 'In progress column' }).getByText('Hold me'),
+  ).toBeVisible();
+  if (isMobile) await page.getByRole('tab', { name: /New/ }).click();
+  await expect(page.getByRole('region', { name: 'New column' }).getByText('Tap me')).toBeVisible();
 });

@@ -8,7 +8,7 @@ import {
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
-import { createCollection } from '@tanstack/react-db';
+import { createCollection, useLiveQuery } from '@tanstack/react-db';
 import { api } from './api';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
@@ -87,3 +87,9 @@ export const boardColumnsCollection = createCollection(
     },
   }),
 );
+
+/** The signed-in user's Deck columns, unordered. */
+export function useBoardColumns() {
+  const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));
+  return data;
+}

@@ -119,7 +119,8 @@ export const setNoteArchived = (id: string, isArchived: boolean) =>
   // Archiving unpins, as in Keep.
   updateNote(id, isArchived ? { isArchived, isPinned: false } : { isArchived });
 
-export const moveNoteToDeck = (id: string) => updateNote(id, { status: DEFAULT_BOARD_STATUS });
+export const moveNoteToDeck = (id: string, status = DEFAULT_BOARD_STATUS) =>
+  updateNote(id, { status });
 
 export const sendNoteToGallery = (id: string) => updateNote(id, { status: null });
 
