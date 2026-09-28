@@ -48,6 +48,11 @@ type Props = {
  * The open note, full screen on phones and a centered panel on wider screens. It grows
  * out of the card that opened it and shrinks back into that card when it closes.
  */
+/** Where the surface scales from while it is pulled down. */
+const ORIGIN = { x: 0.5, y: 0.2 };
+/** How much a spring's overshoot scales the surface (1.04 progress → 1.04 scale). */
+const POP_STRENGTH = 1;
+
 export function NoteEditorOverlay({ noteId }: Props) {
   const { close } = useOpenNote();
   const { data: matches = [], isReady } = useLiveQuery(
@@ -127,30 +132,52 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
   // Container transform: translate the surface so its top-left sits on the card, and
   // clip it to the card's size. Content is never scaled, so text stays crisp.
+  // The springs overshoot, but the geometry cannot (a full-screen surface pushed past its
+  // place would bare the screen edge), so it follows the progress clamped to 0..1 and the
+  // overshoot becomes a brief scale instead: a pop past full size on open, a small
+  // squash into the card on close.
+  const geometry = () => Math.min(1, Math.max(0, progress.get()));
+  const pop = () => {
+    const overshoot = progress.get() - geometry();
+    return 1 + overshoot * POP_STRENGTH;
+  };
+  // Motion scales about the transform origin; this shifts the surface so the pop centres on
+  // the screen (open) or on the card (close) instead.
+  const popOffset = (axis: 'x' | 'y') => {
+    const t = targetRef.current;
+    const card = cardRect.current;
+    const size = axis === 'x' ? t.width : t.height;
+    const pivot =
+      progress.get() < 0.5 && card ? (axis === 'x' ? card.width : card.height) / 2 : size / 2;
+    const originAt = size * (axis === 'x' ? ORIGIN.x : ORIGIN.y);
+    return (1 - pop()) * (pivot - originAt);
+  };
   const x = useTransform(() => {
     const card = cardRect.current;
-    return card ? (1 - progress.get()) * (card.x - targetRef.current.x) : 0;
+    const offset = card ? (1 - geometry()) * (card.x - targetRef.current.x) : 0;
+    return offset + popOffset('x');
   });
   const y = useTransform(() => {
     const card = cardRect.current;
-    const offset = card ? (1 - progress.get()) * (card.y - targetRef.current.y) : 0;
-    return offset + dragY.get() + (1 - fade.get()) * 48;
+    const offset = card ? (1 - geometry()) * (card.y - targetRef.current.y) : 0;
+    return offset + popOffset('y') + dragY.get() + (1 - fade.get()) * 48;
   });
+  const scale = useTransform(() => dragScale.get() * pop());
   const clipPath = useTransform(() => {
     const card = cardRect.current;
     const t = targetRef.current;
-    const p = progress.get();
+    const p = geometry();
     if (!card) return `inset(0px round ${t.radius}px)`;
-    const right = Math.max(0, (1 - p) * (t.width - card.width));
-    const bottom = Math.max(0, (1 - p) * (t.height - card.height));
+    const right = (1 - p) * (t.width - card.width);
+    const bottom = (1 - p) * (t.height - card.height);
     const radius = lerp(card.radius, t.radius || 28 * Math.min(1, dragY.get() / 80), p);
-    return `inset(0px ${right}px ${bottom}px 0px round ${radius}px)`;
+    return `inset(0px ${Math.max(0, right)}px ${Math.max(0, bottom)}px 0px round ${radius}px)`;
   });
-  const ghostOpacity = useTransform(() => (cardRect.current ? 1 - progress.get() / 0.35 : 0));
+  const ghostOpacity = useTransform(() => (cardRect.current ? 1 - geometry() / 0.35 : 0));
   const contentOpacity = useTransform(() =>
-    cardRect.current ? (progress.get() - 0.25) / 0.45 : fade.get(),
+    cardRect.current ? (geometry() - 0.25) / 0.45 : fade.get(),
   );
-  const backdropOpacity = useTransform(() => progress.get() * 0.35);
+  const backdropOpacity = useTransform(() => geometry() * 0.35);
 
   // Open: grow out of the card, then swap the preview for the real editor.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once; the key fixes the note
@@ -172,7 +199,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (cardRect.current) hideCard(note.id);
     rerender((n) => n + 1);
 
-    const animations = [animate(progress, 0, springs.expand), animate(dragY, 0, springs.expand)];
+    const animations = [
+      animate(progress, 0, springs.collapse),
+      animate(dragY, 0, springs.collapse),
+    ];
     if (!cardRect.current) animations.push(animate(fade, 0, springs.smooth));
     void Promise.all(animations).then(() => {
       showCard(note.id);
@@ -207,8 +237,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
               x,
               y,
               clipPath,
-              scale: dragScale,
-              transformOrigin: '50% 20%',
+              scale,
+              transformOrigin: `${ORIGIN.x * 100}% ${ORIGIN.y * 100}%`,
               pointerEvents: isPresent ? 'auto' : 'none',
             }}
           >

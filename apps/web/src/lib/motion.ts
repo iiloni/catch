@@ -11,6 +11,8 @@ export const springs = {
   smooth: { type: 'spring', visualDuration: 0.4, bounce: 0.15 },
   /** Things that should feel thrown, like the quick-note window opening. */
   bouncy: { type: 'spring', visualDuration: 0.45, bounce: 0.28 },
-  /** Full-screen transitions such as a card opening into the editor. */
-  expand: { type: 'spring', visualDuration: 0.45, bounce: 0.12 },
+  /** A card opening into the editor: lively enough to pop past full size and settle. */
+  expand: { type: 'spring', visualDuration: 0.5, bounce: 0.28 },
+  /** The editor landing back in its card, with a small squash as it arrives. */
+  collapse: { type: 'spring', visualDuration: 0.42, bounce: 0.2 },
 } satisfies Record<string, Transition>;

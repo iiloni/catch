@@ -237,6 +237,10 @@
   --bn-colors-editor-text: var(--foreground);
   --bn-font-family: var(--font-sans);
 }
+/* BlockNote's default styles name Inter outright, ignoring --bn-font-family. */
+.bn-container.note-editor .bn-default-styles {
+  font-family: var(--font-sans);
+}
 
 /* The leading heading is the note's title, set like the cards' titles. */
 .bn-container.note-editor [data-content-type="heading"] {
@@ -270,24 +274,63 @@
 ::view-transition {
   background: var(--background);
 }
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 320ms;
-  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+/* A spring (damping ratio 0.78) sampled into linear(); it overshoots by 2% and settles. */
+:root {
+  --ease-page-spring: linear(
+    0,
+    0.034,
+    0.116,
+    0.225,
+    0.344,
+    0.462,
+    0.573,
+    0.671,
+    0.755,
+    0.825,
+    0.881,
+    0.925,
+    0.958,
+    0.982,
+    0.999,
+    1.009,
+    1.016,
+    1.019,
+    1.02,
+    1.019,
+    1.018,
+    1.015,
+    1.013,
+    1.011,
+    1.008,
+    1.007,
+    1.005,
+    1.003,
+    1.002,
+    1.001,
+    1
+  );
 }
+/* Position rides the spring; opacity fades quickly so the two pages barely overlap. */
 html:active-view-transition-type(forward)::view-transition-old(root) {
-  animation-name: page-out-left;
+  animation:
+    600ms var(--ease-page-spring) both page-to-left,
+    180ms ease-out both page-fade-out;
 }
 html:active-view-transition-type(forward)::view-transition-new(root) {
-  animation-name: page-in-right;
+  animation:
+    600ms var(--ease-page-spring) both page-from-right,
+    260ms ease-out 60ms both page-fade-in;
 }
 html:active-view-transition-type(back)::view-transition-old(root) {
-  animation-name: page-out-right;
+  animation:
+    600ms var(--ease-page-spring) both page-to-right,
+    180ms ease-out both page-fade-out;
 }
 html:active-view-transition-type(back)::view-transition-new(root) {
-  animation-name: page-in-left;
+  animation:
+    600ms var(--ease-page-spring) both page-from-left,
+    260ms ease-out 60ms both page-fade-in;
 }
-/* The dock animates itself; show it live rather than cross-fading two copies. */
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-old(dock) {
   display: none;
@@ -297,38 +340,40 @@ html:active-view-transition-type(back)::view-transition-new(root) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  html::view-transition-old(root),
-  html::view-transition-new(root) {
-    animation-name: page-fade;
-    animation-duration: 150ms;
+  html:active-view-transition-type(forward, back)::view-transition-old(root) {
+    animation: 150ms ease-out both page-fade-out;
+  }
+  html:active-view-transition-type(forward, back)::view-transition-new(root) {
+    animation: 150ms ease-out both page-fade-in;
   }
 }
 
-@keyframes page-out-left {
+@keyframes page-to-left {
+  to {
+    transform: translateX(-20%);
+  }
+}
+@keyframes page-from-right {
+  from {
+    transform: translateX(20%);
+  }
+}
+@keyframes page-to-right {
+  to {
+    transform: translateX(20%);
+  }
+}
+@keyframes page-from-left {
+  from {
+    transform: translateX(-20%);
+  }
+}
+@keyframes page-fade-out {
   to {
     opacity: 0;
-    transform: translateX(-12%);
   }
 }
-@keyframes page-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(12%);
-  }
-}
-@keyframes page-out-right {
-  to {
-    opacity: 0;
-    transform: translateX(12%);
-  }
-}
-@keyframes page-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-12%);
-  }
-}
-@keyframes page-fade {
+@keyframes page-fade-in {
   from {
     opacity: 0;
   }

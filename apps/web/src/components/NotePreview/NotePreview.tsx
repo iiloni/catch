@@ -18,6 +18,9 @@ type Props = {
   className?: string;
 };
 
+/** BlockNote's heading sizes, by level. */
+const HEADING_SIZES: Record<number, string> = { 1: '3em', 2: '2em', 3: '1.3em' };
+
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null;
 
 function renderInline(content: unknown, key = 0): ReactNode {
@@ -68,19 +71,23 @@ function PreviewBlock({
   let body: ReactNode;
   switch (block.type) {
     case 'heading':
-      body = isTitle ? (
-        <h3
-          className={cn(
-            variant === 'card'
-              ? 'font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]'
-              : 'font-bold font-display text-[1.3em] leading-normal tracking-[-0.01em]',
-          )}
-        >
-          {inline}
-        </h3>
-      ) : (
-        <p className="font-semibold">{inline}</p>
-      );
+      // Set like BlockNote's headings (size by level, room above), so the editor can swap
+      // in without the text moving.
+      body =
+        variant === 'editor' ? (
+          <h3
+            className="pt-[18px]! font-bold font-display leading-normal tracking-[-0.01em]"
+            style={{ fontSize: HEADING_SIZES[Number(props.level)] ?? HEADING_SIZES[3] }}
+          >
+            {inline}
+          </h3>
+        ) : isTitle ? (
+          <h3 className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]">
+            {inline}
+          </h3>
+        ) : (
+          <p className="font-semibold">{inline}</p>
+        );
       break;
     case 'checkListItem': {
       const Icon = props.checked ? Check : Square;
