@@ -3,6 +3,7 @@ import {
   type CollisionDetection,
   DndContext,
   type DragEndEvent,
+  type DragMoveEvent,
   DragOverlay,
   type DragStartEvent,
   KeyboardSensor,
@@ -18,7 +19,7 @@ import {
 } from '@dnd-kit/core';
 import { LayoutGrid } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -34,6 +35,21 @@ const collisionDetection: CollisionDetection = (args) => {
   return hits.length > 0 ? hits : rectIntersection(args);
 };
 
+/** How close to the pager's side (as a share of its width) a dragged card turns the page. */
+const PAGE_EDGE = 0.14;
+/** Hold at the edge this long before the first page turn, then between further turns. */
+const FIRST_TURN_MS = 350;
+const NEXT_TURN_MS = 800;
+
+/** Where the drag's pointer started (touch or mouse); keyboard drags have none. */
+function startX(event: Event | null) {
+  if (event instanceof MouseEvent) return event.clientX;
+  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) {
+    return event.touches[0]?.clientX ?? null;
+  }
+  return null;
+}
+
 type Props = {
   notes: Note[];
   onOpen: (note: Note, card: HTMLElement) => void;
@@ -48,6 +64,10 @@ export function NoteBoard({ notes, onOpen }: Props) {
   const [active, setActive] = useState<{ note: Note; width: number } | null>(null);
   const [page, setPage] = useState(0);
   const pager = useRef<HTMLDivElement>(null);
+  // The page being shown or scrolled to; `page` lags behind while the pager scrolls.
+  const pageTarget = useRef(0);
+  // Which edge the dragged card is held against, and the timer for the next page turn.
+  const edge = useRef<{ side: -1 | 0 | 1; timer: number }>({ side: 0, timer: 0 });
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A long press before dragging keeps touch scrolling (and the pager) working.
@@ -66,7 +86,45 @@ export function NoteBoard({ notes, onOpen }: Props) {
     setActive({ note, width: event.active.rect.current.initial?.width ?? 280 });
   }
 
+  function stopEdgeTurns() {
+    window.clearTimeout(edge.current.timer);
+    edge.current = { side: 0, timer: 0 };
+  }
+
+  // Unmounting mid-drag (say, the tab changes) must not leave a page turn pending.
+  useEffect(() => () => window.clearTimeout(edge.current.timer), []);
+
+  // Holding a card against the pager's side turns one page after a pause, then one more
+  // each NEXT_TURN_MS. (dnd-kit's own auto-scroll would race through every column.)
+  function handleDragMove(event: DragMoveEvent) {
+    const element = pager.current;
+    const x = startX(event.activatorEvent);
+    if (!element || x === null || element.scrollWidth <= element.clientWidth) return;
+    const box = element.getBoundingClientRect();
+    const pointer = x + event.delta.x;
+    const zone = box.width * PAGE_EDGE;
+    const side = pointer < box.left + zone ? -1 : pointer > box.right - zone ? 1 : 0;
+    if (side === edge.current.side) return;
+
+    stopEdgeTurns();
+    if (side === 0) return;
+    const turn = (delay: number) => {
+      edge.current = {
+        side,
+        timer: window.setTimeout(() => {
+          const next = pageTarget.current + side;
+          if (next < 0 || next >= BOARD_COLUMNS.length) return;
+          haptics.selection();
+          showPage(next);
+          turn(NEXT_TURN_MS);
+        }, delay),
+      };
+    };
+    turn(FIRST_TURN_MS);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    stopEdgeTurns();
     setActive(null);
     const note = notes.find((n) => n.id === event.active.id);
     const target = event.over?.id;
@@ -81,6 +139,7 @@ export function NoteBoard({ notes, onOpen }: Props) {
   }
 
   function showPage(index: number) {
+    pageTarget.current = index;
     const element = pager.current;
     const column = element?.children[index] as HTMLElement | undefined;
     if (element && column) element.scrollTo({ left: column.offsetLeft - 12, behavior: 'smooth' });
@@ -92,9 +151,12 @@ export function NoteBoard({ notes, onOpen }: Props) {
     if (!element || !first) return;
     const next = Math.round(element.scrollLeft / (first.offsetWidth + 12));
     if (next !== page) {
-      haptics.selection();
+      // Page turns during a drag already tick when they start.
+      if (!active) haptics.selection();
       setPage(next);
     }
+    // While dragging, only page turns move the pager, and they set the target themselves.
+    if (!active) pageTarget.current = next;
   }
 
   return (
@@ -102,9 +164,15 @@ export function NoteBoard({ notes, onOpen }: Props) {
       sensors={sensors}
       collisionDetection={collisionDetection}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+      // Columns turn one at a time (handleDragMove); still scroll up and down on their own.
+      autoScroll={{ canScroll: (element) => element !== pager.current }}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActive(null)}
+      onDragCancel={() => {
+        stopEdgeTurns();
+        setActive(null);
+      }}
     >
       <div
         role="tablist"
