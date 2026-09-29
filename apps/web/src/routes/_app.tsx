@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Dock } from '@/components/Dock/Dock';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
+import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { getAuthToken } from '@/lib/auth';
@@ -41,6 +42,7 @@ function AppLayout() {
         <Outlet />
       </div>
       <QuickNote />
+      <PageBottomBlur />
       <Dock />
       <NoteEditorOverlay noteId={note} />
       <AnimatePresence>
