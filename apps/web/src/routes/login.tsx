@@ -46,7 +46,7 @@ function LoginPage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
       <div className="flex items-center gap-3">
-        <img src="/icon.svg" alt="" className="size-16" />
+        <img src="/icon-small.svg" alt="" className="size-16" />
         <span className="font-display font-extrabold text-3xl tracking-[-0.03em]">Catch</span>
       </div>
       <form

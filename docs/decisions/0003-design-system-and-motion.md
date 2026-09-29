@@ -11,10 +11,12 @@ layout.
 
 ## Decisions
 
-**Look.** The original Catch hand-and-note mark supplies a yellow-to-orange sunrise (`#ffdc5c`
-to `#ff930f`). The icon is redrawn as a simpler vector for small launchers, with one note fold
-and fewer hand details. A solid golden middle tone (`--brand`) colors controls and focus while
-the gradient marks the icon and compose button. Warm graphite neutrals give both light and dark
+**Look.** The approved Gentle Drop mark in `branding/` supplies a three-stop amber gradient
+(`#FFE174`, `#FFC247`, `#FFA32B`), a cream card with two charcoal lines, and two motion marks.
+The supplied small and favicon variants simplify it at their defined raster sizes, while
+the supplied foreground and background SVGs form the Android adaptive icon. The approved
+middle amber (`--brand`) colors controls and focus, and the gradient marks the icon and
+compose button. Warm graphite neutrals give both light and dark
 themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
 offline. Note colors are generated in OKLCH with one lightness and chroma per theme, so text
 contrast is the same on every color. Menus, sheets and the dock use frosted glass

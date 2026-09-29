@@ -4,6 +4,7 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
+import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
 
 export default defineConfig({
   plugins: [
@@ -16,7 +17,7 @@ export default defineConfig({
         name: 'Catch',
         short_name: 'Catch',
         description: 'Self-hosted notes that work offline.',
-        theme_color: '#ffc247',
+        theme_color: brandTokens.colors.amberPrimary.hex,
         background_color: '#f7f6f2',
         display: 'standalone',
         start_url: '/',

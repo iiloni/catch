@@ -1,0 +1,201 @@
+{
+  "tokenFormatVersion": 1,
+  "brand": "Catch",
+  "direction": "Gentle Drop",
+  "units": "1024-unit square; SVG user units",
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "colors": {
+    "amberLight": {
+      "hex": "#FFE174",
+      "rgb": [255, 225, 116],
+      "alpha": 1,
+      "usage": "gradient start, lower left"
+    },
+    "amberPrimary": {
+      "hex": "#FFC247",
+      "rgb": [255, 194, 71],
+      "alpha": 1,
+      "usage": "primary amber and gradient midpoint"
+    },
+    "amberDeep": {
+      "hex": "#FFA32B",
+      "rgb": [255, 163, 43],
+      "alpha": 1,
+      "usage": "gradient end, upper right; solid fallback"
+    },
+    "cream": {
+      "hex": "#FFF9F0",
+      "rgb": [255, 249, 240],
+      "alpha": 1,
+      "usage": "note card and motion accents"
+    },
+    "charcoal": {
+      "hex": "#292B2D",
+      "rgb": [41, 43, 45],
+      "alpha": 1,
+      "usage": "note lines and dark monochrome mark"
+    },
+    "landingShadow": {
+      "hex": "#A84E12",
+      "rgb": [168, 78, 18],
+      "alpha": 0.18,
+      "usage": "primary icon landing ellipse only"
+    }
+  },
+  "gradient": {
+    "id": "amber-field",
+    "type": "linear",
+    "units": "userSpaceOnUse",
+    "from": [0, 768],
+    "to": [1024, 256],
+    "stops": [
+      {
+        "offset": 0,
+        "color": "amberLight"
+      },
+      {
+        "offset": 0.55,
+        "color": "amberPrimary"
+      },
+      {
+        "offset": 1,
+        "color": "amberDeep"
+      }
+    ],
+    "highlight": "none"
+  },
+  "geometry": {
+    "tile": {
+      "x": 0,
+      "y": 0,
+      "width": 1024,
+      "height": 1024,
+      "rx": 210
+    },
+    "card": {
+      "center": [520, 505],
+      "width": 510,
+      "height": 490,
+      "rx": 56,
+      "rotationDegClockwise": 16.5,
+      "localRect": [-255, -245, 510, 490]
+    },
+    "linesInCardLocalCoordinates": [
+      {
+        "x": -145,
+        "y": -48,
+        "width": 300,
+        "height": 50,
+        "rx": 25
+      },
+      {
+        "x": -145,
+        "y": 68,
+        "width": 278,
+        "height": 50,
+        "rx": 25
+      }
+    ],
+    "motionMarks": [
+      {
+        "x": 220,
+        "y": 256,
+        "width": 48,
+        "height": 98,
+        "rx": 24,
+        "rotationDegClockwise": -24,
+        "rotationCenter": [244, 305]
+      },
+      {
+        "x": 131,
+        "y": 376,
+        "width": 116,
+        "height": 48,
+        "rx": 24,
+        "rotationDegClockwise": 28,
+        "rotationCenter": [189, 400]
+      }
+    ],
+    "landingShadow": {
+      "center": [514, 820],
+      "rx": 275,
+      "ry": 45,
+      "gaussianStdDeviation": 11,
+      "opacity": 0.18,
+      "blendMode": "normal"
+    }
+  },
+  "clearSpace": {
+    "minimum": 96,
+    "percentOfCanvas": 9.375,
+    "appliesOutsideTile": true
+  },
+  "adaptive": {
+    "sourceToForeground": {
+      "center": [512, 512],
+      "uniformScale": 0.76
+    },
+    "safeCircle": {
+      "center": [512, 512],
+      "radius": 312.89,
+      "diameterDp": 66,
+      "layerDp": 108
+    },
+    "background": "full-bleed canonical amber gradient; no tile radius",
+    "foregroundOmissions": ["landing shadow"],
+    "themedMonochromeSource": "catch-mark-mono-light.svg geometry; color controlled by system"
+  },
+  "sizeRules": [
+    {
+      "minPx": 128,
+      "source": "catch-icon-master.svg"
+    },
+    {
+      "minPx": 48,
+      "maxPx": 127,
+      "source": "catch-icon-small.svg"
+    },
+    {
+      "minPx": 16,
+      "maxPx": 47,
+      "source": "catch-favicon-mark.svg"
+    }
+  ],
+  "variants": {
+    "primary": {
+      "file": "catch-icon-master.svg",
+      "derivedFrom": "canonical geometry"
+    },
+    "small": {
+      "file": "catch-icon-small.svg",
+      "geometryScaleAboutCardCenter": 1.08,
+      "omit": ["motion marks", "landing shadow"]
+    },
+    "monoDark": {
+      "file": "catch-mark-mono-dark.svg",
+      "omit": ["tile", "landing shadow"],
+      "noteLines": "transparent knockouts"
+    },
+    "monoLight": {
+      "file": "catch-mark-mono-light.svg",
+      "omit": ["tile", "landing shadow"],
+      "noteLines": "transparent knockouts"
+    },
+    "favicon": {
+      "file": "catch-favicon-mark.svg",
+      "geometryScaleAboutCardCenter": 1.18,
+      "omit": ["motion marks", "landing shadow"]
+    },
+    "adaptiveForeground": {
+      "file": "catch-adaptive-foreground.svg",
+      "omit": ["tile", "landing shadow"]
+    },
+    "adaptiveBackground": {
+      "file": "catch-adaptive-background.svg",
+      "omit": ["rounded tile", "all foreground elements"]
+    }
+  }
+}
