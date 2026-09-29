@@ -5,6 +5,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { createApp } from './app';
 import { env } from './env';
+import { resumePendingPreviews } from './linkPreviews';
 
 const app = new Hono().route('/', createApp());
 
@@ -18,4 +19,7 @@ if (env.WEB_DIST_DIR) {
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`Catch server listening on http://localhost:${info.port}`);
+  resumePendingPreviews().catch((error: unknown) => {
+    console.error('Could not resume link previews', error);
+  });
 });

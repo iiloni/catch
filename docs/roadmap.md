@@ -30,7 +30,8 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 ## Later
 - [ ] User-defined board columns.
 - [ ] Labels.
-- [ ] Link previews fetched on the server, with optional AI summaries through a user-configured OpenAI-compatible endpoint (off by default). Not yet ported from `catch-old`.
+- [x] Link previews fetched on the server (see `docs/decisions/0006-link-previews.md`).
+- [ ] AI summaries of links through a user-configured OpenAI-compatible endpoint (off by default).
 - [ ] Attachments stored by content hash, deduplicated per user, on a local volume with optional S3.
 - [ ] Android share target: receive text and links from other apps.
 - [ ] Reorder notes by dragging within the gallery and within board columns.

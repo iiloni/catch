@@ -2,6 +2,8 @@ import {
   boardColumnSchema,
   createBoardColumnSchema,
   createNoteSchema,
+  type LinkPreview,
+  linkPreviewSchema,
   noteSchema,
   updateBoardColumnSchema,
   updateNoteSchema,
@@ -9,6 +11,7 @@ import {
 import { snakeCamelMapper } from '@electric-sql/client';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
 import { createCollection, useLiveQuery } from '@tanstack/react-db';
+import { useSyncExternalStore } from 'react';
 import { api } from './api';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
@@ -92,4 +95,50 @@ export const boardColumnsCollection = createCollection(
 export function useBoardColumns() {
   const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));
   return data;
+}
+
+/**
+ * What the server found at the links in the user's notes, keyed by normalized URL. Read
+ * only: the server adds and fills rows as notes are saved (see `api.refreshLinkPreview`).
+ */
+export const linkPreviewsCollection = createCollection(
+  electricCollectionOptions({
+    id: 'link-previews',
+    schema: linkPreviewSchema,
+    getKey: (preview) => preview.url,
+    shapeOptions: {
+      url: `${getServerUrl()}/api/shapes/link-previews`,
+      headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+      columnMapper: snakeCamelMapper(),
+      parser: { timestamptz: (value: string) => new Date(value) },
+    },
+  }),
+);
+
+// Every card on a page reads previews, so they share one subscription instead of a live
+// query each.
+let previewsByUrl: ReadonlyMap<string, LinkPreview> = new Map();
+const previewListeners = new Set<() => void>();
+let previewsSubscribed = false;
+
+function subscribeToPreviews(listener: () => void) {
+  previewListeners.add(listener);
+  if (previewsSubscribed) return () => previewListeners.delete(listener);
+  previewsSubscribed = true;
+  // Kept for the session, like the collection's own sync.
+  linkPreviewsCollection.subscribeChanges(
+    () => {
+      previewsByUrl = new Map(
+        [...linkPreviewsCollection.values()].map((preview) => [preview.url, preview]),
+      );
+      for (const notify of previewListeners) notify();
+    },
+    { includeInitialState: true },
+  );
+  return () => previewListeners.delete(listener);
+}
+
+/** The user's link previews by URL. */
+export function useLinkPreviews(): ReadonlyMap<string, LinkPreview> {
+  return useSyncExternalStore(subscribeToPreviews, () => previewsByUrl);
 }

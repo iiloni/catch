@@ -16,7 +16,7 @@ import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns } from '@/lib/collections';
-import { editorControls, editorNote } from '@/lib/dockState';
+import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
@@ -83,6 +83,13 @@ export function NoteDock() {
   const showColumns = panel === 'columns' && showPanel && note?.status === null;
 
   useEffect(() => () => window.clearTimeout(hold.current?.timer), []);
+
+  // The dock's link tray steps aside while the dock is grown (see NoteLinkTray).
+  const grown = showPalette || showColumns;
+  useEffect(() => {
+    noteDockPanelOpen.set(grown);
+    return () => noteDockPanelOpen.set(false);
+  }, [grown]);
 
   // The columns are a passing menu: a tap anywhere outside the dock folds them away.
   useEffect(() => {

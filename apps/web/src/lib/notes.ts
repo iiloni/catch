@@ -49,6 +49,7 @@ export function createNote(input: {
     isPinned: false,
     isArchived: false,
     position: firstPosition(),
+    hiddenLinks: [],
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
@@ -109,6 +110,21 @@ export function moveDeckNotes(
       draft.position = positions[order.get(draft.id) ?? -1] ?? draft.position;
     }
   });
+}
+
+/**
+ * Removes a link's preview from a note, leaving the link in its text. Like rearranging, this
+ * is not an edit, so it leaves `updatedAt` alone.
+ */
+export function hideLinkPreview(id: string, url: string) {
+  const setHidden = (hidden: boolean) =>
+    notesCollection.update(id, (draft) => {
+      const others = draft.hiddenLinks.filter((link) => link !== url);
+      draft.hiddenLinks = hidden ? [...others, url] : others;
+    });
+  const transaction = setHidden(true);
+  toast('Preview removed', { action: { label: 'Undo', onClick: () => setHidden(false) } });
+  return transaction;
 }
 
 export const setNoteColor = (id: string, color: NoteColor) => updateNote(id, { color });

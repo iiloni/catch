@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
 import { z } from 'zod';
 import { Dock } from '@/components/Dock/Dock';
+import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
@@ -43,6 +44,7 @@ function AppLayout() {
       <QuickNote />
       <Dock />
       <NoteEditorOverlay noteId={note} />
+      <LinkPreviewOverlay />
       <AnimatePresence>
         {pane.shown && note && (
           <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />

@@ -117,5 +117,9 @@ write routes that return `{ txid }`, then add a collection.
   in `lib/dockState.ts`.
 - Notes are ordered by `position`, a fractional index (ADR 0004). Compare positions with
   `comparePositions` (code units); `localeCompare` and Postgres collations order them wrongly.
+- Link previews are derived from a note's links, not stored in it (ADR 0006). Read a note's
+  previews with `useNoteLinks` (`lib/linkPreviews.ts`), which shares one subscription across
+  every card. Server-side page fetches must go through `safeFetch`, which blocks private
+  addresses.
 - TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts` and route files so
   upgrades stay contained.

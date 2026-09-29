@@ -17,6 +17,7 @@ function note(title: string, body: string[], overrides: Partial<Note> = {}): Not
     isPinned: false,
     isArchived: false,
     position: 'a0',
+    hiddenLinks: [],
     createdAt: new Date(2026, 0, counter),
     updatedAt: new Date(2026, 0, counter),
     deletedAt: null,

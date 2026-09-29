@@ -5,6 +5,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { haptics } from '@/lib/haptics';
 import { SwipeArchiveCard } from './SwipeArchiveCard';
 
+// Cards read link previews; these notes have no links, so no sync is needed.
+vi.mock('@/lib/collections', () => ({ useLinkPreviews: () => new Map() }));
+
 vi.mock('@/lib/haptics', () => ({
   haptics: { threshold: vi.fn(), success: vi.fn() },
 }));
@@ -20,6 +23,7 @@ const note: Note = {
   isPinned: false,
   isArchived: false,
   position: 'a0',
+  hiddenLinks: [],
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,

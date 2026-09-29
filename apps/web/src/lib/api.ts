@@ -1,4 +1,10 @@
-import type { CreateBoardColumn, CreateNote, UpdateBoardColumn, UpdateNote } from '@catch/shared';
+import type {
+  CreateBoardColumn,
+  CreateNote,
+  RefreshLinkPreview,
+  UpdateBoardColumn,
+  UpdateNote,
+} from '@catch/shared';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
 
@@ -40,4 +46,9 @@ export const api = {
     request<TxidResponse>(`/board-columns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteBoardColumn: (id: string) =>
     request<TxidResponse>(`/board-columns/${id}`, { method: 'DELETE' }),
+  refreshLinkPreview: (body: RefreshLinkPreview) =>
+    request<TxidResponse>('/link-previews/refresh', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };

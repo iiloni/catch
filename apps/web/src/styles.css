@@ -158,6 +158,20 @@
   --note-bg: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
 }
 
+/*
+ * Link previews take a site's hue (set inline as --link-hue, with data-link-hue) at one
+ * lightness and chroma per theme, as note colors do, so a loud brand and a quiet one read
+ * alike and text contrast holds. Sites without a clear color stay neutral.
+ */
+[data-link-tint] {
+  --link-bg: light-dark(oklch(0.975 0.004 85), oklch(0.3 0.01 70));
+  --link-accent: var(--muted-foreground);
+}
+[data-link-tint][data-link-hue] {
+  --link-bg: light-dark(oklch(0.955 0.04 var(--link-hue)), oklch(0.33 0.05 var(--link-hue)));
+  --link-accent: light-dark(oklch(0.5 0.13 var(--link-hue)), oklch(0.8 0.1 var(--link-hue)));
+}
+
 /* Deck colors mark a column's edge and controls; note colors remain independent. */
 [data-column-color="amber"] {
   --column-accent: light-dark(#b56a12, #ffc247);
@@ -211,6 +225,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-note: var(--note-bg);
+  --color-link: var(--link-bg);
+  --color-link-accent: var(--link-accent);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
 }
@@ -313,11 +329,14 @@
     padding-inline: 1.25rem;
   }
 }
-.note-preview-editor {
+/* The editor's preview and its links line up with the editor's text. */
+.note-preview-editor,
+.note-links-inset {
   padding-inline: 2.25rem 1rem;
 }
 @media (pointer: coarse) {
-  .note-preview-editor {
+  .note-preview-editor,
+  .note-links-inset {
     padding-inline: 1.25rem;
   }
 }

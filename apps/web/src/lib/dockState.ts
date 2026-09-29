@@ -58,3 +58,6 @@ export function pageTransition(from: string | undefined, to: string): ['forward'
  */
 export const editorNote = createStore<Note | null>(null);
 export const editorControls = createStore<EditorControls | null>(null);
+
+/** The open note's dock has grown upward into its palette or the Deck's columns. */
+export const noteDockPanelOpen = createStore(false);

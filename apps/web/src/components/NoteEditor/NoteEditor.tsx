@@ -215,6 +215,11 @@ function createControls(editor: AnyEditor): EditorControls {
       if (editor.canUnnestBlock()) editor.unnestBlock();
       refresh();
     },
+    focusEnd() {
+      const last = editor.document.at(-1);
+      if (last) editor.setTextCursorPosition(last, 'end');
+      editor.focus();
+    },
   };
 }
 
