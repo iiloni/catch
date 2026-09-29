@@ -291,6 +291,30 @@
   mask-image: linear-gradient(to top, black 0%, black 35%, transparent 100%);
 }
 
+/*
+ * Sonner gives every toast its column's full width (the whole screen on phones). Size each
+ * to its text and center it; the extra attribute outranks Sonner's own injected rules.
+ */
+[data-sonner-toaster][data-y-position] [data-sonner-toast] {
+  left: 0;
+  right: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+/* Phones pin the column between side offsets; its full width would overhang the right one. */
+@media (max-width: 600px) {
+  [data-sonner-toaster][data-y-position] {
+    width: auto;
+  }
+}
+/* Wide screens center toasts over the page, not across an open note's pane. */
+@media (min-width: 601px) {
+  [data-sonner-toaster][data-y-position][data-x-position="center"] {
+    left: calc((100% - var(--note-pane)) / 2);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

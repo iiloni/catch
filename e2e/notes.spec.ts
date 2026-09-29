@@ -279,6 +279,48 @@ test('trash with undo, restore, and delete forever', async ({ page }) => {
   await expect(page.getByText('No notes in the trash.')).toBeVisible();
 });
 
+test('toasts close from their button, or with a swipe by touch or mouse', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await createNote(page, 'Dentist');
+  await createNote(page, 'Plumber');
+  const toast = page.locator('[data-sonner-toast]');
+  // Well inside the four seconds after which a toast closes by itself.
+  const dismissed = { timeout: 1000 };
+
+  await noteAction(page, 'Dentist', 'Move to trash');
+  await toast.getByRole('button', { name: 'Close toast' }).click();
+  await expect(toast).toHaveCount(0, dismissed);
+
+  await noteAction(page, 'Plumber', 'Move to trash');
+  const message = toast.getByText('Moved to trash');
+  // Toasts slide in; measure where this one settles.
+  await message.hover({ trial: true });
+  const bounds = await message.boundingBox();
+  if (!bounds) throw new Error('Missing toast');
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  if (isMobile) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (const dy of [10, 30, 60]) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y - dy }],
+      });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 80, y, { steps: 5 });
+    await page.mouse.up();
+  }
+  await expect(toast).toHaveCount(0, dismissed);
+});
+
 test('archive and unarchive', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Old receipts');

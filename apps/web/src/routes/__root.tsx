@@ -24,8 +24,8 @@ function RootError({ error, reset }: ErrorComponentProps) {
   );
 }
 
-// Toasts sit just above the dock, near the thumb that triggered them.
-const toastOffset = { bottom: 'calc(var(--dock-bottom) + var(--dock-height) + 0.75rem)' };
+// Toasts drop in at the top, clear of the dock and the controls that float above it.
+const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
 
 function Root() {
   useApplyTheme();
@@ -35,7 +35,7 @@ function Root() {
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
         <Outlet />
-        <Toaster position="bottom-center" offset={toastOffset} mobileOffset={toastOffset} />
+        <Toaster position="top-center" offset={toastOffset} mobileOffset={toastOffset} />
       </TooltipProvider>
     </MotionConfig>
   );
