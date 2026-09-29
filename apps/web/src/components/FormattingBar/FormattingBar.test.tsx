@@ -17,6 +17,7 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     subscribe: () => () => {},
     toggleStyle: vi.fn(),
     toggleBlock: vi.fn(),
+    insertSlash: vi.fn(),
     indent: vi.fn(),
     outdent: vi.fn(),
     focusEnd: vi.fn(),
@@ -51,11 +52,24 @@ describe('FormattingBar', () => {
       </TooltipProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Slash menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Numbered list' }));
     fireEvent.click(screen.getByRole('button', { name: 'Indent' }));
     expect(controls.toggleStyle).toHaveBeenCalledWith('italic');
+    expect(controls.insertSlash).toHaveBeenCalledOnce();
     expect(controls.toggleBlock).toHaveBeenCalledWith('numberedListItem');
     expect(controls.indent).toHaveBeenCalled();
+  });
+
+  it('shows the slash button first', () => {
+    render(
+      <TooltipProvider>
+        <FormattingBar controls={fakeControls()} />
+      </TooltipProvider>,
+    );
+    const buttons = screen.getAllByRole('button');
+    expect(buttons[0]).toHaveAccessibleName('Slash menu');
+    expect(buttons[0]).toHaveTextContent('/');
   });
 
   it('disables indenting when the block cannot move', () => {

@@ -430,7 +430,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             if (!(target instanceof Element)) return;
             if (
               !target.isConnected ||
-              target.closest('[data-dock], [data-sonner-toaster], [data-link-overlay]')
+              target.closest(
+                '[data-dock], [data-sonner-toaster], [data-link-overlay], .bn-suggestion-menu',
+              )
             ) {
               event.preventDefault();
             }

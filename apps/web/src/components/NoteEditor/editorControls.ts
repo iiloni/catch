@@ -28,6 +28,8 @@ export type EditorControls = {
   toggleStyle(style: TextStyle): void;
   /** Turns the selected blocks into `kind`, or back into paragraphs if they already are. */
   toggleBlock(kind: BlockKind): void;
+  /** Inserts a slash at the caret and opens BlockNote's slash menu. */
+  insertSlash(): void;
   indent(): void;
   outdent(): void;
   /** Puts the caret at the end of the note, for taps on the blank space below it. */

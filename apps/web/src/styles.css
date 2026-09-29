@@ -350,6 +350,11 @@
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
   --bn-font-family: var(--font-sans);
+  min-height: 100%;
+}
+/* A slash menu portalled to body must fit narrow viewports. */
+.bn-root.note-editor .bn-suggestion-menu {
+  max-width: calc(100vw - 1.25rem);
 }
 /* BlockNote's default styles name Inter outright, ignoring --bn-font-family. */
 .bn-container.note-editor .bn-default-styles {
