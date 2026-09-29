@@ -5,120 +5,315 @@ import {
   type LinkPreview,
   linkPreviewSchema,
   noteSchema,
+  type TxidResponse,
   updateBoardColumnSchema,
   updateNoteSchema,
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
+import {
+  type PersistedCollectionPersistence,
+  type PersistedSyncWrappedOptions,
+  persistedCollectionOptions,
+} from '@tanstack/db-sqlite-persistence-core';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
-import { createCollection, useLiveQuery } from '@tanstack/react-db';
+import {
+  NonRetriableError,
+  type OfflineConfig,
+  type OfflineTransaction,
+  startOfflineExecutor,
+  WebLocksLeader,
+} from '@tanstack/offline-transactions';
+import {
+  createCollection,
+  type PendingMutation,
+  type Transaction,
+  useLiveQuery,
+} from '@tanstack/react-db';
 import { useSyncExternalStore } from 'react';
-import { api } from './api';
-import { getAuthToken } from './auth';
+import { toast } from 'sonner';
+import { z } from 'zod';
+import { ApiError, api } from './api';
+import { getAuthToken, resolveSignedInUser } from './auth';
+import {
+  createOnlineDetector,
+  createOutboxStorage,
+  deleteOutbox,
+  openLocalDatabase,
+} from './localStore';
+import { mergeQueuedWrites } from './mergeQueuedWrites';
 import { getServerUrl } from './serverUrl';
+import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
+
+// Collections read from and write to the signed-in user's store on this device, so notes
+// show and can be edited without a connection (ADR 0007).
+const user = await resolveSignedInUser();
+const database = user ? await openLocalDatabase(user.id) : null;
+
+/** Keeps nothing: without a database, collections live in memory as they did before. */
+const memoryOnly: PersistedCollectionPersistence = {
+  adapter: {
+    loadSubset: async () => [],
+    applyCommittedTx: async () => {},
+    ensureIndex: async () => {},
+  },
+};
+const persistence = database?.persistence ?? memoryOnly;
 
 /**
- * All of the signed-in user's notes, synced from Postgres through Electric.
- * Writes apply optimistically, go to the API, and settle once Electric streams
- * the same transaction back.
+ * Adds the database to a synced collection's options. The wrapper swaps in a `sync` that
+ * serves rows from the database first and saves synced changes to it; the rest of the
+ * options, and so the collection's types, stay as they were.
+ *
+ * Bump `schemaVersion` whenever the columns the collection's shape syncs change (in the
+ * server's `routes/shapes.ts` or the shared schema). Devices then drop their copy of the
+ * collection and sync it again, rather than reading rows of the old shape.
+ */
+function persisted<TOptions extends object>(options: TOptions, schemaVersion: number): TOptions {
+  return persistedCollectionOptions({
+    ...(options as PersistedSyncWrappedOptions<object, string | number>),
+    persistence,
+    schemaVersion,
+  }) as unknown as TOptions;
+}
+
+/**
+ * All of the signed-in user's notes, synced from Postgres through Electric. Change them
+ * through `write` (see `lib/notes.ts`), never directly.
  */
 export const notesCollection = createCollection(
-  electricCollectionOptions({
-    id: 'notes',
-    schema: noteSchema,
-    getKey: (note) => note.id,
-    shapeOptions: {
-      url: `${getServerUrl()}/api/shapes/notes`,
-      headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
-      columnMapper: snakeCamelMapper(),
-      // Synced rows skip the collection schema, so parse timestamps here.
-      parser: { timestamptz: (value: string) => new Date(value) },
-    },
-    onInsert: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.map((m) => api.createNote(createNoteSchema.parse(m.modified))),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-    onUpdate: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.flatMap((m) => {
-          const changes = updateNoteSchema.parse(m.changes);
-          // Saving unchanged content leaves only `updatedAt`, which the server owns. Such a
-          // write changes no synced column, so Electric never streams its txid back and the
-          // note would wait out the txid timeout before taking further synced changes.
-          if (Object.keys(changes).length === 0) return [];
-          return [api.updateNote(String(m.key), changes)];
-        }),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-    onDelete: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.map((m) => api.deleteNote(String(m.key))),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-  }),
+  persisted(
+    electricCollectionOptions({
+      id: 'notes',
+      schema: noteSchema,
+      getKey: (note) => note.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/notes`,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        // Synced rows skip the collection schema, so parse timestamps here.
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
 );
 
 export const boardColumnsCollection = createCollection(
-  electricCollectionOptions({
-    id: 'board-columns',
-    schema: boardColumnSchema,
-    getKey: (column) => column.id,
-    shapeOptions: {
-      url: `${getServerUrl()}/api/shapes/board-columns`,
-      headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
-      columnMapper: snakeCamelMapper(),
-    },
-    onInsert: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.map((m) =>
-          api.createBoardColumn(createBoardColumnSchema.parse(m.modified)),
-        ),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-    onUpdate: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.map((m) =>
-          api.updateBoardColumn(String(m.key), updateBoardColumnSchema.parse(m.changes)),
-        ),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-    onDelete: async ({ transaction }) => {
-      const results = await Promise.all(
-        transaction.mutations.map((m) => api.deleteBoardColumn(String(m.key))),
-      );
-      return { txid: results.map((r) => r.txid) };
-    },
-  }),
+  persisted(
+    electricCollectionOptions({
+      id: 'board-columns',
+      schema: boardColumnSchema,
+      getKey: (column) => column.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/board-columns`,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+      },
+    }),
+    1,
+  ),
 );
-
-/** The signed-in user's Deck columns, unordered. */
-export function useBoardColumns() {
-  const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));
-  return data;
-}
 
 /**
  * What the server found at the links in the user's notes, keyed by normalized URL. Read
  * only: the server adds and fills rows as notes are saved (see `api.refreshLinkPreview`).
  */
 export const linkPreviewsCollection = createCollection(
-  electricCollectionOptions({
-    id: 'link-previews',
-    schema: linkPreviewSchema,
-    getKey: (preview) => preview.url,
-    shapeOptions: {
-      url: `${getServerUrl()}/api/shapes/link-previews`,
-      headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
-      columnMapper: snakeCamelMapper(),
-      parser: { timestamptz: (value: string) => new Date(value) },
-    },
-  }),
+  persisted(
+    electricCollectionOptions({
+      id: 'link-previews',
+      schema: linkPreviewSchema,
+      getKey: (preview) => preview.url,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/link-previews`,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
 );
+
+const writableCollections = {
+  notes: notesCollection,
+  boardColumns: boardColumnsCollection,
+};
+
+/** How long to wait for Electric to stream a write back before letting it settle anyway. */
+const SYNC_WAIT_MS = 30_000;
+
+/**
+ * Sends one queued transaction to the API, then waits until Electric streams it back so the
+ * optimistic state hands over to synced rows without flicker. The outbox retries whatever
+ * this throws, except `NonRetriableError`, which drops the write and rolls it back.
+ */
+async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
+  let sent: { mutation: PendingMutation; txid: TxidResponse['txid'] }[];
+  try {
+    sent = await Promise.all(
+      transaction.mutations.map(async (mutation) => ({
+        mutation,
+        txid: (await send(mutation))?.txid ?? null,
+      })),
+    );
+  } catch (error) {
+    const classified = classifyWriteError(error);
+    if (classified instanceof NonRetriableError) settlePendingWrite(transaction.id);
+    throw classified;
+  }
+  updateSyncStatus({ offline: false, signedOut: false });
+  settlePendingWrite(transaction.id);
+  await Promise.all(
+    sent.flatMap(({ mutation, txid }) => {
+      if (txid === null) return [];
+      const collection =
+        mutation.collection.id === notesCollection.id ? notesCollection : boardColumnsCollection;
+      // The server has the write; a slow stream only delays the hand-over.
+      return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
+    }),
+  );
+}
+
+/** The API call for one mutation, or null when there is nothing to send. */
+function send(mutation: PendingMutation): Promise<TxidResponse> | null {
+  const key = String(mutation.key);
+  if (mutation.collection.id === notesCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return api.createNote(createNoteSchema.parse(mutation.modified));
+      case 'update': {
+        const changes = updateNoteSchema.parse(mutation.changes);
+        // Saving unchanged content leaves only `updatedAt`, which the server owns. Such a
+        // write changes no synced column, so Electric would never stream its txid back.
+        if (Object.keys(changes).length === 0) return null;
+        return api.updateNote(key, changes);
+      }
+      case 'delete':
+        return api.deleteNote(key);
+    }
+  }
+  if (mutation.collection.id === boardColumnsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return api.createBoardColumn(createBoardColumnSchema.parse(mutation.modified));
+      case 'update':
+        return api.updateBoardColumn(key, updateBoardColumnSchema.parse(mutation.changes));
+      case 'delete':
+        return api.deleteBoardColumn(key);
+    }
+  }
+  throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
+}
+
+/**
+ * Sorts a failed write into one to retry (the connection or the server may come back, or
+ * the user may sign in again) and one that will never succeed. Retried errors get fixed
+ * messages: the outbox gives up on any whose message mentions some 4xx status codes.
+ */
+function classifyWriteError(error: unknown): Error {
+  if (error instanceof NonRetriableError) return reject(error.message);
+  if (error instanceof z.ZodError) return reject('Invalid change');
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      updateSyncStatus({ signedOut: true });
+      return new Error('Waiting for sign-in');
+    }
+    if (error.status >= 500 || error.status === 408 || error.status === 429) {
+      updateSyncStatus({ offline: true });
+      return new Error('Server unavailable');
+    }
+    // A 404 is an edit to a note or column deleted on another device before it arrived.
+    return reject(
+      error.status === 404 ? 'It was deleted on another device.' : 'The server turned it down.',
+    );
+  }
+  // `fetch` rejects when the server cannot be reached.
+  updateSyncStatus({ offline: true });
+  return new Error('Server unreachable');
+}
+
+function reject(reason: string) {
+  reportUnsaved(reason);
+  return new NonRetriableError(reason);
+}
+
+function reportUnsaved(reason: string) {
+  toast.error('A change could not be saved', { description: reason });
+}
+
+const onlineDetector = createOnlineDetector();
+
+/**
+ * The outbox: writes are stored on the device before they are sent, and sent in order,
+ * retrying until the server has them. Only one tab per user keeps the outbox; the others
+ * send their writes straight away and need a connection.
+ */
+const executor = startOfflineExecutor({
+  collections: writableCollections,
+  mutationFns: { push: pushWrites },
+  storage: createOutboxStorage(user?.id ?? null),
+  // Without Web Locks the executor falls back to electing a leader over a BroadcastChannel.
+  leaderElection: WebLocksLeader.isSupported()
+    ? new WebLocksLeader(`catch-outbox-${user?.id ?? ''}`)
+    : undefined,
+  onlineDetector,
+  beforeRetry: (queued: OfflineTransaction[]) => mergeQueuedWrites(queued, notesCollection.id),
+  onLeadershipChange: (isLeader) => updateSyncStatus({ sharedTab: !isLeader }),
+});
+
+const updateConnection = () => updateSyncStatus({ offline: !onlineDetector.isOnline() });
+updateConnection();
+window.addEventListener('offline', updateConnection);
+onlineDetector.subscribe(updateConnection);
+
+// Restores the writes an earlier visit left in the outbox, so they show until they sync.
+await executor.waitForInit();
+for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
+
+/**
+ * Applies the changes `mutate` makes to the collections optimistically and queues them for
+ * the server. The returned transaction's `isPersisted.promise` settles once the server has
+ * them, which offline can be much later.
+ */
+export function write(mutate: () => void): Transaction {
+  const offline = executor.createOfflineTransaction({ mutationFnName: 'push', autoCommit: false });
+  const transaction = offline.mutate(mutate);
+  addPendingWrite(transaction.id);
+  offline.commit().then(
+    () => settlePendingWrite(transaction.id),
+    (error: unknown) => {
+      settlePendingWrite(transaction.id);
+      // `pushWrites` reports the changes the server refused. Anything else failed on the
+      // device: in a tab without the outbox, a write that could not be sent straight away.
+      if (!(error instanceof NonRetriableError)) {
+        reportUnsaved(
+          getSyncStatus().sharedTab
+            ? 'Catch is open in another tab, and only that tab can save changes offline.'
+            : 'It could not be stored on this device.',
+        );
+      }
+    },
+  );
+  return transaction;
+}
+
+/**
+ * Signs out of this device: forgets writes that have not synced and deletes the device's
+ * copy of the user's data. The page must reload afterwards.
+ */
+export async function clearLocalData() {
+  await executor.clearOutbox();
+  executor.dispose();
+  await database?.destroy();
+  if (user) deleteOutbox(user.id);
+}
+
+/** The signed-in user's Deck columns, unordered. */
+export function useBoardColumns() {
+  const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));
+  return data;
+}
 
 // Every card on a page reads previews, so they share one subscription instead of a live
 // query each.

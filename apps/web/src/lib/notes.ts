@@ -8,7 +8,7 @@ import {
 } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
-import { notesCollection } from './collections';
+import { notesCollection, write } from './collections';
 
 type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
@@ -40,28 +40,32 @@ export function createNote(input: {
 }) {
   const now = new Date();
   const id = uuidv7();
-  const transaction = notesCollection.insert({
-    id,
-    userId: input.userId,
-    content: input.content,
-    color: input.color ?? 'default',
-    status: input.status ?? null,
-    isPinned: false,
-    isArchived: false,
-    position: firstPosition(),
-    hiddenLinks: [],
-    createdAt: now,
-    updatedAt: now,
-    deletedAt: null,
-  });
+  const transaction = write(() =>
+    notesCollection.insert({
+      id,
+      userId: input.userId,
+      content: input.content,
+      color: input.color ?? 'default',
+      status: input.status ?? null,
+      isPinned: false,
+      isArchived: false,
+      position: firstPosition(),
+      hiddenLinks: [],
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }),
+  );
   return { id, transaction };
 }
 
 export function updateNote(id: string, changes: NoteChanges) {
-  return notesCollection.update(id, (draft) => {
-    Object.assign(draft, changes);
-    draft.updatedAt = new Date();
-  });
+  return write(() =>
+    notesCollection.update(id, (draft) => {
+      Object.assign(draft, changes);
+      draft.updatedAt = new Date();
+    }),
+  );
 }
 
 /**
@@ -70,9 +74,11 @@ export function updateNote(id: string, changes: NoteChanges) {
  */
 export function moveNote(id: string, others: readonly Note[], index: number) {
   const position = positionForMove(others, index);
-  return notesCollection.update(id, (draft) => {
-    draft.position = position;
-  });
+  return write(() =>
+    notesCollection.update(id, (draft) => {
+      draft.position = position;
+    }),
+  );
 }
 
 /** The positions a note moved to `index` among `others` must fall between. */
@@ -101,15 +107,17 @@ export function moveDeckNotes(
   const positions = positionsBetween(...boundsForMove(others, index), ids.length);
   const order = new Map(ids.map((id, i) => [id, i]));
   const now = new Date();
-  return notesCollection.update([...ids], (drafts) => {
-    for (const draft of drafts) {
-      if (draft.status !== status) {
-        draft.status = status;
-        draft.updatedAt = now;
+  return write(() =>
+    notesCollection.update([...ids], (drafts) => {
+      for (const draft of drafts) {
+        if (draft.status !== status) {
+          draft.status = status;
+          draft.updatedAt = now;
+        }
+        draft.position = positions[order.get(draft.id) ?? -1] ?? draft.position;
       }
-      draft.position = positions[order.get(draft.id) ?? -1] ?? draft.position;
-    }
-  });
+    }),
+  );
 }
 
 /**
@@ -118,10 +126,12 @@ export function moveDeckNotes(
  */
 export function hideLinkPreview(id: string, url: string) {
   const setHidden = (hidden: boolean) =>
-    notesCollection.update(id, (draft) => {
-      const others = draft.hiddenLinks.filter((link) => link !== url);
-      draft.hiddenLinks = hidden ? [...others, url] : others;
-    });
+    write(() =>
+      notesCollection.update(id, (draft) => {
+        const others = draft.hiddenLinks.filter((link) => link !== url);
+        draft.hiddenLinks = hidden ? [...others, url] : others;
+      }),
+    );
   const transaction = setHidden(true);
   toast('Preview removed', { action: { label: 'Undo', onClick: () => setHidden(false) } });
   return transaction;
@@ -143,14 +153,16 @@ export const sendNoteToGallery = (id: string) => updateNote(id, { status: null }
 /** Takes deck notes out of the deck. Undo puts each back in its column. */
 export function sendNotesToGallery(notes: readonly Note[]) {
   const now = new Date();
-  const transaction = notesCollection.update(
-    notes.map((note) => note.id),
-    (drafts) => {
-      for (const draft of drafts) {
-        draft.status = null;
-        draft.updatedAt = now;
-      }
-    },
+  const transaction = write(() =>
+    notesCollection.update(
+      notes.map((note) => note.id),
+      (drafts) => {
+        for (const draft of drafts) {
+          draft.status = null;
+          draft.updatedAt = now;
+        }
+      },
+    ),
   );
   toast(plural(notes.length, 'Note sent to gallery', 'notes sent to gallery'), {
     action: {
@@ -165,7 +177,7 @@ export function sendNotesToGallery(notes: readonly Note[]) {
 
 export const restoreNote = (id: string) => updateNote(id, { deletedAt: null });
 
-export const deleteNoteForever = (id: string) => notesCollection.delete(id);
+export const deleteNoteForever = (id: string) => write(() => notesCollection.delete(id));
 
 export function trashNote(id: string) {
   const transaction = updateNote(id, { deletedAt: new Date() });
@@ -181,12 +193,14 @@ const plural = (count: number, one: string, many: string) =>
 /** Changes the color of several notes in one transaction. */
 export function setNotesColor(ids: readonly string[], color: NoteColor) {
   const now = new Date();
-  return notesCollection.update([...ids], (drafts) => {
-    for (const draft of drafts) {
-      draft.color = color;
-      draft.updatedAt = now;
-    }
-  });
+  return write(() =>
+    notesCollection.update([...ids], (drafts) => {
+      for (const draft of drafts) {
+        draft.color = color;
+        draft.updatedAt = now;
+      }
+    }),
+  );
 }
 
 /** Puts notes back as they were: in place, pinned or not. */
@@ -208,16 +222,18 @@ function undoFor(notes: readonly Note[]) {
  */
 export function archiveNotes(notes: readonly Note[]) {
   const now = new Date();
-  const transaction = notesCollection.update(
-    notes.map((note) => note.id),
-    (drafts) => {
-      for (const draft of drafts) {
-        draft.isArchived = true;
-        draft.isPinned = false;
-        draft.deletedAt = null;
-        draft.updatedAt = now;
-      }
-    },
+  const transaction = write(() =>
+    notesCollection.update(
+      notes.map((note) => note.id),
+      (drafts) => {
+        for (const draft of drafts) {
+          draft.isArchived = true;
+          draft.isPinned = false;
+          draft.deletedAt = null;
+          draft.updatedAt = now;
+        }
+      },
+    ),
   );
   toast(plural(notes.length, 'Note archived', 'notes archived'), {
     action: { label: 'Undo', onClick: undoFor(notes) },
@@ -227,14 +243,16 @@ export function archiveNotes(notes: readonly Note[]) {
 
 export function unarchiveNotes(notes: readonly Note[]) {
   const now = new Date();
-  const transaction = notesCollection.update(
-    notes.map((note) => note.id),
-    (drafts) => {
-      for (const draft of drafts) {
-        draft.isArchived = false;
-        draft.updatedAt = now;
-      }
-    },
+  const transaction = write(() =>
+    notesCollection.update(
+      notes.map((note) => note.id),
+      (drafts) => {
+        for (const draft of drafts) {
+          draft.isArchived = false;
+          draft.updatedAt = now;
+        }
+      },
+    ),
   );
   toast(plural(notes.length, 'Note unarchived', 'notes unarchived'), {
     action: { label: 'Undo', onClick: undoFor(notes) },
@@ -245,14 +263,16 @@ export function unarchiveNotes(notes: readonly Note[]) {
 /** Takes notes out of the trash, back to the gallery or archive they were in. */
 export function restoreNotes(notes: readonly Note[]) {
   const now = new Date();
-  const transaction = notesCollection.update(
-    notes.map((note) => note.id),
-    (drafts) => {
-      for (const draft of drafts) {
-        draft.deletedAt = null;
-        draft.updatedAt = now;
-      }
-    },
+  const transaction = write(() =>
+    notesCollection.update(
+      notes.map((note) => note.id),
+      (drafts) => {
+        for (const draft of drafts) {
+          draft.deletedAt = null;
+          draft.updatedAt = now;
+        }
+      },
+    ),
   );
   toast(plural(notes.length, 'Note restored', 'notes restored'), {
     action: { label: 'Undo', onClick: undoFor(notes) },
@@ -260,16 +280,19 @@ export function restoreNotes(notes: readonly Note[]) {
   return transaction;
 }
 
-export const deleteNotesForever = (ids: readonly string[]) => notesCollection.delete([...ids]);
+export const deleteNotesForever = (ids: readonly string[]) =>
+  write(() => notesCollection.delete([...ids]));
 
 export function trashNotes(ids: readonly string[]) {
   const now = new Date();
-  const transaction = notesCollection.update([...ids], (drafts) => {
-    for (const draft of drafts) {
-      draft.deletedAt = now;
-      draft.updatedAt = now;
-    }
-  });
+  const transaction = write(() =>
+    notesCollection.update([...ids], (drafts) => {
+      for (const draft of drafts) {
+        draft.deletedAt = now;
+        draft.updatedAt = now;
+      }
+    }),
+  );
   toast(plural(ids.length, 'Moved to trash', 'notes moved to trash'), {
     action: {
       label: 'Undo',
@@ -298,7 +321,7 @@ export function duplicateNotes(notes: readonly Note[]) {
     updatedAt: now,
     deletedAt: note.deletedAt ? now : null,
   }));
-  const transaction = notesCollection.insert(copies);
+  const transaction = write(() => notesCollection.insert(copies));
   toast(plural(notes.length, 'Note copied', 'notes copied'));
   return { ids: copies.map((copy) => copy.id), transaction };
 }
@@ -310,7 +333,7 @@ export function duplicateNotes(notes: readonly Note[]) {
 export function discardIfEmpty(id: string) {
   const note = notesCollection.get(id);
   if (!note || note.deletedAt || blocksHaveContent(note.content)) return false;
-  notesCollection.delete(id);
+  write(() => notesCollection.delete(id));
   toast('Empty note discarded');
   return true;
 }

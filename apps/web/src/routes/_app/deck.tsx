@@ -12,6 +12,7 @@ import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
+import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/deck')({
   component: DeckPage,
@@ -32,6 +33,7 @@ function DeckPage() {
           and(isNull(note.deletedAt), eq(note.isArchived, false), not(isNull(note.status))),
         ),
   });
+  const awaitingSync = useAwaitingSync(isLoading || columnsLoading, columns.length);
   const selection = useNoteSelection(
     [...notes].sort((a, b) => comparePositions(a.position, b.position)),
   );
@@ -56,7 +58,7 @@ function DeckPage() {
       />
       <ColumnManager columns={columns} open={managing} onOpenChange={setManaging} />
       <div className="mx-auto max-w-7xl pt-3">
-        {isLoading || columnsLoading ? null : (
+        {awaitingSync ? null : (
           <NoteBoard
             notes={notes}
             columns={columns}

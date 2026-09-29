@@ -9,8 +9,10 @@ import {
   useTransform,
 } from 'motion/react';
 import { type ReactNode, useCallback, useState } from 'react';
+import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
+import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
 /**
@@ -159,6 +161,15 @@ function HeaderToolbars({
 }) {
   const mode = selection ? 'selection' : 'page';
   const glass = !flat || Boolean(selection);
+  const status = useSyncStatus();
+  const pageTrailing = showsSyncIndicator(status) ? (
+    <>
+      <SyncIndicator status={status} />
+      {trailing}
+    </>
+  ) : (
+    trailing
+  );
   return (
     <>
       <HeaderToolbar side="left" mode={mode} glass={glass}>
@@ -169,7 +180,7 @@ function HeaderToolbars({
         )}
       </HeaderToolbar>
       <HeaderToolbar side="right" mode={mode} glass={glass}>
-        {selection ? selection.actions : trailing}
+        {selection ? selection.actions : pageTrailing}
       </HeaderToolbar>
     </>
   );

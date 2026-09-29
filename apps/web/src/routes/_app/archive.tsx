@@ -9,6 +9,7 @@ import { notesCollection } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
+import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/archive')({
   component: ArchivePage,
@@ -22,6 +23,7 @@ function ArchivePage() {
         .from({ note: notesCollection })
         .where(({ note }) => and(isNull(note.deletedAt), eq(note.isArchived, true))),
   });
+  const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
 
@@ -33,7 +35,7 @@ function ArchivePage() {
         selection={selectionHeader(selection, 'archive')}
       />
       <section aria-label="Archive" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
-        {isLoading ? null : notes.length > 0 ? (
+        {awaitingSync ? null : notes.length > 0 ? (
           <NoteGrid
             notes={sorted}
             onOpen={(note, card) => open(note.id, card)}

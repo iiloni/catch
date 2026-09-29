@@ -15,7 +15,7 @@ import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
-import { authClient } from '@/lib/auth';
+import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { quickNote, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
@@ -65,7 +65,6 @@ export function QuickNote() {
 
 function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
   const [isPresent, safeToRemove] = usePresence();
-  const { data: session } = authClient.useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: openNote } = useOpenNote();
   const ref = useRef<HTMLElement>(null);
@@ -99,9 +98,11 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
 
   function create() {
     const { content, color, destination } = latest.current;
-    if (!session) return null;
+    // Remembered rather than fetched, so notes can be created offline.
+    const user = getSignedInUser();
+    if (!user) return null;
     return createNote({
-      userId: session.user.id,
+      userId: user.id,
       content,
       color,
       status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,

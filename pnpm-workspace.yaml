@@ -3,6 +3,8 @@ packages:
   - packages/*
 
 allowBuilds:
+  # Its postinstall downloads PowerSync extensions; TanStack DB's worker bundles its own build.
+  '@journeyapps/wa-sqlite': false
   esbuild: true
   # Prebuilt libvips ships in @img/sharp-*; its install script only checks for it.
   sharp: false

@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,6 @@ const devCredentials = import.meta.env.DEV
   : undefined;
 
 function LoginPage() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -35,12 +34,13 @@ function LoginPage() {
       mode === 'sign-in'
         ? await authClient.signIn.email({ email, password })
         : await authClient.signUp.email({ email, password, name: String(form.get('name') ?? '') });
-    setPending(false);
     if (result.error) {
+      setPending(false);
       setError(result.error.message ?? 'Something went wrong');
       return;
     }
-    await navigate({ to: '/' });
+    // A full load, so the collections open this user's copy of their notes on the device.
+    window.location.assign('/');
   }
 
   return (

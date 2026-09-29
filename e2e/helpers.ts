@@ -13,6 +13,16 @@ export async function signUp(page: Page) {
   return email;
 }
 
+/** Signs in as a user `signUp` created, as on another device. */
+export async function signIn(page: Page, email: string) {
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('password123');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
+}
+
 /** Creates a note through the quick-note window above the dock. */
 export async function createNote(page: Page, title: string, body?: string) {
   await page.getByRole('button', { name: 'New note' }).click();
