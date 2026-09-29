@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Catch monochrome light mark with transparent line cutouts">
+<defs></defs>
+<g id="motion-marks" fill="#FFF9F0"><rect x="220" y="256" width="48" height="98" rx="24" transform="rotate(-24 244 305)"/><rect x="131" y="376" width="116" height="48" rx="24" transform="rotate(28 189 400)"/></g><g id="note" transform="translate(520 505) rotate(16.5)"><path id="card-with-line-knockouts" d="M -199 -245 H 199 A 56 56 0 0 1 255 -189 V 189 A 56 56 0 0 1 199 245 H -199 A 56 56 0 0 1 -255 189 V -189 A 56 56 0 0 1 -199 -245 Z M -120 -48 H 130 A 25 25 0 0 1 155 -23 V -23 A 25 25 0 0 1 130 2 H -120 A 25 25 0 0 1 -145 -23 V -23 A 25 25 0 0 1 -120 -48 Z M -120 68 H 108 A 25 25 0 0 1 133 93 V 93 A 25 25 0 0 1 108 118 H -120 A 25 25 0 0 1 -145 93 V 93 A 25 25 0 0 1 -120 68 Z" fill="#FFF9F0" fill-rule="evenodd"/></g>
+</svg>

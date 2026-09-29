@@ -13,7 +13,7 @@
   color-scheme: light dark;
   --radius: 0.75rem;
   /*
-   * Warm graphite gives the old yellow-to-orange mark a quiet canvas.
+   * Warm graphite gives the amber mark a quiet canvas.
    */
   --background: light-dark(oklch(0.965 0.008 85), oklch(0.205 0.01 70));
   --foreground: light-dark(oklch(0.24 0.016 70), oklch(0.95 0.007 85));
@@ -34,11 +34,21 @@
   --input: var(--border);
   --ring: var(--brand);
 
-  /* The old mark's sunrise, with a solid middle tone for controls and focus. */
-  --brand: #ffc247;
+  /* The supplied icon palette also colors existing brand surfaces. */
+  --brand-amber-light: #ffe174;
+  --brand-amber-primary: #ffc247;
+  --brand-amber-deep: #ffa32b;
+  --brand-cream: #fff9f0;
+  --brand-charcoal: #292b2d;
+  --brand: var(--brand-amber-primary);
   --brand-foreground: #452904;
   --brand-link: light-dark(#955000, #ffd278);
-  --brand-gradient: linear-gradient(45deg, #ffdc5c, #ff930f);
+  --brand-gradient: linear-gradient(
+    63.435deg,
+    var(--brand-amber-light) 0%,
+    var(--brand-amber-primary) 55%,
+    var(--brand-amber-deep) 100%
+  );
 
   /* Frosted material for the dock, the collapsed header and sheets. */
   --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));

@@ -56,6 +56,9 @@ pnpm --filter @catch/web android:sync
 pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDebug
 ```
 
-The folded-note mark lives in `apps/web/public/icon.svg`. To regenerate the repo and browser
-favicons, Android launcher icons, and splash images from it, run
-`./scripts/generate-brand-assets.sh` with ImageMagick installed.
+The approved Gentle Drop masters and exact values live in `branding/`. To regenerate the
+browser and PWA icons, Android launcher layers, and splash images, run
+`./scripts/generate-brand-assets.sh` with ImageMagick (SVG support) and Python 3 installed.
+The script chooses the supplied primary, small, or favicon SVG for each output size. Public
+SVGs are copies of the masters, and the Android monochrome layer comes from the supplied
+light monochrome knockout mark.
