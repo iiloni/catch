@@ -64,7 +64,8 @@ export function Dock() {
           ? 'search'
           : 'tabs';
   const inputRef = useRef<HTMLInputElement>(null);
-  // Above the editor while it is open or animating, below sheets and menus otherwise.
+  // Above the editor while it is open or animating. Motion keeps writing this value inline,
+  // so the quick note overrides it in CSS to keep its close button above the scrim.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
   const dockRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +127,7 @@ export function Dock() {
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
           'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
+          quickNoteOpen && 'z-[75]!',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
             : 'pr-[calc(var(--note-pane)+0.75rem)] pl-3',
@@ -139,9 +141,15 @@ export function Dock() {
                 key="dock"
                 className="pointer-events-auto relative flex w-full max-w-md items-end"
                 initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
+                // The page dock keeps its width and slides as one piece under the
+                // viewport-centered quick note, so its controls never reflow separately.
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  x: quickNoteOpen && pane.shown ? pane.noteWidth / 2 : 0,
+                }}
                 exit={{ opacity: 0, y: 24 }}
-                transition={springs.smooth}
+                transition={{ ...springs.smooth, bounce: 0 }}
               >
                 <GallerySwitcher
                   open={switcherOpen && mode === 'tabs'}
@@ -202,7 +210,7 @@ export function Dock() {
         </LayoutGroup>
       </motion.div>
       <AnimatePresence>
-        {pane.shown && noteOpen && (
+        {pane.shown && noteOpen && !quickNoteOpen && (
           <PaneDock key="pane" width={pane.noteWidth} compact={keyboardOpen} />
         )}
       </AnimatePresence>
