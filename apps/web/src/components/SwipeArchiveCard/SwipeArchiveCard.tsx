@@ -27,6 +27,12 @@ type Swipe = {
   crossed: boolean;
 };
 
+/**
+ * The swipe's backing stays under the card itself, clear of the narrower link underlay's
+ * visible strip below it (see LinkUnderlay).
+ */
+const UNDER_CARD_ONLY = 'group-has-[[data-link-underlay]]/swipe:bottom-9';
+
 const MAX_SWIPE = 96;
 const ARCHIVE_THRESHOLD = MAX_SWIPE / 2;
 
@@ -61,7 +67,8 @@ export function SwipeArchiveCard({
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.pointerType !== 'touch' || committing.current || !swipeable) return;
     const button = (event.target as Element).closest('button');
-    if (button && button.getAttribute('aria-label') !== 'Open note') return;
+    // The card and its link underlay swipe; its other buttons (the pin) do not.
+    if (button && !button.matches('[aria-label="Open note"], [data-link-underlay]')) return;
     x.stop();
     suppressClick.current = false;
     swipe.current = {
@@ -131,10 +138,7 @@ export function SwipeArchiveCard({
   return (
     <div
       data-swipe-archive
-      className={cn(
-        'relative overflow-hidden rounded-2xl touch-pan-y',
-        !bare && 'bg-foreground/[0.07]',
-      )}
+      className="group/swipe relative overflow-hidden rounded-2xl touch-pan-y"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -149,7 +153,8 @@ export function SwipeArchiveCard({
       <div
         aria-hidden
         className={cn(
-          'absolute inset-0 flex items-center justify-between px-5 text-foreground/60',
+          'absolute inset-0 flex items-center justify-between rounded-2xl bg-foreground/[0.07] px-5 text-foreground/60',
+          UNDER_CARD_ONLY,
           bare && 'invisible',
         )}
       >
@@ -159,7 +164,10 @@ export function SwipeArchiveCard({
       <motion.div
         data-swipe-archive-cue
         aria-hidden
-        className="absolute inset-0 flex items-center justify-between rounded-2xl bg-brand/70 px-5 text-brand-foreground"
+        className={cn(
+          'absolute inset-0 flex items-center justify-between rounded-2xl bg-brand/70 px-5 text-brand-foreground',
+          UNDER_CARD_ONLY,
+        )}
         style={{ opacity: cueOpacity }}
       >
         <Archive className="size-5" />

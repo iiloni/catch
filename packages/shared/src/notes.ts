@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NOTE_COLORS } from './colors';
+import { hiddenLinksSchema } from './links';
 
 export const noteColorSchema = z.enum(NOTE_COLORS);
 
@@ -29,6 +30,7 @@ export const noteSchema = z.object({
   isPinned: z.boolean(),
   isArchived: z.boolean(),
   position: notePositionSchema,
+  hiddenLinks: hiddenLinksSchema,
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   deletedAt: z.coerce.date().nullable(),
@@ -41,8 +43,16 @@ export type Note = z.infer<typeof noteSchema>;
  * server puts the note first.
  */
 export const createNoteSchema = noteSchema
-  .pick({ id: true, content: true, color: true, status: true, isPinned: true, position: true })
-  .partial({ color: true, status: true, isPinned: true, position: true });
+  .pick({
+    id: true,
+    content: true,
+    color: true,
+    status: true,
+    isPinned: true,
+    position: true,
+    hiddenLinks: true,
+  })
+  .partial({ color: true, status: true, isPinned: true, position: true, hiddenLinks: true });
 
 export type CreateNote = z.infer<typeof createNoteSchema>;
 
@@ -54,6 +64,7 @@ export const updateNoteSchema = noteSchema
     isPinned: true,
     isArchived: true,
     position: true,
+    hiddenLinks: true,
     deletedAt: true,
   })
   .partial();

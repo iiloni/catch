@@ -42,9 +42,10 @@ In rough priority order.
    against it. The standalone Android app needs the server on HTTPS.
 4. **Markdown import and export.** Convert with BlockNote's Markdown helpers, and consider
    importing `catch-old` data and Google Keep exports (Takeout) as well.
-5. **Link previews and AI summaries.** These are the last `catch-old` features not ported.
-   They need server-side page fetching with SSRF protection (block private addresses, limit
-   size and time) and an optional OpenAI-compatible provider, off by default.
+5. **AI summaries of links.** Link previews are in (ADR 0006); summaries are the last
+   `catch-old` feature not ported. Add a nullable `summary` to `link_previews`, fill it from the
+   preview queue through an optional OpenAI-compatible provider (off by default), and show it
+   as a disclosure on the preview card.
 6. **Android share target.** Receive text and links from other apps and create notes from
    them.
 7. **Labels**, **user-defined board columns**, and **manual reordering** (drag within the
@@ -62,5 +63,7 @@ In rough priority order.
   offline-behavior tests together with offline persistence.
 - **TanStack DB is pre-1.0.** Keep its usage in `apps/web/src/lib/collections.ts` and the
   route files so upgrades stay contained.
+- **Link preview assets are never deleted.** Thumbnails and icons in `link_preview_assets`
+  are shared by content hash; add a cleanup of ones no preview references.
 - **Migrations.** Only one agent or worktree should change the database schema at a time
   (see [WORKTREES.md](WORKTREES.md)).

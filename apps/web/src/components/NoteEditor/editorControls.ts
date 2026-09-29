@@ -30,4 +30,6 @@ export type EditorControls = {
   toggleBlock(kind: BlockKind): void;
   indent(): void;
   outdent(): void;
+  /** Puts the caret at the end of the note, for taps on the blank space below it. */
+  focusEnd(): void;
 };

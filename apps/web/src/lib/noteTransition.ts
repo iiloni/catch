@@ -57,6 +57,8 @@ export function measureCard(noteId: string): Rect | null {
 
 // Cards hidden while their note is "lifted" into the editor or quick-note window.
 const hidden = new Set<string>();
+// Hidden cards whose note is about to land back in them.
+const landing = new Set<string>();
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -65,11 +67,23 @@ function emit() {
 
 export function hideCard(noteId: string) {
   hidden.add(noteId);
+  landing.delete(noteId);
+  emit();
+}
+
+/**
+ * Marks a hidden card as moments from being shown, so what hangs under it (its link
+ * underlay) can start moving while the note settles into it.
+ */
+export function landCard(noteId: string) {
+  if (!hidden.has(noteId)) return;
+  landing.add(noteId);
   emit();
 }
 
 export function showCard(noteId: string) {
   hidden.delete(noteId);
+  landing.delete(noteId);
   emit();
 }
 
@@ -80,4 +94,8 @@ function subscribe(listener: () => void) {
 
 export function useIsCardHidden(noteId: string) {
   return useSyncExternalStore(subscribe, () => hidden.has(noteId));
+}
+
+export function useIsCardLanding(noteId: string) {
+  return useSyncExternalStore(subscribe, () => landing.has(noteId));
 }

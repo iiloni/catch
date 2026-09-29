@@ -12,6 +12,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { notes } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { queuePreviews, trackNoteLinks } from '../linkPreviews';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -43,37 +44,43 @@ export const notesRoutes = new Hono<AppEnv>()
   .post('/', zValidator('json', createNoteSchema), async (c) => {
     const user = c.get('user')!;
     const body = c.req.valid('json');
-    const txid = await db.transaction(async (tx) => {
+    const { txid, links } = await db.transaction(async (tx) => {
       await tx.insert(notes).values({
         ...body,
         position: body.position ?? (await firstPosition(tx, user.id)),
         userId: user.id,
         searchText: blocksToPlainText(body.content),
       });
-      return currentTxid(tx);
+      const links = await trackNoteLinks(tx, user.id, body.content);
+      return { txid: await currentTxid(tx), links };
     });
+    queuePreviews(user.id, links);
     return c.json({ txid }, 201);
   })
   .patch('/:id', idParam, zValidator('json', updateNoteSchema), async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
-    // Rearranging notes is not editing them, so it leaves "Last edited" alone.
-    const moveOnly = Object.keys(body).every((key) => key === 'position');
+    // Rearranging notes or hiding a link's preview is not editing them, so it leaves
+    // "Last edited" alone.
+    const notAnEdit = Object.keys(body).every((key) => key === 'position' || key === 'hiddenLinks');
     const result = await db.transaction(async (tx) => {
       const updated = await tx
         .update(notes)
         .set({
           ...body,
           ...(body.content ? { searchText: blocksToPlainText(body.content) } : {}),
-          ...(moveOnly ? { updatedAt: sql`${notes.updatedAt}` } : {}),
+          ...(notAnEdit ? { updatedAt: sql`${notes.updatedAt}` } : {}),
         })
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
-      return updated.length > 0 ? currentTxid(tx) : null;
+      if (updated.length === 0) return null;
+      const links = body.content ? await trackNoteLinks(tx, user.id, body.content) : [];
+      return { txid: await currentTxid(tx), links };
     });
     if (result === null) return c.json({ error: 'Note not found' }, 404);
-    return c.json({ txid: result });
+    queuePreviews(user.id, result.links);
+    return c.json({ txid: result.txid });
   })
   .delete('/:id', idParam, async (c) => {
     const user = c.get('user')!;

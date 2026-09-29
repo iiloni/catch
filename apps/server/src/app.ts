@@ -5,6 +5,7 @@ import { auth } from './auth';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { boardColumnRoutes } from './routes/boardColumns';
+import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
 import { shapeRoutes } from './routes/shapes';
 
@@ -44,6 +45,7 @@ export function createApp() {
     .get('/health', (c) => c.json({ ok: true }))
     .route('/notes', notesRoutes)
     .route('/board-columns', boardColumnRoutes)
+    .route('/link-previews', linkPreviewRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

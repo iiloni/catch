@@ -4,6 +4,7 @@ import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
+import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
 import {
   SettingsTabPicker,
   SettingsTabSelector,
@@ -154,34 +155,38 @@ export function Dock() {
                   hovered={settingsHover}
                   onSelect={selectSettingsTab}
                 />
-                <div className="glass relative min-h-[var(--dock-height)] min-w-0 flex-1 rounded-[var(--dock-radius)]">
-                  <SearchField inputRef={inputRef} active={mode === 'search'} />
-                  <AnimatePresence initial={false}>
-                    {mode === 'tabs' && (
-                      <Tabs
-                        key="tabs"
-                        active={tab}
-                        // Focusing inside the tap keeps Android willing to raise the keyboard.
-                        onSearch={() => inputRef.current?.focus()}
-                        switcherOpen={switcherOpen}
-                        onSwitcher={setSwitcher}
-                        onSwitcherHover={setSwitcherHover}
-                        onSwitcherSelect={selectGalleryPage}
-                      />
-                    )}
-                    {mode === 'settings' && (
-                      <SettingsTabSelector
-                        key="settings"
-                        current={settingsTab}
-                        open={switcherOpen}
-                        onOpenChange={setSwitcher}
-                        onHover={setSettingsHover}
-                        onSelect={selectSettingsTab}
-                        pickerRoot={() => dockRef.current}
-                      />
-                    )}
-                    {mode === 'note' && <NoteDock key="note" />}
-                  </AnimatePresence>
+                {/* Isolated so the link tray can tuck behind the dock's glass. */}
+                <div className="relative isolate min-w-0 flex-1">
+                  {mode === 'note' && <NoteLinkTray />}
+                  <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
+                    <SearchField inputRef={inputRef} active={mode === 'search'} />
+                    <AnimatePresence initial={false}>
+                      {mode === 'tabs' && (
+                        <Tabs
+                          key="tabs"
+                          active={tab}
+                          // Focusing inside the tap keeps Android willing to raise the keyboard.
+                          onSearch={() => inputRef.current?.focus()}
+                          switcherOpen={switcherOpen}
+                          onSwitcher={setSwitcher}
+                          onSwitcherHover={setSwitcherHover}
+                          onSwitcherSelect={selectGalleryPage}
+                        />
+                      )}
+                      {mode === 'settings' && (
+                        <SettingsTabSelector
+                          key="settings"
+                          current={settingsTab}
+                          open={switcherOpen}
+                          onOpenChange={setSwitcher}
+                          onHover={setSettingsHover}
+                          onSelect={selectSettingsTab}
+                          pickerRoot={() => dockRef.current}
+                        />
+                      )}
+                      {mode === 'note' && <NoteDock key="note" />}
+                    </AnimatePresence>
+                  </div>
                 </div>
                 <AnimatePresence initial={false}>
                   {(mode === 'tabs' || mode === 'settings') && (
@@ -219,14 +224,17 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
       )}
       style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
     >
-      <motion.div
-        className="glass pointer-events-auto relative min-h-[var(--dock-height)] w-full max-w-md rounded-[var(--dock-radius)]"
-        initial={false}
-        exit={{ opacity: 0 }}
-        transition={springs.pane}
-      >
-        <NoteDock />
-      </motion.div>
+      <div className="pointer-events-auto relative isolate w-full max-w-md">
+        <NoteLinkTray />
+        <motion.div
+          className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
+          initial={false}
+          exit={{ opacity: 0 }}
+          transition={springs.pane}
+        >
+          <NoteDock />
+        </motion.div>
+      </div>
     </div>
   );
 }

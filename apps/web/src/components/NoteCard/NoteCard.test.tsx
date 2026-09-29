@@ -2,10 +2,16 @@ import type { Note } from '@catch/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { linkOverlay } from '@/lib/linkPreviews';
 import { setNotePinned, trashNote } from '@/lib/notes';
+import { link, makePreview, paragraph } from '@/test/links';
 import { NoteCard } from './NoteCard';
 
 vi.mock('@/lib/notes');
+const previews = new Map([
+  ['https://a.example/', makePreview('https://a.example/', { title: 'Page A', siteName: 'A' })],
+]);
+vi.mock('@/lib/collections', () => ({ useLinkPreviews: () => previews }));
 
 const note: Note = {
   id: '0199a0a0-0000-7000-8000-000000000001',
@@ -19,6 +25,7 @@ const note: Note = {
   isPinned: false,
   isArchived: false,
   position: 'a0',
+  hiddenLinks: [],
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,
@@ -73,5 +80,39 @@ describe('NoteCard', () => {
     renderCard({ note: { ...note, deletedAt: new Date() } });
     expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument();
+  });
+
+  it('tucks a note’s links under the card and opens them', () => {
+    renderCard({
+      note: {
+        ...note,
+        content: [
+          ...note.content,
+          paragraph(link('https://a.example/')),
+          paragraph(link('https://b.example/')),
+        ],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '2 links, first Page A' }));
+    expect(linkOverlay.get()).toMatchObject({ noteId: note.id, fromEditor: false });
+    linkOverlay.set(null);
+  });
+
+  it('selects rather than opening links while notes are selected', () => {
+    const onSelect = vi.fn();
+    renderCard({
+      note: { ...note, content: [...note.content, paragraph(link('https://a.example/'))] },
+      selected: false,
+      onSelect,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Link: Page A' }));
+    expect(onSelect).toHaveBeenCalled();
+    expect(linkOverlay.get()).toBeNull();
+  });
+
+  it('shows a note that is only a link as that link', () => {
+    renderCard({ note: { ...note, content: [paragraph(link('https://a.example/'))] } });
+    expect(screen.getByRole('heading', { name: 'Page A' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Link/ })).not.toBeInTheDocument();
   });
 });

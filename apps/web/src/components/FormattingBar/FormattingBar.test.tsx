@@ -19,6 +19,7 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     toggleBlock: vi.fn(),
     indent: vi.fn(),
     outdent: vi.fn(),
+    focusEnd: vi.fn(),
   };
 }
 

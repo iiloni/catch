@@ -15,16 +15,19 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
+import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { useNoteLinks } from '@/lib/linkPreviews';
 import { curves, springs } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, trashNote } from '@/lib/notes';
 import {
   editorProgress,
   hideCard,
+  landCard,
   measureCard,
   type Rect,
   showCard,
@@ -71,8 +74,20 @@ export function NoteEditorOverlay({ noteId }: Props) {
 /** Space the panel leaves above and below itself: the status bar at the top, the dock below. */
 type Insets = { top: number; bottom: number };
 
+/**
+ * From this width the note's links get a column beside it instead of following its text.
+ * Only a pane gets this wide: the centered panel stops at 672 px and phones are narrower.
+ */
+const SIDE_LINKS_MIN = 700;
+
 /** Space between the panel and the screen's top edge or the dock. */
 const PANEL_GAP = 12;
+
+/**
+ * How long before the editor finishes settling into its card (in seconds) the card's link
+ * underlay starts sliding out, so the two motions overlap rather than queue.
+ */
+const LAND_EARLY = 0.25;
 
 /** The editor's rectangle: the whole screen on phones, the pane or a centered panel otherwise. */
 function targetRect({ split, listWidth, viewport }: NotePane, insets: Insets): Rect {
@@ -146,6 +161,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const targetRef = useRef(target);
   targetRef.current = target;
   const editable = !note.deletedAt;
+  const hasLinks = useNoteLinks(note).length > 0;
+  const sideLinks = split && target.width >= SIDE_LINKS_MIN && hasLinks;
 
   // The dock shows this note's actions (see NoteDock).
   useEffect(() => editorNote.set(note), [note]);
@@ -300,9 +317,16 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
     // Measure a frame later: an action that closed the editor (trash, archive) may be about
     // to take the card off the page, and shrinking into a card that vanishes looks broken.
+    let landing = 0;
     const frame = requestAnimationFrame(() => {
       cardRect.current = discarded ? null : measureCard(note.id);
-      if (cardRect.current) hideCard(note.id);
+      if (cardRect.current) {
+        hideCard(note.id);
+        landing = window.setTimeout(
+          () => landCard(note.id),
+          (curves.collapse.duration - LAND_EARLY) * 1000,
+        );
+      }
       rerender((n) => n + 1);
 
       const animations = [
@@ -317,7 +341,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         safeToRemove();
       });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(landing);
+    };
   }, [isPresent, flush, note.id, progress, dragY, fade, textFade, self, safeToRemove]);
 
   // A pane is part of the layout, not a sheet over it, so it does not swipe away.
@@ -326,6 +353,53 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     onDismiss: requestClose,
     enabled: isPresent && !split,
   });
+
+  const scrollArea = (
+    <div
+      ref={scrollRef}
+      data-note-scroll
+      data-note-color={note.color}
+      className={cn(
+        'relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pt-2',
+        split
+          ? cn(
+              'rounded-3xl border border-transparent bg-note pb-6 shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
+              // The card stops above the pane's dock, which follows the keyboard up.
+              !sideLinks && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
+            )
+          : target.radius
+            ? // The panel ends above the dock, until the keyboard lifts the dock.
+              'pb-[calc(var(--keyboard)+1.5rem)]'
+            : // Room to scroll the last lines clear of the dock (and keyboard) above.
+              'pb-[var(--dock-space)]',
+      )}
+    >
+      {/* The editor keeps its own height so the links follow its last line. */}
+      <div className="flex min-h-full flex-col">
+        {settled ? (
+          <LazyNoteEditor
+            initialContent={note.content}
+            onChange={save}
+            onControls={editorControls.set}
+            editable={editable}
+            className="min-h-0"
+            fallback={<NotePreview content={note.content} maxBlocks={200} variant="editor" />}
+          />
+        ) : (
+          <NotePreview content={note.content} maxBlocks={200} variant="editor" />
+        )}
+        {!sideLinks && <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />}
+        {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
+        <div
+          aria-hidden
+          className={cn('min-h-16 flex-1', editable && 'cursor-text')}
+          onClick={() => {
+            if (editable) editorControls.get()?.focusEnd();
+          }}
+        />
+      </div>
+    </div>
+  );
 
   return (
     // Not modal: the dock above the editor is its toolbar and must stay usable. The page
@@ -354,7 +428,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             }
             const target = event.target;
             if (!(target instanceof Element)) return;
-            if (!target.isConnected || target.closest('[data-dock], [data-sonner-toaster]')) {
+            if (
+              !target.isConnected ||
+              target.closest('[data-dock], [data-sonner-toaster], [data-link-overlay]')
+            ) {
               event.preventDefault();
             }
           }}
@@ -435,36 +512,23 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 </div>
               </header>
 
-              <div
-                ref={scrollRef}
-                data-note-scroll
-                data-note-color={note.color}
-                className={cn(
-                  'relative min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2',
-                  split
-                    ? // The card stops above the pane's dock, which follows the keyboard up.
-                      'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] rounded-3xl border border-transparent bg-note pb-6 shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border'
-                    : target.radius
-                      ? // The panel ends above the dock, until the keyboard lifts the dock.
-                        'pb-[calc(var(--keyboard)+1.5rem)]'
-                      : // Room to scroll the last lines clear of the dock (and keyboard) above.
-                        'pb-[var(--dock-space)]',
-                )}
-              >
-                {settled ? (
-                  <LazyNoteEditor
-                    initialContent={note.content}
-                    onChange={save}
-                    onControls={editorControls.set}
-                    editable={editable}
-                    fallback={
-                      <NotePreview content={note.content} maxBlocks={200} variant="editor" />
-                    }
-                  />
-                ) : (
-                  <NotePreview content={note.content} maxBlocks={200} variant="editor" />
-                )}
-              </div>
+              {sideLinks ? (
+                // The column sits outside the note's card: the links belong to the note but
+                // are not part of its text.
+                <div className="mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] flex min-h-0 flex-1 gap-3">
+                  {scrollArea}
+                  <motion.aside
+                    className="w-64 shrink-0 overflow-y-auto overscroll-contain pb-6"
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={springs.smooth}
+                  >
+                    <NoteLinks note={note} variant="side" />
+                  </motion.aside>
+                </div>
+              ) : (
+                scrollArea
+              )}
             </motion.div>
           </motion.div>
         </DialogPrimitive.Content>

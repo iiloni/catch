@@ -1,12 +1,16 @@
 import type { Note } from '@catch/shared';
 import { Pin } from 'lucide-react';
-import { motion } from 'motion/react';
+import { animate, motion, useMotionValue } from 'motion/react';
+import { useLayoutEffect, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
+import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
+import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
-import { useIsCardHidden } from '@/lib/noteTransition';
+import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
 import { paneNoteId } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
@@ -29,8 +33,16 @@ type Props = {
   className?: string;
 };
 
-/** A card's contents. The editor draws the same face while it grows out of the card. */
+/**
+ * A card's contents: the note's text, or for a note that is only a link, that link's
+ * preview. The editor draws the same face while it grows out of the card.
+ */
 export function NoteCardFace({ note }: { note: Note }) {
+  const links = useNoteLinks(note);
+  const [link] = links;
+  if (useIsLinkNote(note, links) && link) {
+    return <LinkNoteFace link={link} tinted={note.color === 'default'} />;
+  }
   return (
     <div className="px-3.5 pt-3 pb-3.5">
       <NotePreview content={note.content} className={cn(note.isPinned && 'pr-5')} />
@@ -53,8 +65,28 @@ export function NoteCard({
   const canPin = actions && !note.deletedAt && !note.isArchived;
   const hidden = useIsCardHidden(note.id);
   const openBeside = paneNoteId.use() === note.id;
+  const links = useNoteLinks(note);
+  // A note that is only a link shows it on its face; any other note lists links underneath.
+  const underlay = !useIsLinkNote(note, links) && links.length > 0;
 
-  return (
+  // A note shrinking back into its card lands without the underlay, which slides out from
+  // behind the card as the note settles, as if the card were setting it down.
+  const landing = useIsCardLanding(note.id);
+  const underlayHidden = hidden && !landing;
+  const underlayRef = useRef<HTMLDivElement>(null);
+  const underlayY = useMotionValue(0);
+  const wasHidden = useRef(underlayHidden);
+  useLayoutEffect(() => {
+    const element = underlayRef.current;
+    if (wasHidden.current && !underlayHidden && element) {
+      // The wrapper holds only the strip below the card; the underlay's top already tucks under.
+      underlayY.set(-element.offsetHeight);
+      void animate(underlayY, 0, springs.smooth);
+    }
+    wasHidden.current = underlayHidden;
+  }, [underlayHidden, underlayY]);
+
+  const card = (
     <motion.article
       data-note-card={note.id}
       data-note-color={note.color}
@@ -121,5 +153,28 @@ export function NoteCard({
         />
       )}
     </motion.article>
+  );
+
+  if (!underlay) return card;
+  return (
+    // Isolated so the underlay can sit behind the card without going behind the page.
+    <div className="isolate flex flex-col">
+      {card}
+      <motion.div
+        ref={underlayRef}
+        className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
+        style={{ y: underlayY }}
+      >
+        <LinkUnderlay
+          variant="card"
+          links={links}
+          color={note.color}
+          onOpen={() => {
+            if (selecting) onSelect?.(note);
+            else openLinkOverlay(note.id);
+          }}
+        />
+      </motion.div>
+    </div>
   );
 }

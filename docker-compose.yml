@@ -18,6 +18,7 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
+      LINK_PREVIEWS: ${LINK_PREVIEWS:-true}
     healthcheck:
       test:
         - CMD

@@ -23,6 +23,14 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+  /**
+   * Fetch pages for link previews. Off keeps the server from contacting the sites users
+   * link to; notes then show plain link cards.
+   */
+  LINK_PREVIEWS: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
   /** Directory containing the built web app. Served when set. */
   WEB_DIST_DIR: z.string().optional(),
 });

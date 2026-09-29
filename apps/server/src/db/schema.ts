@@ -3,6 +3,7 @@ import {
   boolean,
   customType,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -13,6 +14,10 @@ import {
 
 const tsvector = customType<{ data: string }>({
   dataType: () => 'tsvector',
+});
+
+const bytea = customType<{ data: Buffer }>({
+  dataType: () => 'bytea',
 });
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
@@ -109,6 +114,8 @@ export const notes = pgTable(
     isArchived: boolean().notNull().default(false),
     /** Fractional index of the note in the user's arrangement (see `positionBetween`). */
     position: text().notNull(),
+    /** Normalized URLs of links whose previews the user removed from this note. */
+    hiddenLinks: jsonb().$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     /** Set when a note is moved to the trash. DELETE removes it for good. */
@@ -133,3 +140,45 @@ export const boardColumns = pgTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.id] })],
 );
+
+/**
+ * What the server found at each link in a user's notes, keyed by normalized URL (see
+ * `extractLinks`). Rows are added as `pending` when a note gains a link and filled in by the
+ * fetch queue (src/linkPreviews), which Electric then streams to the user's devices.
+ */
+export const linkPreviews = pgTable(
+  'link_previews',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    url: text().notNull(),
+    status: text({ enum: ['pending', 'ready', 'failed'] })
+      .notNull()
+      .default('pending'),
+    title: text(),
+    description: text(),
+    siteName: text(),
+    imageHash: text(),
+    imageWidth: integer(),
+    imageHeight: integer(),
+    iconHash: text(),
+    /** The site's color as an OKLCH hue, or null when it has no clear one. */
+    hue: integer(),
+    fetchedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.url] })],
+);
+
+/**
+ * Thumbnails and site icons, resized on the server and named by the SHA-256 of their bytes.
+ * They are copies of public web content, shared by every user who links to them, and are
+ * served without auth so plain `<img>` tags can load them (see ADR 0006).
+ */
+export const linkPreviewAssets = pgTable('link_preview_assets', {
+  hash: text().primaryKey(),
+  contentType: text().notNull(),
+  data: bytea().notNull(),
+  createdAt: createdAt(),
+});

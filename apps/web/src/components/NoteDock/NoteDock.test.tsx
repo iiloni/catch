@@ -30,6 +30,7 @@ const note: Note = {
   isPinned: false,
   isArchived: false,
   position: 'a0',
+  hiddenLinks: [],
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,
