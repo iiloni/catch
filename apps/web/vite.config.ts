@@ -51,7 +51,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    // Worktree stacks often run together; keep test forks within host memory.
+    // Builds jsdom once per worker instead of once per file, which was most of the run.
+    // Each file still gets a fresh module graph and globals.
+    pool: 'vmThreads',
+    // Worktree stacks often run together; keep test workers within host memory.
     maxWorkers: 2,
   },
 });
