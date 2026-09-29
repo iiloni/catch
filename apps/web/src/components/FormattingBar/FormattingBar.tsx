@@ -25,11 +25,13 @@ import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 type Tool =
+  | { label: string; action: 'slash' }
   | { label: string; icon: LucideIcon; style: TextStyle }
   | { label: string; icon: LucideIcon; block: BlockKind }
   | { label: string; icon: LucideIcon; action: 'indent' | 'outdent' };
 
 const TOOLS: Tool[] = [
+  { label: 'Slash menu', action: 'slash' },
   { label: 'Bold', icon: Bold, style: 'bold' },
   { label: 'Italic', icon: Italic, style: 'italic' },
   { label: 'Underline', icon: Underline, style: 'underline' },
@@ -55,7 +57,10 @@ function isActive(tool: Tool, state: FormattingState | null) {
 
 function isEnabled(tool: Tool, state: FormattingState | null) {
   if (!state) return false;
-  if ('action' in tool) return tool.action === 'indent' ? state.canIndent : state.canOutdent;
+  if ('action' in tool) {
+    if (tool.action === 'slash') return true;
+    return tool.action === 'indent' ? state.canIndent : state.canOutdent;
+  }
   return true;
 }
 
@@ -80,6 +85,7 @@ export function FormattingBar({
     haptics.selection();
     if ('style' in tool) controls.toggleStyle(tool.style);
     else if ('block' in tool) controls.toggleBlock(tool.block);
+    else if (tool.action === 'slash') controls.insertSlash();
     else if (tool.action === 'indent') controls.indent();
     else controls.outdent();
   }
@@ -118,7 +124,7 @@ function FormattingButton({
   enabled: boolean;
   onPress: () => void;
 }) {
-  const Icon = tool.icon;
+  const Icon = 'icon' in tool ? tool.icon : null;
   const [open, setOpen] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const start = useRef({ x: 0, y: 0 });
@@ -182,7 +188,13 @@ function FormattingButton({
             active ? 'bg-foreground/[0.12] text-foreground' : 'text-foreground/75',
           )}
         >
-          <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden />
+          {Icon ? (
+            <Icon className="size-[18px]" strokeWidth={active ? 2.5 : 2} aria-hidden />
+          ) : (
+            <span aria-hidden className="text-xl font-semibold leading-none">
+              /
+            </span>
+          )}
         </motion.button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={16} className="z-[70]">

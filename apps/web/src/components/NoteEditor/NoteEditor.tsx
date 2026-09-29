@@ -5,9 +5,11 @@ import { en } from '@blocknote/core/locales';
 import {
   BlockColorsItem,
   DragHandleButton,
+  type FloatingUIOptions,
   RemoveBlockItem,
   SideMenu,
   SideMenuController,
+  SuggestionMenuController,
   TableColumnHeaderItem,
   TableRowHeaderItem,
   useBlockNoteEditor,
@@ -19,6 +21,7 @@ import {
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
 import type { Note } from '@catch/shared';
+import { type Middleware, offset, shift, size } from '@floating-ui/react';
 import { type MouseEvent, useEffect, useState } from 'react';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
@@ -27,6 +30,54 @@ import type { EditorControls, FormattingState, TextStyle } from './editorControl
 
 /** New notes start with an empty heading that acts as the title. */
 const EMPTY_NOTE: PartialBlock[] = [{ type: 'heading', props: { level: 3 }, content: [] }];
+
+// The Android keyboard overlays the page, so Floating UI's viewport must end above it.
+function menuViewport() {
+  const styles = getComputedStyle(document.documentElement);
+  const inset = (side: string) =>
+    Number.parseFloat(styles.getPropertyValue(`--safe-area-inset-${side}`)) || 0;
+  const top = inset('top');
+  const left = inset('left');
+  return {
+    x: left,
+    y: top,
+    width: Math.max(0, window.innerWidth - left - inset('right')),
+    height: Math.max(0, window.innerHeight - top - Math.max(keyboardHeight.get(), inset('bottom'))),
+  };
+}
+
+// Size middleware scrolls a tall menu, so choosing a side by the menu's measured
+// height would keep it on whichever side was measured first.
+const chooseMenuSide: Middleware = {
+  name: 'chooseMenuSide',
+  fn({ elements, placement }) {
+    const caret = elements.reference.getBoundingClientRect();
+    const viewport = menuViewport();
+    const above = caret.top - viewport.y;
+    const below = viewport.y + viewport.height - caret.bottom;
+    const preferred = above > below ? 'top-start' : 'bottom-start';
+    return placement === preferred ? {} : { reset: { placement: preferred } };
+  },
+};
+
+const slashMenuFloatingOptions: FloatingUIOptions = {
+  useFloatingOptions: {
+    placement: 'bottom-start',
+    middleware: [
+      chooseMenuSide,
+      offset(10),
+      shift(() => ({ rootBoundary: menuViewport(), padding: 10 })),
+      size(() => ({
+        rootBoundary: menuViewport(),
+        padding: 10,
+        apply({ elements, availableHeight }) {
+          elements.floating.style.maxHeight = `${Math.max(0, availableHeight)}px`;
+        },
+      })),
+    ],
+    whileElementsMounted: (_reference, _floating, update) => keyboardHeight.on('change', update),
+  },
+};
 
 type Props = {
   initialContent?: Note['content'];
@@ -103,11 +154,18 @@ export function NoteEditor({
       theme={theme}
       formattingToolbar={!coarsePointer}
       sideMenu={false}
-      className={cn('note-editor min-h-full', className)}
+      slashMenu={false}
+      className={cn('note-editor', className)}
       onClick={focusAboveBlankSpace}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
       <SideMenuController sideMenu={NoteSideMenu} />
+      <SuggestionMenuController
+        triggerCharacter="/"
+        shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
+        portalElement={typeof document === 'undefined' ? undefined : document.body}
+        floatingUIOptions={slashMenuFloatingOptions}
+      />
     </BlockNoteView>
   );
 }
@@ -206,6 +264,11 @@ function createControls(editor: AnyEditor): EditorControls {
         }
       });
       refresh();
+    },
+    insertSlash() {
+      editor
+        .getExtension(SuggestionMenu)
+        ?.openSuggestionMenu('/', { deleteTriggerCharacter: true });
     },
     indent() {
       if (editor.canNestBlock()) editor.nestBlock();
