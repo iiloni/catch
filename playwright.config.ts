@@ -22,6 +22,7 @@ if (!baseURL) {
 
 export default defineConfig({
   testDir: './e2e',
+  workers: 2,
   use: {
     baseURL,
     trace: 'retain-on-failure',

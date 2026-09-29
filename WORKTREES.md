@@ -2,8 +2,9 @@
 
 Every checkout runs its own Docker Compose stack: the app container (API + Vite with hot
 reload), Postgres and Electric, each with its own volumes. Project names and host ports are
-generated per checkout, so several agents can work, run migrations and run end-to-end tests
-at the same time without touching each other's data.
+generated per checkout, so several agents can work and run migrations without touching each
+other's data. End-to-end suites take a shared host lock: a second suite waits until the first
+finishes, keeping concurrent agents' test runs from overwhelming the machine.
 
 Only the app is published to the host, on one port per worktree. Postgres and Electric stay
 on the stack's private network. The pnpm download cache (`catch-pnpm-store`) is the only
@@ -78,6 +79,10 @@ Run these from inside the worktree; they always target that worktree's stack.
 `./scripts/dev.sh help` lists everything. Running `pnpm install` on the host as well is
 fine (editors want it, and `e2e` needs Playwright on the host); container dependencies live
 in their own volumes and never mix with the host's.
+
+Playwright uses two workers per suite by default. Each worker also runs Chromium processes,
+so the worker count is not a CPU core limit. Pass `--workers=N` to `e2e` if a run needs a
+different limit. `pnpm e2e` goes through the same shared lock as `./scripts/dev.sh e2e`.
 
 ## Shared settings
 
