@@ -38,6 +38,88 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   await expect(page).toHaveURL(/\/$/);
 });
 
+test('a quick note and its dock center over the split view with one formatting bar', async ({
+  page,
+}) => {
+  await signUp(page);
+  await createNote(page, 'Alpha', 'First');
+  await openNote(page, 'Alpha');
+  const dock = page.locator('[data-dock] > div');
+  const initialDock = await dock.boundingBox();
+  if (!initialDock) throw new Error('Missing page dock');
+  const initialDockCenter = initialDock.x + initialDock.width / 2;
+
+  // Chromium emulation has no on-screen keyboard; report its height as Android does.
+  await page.evaluate(async () => {
+    const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+    keyboardHeight.jump(320);
+  });
+  await expect(page.getByRole('toolbar', { name: 'Formatting' })).toHaveCount(1);
+
+  const dockMotion = page.evaluate(
+    () =>
+      new Promise<{ center: number; searchOffset: number }[]>((resolve) => {
+        const dock = document.querySelector('[data-dock] > div');
+        const search = document.querySelector('[data-dock] a[aria-label="Search"]');
+        const icon = search?.querySelector('svg');
+        if (!dock || !search || !icon) return resolve([]);
+        const samples: { center: number; searchOffset: number }[] = [];
+        const end = performance.now() + 650;
+        const record = () => {
+          const dockBox = dock.getBoundingClientRect();
+          const searchBox = search.getBoundingClientRect();
+          const iconBox = icon.getBoundingClientRect();
+          samples.push({
+            center: dockBox.x + dockBox.width / 2,
+            searchOffset: iconBox.x + iconBox.width / 2 - (searchBox.x + searchBox.width / 2),
+          });
+          if (performance.now() < end) requestAnimationFrame(record);
+          else resolve(samples);
+        };
+        requestAnimationFrame(record);
+      }),
+  );
+  await page.getByRole('button', { name: 'New note' }).click();
+  const samples = await dockMotion;
+  expect(samples.some(({ center }) => center > initialDockCenter + 20 && center < 570)).toBe(true);
+  expect(Math.max(...samples.map(({ center }) => center))).toBeLessThan(593);
+  expect(Math.max(...samples.map(({ searchOffset }) => Math.abs(searchOffset)))).toBeLessThan(5);
+  const quickNote = page.getByRole('region', { name: 'New note' });
+  await expect(quickNote.locator('[contenteditable]')).toBeFocused();
+  await expect
+    .poll(async () => {
+      const box = await quickNote.boundingBox();
+      return box ? Math.abs(box.x + box.width / 2 - 1180 / 2) : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(2);
+  await expect
+    .poll(async () => {
+      const box = await dock.boundingBox();
+      return box ? Math.abs(box.x + box.width / 2 - 1180 / 2) : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(2);
+  expect(
+    await quickNote.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return element.contains(
+        document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2),
+      );
+    }),
+  ).toBe(true);
+  await expect(page.getByRole('toolbar', { name: 'Formatting' })).toHaveCount(1);
+  await expect(noteToolbar(page)).toBeHidden();
+
+  await page.getByRole('button', { name: 'Close new note' }).click();
+  await expect(quickNote).toBeHidden();
+  await expect
+    .poll(async () => {
+      const box = await dock.boundingBox();
+      return box ? Math.abs(box.x + box.width / 2 - initialDockCenter) : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(2);
+  await expect(page.getByRole('toolbar', { name: 'Formatting' })).toHaveCount(1);
+});
+
 test('on the deck a note pops up over the board instead', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Ship it');
