@@ -271,16 +271,24 @@
   }
 }
 
-/* Blur scrolling notes behind a tab page's header controls without a visible bar edge. */
-.page-top-blur {
+/* Blur scrolling content behind the page's fixed controls without a visible bar edge. */
+.page-top-blur,
+.page-bottom-blur {
   background-color: var(--glass);
   backdrop-filter: blur(24px) saturate(150%);
-  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
 
   @media (prefers-reduced-transparency: reduce) {
     background-color: var(--background);
     backdrop-filter: none;
   }
+}
+
+.page-top-blur {
+  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
+}
+
+.page-bottom-blur {
+  mask-image: linear-gradient(to top, black 0%, black 35%, transparent 100%);
 }
 
 @layer base {
