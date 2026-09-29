@@ -30,9 +30,10 @@ export function PageBottomBlur() {
   }, []);
 
   return (
+    // Match the top blur across the note pane so the split boundary has no seam.
     <div
       aria-hidden
-      className="page-bottom-blur pointer-events-none fixed right-[var(--note-pane)] bottom-[var(--keyboard)] left-0 z-30 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
+      className="page-bottom-blur pointer-events-none fixed right-0 bottom-[var(--keyboard)] left-0 z-30 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
       style={{ opacity: hasMoreBelow ? 1 : 0 }}
     />
   );
