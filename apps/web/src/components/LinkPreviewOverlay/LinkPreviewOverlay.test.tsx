@@ -37,6 +37,18 @@ function show(fromEditor = false) {
   return view;
 }
 
+function swipe(target: Element, delta: number, canceled = false) {
+  const start = { clientX: 100, clientY: 200 };
+  const finish = { clientX: 100, clientY: 200 + delta };
+  fireEvent.touchStart(target, { touches: [start], changedTouches: [start] });
+  fireEvent.touchMove(target, { touches: [finish], changedTouches: [finish] });
+  fireEvent.touchMove(target, { touches: [finish], changedTouches: [finish] });
+  fireEvent[canceled ? 'touchCancel' : 'touchEnd'](target, {
+    touches: [],
+    changedTouches: [finish],
+  });
+}
+
 describe('LinkPreviewOverlay', () => {
   it("lists the note's links and opens the note", () => {
     show();
@@ -59,5 +71,47 @@ describe('LinkPreviewOverlay', () => {
     rerender(<LinkPreviewOverlay />);
     expect(linkOverlay.get()).toBeNull();
     href = '/';
+  });
+
+  it.each([
+    ['down', 140, 0],
+    ['up', -140, 200],
+  ])('dismisses when swiped %s from the list edge', (_, delta, scrollTop) => {
+    show();
+    const list = screen.getByRole('list');
+    Object.defineProperties(list, {
+      clientHeight: { value: 100 },
+      scrollHeight: { value: 300 },
+    });
+    list.scrollTop = scrollTop;
+
+    swipe(list, delta);
+
+    expect(linkOverlay.get()).toBeNull();
+  });
+
+  it('lets the list scroll before treating a swipe as dismissal', () => {
+    show();
+    const list = screen.getByRole('list');
+    Object.defineProperties(list, {
+      clientHeight: { value: 100 },
+      scrollHeight: { value: 300 },
+    });
+    list.scrollTop = 100;
+
+    swipe(list, 140);
+    swipe(list, -140);
+
+    expect(linkOverlay.get()).not.toBeNull();
+  });
+
+  it('keeps a short or canceled swipe open', () => {
+    show();
+    const dialog = screen.getByRole('dialog');
+
+    swipe(dialog, 40);
+    swipe(dialog, -140, true);
+
+    expect(linkOverlay.get()).not.toBeNull();
   });
 });

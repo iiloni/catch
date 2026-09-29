@@ -43,3 +43,33 @@ test('link previews can be turned off in Settings', async ({ page }) => {
   await expect(card(page, 'Bookmarks')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Link: / })).toBeHidden();
 });
+
+test('the link overlay dismisses with an upward or downward touch swipe', async ({ page }) => {
+  test.skip(test.info().project.name !== 'android');
+  await signUp(page);
+  await createNote(page, 'Swipe links', 'https://example.com and https://example.org');
+  const underlay = page.getByRole('button', { name: /^2 links, first / });
+  const overlay = page.getByRole('dialog', { name: '2 links' });
+  const cdp = await page.context().newCDPSession(page);
+
+  for (const delta of [-150, 150]) {
+    await underlay.click();
+    await expect(overlay).toBeVisible();
+    const header = await overlay.locator('header').boundingBox();
+    if (!header) throw new Error('Link overlay header is missing');
+    const x = header.x + 30;
+    const y = header.y + header.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y }],
+    });
+    for (let step = 1; step <= 6; step++) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y + (delta * step) / 6 }],
+      });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(overlay).toBeHidden();
+  }
+});

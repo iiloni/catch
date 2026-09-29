@@ -46,10 +46,11 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   link's preview as its face instead, keeping the note's color if the user chose one.
 - *Overlay.* Tapping an underlay opens every link as a list (`LinkPreviewOverlay`) that slides
   up from behind the dock it belongs to (the page's, or the open note's) and rests just above
-  it, in reach of the thumb, on every screen size. It slides back down to close, and stacks
-  under the editor, so "Open note" grows the note over it as it leaves. Growing it out of the
-  underlay instead read as an empty box that filled in late. Back, Escape, a tap outside and
-  any navigation close it.
+  it, in reach of the thumb, on every screen size. Closing normally slides it back down;
+  swiping the card up or down dismisses it in that direction, once the link list reaches its
+  scroll edge. It stacks under the editor, so "Open note" grows the note over it as it leaves.
+  Growing it out of the underlay instead read as an empty box that filled in late. Back,
+  Escape, a tap outside and any navigation close it.
 - *Open note.* The layout follows the editor's width, not the viewport or whether it is split:
   from 700 px (in practice, a wide pane) the links get a column beside the note's card; narrower,
   they follow the note's text. While those cards are off screen, a tray tucked behind the dock

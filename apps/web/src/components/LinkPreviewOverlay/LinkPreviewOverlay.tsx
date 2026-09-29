@@ -11,12 +11,13 @@ import {
   useTransform,
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkPreviewCard } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { Button } from '@/components/ui/button';
 import { useBackHandler } from '@/lib/backButton';
 import { notesCollection } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
 import { linkOverlay, showLinkInNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { findCard } from '@/lib/noteTransition';
@@ -25,6 +26,8 @@ import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
 const close = () => linkOverlay.set(null);
+const DISMISS_DISTANCE = 110;
+const MAX_DRAG = 180;
 
 /**
  * Every link in a note, as a list that slides up from behind the dock it was opened from:
@@ -71,12 +74,16 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
   const pane = useNotePane();
   const inPane = fromEditor && pane.shown;
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panel, setPanel] = useState<HTMLDivElement | null>(null);
   const hidden = useRef(0);
+  const hiddenAbove = useRef(0);
+  const exitDirection = useRef(1);
   const y = useMotionValue(0);
   // Reads `y` unconditionally: the transform follows only the values its first run reads.
   const backdropOpacity = useTransform(() => {
     const offset = y.get();
-    return hidden.current > 0 ? 0.35 * Math.max(0, 1 - offset / hidden.current) : 0;
+    const distance = offset < 0 ? hiddenAbove.current : hidden.current;
+    return distance > 0 ? 0.35 * Math.max(0, 1 - Math.abs(offset) / distance) : 0;
   });
 
   // A ref callback rather than a layout effect: the portal mounts its children a render late,
@@ -84,8 +91,10 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
   const attachPanel = useCallback(
     (panel: HTMLDivElement | null) => {
       panelRef.current = panel;
+      setPanel(panel);
       if (!panel || hidden.current > 0) return;
       hidden.current = hiddenOffset(panel, 0);
+      hiddenAbove.current = panel.getBoundingClientRect().bottom + 8;
       y.set(hidden.current);
       void animate(y, 0, springs.smooth);
     },
@@ -96,9 +105,122 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
     if (isPresent) return;
     const panel = panelRef.current;
     // The list may have changed height since it opened.
-    if (panel) hidden.current = hiddenOffset(panel, y.get());
-    void animate(y, hidden.current, { ...springs.pane, visualDuration: 0.35 }).then(safeToRemove);
+    if (panel) {
+      hidden.current = hiddenOffset(panel, y.get());
+      hiddenAbove.current = panel.getBoundingClientRect().bottom - y.get() + 8;
+    }
+    const target = exitDirection.current < 0 ? -hiddenAbove.current : hidden.current;
+    void animate(y, target, { ...springs.pane, visualDuration: 0.35 }).then(safeToRemove);
   }, [isPresent, y, safeToRemove]);
+
+  useEffect(() => {
+    if (!panel || !isPresent) return;
+    const scrollArea = panel.querySelector<HTMLElement>('[data-link-overlay-scroll]');
+    let startX: number | null = null;
+    let startY: number | null = null;
+    let dragging = false;
+    let armed = false;
+    let direction = 0;
+    let lastY = 0;
+    let lastTime = 0;
+    let velocity = 0;
+    let startedInList = false;
+    let startOffset = 0;
+
+    function onStart(event: TouchEvent) {
+      if (event.touches.length !== 1) {
+        if (dragging) void animate(y, 0, springs.snappy);
+        startX = null;
+        startY = null;
+        dragging = false;
+        return;
+      }
+      const touch = event.touches[0];
+      if (!touch) return;
+      startOffset = y.get();
+      startX = touch.clientX;
+      startY = touch.clientY;
+      lastY = touch.clientY;
+      lastTime = event.timeStamp;
+      dragging = false;
+      armed = false;
+      velocity = 0;
+      startedInList = scrollArea?.contains(event.target as Node) ?? false;
+    }
+
+    function onMove(event: TouchEvent) {
+      const touch = event.touches[0];
+      if (event.touches.length !== 1) {
+        if (dragging) void animate(y, 0, springs.snappy);
+        startX = null;
+        startY = null;
+        dragging = false;
+        return;
+      }
+      if (startY === null || startX === null || !touch) return;
+      const delta = touch.clientY - startY;
+      if (!dragging) {
+        if (Math.abs(delta) < 8 && Math.abs(touch.clientX - startX) < 8) return;
+        if (Math.abs(touch.clientX - startX) > Math.abs(delta)) {
+          startY = null;
+          return;
+        }
+        if (startedInList && scrollArea) {
+          const atTop = scrollArea.scrollTop <= 1;
+          const atBottom =
+            scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 1;
+          if ((delta > 0 && !atTop) || (delta < 0 && !atBottom)) {
+            startY = null;
+            return;
+          }
+        }
+        direction = Math.sign(delta);
+        dragging = true;
+        y.stop();
+      }
+      event.preventDefault();
+      velocity = (touch.clientY - lastY) / Math.max(1, event.timeStamp - lastTime);
+      lastY = touch.clientY;
+      lastTime = event.timeStamp;
+      const distance = Math.max(0, delta * direction - 8);
+      y.set(startOffset + direction * Math.min(distance * 0.75, MAX_DRAG));
+      const past = distance > DISMISS_DISTANCE;
+      if (past !== armed) {
+        armed = past;
+        if (past) haptics.threshold();
+      }
+    }
+
+    function onEnd(event: TouchEvent) {
+      const flung = Math.abs(y.get() - startOffset) >= 24 && velocity * direction > 0.6;
+      if (
+        dragging &&
+        event.type !== 'touchcancel' &&
+        event.touches.length === 0 &&
+        (armed || flung)
+      ) {
+        if (!armed) haptics.threshold();
+        exitDirection.current = direction;
+        close();
+      } else if (dragging) {
+        void animate(y, 0, springs.snappy);
+      }
+      startX = null;
+      startY = null;
+      dragging = false;
+    }
+
+    panel.addEventListener('touchstart', onStart, { passive: true });
+    panel.addEventListener('touchmove', onMove, { passive: false });
+    panel.addEventListener('touchend', onEnd);
+    panel.addEventListener('touchcancel', onEnd);
+    return () => {
+      panel.removeEventListener('touchstart', onStart);
+      panel.removeEventListener('touchmove', onMove);
+      panel.removeEventListener('touchend', onEnd);
+      panel.removeEventListener('touchcancel', onEnd);
+    };
+  }, [panel, isPresent, y]);
 
   // Removing the last preview leaves nothing to list.
   useEffect(() => {
@@ -164,7 +286,10 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                   <X />
                 </IconButton>
               </header>
-              <ul className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3">
+              <ul
+                data-link-overlay-scroll
+                className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3"
+              >
                 {links.map((link) => (
                   <li key={link.url}>
                     <LinkPreviewCard
