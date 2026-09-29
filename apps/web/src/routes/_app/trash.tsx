@@ -20,6 +20,7 @@ import { useNoteSelection } from '@/lib/noteSelection';
 import { deleteNotesForever } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
+import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/trash')({
   component: TrashPage,
@@ -32,6 +33,7 @@ function TrashPage() {
     query: (q) =>
       q.from({ note: notesCollection }).where(({ note }) => not(isNull(note.deletedAt))),
   });
+  const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
 
@@ -60,7 +62,7 @@ function TrashPage() {
         selection={selectionHeader(selection, 'trash')}
       />
       <section aria-label="Trash" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
-        {isLoading ? null : notes.length > 0 ? (
+        {awaitingSync ? null : notes.length > 0 ? (
           <NoteGrid
             notes={sorted}
             onOpen={(note, card) => open(note.id, card)}

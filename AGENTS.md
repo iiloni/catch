@@ -47,21 +47,26 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 ## How data flows
 
 1. Clients read through **TanStack DB collections** (`apps/web/src/lib/collections.ts`), which
-   Electric keeps in sync with Postgres.
+   Electric keeps in sync with Postgres. Each user's collections are kept in SQLite on the
+   device (`lib/localStore.ts`, ADR 0007), so notes show offline.
 2. Clients never talk to Electric directly. `GET /api/shapes/*` is an auth proxy that pins
    each shape to the signed-in user's rows and an explicit column list.
-3. Writes are optimistic: the collection updates immediately, the mutation handler calls the
-   REST API, and the API returns the Postgres `txid` so the optimistic state is dropped once
-   Electric streams that transaction back.
+3. Writes are optimistic and queued: `write()` applies them to the collection immediately and
+   stores them in an outbox, which sends them to the REST API in order, retrying until the
+   server has them. The API returns the Postgres `txid` so the optimistic state is dropped
+   once Electric streams that transaction back, or `{ txid: null }` for a replayed write it
+   already applied.
 4. IDs are UUIDv7 and are generated **on the client** so notes can be created offline.
 5. Note content is BlockNote JSON (`blocks`). The server derives `searchText` from it on
    write; Markdown only appears at import and export boundaries.
 6. Components call the note actions in `apps/web/src/lib/notes.ts` (pin, archive, trash, ...)
-   rather than mutating the collection directly.
+   rather than mutating the collection directly. Those actions wrap their changes in `write()`;
+   collections have no mutation handlers, so a change outside `write()` throws.
 
 When adding a synced table: add it to the Drizzle schema, generate a migration, add a Zod
 schema to `packages/shared`, add a shape route with a user filter and a column allowlist, add
-write routes that return `{ txid }`, then add a collection.
+write routes that return `{ txid }` (and are safe to replay), then add a persisted collection.
+If clients write to it, add it to `writableCollections` and `send()` in `collections.ts`.
 
 ## Conventions
 
@@ -121,5 +126,12 @@ write routes that return `{ txid }`, then add a collection.
   previews with `useNoteLinks` (`lib/linkPreviews.ts`), which shares one subscription across
   every card. Server-side page fetches must go through `safeFetch`, which blocks private
   addresses.
-- TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts` and route files so
-  upgrades stay contained.
+- TanStack DB is pre-1.0. Keep its usage inside `src/lib/collections.ts`, `src/lib/localStore.ts`
+  and route files so upgrades stay contained.
+- Bump a collection's `schemaVersion` in `collections.ts` whenever the columns its shape syncs
+  change, or devices keep reading rows of the old shape from their local database.
+- Collections open the signed-in user's local database when the module loads (top-level
+  await), so signing in does a full page load. Offline, collections never become ready (that
+  needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
+- The dev server has no service worker, so a page cannot load code offline in development.
+  E2E tests for offline behavior block `/api` instead, or warm lazy chunks before going offline.

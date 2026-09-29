@@ -44,18 +44,32 @@ export const notesRoutes = new Hono<AppEnv>()
   .post('/', zValidator('json', createNoteSchema), async (c) => {
     const user = c.get('user')!;
     const body = c.req.valid('json');
-    const { txid, links } = await db.transaction(async (tx) => {
-      await tx.insert(notes).values({
-        ...body,
-        position: body.position ?? (await firstPosition(tx, user.id)),
-        userId: user.id,
-        searchText: blocksToPlainText(body.content),
-      });
+    const result = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(notes)
+        .values({
+          ...body,
+          position: body.position ?? (await firstPosition(tx, user.id)),
+          userId: user.id,
+          searchText: blocksToPlainText(body.content),
+        })
+        .onConflictDoNothing()
+        .returning({ id: notes.id });
+      if (inserted.length === 0) return null;
       const links = await trackNoteLinks(tx, user.id, body.content);
       return { txid: await currentTxid(tx), links };
     });
-    queuePreviews(user.id, links);
-    return c.json({ txid }, 201);
+    if (result === null) {
+      // Clients replay queued writes, so the note may already be here from an earlier try.
+      const [existing] = await db
+        .select({ id: notes.id })
+        .from(notes)
+        .where(and(eq(notes.id, body.id), eq(notes.userId, user.id)));
+      if (!existing) return c.json({ error: 'Note id is taken' }, 409);
+      return c.json({ txid: null });
+    }
+    queuePreviews(user.id, result.links);
+    return c.json({ txid: result.txid }, 201);
   })
   .patch('/:id', idParam, zValidator('json', updateNoteSchema), async (c) => {
     const user = c.get('user')!;
@@ -92,6 +106,7 @@ export const notesRoutes = new Hono<AppEnv>()
         .returning({ id: notes.id });
       return deleted.length > 0 ? currentTxid(tx) : null;
     });
-    if (result === null) return c.json({ error: 'Note not found' }, 404);
+    // Already gone, perhaps deleted by an earlier try of this same queued write.
+    if (result === null) return c.json({ txid: null });
     return c.json({ txid: result });
   });

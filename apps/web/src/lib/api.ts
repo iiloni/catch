@@ -2,6 +2,7 @@ import type {
   CreateBoardColumn,
   CreateNote,
   RefreshLinkPreview,
+  TxidResponse,
   UpdateBoardColumn,
   UpdateNote,
 } from '@catch/shared';
@@ -16,9 +17,6 @@ export class ApiError extends Error {
     super(message);
   }
 }
-
-/** Write endpoints return the Postgres txid so Electric can confirm the write synced. */
-type TxidResponse = { txid: number };
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const token = getAuthToken();

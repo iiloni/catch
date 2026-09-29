@@ -22,6 +22,7 @@ import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 import { usePersistentState } from '@/lib/storage';
+import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/')({
   component: GalleryPage,
@@ -51,6 +52,7 @@ function GalleryPage() {
         ),
   });
 
+  const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes, sort.field, sort.direction);
   const pinned = sorted.filter((note) => note.isPinned);
   const others = sorted.filter((note) => !note.isPinned);
@@ -75,7 +77,7 @@ function GalleryPage() {
         aria-label="Gallery"
         className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        {isLoading ? null : notes.length === 0 ? (
+        {awaitingSync ? null : notes.length === 0 ? (
           <EmptyState icon={Lightbulb} title="Catch your first note">
             Tap + to write something down. It lands here.
           </EmptyState>

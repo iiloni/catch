@@ -35,11 +35,30 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            // Preview thumbnails and icons are named by their hash and never change, so they
+            // can be served from the cache, which keeps them showing offline.
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/link-previews/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'link-preview-assets',
+              expiration: { maxEntries: 1000 },
+              // The Android app loads them from another origin, as opaque responses.
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
+  optimizeDeps: {
+    // Its SQLite worker is a file next to it, found through `import.meta.url`; pre-bundling
+    // would move the module away from it.
+    exclude: ['@tanstack/browser-db-sqlite-persistence'],
   },
   server: {
     // Set by docker-compose.dev.yml so worktree stacks are reachable from the host

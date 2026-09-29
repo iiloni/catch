@@ -6,7 +6,7 @@ import {
   positionBetween,
 } from '@catch/shared';
 import { uuidv7 } from 'uuidv7';
-import { boardColumnsCollection } from './collections';
+import { boardColumnsCollection, write } from './collections';
 
 export function sortBoardColumns(columns: readonly BoardColumn[]) {
   return [...columns].sort(
@@ -21,17 +21,19 @@ export function addBoardColumn(
   columns: readonly BoardColumn[],
 ) {
   const ordered = sortBoardColumns(columns);
-  boardColumnsCollection.insert({
-    id: uuidv7(),
-    userId,
-    name: name.trim(),
-    color,
-    position: positionBetween(ordered.at(-1)?.position ?? null, null),
-  });
+  write(() =>
+    boardColumnsCollection.insert({
+      id: uuidv7(),
+      userId,
+      name: name.trim(),
+      color,
+      position: positionBetween(ordered.at(-1)?.position ?? null, null),
+    }),
+  );
 }
 
 export function editBoardColumn(id: string, changes: Partial<Pick<BoardColumn, 'name' | 'color'>>) {
-  boardColumnsCollection.update(id, (draft) => Object.assign(draft, changes));
+  write(() => boardColumnsCollection.update(id, (draft) => Object.assign(draft, changes)));
 }
 
 export function moveBoardColumn(
@@ -43,12 +45,14 @@ export function moveBoardColumn(
   const before = others[index - 1]?.position ?? null;
   const after =
     others.slice(index).find((item) => before === null || item.position > before)?.position ?? null;
-  boardColumnsCollection.update(column.id, (draft) => {
-    draft.position = positionBetween(before, after);
-  });
+  write(() =>
+    boardColumnsCollection.update(column.id, (draft) => {
+      draft.position = positionBetween(before, after);
+    }),
+  );
 }
 
 export function removeBoardColumn(id: string) {
   if (id === DEFAULT_BOARD_STATUS) return;
-  boardColumnsCollection.delete(id);
+  write(() => boardColumnsCollection.delete(id));
 }

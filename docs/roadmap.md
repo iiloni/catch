@@ -20,9 +20,9 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [x] Keyword search on the client, with a color filter and recent searches.
 - [x] 18 note colors on an OKLCH scale; graphite and legal-pad yellow theme.
 - [x] System haptics on Android.
+- [x] Offline persistence: collections kept in SQLite on the device, and writes queued while offline (see `docs/decisions/0007-offline-persistence.md`).
 
 ## Next
-- [ ] Offline persistence for TanStack DB collections and queued offline writes.
 - [ ] Hybrid search on the server (see `docs/decisions/0002-search.md`); keyword search runs on the client today.
 - [ ] Long-press to select several notes, with actions in the dock.
 - [ ] Markdown import and export.

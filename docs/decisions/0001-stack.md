@@ -29,7 +29,8 @@ coding agents, so the stack optimizes for:
 
 ## Consequences
 
-- TanStack DB is pre-1.0; its usage is kept in `apps/web/src/lib/collections.ts`.
+- TanStack DB is pre-1.0; its usage is kept in `apps/web/src/lib/collections.ts` (and the
+  local database in `lib/localStore.ts`, see ADR 0007).
 - Self-hosting runs three containers: app, Postgres (with pgvector), Electric.
 - Note content is stored as BlockNote JSON (lossless). Plain text is derived on write for
   search, and Markdown export will be derived the same way.

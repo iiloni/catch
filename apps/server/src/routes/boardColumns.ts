@@ -21,12 +21,19 @@ export const boardColumnRoutes = new Hono<AppEnv>()
     const body = c.req.valid('json');
     if (body.id === DEFAULT_BOARD_STATUS) return c.json({ error: 'Reserved column id' }, 409);
     const txid = await db.transaction(async (tx) => {
-      await tx.insert(boardColumns).values({ ...body, userId });
+      const inserted = await tx
+        .insert(boardColumns)
+        .values({ ...body, userId })
+        // Clients replay queued writes, so the column may already be here from an earlier try.
+        .onConflictDoNothing()
+        .returning({ id: boardColumns.id });
+      if (inserted.length === 0) return null;
       const [row] = await tx.execute<{ txid: string }>(
         sql`SELECT pg_current_xact_id()::xid::text AS txid`,
       );
       return Number(row?.txid);
     });
+    if (txid === null) return c.json({ txid: null });
     return c.json({ txid }, 201);
   })
   .patch('/:id', idParam, zValidator('json', updateBoardColumnSchema), async (c) => {
@@ -67,6 +74,7 @@ export const boardColumnRoutes = new Hono<AppEnv>()
       );
       return Number(row?.txid);
     });
-    if (txid === null) return c.json({ error: 'Column not found' }, 404);
+    // Already gone, perhaps deleted by an earlier try of this same queued write.
+    if (txid === null) return c.json({ txid: null });
     return c.json({ txid });
   });
