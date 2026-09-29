@@ -138,6 +138,15 @@ case "$command" in
         ;;
     e2e)
         # Playwright runs on the host (it needs a browser) against this stack.
+        # All worktrees share the Git common directory, so only one suite runs
+        # on this machine at a time. Keep the lock until Playwright exits.
+        command -v flock >/dev/null || { echo "flock is required for e2e runs." >&2; exit 1; }
+        common_dir=$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)
+        exec 9>"$common_dir/catch-e2e.lock"
+        if ! flock -n 9; then
+            echo "Another Catch e2e run is active; waiting for it to finish..."
+            flock 9
+        fi
         E2E_BASE_URL="http://localhost:$(env_value CATCH_PORT)" \
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
@@ -205,7 +214,7 @@ Usage: ./scripts/dev.sh <command>
   check               Lint, typecheck, unit tests and build (in the container)
   test [args]         Unit tests (in the container)
   build               Build all packages (in the container)
-  e2e [args]          Playwright tests from the host against this stack
+  e2e [args]          Playwright tests from the host (one suite across worktrees)
   android [--usb]     Start the stack and install a live-reload debug app on Android
                       (--usb reaches the dev server via adb instead of Tailscale)
   shell               Open a shell in the app container
