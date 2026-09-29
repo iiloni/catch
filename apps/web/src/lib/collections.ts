@@ -41,9 +41,14 @@ export const notesCollection = createCollection(
     },
     onUpdate: async ({ transaction }) => {
       const results = await Promise.all(
-        transaction.mutations.map((m) =>
-          api.updateNote(String(m.key), updateNoteSchema.parse(m.changes)),
-        ),
+        transaction.mutations.flatMap((m) => {
+          const changes = updateNoteSchema.parse(m.changes);
+          // Saving unchanged content leaves only `updatedAt`, which the server owns. Such a
+          // write changes no synced column, so Electric never streams its txid back and the
+          // note would wait out the txid timeout before taking further synced changes.
+          if (Object.keys(changes).length === 0) return [];
+          return [api.updateNote(String(m.key), changes)];
+        }),
       );
       return { txid: results.map((r) => r.txid) };
     },
