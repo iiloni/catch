@@ -27,6 +27,7 @@ import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
+import { useListItemDrag } from './useListItemDrag';
 
 /** New notes start with an empty heading that acts as the title. */
 const EMPTY_NOTE: PartialBlock[] = [{ type: 'heading', props: { level: 3 }, content: [] }];
@@ -128,9 +129,18 @@ export function NoteEditor({
   }, [controls, onControls]);
 
   useCaretAboveKeyboard(editor);
+  const editorRef = useListItemDrag(editor, editable);
 
   function focusAboveBlankSpace(event: MouseEvent<HTMLDivElement>) {
     if (!editable || !(event.target instanceof Element)) return;
+    // The checkbox's padding belongs to the same touch target as the native input.
+    const checkbox = event.target.matches('[data-content-type="checkListItem"] > div')
+      ? event.target.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      : null;
+    if (checkbox) {
+      checkbox.click();
+      return;
+    }
     // A tap inside a block belongs to BlockNote, which places the caret at the tapped text.
     if (event.target.closest('[data-node-type="blockContainer"]')) return;
 
@@ -149,6 +159,7 @@ export function NoteEditor({
 
   return (
     <BlockNoteView
+      ref={editorRef}
       editor={editor}
       editable={editable}
       theme={theme}

@@ -1,4 +1,3 @@
-import { Check, Square } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -23,16 +22,17 @@ const HEADING_SIZES: Record<number, string> = { 1: '3em', 2: '2em', 3: '1.3em' }
 
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null;
 
-function renderInline(content: unknown, key = 0): ReactNode {
+function renderInline(content: unknown, variant: Variant, key = 0): ReactNode {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map((item, index) => renderInline(item, index));
+  if (Array.isArray(content))
+    return content.map((item, index) => renderInline(item, variant, index));
   if (!isObject(content)) return null;
 
   // Cards are buttons, so links render as text here; they are clickable in the editor.
   if (content.type === 'link') {
     return (
       <span key={key} data-href={String(content.href)} className="underline underline-offset-2">
-        {renderInline(content.content)}
+        {renderInline(content.content, variant)}
       </span>
     );
   }
@@ -43,7 +43,7 @@ function renderInline(content: unknown, key = 0): ReactNode {
     <span
       key={key}
       className={cn(
-        Boolean(styles.bold) && 'font-semibold',
+        Boolean(styles.bold) && (variant === 'editor' ? 'font-bold' : 'font-semibold'),
         Boolean(styles.italic) && 'italic',
         Boolean(styles.underline) && 'underline',
         Boolean(styles.strike) && 'line-through',
@@ -59,14 +59,18 @@ function PreviewBlock({
   block,
   isTitle,
   variant,
+  listIndex,
 }: {
   block: Json;
   isTitle: boolean;
   variant: Variant;
+  listIndex: number;
 }) {
   const props = isObject(block.props) ? block.props : {};
   const children = Array.isArray(block.children) ? block.children.filter(isObject) : [];
-  const inline = renderInline(block.content);
+  const inline = renderInline(block.content, variant);
+  const empty = Array.isArray(block.content) ? block.content.length === 0 : !block.content;
+  const text = empty && variant === 'editor' ? <br /> : inline;
 
   let body: ReactNode;
   switch (block.type) {
@@ -79,7 +83,7 @@ function PreviewBlock({
             className="pt-[18px]! font-bold font-display leading-normal tracking-[-0.01em]"
             style={{ fontSize: HEADING_SIZES[Number(props.level)] ?? HEADING_SIZES[3] }}
           >
-            {inline}
+            {text}
           </h3>
         ) : isTitle ? (
           <h3 className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]">
@@ -90,25 +94,48 @@ function PreviewBlock({
         );
       break;
     case 'checkListItem': {
-      const Icon = props.checked ? Check : Square;
       body = (
-        <p
-          className={cn(
-            'flex gap-2',
-            Boolean(props.checked) && 'text-muted-foreground line-through',
-          )}
-        >
-          <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{inline}</span>
-        </p>
+        <div data-content-type="checkListItem" className="note-preview-checklist">
+          <div className="note-checkbox-target" aria-hidden>
+            <span className="note-checkbox" data-checked={Boolean(props.checked)} />
+          </div>
+          <p
+            className={cn(
+              'min-w-0 whitespace-pre-wrap',
+              Boolean(props.checked) && 'text-muted-foreground line-through',
+            )}
+          >
+            {text}
+          </p>
+        </div>
       );
       break;
     }
     case 'bulletListItem':
-      body = <p className="before:mr-2 before:content-['•']">{inline}</p>;
+      body =
+        variant === 'editor' ? (
+          <p data-content-type="bulletListItem" className="note-preview-list">
+            <span className="note-preview-list-marker" aria-hidden>
+              •
+            </span>
+            <span className="min-w-0 whitespace-pre-wrap">{text}</span>
+          </p>
+        ) : (
+          <p className="before:mr-2 before:content-['•']">{inline}</p>
+        );
       break;
     case 'numberedListItem':
-      body = <p className="before:mr-2 before:content-['–']">{inline}</p>;
+      body =
+        variant === 'editor' ? (
+          <p data-content-type="numberedListItem" className="note-preview-list">
+            <span className="note-preview-list-marker" aria-hidden>
+              {listIndex}.
+            </span>
+            <span className="min-w-0 whitespace-pre-wrap">{text}</span>
+          </p>
+        ) : (
+          <p className="before:mr-2 before:content-['–']">{inline}</p>
+        );
       break;
     case 'quote':
       body = <blockquote className="border-current/30 border-l-2 pl-2 italic">{inline}</blockquote>;
@@ -127,26 +154,49 @@ function PreviewBlock({
         ) : null;
       break;
     default:
-      body = inline ? <p>{inline}</p> : null;
+      body = inline || variant === 'editor' ? <p className="whitespace-pre-wrap">{text}</p> : null;
   }
 
-  return (
+  const nested = children.length > 0 && (
+    <div className={variant === 'editor' ? 'pl-6' : 'pl-4'}>
+      {renderBlocks(children, variant, false)}
+    </div>
+  );
+  return variant === 'editor' ? (
+    <div className="note-preview-block" data-preview-block={block.id}>
+      {body}
+      {nested}
+    </div>
+  ) : (
     <>
       {body}
-      {children.length > 0 && (
-        <div className="pl-4">
-          {children.map((child, index) => (
-            <PreviewBlock
-              key={String(child.id ?? index)}
-              block={child}
-              isTitle={false}
-              variant={variant}
-            />
-          ))}
-        </div>
-      )}
+      {nested}
     </>
   );
+}
+
+function renderBlocks(blocks: readonly Json[], variant: Variant, topLevel: boolean) {
+  let listIndex = 0;
+  return blocks.map((block, index) => {
+    const props = isObject(block.props) ? block.props : {};
+    listIndex =
+      block.type === 'numberedListItem'
+        ? listIndex > 0
+          ? listIndex + 1
+          : typeof props.start === 'number'
+            ? props.start
+            : 1
+        : 0;
+    return (
+      <PreviewBlock
+        key={String(block.id ?? index)}
+        block={block}
+        isTitle={topLevel && index === 0 && block.type === 'heading'}
+        variant={variant}
+        listIndex={listIndex}
+      />
+    );
+  });
 }
 
 function isEmptyBlock(block: Json) {
@@ -157,7 +207,7 @@ function isEmptyBlock(block: Json) {
 
 /** Read-only rendering of a BlockNote document, light enough for a grid of cards. */
 export function NotePreview({ content, maxBlocks = 10, variant = 'card', className }: Props) {
-  const blocks = content.filter((block) => !isEmptyBlock(block));
+  const blocks = variant === 'editor' ? content : content.filter((block) => !isEmptyBlock(block));
   const shown = blocks.slice(0, maxBlocks);
 
   return (
@@ -165,19 +215,12 @@ export function NotePreview({ content, maxBlocks = 10, variant = 'card', classNa
       className={cn(
         'flex flex-col break-words',
         variant === 'card'
-          ? 'gap-1 text-sm leading-snug'
-          : 'note-preview-editor text-base leading-6 [&>*]:py-[3px]',
+          ? 'note-preview-card gap-1 text-sm leading-snug'
+          : 'note-preview-editor text-base leading-6',
         className,
       )}
     >
-      {shown.map((block, index) => (
-        <PreviewBlock
-          key={String(block.id ?? index)}
-          block={block}
-          isTitle={index === 0 && block.type === 'heading'}
-          variant={variant}
-        />
-      ))}
+      {renderBlocks(shown, variant, true)}
       {blocks.length > shown.length && <p className="text-muted-foreground">…</p>}
     </div>
   );

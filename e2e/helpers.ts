@@ -62,7 +62,7 @@ export async function openNote(page: Page, title: string) {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   // The editor grows out of the card and swaps in BlockNote once the transition settles.
-  await expect(dialog.locator('[contenteditable]')).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toBeVisible();
   return dialog;
 }
 
