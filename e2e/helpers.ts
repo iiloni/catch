@@ -85,3 +85,13 @@ export async function noteAction(page: Page, title: string, action: string) {
 export async function waitForPageTransition(page: Page) {
   await page.waitForFunction(() => !document.documentElement.matches(':active-view-transition'));
 }
+
+/** Opens the note's move picker and chooses a deck column or Gallery. */
+export async function moveNote(page: Page, title: string, destination = 'New Default') {
+  const dialog = await noteAction(page, title, 'Move note');
+  await page
+    .getByRole('group', { name: 'Move note', exact: true })
+    .getByRole('button', { name: destination, exact: true })
+    .click();
+  return dialog;
+}

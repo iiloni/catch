@@ -39,10 +39,13 @@ Sheets float above the bottom safe area or keyboard with a small gap and rounded
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
-pin, deck, archive); the color button grows the dock upward into a palette, and trashing
-lives in the editor's top right. Tapping the deck button adds the note to the default column;
-holding it (or sliding off it) grows the dock upward into the Deck's columns, and letting go
-on one puts the note there. The editor therefore is a non-modal dialog, with the page
+pin, move, archive); the color button grows the dock upward into a palette, and trashing
+lives in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
+stack in a wider left column, with one full-height Gallery target on the right. A brand
+border and check mark show the current location. The move button also shows its location:
+a dashboard for Gallery, or columns with the current column's accent line underneath. Holding the button (or sliding off it)
+also opens the picker, and letting go on a destination moves the note there. Desktop
+card toolbars expand the same picker vertically. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
 
 On phones the note scrolls behind its floating back and trash controls, with the Gallery's

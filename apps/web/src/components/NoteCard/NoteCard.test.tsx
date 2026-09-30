@@ -1,9 +1,9 @@
-import type { Note } from '@catch/shared';
+import type { BoardColumn, Note } from '@catch/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { linkOverlay } from '@/lib/linkPreviews';
-import { setNotePinned, trashNote } from '@/lib/notes';
+import { moveNoteToDeck, sendNoteToGallery, setNotePinned, trashNote } from '@/lib/notes';
 import { link, makePreview, paragraph } from '@/test/links';
 import { NoteCard } from './NoteCard';
 
@@ -11,7 +11,14 @@ vi.mock('@/lib/notes');
 const previews = new Map([
   ['https://a.example/', makePreview('https://a.example/', { title: 'Page A', siteName: 'A' })],
 ]);
-vi.mock('@/lib/collections', () => ({ useLinkPreviews: () => previews }));
+const columns: BoardColumn[] = [
+  { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
+  { id: 'doing', userId: 'user-1', name: 'Doing', color: 'blue', position: 'a1' },
+];
+vi.mock('@/lib/collections', () => ({
+  useLinkPreviews: () => previews,
+  useBoardColumns: () => columns,
+}));
 
 const note: Note = {
   id: '0199a0a0-0000-7000-8000-000000000001',
@@ -62,6 +69,37 @@ describe('NoteCard', () => {
     expect(setNotePinned).toHaveBeenCalledWith(note.id, true);
     expect(trashNote).toHaveBeenCalledWith(note.id);
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('expands destinations and moves the card without opening the editor', () => {
+    const onOpen = vi.fn();
+    renderCard({ onOpen });
+    const move = screen.getByRole('button', { name: 'Move note' });
+    fireEvent.click(move);
+    expect(move).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Send to gallery' })).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Doing' }));
+    expect(moveNoteToDeck).toHaveBeenCalledWith(note.id, 'doing');
+    expect(move).toHaveAttribute('aria-expanded', 'false');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('offers Gallery from a deck card and keeps its move button consistent', () => {
+    renderCard({ note: { ...note, status: 'doing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move note' }));
+    expect(screen.getByRole('button', { name: 'Doing' })).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send to gallery' }));
+    expect(sendNoteToGallery).toHaveBeenCalledWith(note.id);
+    expect(screen.getByRole('button', { name: 'Move note' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
   it('toggles selection instead of opening while notes are selected', () => {

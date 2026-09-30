@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Check, ChevronLeft, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { path: '/deck', label: 'Deck', icon: Columns3 },
-  { path: '/', label: 'Gallery', icon: LayoutGrid },
+  { path: '/', label: 'Gallery', icon: LayoutDashboard },
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
 
