@@ -230,7 +230,9 @@ export function ImageStage({
               const dy = next.y - start.current.y;
               if (!direction.current && moved.current) {
                 direction.current =
-                  details?.current && dy < 0 && Math.abs(dy) > Math.abs(dx)
+                  details?.current &&
+                  (dy < 0 || details.current.isOpen) &&
+                  Math.abs(dy) > Math.abs(dx)
                     ? 'details'
                     : 'horizontal';
                 if (direction.current === 'details' && detailsStart.current)

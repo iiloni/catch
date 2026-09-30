@@ -517,8 +517,26 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     await expect(details).toHaveCSS('transform', 'none');
     await expect(viewer).toHaveAccessibleName('landscape.png');
     await expect(viewer.getByRole('button', { name: 'Reset zoom' })).toHaveText('100%');
-    await info.click();
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [imageStart],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: imageStart.x, y: imageStart.y + 80 }],
+    });
+    const pushed = await details.boundingBox();
+    if (!pushed) throw new Error('Missing dragged details');
+    expect(pushed.y).toBeGreaterThan(sheetBounds.y + 40);
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: imageStart.x, y: imageStart.y + 240 }],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(info).toHaveAttribute('aria-expanded', 'false');
     await expect(details).toHaveAttribute('inert', '');
+    await expect(viewer).toHaveAccessibleName('landscape.png');
     await session.detach();
   } else {
     await expect(viewer.getByRole('button', { name: 'Keep offline' })).toBeVisible();

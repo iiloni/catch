@@ -64,8 +64,8 @@ right beside close on wide screens. Below 640 px, navigation is centered at the 
 sits at the bottom right and an Info button sits at the bottom left. Metadata starts hidden
 in a sheet that slides up to rest above the zoom controls. Dragging the Info button or the
 sheet, or swiping up on a fitted image, follows the finger, with threshold and state-change
-haptics; releasing settles it open
-or closed. The bottom controls leave room for each other and the device's safe area.
+haptics; releasing settles it open or closed. Swiping down on the fitted image also pushes
+the open sheet down. The bottom controls leave room for each other and the device's safe area.
 Images support wheel and pinch zoom at the focal point, bounded dragging, double-tap zoom, fit/fill, and
 keyboard zoom/reset/pan. Arrows and unzoomed swipes navigate the note's attachments, resetting
 the view and stopping playback on each change. Video/audio use native playback controls;

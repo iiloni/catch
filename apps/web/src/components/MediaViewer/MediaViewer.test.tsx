@@ -207,7 +207,7 @@ describe('MediaViewer', () => {
     await waitFor(() => expect(sheet).toHaveAttribute('inert'));
   });
 
-  it('reveals details with an upward image drag even with one attachment, while zoomed drags pan', async () => {
+  it('opens and dismisses details by dragging the fitted image, while zoomed drags pan', async () => {
     vi.stubGlobal('innerWidth', 380);
     vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(600);
     render(<MediaViewer file={file} onClose={vi.fn()} />);
@@ -222,7 +222,18 @@ describe('MediaViewer', () => {
     fireEvent.pointerUp(stage, { pointerId: 1, clientX: 320, clientY: 190 });
     expect(info).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
-    fireEvent.click(info);
+    await waitFor(() => expect(sheet).toHaveStyle({ transform: 'none' }));
+    fireEvent.pointerDown(stage, { pointerId: 2, button: 0, clientX: 320, clientY: 190 });
+    fireEvent.pointerMove(stage, { pointerId: 2, clientX: 320, clientY: 300 });
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    expect(haptics.threshold).toHaveBeenCalledTimes(2);
+    fireEvent.pointerCancel(stage, { pointerId: 2, clientX: 320, clientY: 300 });
+    await waitFor(() => expect(sheet).toHaveStyle({ transform: 'none' }));
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.pointerDown(stage, { pointerId: 3, button: 0, clientX: 320, clientY: 190 });
+    fireEvent.pointerMove(stage, { pointerId: 3, clientX: 320, clientY: 300 });
+    fireEvent.pointerUp(stage, { pointerId: 3, clientX: 320, clientY: 300 });
+    expect(info).toHaveAttribute('aria-expanded', 'false');
     await waitFor(() => expect(sheet).toHaveAttribute('inert'));
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     fireEvent.pointerDown(stage, { pointerId: 2, button: 0, clientX: 320, clientY: 300 });

@@ -16,6 +16,7 @@ import { springs } from '@/lib/motion';
 
 export type DetailsPointer = Pick<PointerEvent, 'pointerId' | 'clientY' | 'timeStamp'>;
 export interface DetailsGesture {
+  isOpen: boolean;
   begin: (event: DetailsPointer) => void;
   move: (event: DetailsPointer) => void;
   finish: (event: DetailsPointer, cancelled?: boolean) => void;
@@ -76,7 +77,7 @@ export function DetailsSheet({
     });
   }
 
-  useImperativeHandle(ref, () => ({ begin, move, finish }));
+  useImperativeHandle(ref, () => ({ isOpen: open, begin, move, finish }));
 
   function begin(event: DetailsPointer) {
     if (drag.current) return;
