@@ -134,7 +134,7 @@ case "$command" in
         "${compose[@]}" exec -T app pnpm test "$@"
         ;;
     build)
-        "${compose[@]}" exec -T app pnpm build
+        "${compose[@]}" exec -T -e "CATCH_CHANNEL=${1:-stable}" app pnpm build
         ;;
     e2e)
         # Playwright runs on the host (it needs a browser) against this stack.
@@ -213,7 +213,7 @@ Usage: ./scripts/dev.sh <command>
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
   test [args]         Unit tests (in the container)
-  build               Build all packages (in the container)
+  build [channel]     Build all packages (in the container; stable by default, or preview)
   e2e [args]          Playwright tests from the host (one suite across worktrees)
   android [--usb]     Start the stack and install a live-reload debug app on Android
                       (--usb reaches the dev server via adb instead of Tailscale)

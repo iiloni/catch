@@ -63,9 +63,10 @@ Stable is the default Android flavor. `assemblePreviewDebug` builds the separate
 Preview app; release builds read their version and signing credentials from the environment
 (see [Releasing and deployment](docs/releases.md)).
 
-The approved Gentle Drop masters and exact values live in `branding/`. To regenerate the
-browser and PWA icons, Android launcher layers, and splash images, run
-`./scripts/generate-brand-assets.sh` with ImageMagick (SVG support) and Python 3 installed.
-The script chooses the supplied primary, small, or favicon SVG for each output size. Public
-SVGs are copies of the masters, and the Android monochrome layer comes from the supplied
-light monochrome knockout mark.
+The approved Gentle Drop masters and exact values live in `branding/`, with the icon-only
+preview extension in `branding/preview/`. Run `./scripts/generate-brand-assets.sh all` with
+ImageMagick (SVG support) and Python 3 to regenerate both channels, or pass `stable` (the
+default) or `preview` to regenerate one. Check preview derivation with
+`python3 branding/preview/derive-preview-icons.py --check`.
+See [Brand assets](docs/branding.md) for sizes, shared Android layers, integrity checks,
+and channel selection. UI colors and theme colors stay the same in both channels.

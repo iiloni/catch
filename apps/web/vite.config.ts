@@ -5,9 +5,21 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
+import { buildChannel } from '../../scripts/build-channel.ts';
+
+const iconBase = buildChannel(process.env.CATCH_CHANNEL) === 'preview' ? '/preview' : '';
 
 export default defineConfig({
   plugins: [
+    {
+      name: 'channel-icons',
+      transformIndexHtml(html) {
+        return html.replace(
+          /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
+          `href="${iconBase}/$1"`,
+        );
+      },
+    },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
@@ -22,10 +34,10 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         icons: [
-          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
           {
-            src: '/maskable-512x512.png',
+            src: `${iconBase}/maskable-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

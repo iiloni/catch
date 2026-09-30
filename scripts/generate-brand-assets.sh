@@ -9,17 +9,43 @@ repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 brand_dir="$repo_dir/branding"
 public_dir="$repo_dir/apps/web/public"
 res_dir="$repo_dir/apps/web/android/app/src/main/res"
+channel="${1:-stable}"
+case "$channel" in
+  all)
+    "$0" stable
+    "$0" preview
+    exit 0
+    ;;
+  stable)
+    primary_source="$brand_dir/catch-icon-master.svg"
+    small_source="$brand_dir/catch-icon-small.svg"
+    favicon_source="$brand_dir/catch-favicon-mark.svg"
+    background_source="$brand_dir/catch-adaptive-background.svg"
+    ;;
+  preview)
+    python3 "$brand_dir/preview/derive-preview-icons.py"
+    python3 "$brand_dir/preview/derive-preview-icons.py" --check
+    primary_source="$brand_dir/preview/catch-icon-preview.svg"
+    small_source="$brand_dir/preview/catch-icon-preview-small.svg"
+    favicon_source="$brand_dir/preview/catch-favicon-preview.svg"
+    background_source="$brand_dir/preview/catch-adaptive-preview-background.svg"
+    public_dir="$public_dir/preview"
+    res_dir="$repo_dir/apps/web/android/app/src/preview/res"
+    ;;
+  *) echo 'Usage: generate-brand-assets.sh [stable|preview|all]' >&2; exit 1 ;;
+esac
+mkdir -p "$public_dir"
 temp_dir="$(mktemp -d)"
 trap 'rm -rf "$temp_dir"' EXIT
 
 source_for_size() {
   local size="$1"
   if (( size >= 128 )); then
-    printf '%s/catch-icon-master.svg' "$brand_dir"
+    printf '%s' "$primary_source"
   elif (( size >= 48 )); then
-    printf '%s/catch-icon-small.svg' "$brand_dir"
+    printf '%s' "$small_source"
   else
-    printf '%s/catch-favicon-mark.svg' "$brand_dir"
+    printf '%s' "$favicon_source"
   fi
 }
 
@@ -43,10 +69,10 @@ render_round() {
     -strip "PNG32:$output"
 }
 
-# These public vectors are copies, so the masters remain in one stable location.
-cp "$brand_dir/catch-icon-master.svg" "$public_dir/icon.svg"
-cp "$brand_dir/catch-icon-small.svg" "$public_dir/icon-small.svg"
-cp "$brand_dir/catch-favicon-mark.svg" "$public_dir/favicon-mark.svg"
+# These public vectors are copies, so the masters remain in one source location.
+cp "$primary_source" "$public_dir/icon.svg"
+cp "$small_source" "$public_dir/icon-small.svg"
+cp "$favicon_source" "$public_dir/favicon-mark.svg"
 
 for size in 16 24 32 48; do
   render_icon "$size" "$temp_dir/favicon-$size.png"
@@ -54,7 +80,9 @@ done
 magick "$temp_dir/favicon-16.png" "$temp_dir/favicon-24.png" \
   "$temp_dir/favicon-32.png" "$temp_dir/favicon-48.png" \
   "$public_dir/favicon.ico"
-cp "$public_dir/favicon.ico" "$repo_dir/favicon.ico"
+if [[ "$channel" == stable ]]; then
+  cp "$public_dir/favicon.ico" "$repo_dir/favicon.ico"
+fi
 cp "$temp_dir/favicon-16.png" "$public_dir/favicon-16x16.png"
 cp "$temp_dir/favicon-32.png" "$public_dir/favicon-32x32.png"
 
@@ -66,7 +94,7 @@ for size in 180 192 512; do
   render_icon "$size" "$output"
 done
 
-render "$brand_dir/catch-adaptive-background.svg" 512 "$temp_dir/maskable-background.png"
+render "$background_source" 512 "$temp_dir/maskable-background.png"
 render "$brand_dir/catch-adaptive-foreground.svg" 512 "$temp_dir/maskable-foreground.png"
 magick "$temp_dir/maskable-background.png" "$temp_dir/maskable-foreground.png" \
   -compose Over -composite -strip "PNG32:$public_dir/maskable-512x512.png"
@@ -101,12 +129,16 @@ PY
 for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:324 xxxhdpi:192:384:432; do
   IFS=: read -r name launcher_size splash_size layer_size <<< "$density"
   mipmap_dir="$res_dir/mipmap-$name"
+  mkdir -p "$mipmap_dir"
   render_icon "$launcher_size" "$mipmap_dir/ic_launcher.png"
   render_round "$launcher_size" "$mipmap_dir/ic_launcher_round.png"
+  render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background.png"
+
+  # Flavor overlays change only channel paint. Android resolves the adaptive XML,
+  # foreground and themed geometry from main for both flavors.
+  [[ "$channel" == stable ]] || continue
   render "$brand_dir/catch-adaptive-foreground.svg" "$layer_size" \
     "$mipmap_dir/ic_launcher_foreground.png"
-  render "$brand_dir/catch-adaptive-background.svg" "$layer_size" \
-    "$mipmap_dir/ic_launcher_background.png"
   render "$temp_dir/monochrome.svg" "$layer_size" \
     "$mipmap_dir/ic_launcher_monochrome.png"
 
@@ -121,6 +153,7 @@ for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:32
   done
 done
 
+[[ "$channel" == stable ]] || exit 0
 render_icon 96 "$temp_dir/splash-icon.png"
 magick -size 480x320 xc:'#f7f6f2' "$temp_dir/splash-icon.png" \
   -gravity center -composite -strip "PNG32:$res_dir/drawable/splash.png"

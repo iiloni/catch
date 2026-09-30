@@ -28,6 +28,11 @@ and preview must advance independently, including preview versions ahead of stab
 - Release workflows queue rather than cancel one another. Android's version name is the
   tag without `v`; its version code is the release workflow run number. Preserve that
   workflow's identity and publish forward releases in sequence so version codes increase.
+- The tag parser's channel output supplies build-only `CATCH_CHANNEL` to web builds and
+  Android sync; Docker defaults to stable. Preview browser/PWA icons use distinct
+  `/preview/` paths, and Android's preview flavor overlays launcher/background resources.
+  Both reuse the stable adaptive foreground and monochrome geometry. Only distribution
+  icons change: application UI and theme colors remain stable (see [brand assets](../branding.md)).
 - Stable Android uses `org.iloni.catchnotes`; preview uses `org.iloni.catchnotes.preview`
   and the name Catch Preview. They can coexist and keep separate device data. Both are
   signed with the operator's persistent release key, held in Actions secrets and backed up

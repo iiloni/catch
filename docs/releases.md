@@ -126,6 +126,12 @@ Local release builds use `CATCH_VERSION`, `CATCH_VERSION_CODE`, `ANDROID_KEYSTOR
 fail the release build. Debug builds do not require them. `assembleStableDebug` is the usual
 development APK; `assemblePreviewDebug` is available for testing the second app.
 
+The workflow forwards the tag parser's channel as build-only `CATCH_CHANNEL` to Android
+web sync and the Docker build. Local preview sync uses
+`CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync` before building the preview
+flavor; an unset channel stays stable. See [Brand assets](branding.md) for regeneration
+and the channel-specific icon paths. Application UI and theme colors are shared unchanged.
+
 ## Creating a release
 
 The local helper requires Node 24+ and installed dependencies (`pnpm install`). It creates
