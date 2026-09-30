@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 export async function signUp(page: Page) {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   await page.goto('/');
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await page.getByRole('button', { name: 'Need an account? Sign up' }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
@@ -16,7 +16,7 @@ export async function signUp(page: Page) {
 /** Signs in as a user `signUp` created, as on another device. */
 export async function signIn(page: Page, email: string) {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in' }).click();
