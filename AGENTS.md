@@ -41,6 +41,9 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   `./scripts/dev.sh up` inside it.
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
+- When asked to merge a worktree into `main`, merge its branch into `main` from the primary
+  checkout, then push the updated `main` to its configured upstream. Check the merge result
+  and working tree before pushing; never force-push `main`.
 - When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
   from inside the worktree. It refuses to delete uncommitted work.
 
