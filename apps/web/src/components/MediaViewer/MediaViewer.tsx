@@ -9,7 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +17,7 @@ import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
 import { cn } from '@/lib/utils';
+import { DetailsSheet } from './DetailsSheet';
 import { ImageStage } from './ImageStage';
 import type { Size } from './transform';
 
@@ -29,6 +30,7 @@ export function MediaViewer({
   files?: Attachment[];
   onClose: () => void;
 }) {
+  const narrow = useSyncExternalStore(subscribeWidth, isNarrow);
   const [currentId, setCurrentId] = useState(file.id);
   const content = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -84,9 +86,15 @@ export function MediaViewer({
           <ViewerContent
             key={current.id}
             file={current}
+            narrow={narrow}
             onNavigate={files.length > 1 ? navigate : undefined}
           />
-          <div className="absolute top-[calc(var(--safe-top)+0.75rem)] right-3 z-20 flex items-center gap-2">
+          <div
+            className={cn(
+              'absolute top-[calc(var(--safe-top)+0.75rem)] z-20 flex items-center gap-2',
+              narrow ? 'left-1/2 -translate-x-1/2' : 'right-16',
+            )}
+          >
             {files.length > 1 && (
               <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
                 <Button
@@ -116,16 +124,21 @@ export function MediaViewer({
                 </Button>
               </div>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-11 rounded-full glass-thick text-foreground"
-              aria-label="Close media viewer"
-              onClick={onClose}
-            >
-              <X />
-            </Button>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'absolute right-3 z-30 size-11 rounded-full glass-thick text-foreground',
+              narrow
+                ? 'bottom-[calc(var(--safe-bottom)+1rem)]'
+                : 'top-[calc(var(--safe-top)+0.75rem)]',
+            )}
+            aria-label="Close media viewer"
+            onClick={onClose}
+          >
+            <X />
+          </Button>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -135,9 +148,11 @@ export function MediaViewer({
 function ViewerContent({
   file,
   onNavigate,
+  narrow,
 }: {
   file: Attachment;
   onNavigate?: (direction: number) => void;
+  narrow: boolean;
 }) {
   const { source, error } = useAttachmentUrl(attachmentUrl(file.id));
   const [failed, setFailed] = useState(false);
@@ -164,8 +179,47 @@ function ViewerContent({
     }
   }
   const download = () => run(() => downloadAttachment(file));
+  const metadata = (
+    <>
+      <h2 className="truncate text-sm font-semibold leading-5" title={file.name}>
+        {file.name}
+      </h2>
+      <p className="text-xs leading-5 text-muted-foreground">
+        {file.mimeType} ·{' '}
+        {file.size >= 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.max(1, Math.round(file.size / 1024))} KB`}
+        {size ? ` · ${size.width} × ${size.height}` : ''}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-2 text-xs"
+          aria-label="Download attachment"
+          disabled={busy}
+          onClick={() => void download()}
+        >
+          <Download className="size-3.5" />
+          Download
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-2 text-xs"
+          disabled={busy || file.status === 'pending'}
+          onClick={() => void run(() => keepAttachmentOffline(file.id), 'Available offline')}
+        >
+          <HardDriveDownload className="size-3.5" />
+          Keep offline
+        </Button>
+      </div>
+    </>
+  );
   return (
     <>
+      <DialogTitle className="sr-only">{file.name}</DialogTitle>
+      <DialogDescription className="sr-only">{file.mimeType} attachment preview</DialogDescription>
       {source && !unavailable && file.kind === 'image' ? (
         <ImageStage
           source={source}
@@ -184,7 +238,10 @@ function ViewerContent({
           autoPlay
           aria-label={file.name}
           onError={() => setFailed(true)}
-          className="absolute inset-0 size-full object-contain"
+          className={cn(
+            'absolute inset-0 h-full w-full object-contain',
+            narrow && 'h-[calc(100%-var(--safe-bottom)-5rem)]',
+          )}
         />
       ) : source && !unavailable && file.kind === 'audio' ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-6 text-white/70">
@@ -217,48 +274,22 @@ function ViewerContent({
           )}
         </div>
       )}
-      <div
-        className={cn(
-          'absolute left-3 z-20 w-72 max-w-[calc(100%-5rem)] rounded-2xl glass-thick px-3 py-2.5 text-foreground',
-          onNavigate
-            ? 'top-[calc(var(--safe-top)+4.75rem)] sm:top-[calc(var(--safe-top)+0.75rem)]'
-            : 'top-[calc(var(--safe-top)+0.75rem)]',
-        )}
-      >
-        <DialogTitle className="truncate text-sm leading-5" title={file.name}>
-          {file.name}
-        </DialogTitle>
-        <DialogDescription className="truncate text-xs leading-5">
-          {file.mimeType} ·{' '}
-          {file.size >= 1024 * 1024
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-            : `${Math.max(1, Math.round(file.size / 1024))} KB`}
-          {size ? ` · ${size.width} × ${size.height}` : ''}
-        </DialogDescription>
-        <div className="mt-1 flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2 text-xs"
-            aria-label="Download attachment"
-            disabled={busy}
-            onClick={() => void download()}
-          >
-            <Download className="size-3.5" />
-            Download
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2 text-xs"
-            disabled={busy || file.status === 'pending'}
-            onClick={() => void run(() => keepAttachmentOffline(file.id), 'Available offline')}
-          >
-            <HardDriveDownload className="size-3.5" />
-            Keep offline
-          </Button>
+      {narrow ? (
+        <DetailsSheet>{metadata}</DetailsSheet>
+      ) : (
+        <div className="absolute top-[calc(var(--safe-top)+0.75rem)] left-3 z-20 w-72 max-w-[calc(100%-16rem)] rounded-2xl glass-thick px-3 py-2.5 text-foreground">
+          {metadata}
         </div>
-      </div>
+      )}
     </>
   );
+}
+
+function isNarrow() {
+  return window.innerWidth < 640;
+}
+
+function subscribeWidth(callback: () => void) {
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
 }

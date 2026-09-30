@@ -1,8 +1,9 @@
 import type { Attachment } from '@catch/shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
+import { haptics } from '@/lib/haptics';
 import { MediaViewer } from './MediaViewer';
 
 vi.mock('@/lib/attachmentFiles', () => ({
@@ -10,6 +11,7 @@ vi.mock('@/lib/attachmentFiles', () => ({
   keepAttachmentOffline: vi.fn(),
 }));
 vi.mock('@/lib/attachments', () => ({ downloadAttachment: vi.fn() }));
+vi.mock('@/lib/haptics', () => ({ haptics: { toggle: vi.fn(), threshold: vi.fn() } }));
 
 const file: Attachment = {
   id: '0199a0a0-0000-7000-8000-000000000001',
@@ -155,6 +157,54 @@ describe('MediaViewer', () => {
     render(<MediaViewer file={file} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Keep offline' }));
     expect(keepAttachmentOffline).toHaveBeenCalledWith(file.id);
+  });
+
+  it('keeps narrow-screen metadata hidden until requested and out of the focus order', async () => {
+    vi.stubGlobal('innerWidth', 380);
+    render(<MediaViewer file={file} onClose={vi.fn()} />);
+    const info = screen.getByRole('button', { name: 'Attachment details' });
+    const sheet = document.querySelector('[data-media-details]');
+    expect(sheet).toHaveAttribute('inert');
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Keep offline' })).not.toBeInTheDocument();
+    fireEvent.click(info);
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Keep offline' }));
+    expect(keepAttachmentOffline).toHaveBeenCalledWith(file.id);
+    fireEvent.click(info);
+    await waitFor(() => expect(sheet).toHaveAttribute('inert'));
+    expect(haptics.toggle).toHaveBeenCalledTimes(2);
+  });
+
+  it('interpolates a details drag, haptics at the threshold, and restores on cancellation', async () => {
+    vi.stubGlobal('innerWidth', 380);
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(600);
+    render(<MediaViewer file={file} onClose={vi.fn()} />);
+    const info = screen.getByRole('button', { name: 'Attachment details' });
+    const sheet = document.querySelector<HTMLElement>('[data-media-details]');
+    if (!sheet) throw new Error('Missing details sheet');
+    info.setPointerCapture = vi.fn();
+    sheet.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(info, { pointerId: 1, button: 0, clientY: 720 });
+    fireEvent.pointerMove(info, { pointerId: 1, clientY: 610 });
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(sheet).not.toHaveAttribute('inert');
+    expect(haptics.threshold).toHaveBeenCalledOnce();
+    await waitFor(() => expect(sheet.style.transform).toContain('74px'));
+    fireEvent.pointerUp(info, { pointerId: 1, clientY: 610 });
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(sheet.style.transform).toBe('none'));
+    fireEvent.pointerDown(sheet, { pointerId: 2, button: 0, clientY: 580 });
+    fireEvent.pointerMove(sheet, { pointerId: 2, clientY: 690 });
+    expect(haptics.threshold).toHaveBeenCalledTimes(2);
+    fireEvent.pointerCancel(sheet, { pointerId: 2, clientY: 690 });
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(sheet.style.transform).toBe('none'));
+    fireEvent.pointerDown(sheet, { pointerId: 3, button: 0, clientY: 580 });
+    fireEvent.pointerMove(sheet, { pointerId: 3, clientY: 690 });
+    fireEvent.pointerUp(sheet, { pointerId: 3, clientY: 690 });
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(sheet).toHaveAttribute('inert'));
   });
 
   it('stops playback and releases the source when navigating away from a recording', () => {

@@ -431,6 +431,79 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   expect(frame.y).toBe(0);
   expect(frame.width).toBeCloseTo(viewport.width, 0);
   expect(frame.height).toBeCloseTo(viewport.height, 0);
+  const details = viewer.locator('[data-media-details]');
+  if (viewport.width < 640) {
+    const info = viewer.getByRole('button', { name: 'Attachment details', exact: true });
+    const close = viewer.getByRole('button', { name: 'Close media viewer' });
+    const next = viewer.getByRole('button', { name: 'Next attachment' });
+    const nav = await next.locator('..').boundingBox();
+    const closeBounds = await close.boundingBox();
+    if (!nav || !closeBounds) throw new Error('Missing narrow viewer controls');
+    expect(nav.x + nav.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(closeBounds.y).toBeGreaterThan(viewport.height - 90);
+    await expect(details).toHaveAttribute('inert', '');
+    await info.click();
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await expect(details).toHaveCSS('transform', 'none');
+    const sheetBounds = await details.boundingBox();
+    const zoomBounds = await viewer.getByRole('group', { name: 'Image controls' }).boundingBox();
+    if (!sheetBounds || !zoomBounds) throw new Error('Missing sheet bounds');
+    expect(sheetBounds.y + sheetBounds.height).toBeLessThan(zoomBounds.y);
+    await page.screenshot({ path: testInfo.outputPath('media-viewer-details.png') });
+    await info.click();
+    await expect(details).toHaveAttribute('inert', '');
+
+    // Real touch events verify continuous sheet movement without zooming or swapping media.
+    const session = await page.context().newCDPSession(page);
+    const infoBounds = await info.boundingBox();
+    if (!infoBounds) throw new Error('Missing Info button');
+    const start = {
+      x: infoBounds.x + infoBounds.width / 2,
+      y: infoBounds.y + infoBounds.height / 2,
+    };
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: start.x, y: start.y - 80 }],
+    });
+    await expect(details).not.toHaveAttribute('inert', '');
+    const partial = await details.boundingBox();
+    if (!partial) throw new Error('Missing dragging sheet');
+    expect(partial.y).toBeGreaterThan(sheetBounds.y + 20);
+    await expect(info).toHaveAttribute('aria-expanded', 'false');
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: start.x, y: start.y - 240 }],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await expect(details).toHaveCSS('transform', 'none');
+    const handle = await details
+      .getByRole('button', { name: 'Hide attachment details' })
+      .boundingBox();
+    if (!handle) throw new Error('Missing details handle');
+    const grip = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [grip] });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: grip.x, y: grip.y + 220 }],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(details).toHaveAttribute('inert', '');
+    await expect(viewer).toHaveAccessibleName('landscape.png');
+    // The next tap must still work after a drag dismissal.
+    await info.click();
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await details.getByRole('button', { name: 'Hide attachment details' }).click();
+    await expect(details).toHaveAttribute('inert', '');
+    await expect(info).toBeFocused();
+    await session.detach();
+  } else {
+    await expect(viewer.getByRole('button', { name: 'Keep offline' })).toBeVisible();
+    await expect(
+      viewer.getByRole('button', { name: 'Attachment details', exact: true }),
+    ).toHaveCount(0);
+  }
   const stage = viewer.locator('[data-media-stage]');
   const center = { x: viewport.width / 2, y: viewport.height / 2 };
   const zoom = viewer.getByRole('button', { name: 'Reset zoom' });
@@ -492,6 +565,18 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   await page.mouse.move(center.x - 60, center.y, { steps: 5 });
   await page.mouse.up();
   await expect(viewer).toHaveAccessibleName('second.png');
+  if (isMobile) {
+    await page.setViewportSize({ width: 320, height: viewport.height });
+    const info = await viewer
+      .getByRole('button', { name: 'Attachment details', exact: true })
+      .boundingBox();
+    const close = await viewer.getByRole('button', { name: 'Close media viewer' }).boundingBox();
+    const controls = await viewer.getByRole('group', { name: 'Image controls' }).boundingBox();
+    if (!info || !close || !controls) throw new Error('Missing small-phone controls');
+    expect(controls.x).toBeGreaterThan(info.x + info.width);
+    expect(controls.x + controls.width).toBeLessThan(close.x);
+    await page.screenshot({ path: testInfo.outputPath('media-viewer-small-phone.png') });
+  }
   await page.keyboard.press('Escape');
   await expect(viewer).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();

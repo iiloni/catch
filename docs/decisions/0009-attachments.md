@@ -60,7 +60,11 @@ Catalog rows share a fixed 64 px thumbnail size with link previews, without a ba
 behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
 card. A small metadata card at the top left offers download and Keep offline.
 Control bars use the metadata card's glass surface. Attachment navigation sits at the top
-right beside close; on narrow screens the metadata sits below that row to avoid overlap.
+right beside close on wide screens. Below 640 px, navigation is centered at the top, close
+sits at the bottom right and an Info button sits at the bottom left. Metadata starts hidden
+in a sheet that slides up to rest above the zoom controls. Dragging the Info button or the
+sheet follows the finger, with threshold and state-change haptics; releasing settles it open
+or closed. The bottom controls leave room for each other and the device's safe area.
 Images support wheel and pinch zoom at the focal point, bounded dragging, double-tap zoom, fit/fill, and
 keyboard zoom/reset/pan. Arrows and unzoomed swipes navigate the note's attachments, resetting
 the view and stopping playback on each change. Video/audio use native playback controls;
