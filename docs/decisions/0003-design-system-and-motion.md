@@ -140,6 +140,15 @@ up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
 focus, so the keyboard stays up.
 
+**Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
+Its toolbar appears once an edit can be undone, and stays available while there is undo or
+redo history. From 640 px it sits beside the back button; on phones it floats at the dock's
+right edge above either the note actions or formatting bar. Keyboard scrolling keeps the
+caret's line above this toolbar too, with enough bottom padding to reach the note's last line.
+The toolbar slides in from the top on desktop or the right on phones with `springs.smooth`,
+matching the sync pill, and skips animation when reduced motion is requested. Its final
+footprint is reserved for caret scrolling during the slide.
+
 **Lists on touch.** Editor checkboxes have a 24 px box inside a 44 px touch target. Cards use
 the same checkbox styling at 16 px; the opening preview matches the editor's row sizes,
 text spacing and indentation so mounting the editor does not move the content. Native

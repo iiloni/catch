@@ -31,12 +31,15 @@ async function caretBounds(page: Page) {
     const area = document.querySelector('[data-note-scroll]');
     if (!area) throw new Error('Missing note scroll area');
     const bounds = area.getBoundingClientRect();
-    const toolbar = document.querySelector('[data-note-toolbar]')?.getBoundingClientRect();
+    const toolbarTops = Array.from(document.querySelectorAll('[data-note-toolbar]'))
+      .map((toolbar) => toolbar.getBoundingClientRect())
+      .filter((rect) => rect.height > 0 && rect.right > bounds.left && rect.left < bounds.right)
+      .map((rect) => rect.top);
     return {
       top: rect.top,
       bottom: rect.bottom,
       visibleTop: bounds.top,
-      visibleBottom: Math.min(bounds.bottom, toolbar?.top ?? window.innerHeight),
+      visibleBottom: Math.min(bounds.bottom, window.innerHeight, ...toolbarTops),
       scrollTop: area.scrollTop,
     };
   });
@@ -106,8 +109,16 @@ for (const [layout, viewport] of [
     await setKeyboardHeight(page, height + 40);
     await expectCaretVisible(page);
     await page.keyboard.press('Enter');
+    await expect(page.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
     await expectCaretVisible(page);
     await page.keyboard.type('Typing on a new line');
+    await expectCaretVisible(page);
+
+    // Selecting text beneath the floating toolbar must bring its line back above it.
+    await area.evaluate((area) => {
+      area.scrollTop -= 80;
+    });
+    await page.keyboard.press('Shift+ArrowLeft');
     await expectCaretVisible(page);
 
     const scrollWithKeyboard = (await caretBounds(page)).scrollTop;

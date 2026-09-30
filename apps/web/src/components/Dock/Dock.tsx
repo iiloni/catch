@@ -3,6 +3,7 @@ import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from '
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
+import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
 import {
@@ -10,7 +11,15 @@ import {
   SettingsTabSelector,
 } from '@/components/SettingsTabPicker/SettingsTabPicker';
 import { useBackHandler } from '@/lib/backButton';
-import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
+import {
+  editorControls,
+  editorNote,
+  lastBrowsingTab,
+  quickNote,
+  searchQuery,
+  type TabPath,
+  tabFor,
+} from '@/lib/dockState';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
@@ -126,7 +135,7 @@ export function Dock() {
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
-          'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
+          'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center overflow-x-clip',
           quickNoteOpen && 'z-[75]!',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
@@ -166,6 +175,7 @@ export function Dock() {
                 {/* Isolated so the link tray can tuck behind the dock's glass. */}
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && <NoteLinkTray />}
+                  {mode === 'note' && <FloatingHistoryToolbar />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField inputRef={inputRef} active={mode === 'search'} />
                     <AnimatePresence initial={false}>
@@ -215,6 +225,20 @@ export function Dock() {
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+function FloatingHistoryToolbar() {
+  const note = editorNote.use();
+  const controls = editorControls.use();
+  if (!note || note.deletedAt) return null;
+
+  return (
+    <HistoryToolbar
+      controls={controls}
+      floating
+      className="absolute right-0 bottom-full mb-3 sm:hidden"
+    />
   );
 }
 

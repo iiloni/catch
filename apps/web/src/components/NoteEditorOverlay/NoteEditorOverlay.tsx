@@ -12,8 +12,10 @@ import {
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
@@ -163,6 +165,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const targetRef = useRef(target);
   targetRef.current = target;
   const editable = !note.deletedAt;
+  const [controls, setControls] = useState<EditorControls | null>(null);
+  const publishControls = useCallback((next: EditorControls | null) => {
+    setControls(next);
+    editorControls.set(next);
+  }, []);
   const hasLinks = useNoteLinks(note).length > 0;
   const sideLinks = split && target.width >= SIDE_LINKS_MIN && hasLinks;
 
@@ -406,7 +413,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             ? // The panel ends above the dock, until the keyboard lifts the dock.
               'pb-[calc(var(--keyboard)+1.5rem)]'
             : // Room to scroll the last lines clear of the dock (and keyboard) above.
-              'pb-[var(--dock-space)]',
+              'pb-[calc(var(--dock-space)+4rem)]',
       )}
     >
       {/* The editor keeps its own height so the links follow its last line. */}
@@ -415,7 +422,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           <LazyNoteEditor
             initialContent={note.content}
             onChange={save}
-            onControls={editorControls.set}
+            onControls={publishControls}
             editable={editable}
             className="min-h-0"
             fallback={<NotePreview content={note.content} maxBlocks={200} variant="editor" />}
@@ -551,6 +558,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                     <ChevronLeft />
                   </IconButton>
                 </div>
+                {editable && <HistoryToolbar controls={controls} className="hidden sm:flex" />}
                 <div className="relative h-[50px] min-w-0 flex-1">
                   <SaveStatus state={state} />
                 </div>

@@ -1,6 +1,6 @@
 import '@blocknote/shadcn/style.css';
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core';
-import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
+import { HistoryExtension, SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import {
   BlockColorsItem,
@@ -329,6 +329,16 @@ function createControls(editor: AnyEditor): EditorControls {
       if (editor.canUnnestBlock()) editor.unnestBlock();
       refresh();
     },
+    undo() {
+      editor.undo();
+      editor.focus();
+      refresh();
+    },
+    redo() {
+      editor.redo();
+      editor.focus();
+      refresh();
+    },
     focusEnd() {
       const last = editor.document.at(-1);
       if (last) editor.setTextCursorPosition(last, 'end');
@@ -339,6 +349,7 @@ function createControls(editor: AnyEditor): EditorControls {
 
 function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  const history = editor.getExtension(HistoryExtension);
   return {
     styles: {
       bold: Boolean(active.bold),
@@ -349,6 +360,8 @@ function readState(editor: AnyEditor): FormattingState {
     block: editor.getTextCursorPosition().block.type,
     canIndent: editor.canNestBlock(),
     canOutdent: editor.canUnnestBlock(),
+    canUndo: history ? editor.canExec(history.undoCommand) : false,
+    canRedo: history ? editor.canExec(history.redoCommand) : false,
   };
 }
 
@@ -381,7 +394,12 @@ function useCaretAboveKeyboard(editor: AnyEditor) {
       // The dock sits outside the scroll area and rises with the keyboard.
       for (const toolbar of document.querySelectorAll('[data-note-toolbar]')) {
         const rect = toolbar.getBoundingClientRect();
-        if (rect.right > bounds.left && rect.left < bounds.right && rect.height > 0) {
+        if (
+          rect.right > bounds.left &&
+          rect.left < bounds.right &&
+          rect.bottom > top &&
+          rect.height > 0
+        ) {
           bottom = Math.min(bottom, rect.top - 12);
         }
       }

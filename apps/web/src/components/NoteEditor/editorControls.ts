@@ -15,6 +15,8 @@ export type FormattingState = {
   block: string;
   canIndent: boolean;
   canOutdent: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 /**
@@ -32,6 +34,8 @@ export type EditorControls = {
   insertSlash(): void;
   indent(): void;
   outdent(): void;
+  undo(): void;
+  redo(): void;
   /** Puts the caret at the end of the note, for taps on the blank space below it. */
   focusEnd(): void;
 };
