@@ -18,9 +18,10 @@ import { useNotePaneLayout } from '@/lib/splitView';
  */
 export const Route = createFileRoute('/_app')({
   validateSearch: z.object({ note: z.string().optional() }),
-  beforeLoad: () => {
-    if (needsServerUrl()) throw redirect({ to: '/setup' });
-    if (!getAuthToken()) throw redirect({ to: '/login' });
+  beforeLoad: ({ location }) => {
+    const search = { redirect: location.href };
+    if (needsServerUrl()) throw redirect({ to: '/setup', search });
+    if (!getAuthToken()) throw redirect({ to: '/login', search });
   },
   // Fetch the editor in the background once the page is up, without blocking it.
   onEnter: () => setTimeout(preloadNoteEditor, 1000),

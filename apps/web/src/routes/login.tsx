@@ -3,11 +3,13 @@ import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth';
+import { authRedirectSearchSchema } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
 export const Route = createFileRoute('/login')({
-  beforeLoad: () => {
-    if (needsServerUrl()) throw redirect({ to: '/setup' });
+  validateSearch: authRedirectSearchSchema,
+  beforeLoad: ({ search }) => {
+    if (needsServerUrl()) throw redirect({ to: '/setup', search });
   },
   component: LoginPage,
 });
@@ -19,6 +21,7 @@ const devCredentials = import.meta.env.DEV
   : undefined;
 
 function LoginPage() {
+  const { redirect: returnTo } = Route.useSearch();
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -40,7 +43,7 @@ function LoginPage() {
       return;
     }
     // A full load, so the collections open this user's copy of their notes on the device.
-    window.location.assign('/');
+    window.location.assign(returnTo ?? '/');
   }
 
   return (

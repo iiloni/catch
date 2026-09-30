@@ -2,14 +2,17 @@ import { createFileRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { authRedirectSearchSchema } from '@/lib/authRedirect';
 import { setServerUrl } from '@/lib/serverUrl';
 
 /** First-run screen for the Android app: which Catch server to connect to. */
 export const Route = createFileRoute('/setup')({
+  validateSearch: authRedirectSearchSchema,
   component: SetupPage,
 });
 
 function SetupPage() {
+  const { redirect } = Route.useSearch();
   const [error, setError] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -24,7 +27,7 @@ function SetupPage() {
     }
     setServerUrl(url);
     // Reload so the auth client and sync pick up the new server.
-    window.location.assign('/login');
+    window.location.assign(redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login');
   }
 
   return (
