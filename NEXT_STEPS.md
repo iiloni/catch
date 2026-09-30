@@ -41,7 +41,8 @@ In rough priority order.
    example Tailscale Serve or Caddy), then install the PWA and a standalone Android build
    against it. The standalone Android app needs the server on HTTPS.
 3. **Markdown import and export.** Convert with BlockNote's Markdown helpers, and consider
-   importing `catch-old` data and Google Keep exports (Takeout) as well.
+   importing `catch-old` data as well. They belong on Settings > Data Management, next to the
+   Google Keep import, and should follow ADR 0008 (derived ids, `importNotes`).
 4. **AI summaries of links.** Link previews are in (ADR 0006); summaries are the last
    `catch-old` feature not ported. Add a nullable `summary` to `link_previews`, fill it from the
    preview queue through an optional OpenAI-compatible provider (off by default), and show it
@@ -62,9 +63,12 @@ In rough priority order.
   Touch dragging on the board and the native app are only tested by hand. The offline tests
   run against the dev server, which has no service worker, so a fully offline start of a
   production build is only checked by hand (ADR 0007).
-- **Offline edits take the sync time.** The server stamps `updatedAt` when it applies a
-  write, so a note edited offline shows when it synced as "Last edited". Accepting a
-  client timestamp (bounded by the server's clock) would fix it.
+- **Offline edits take the sync time.** The server stamps `updatedAt` when it applies an
+  update, so a note edited offline shows when it synced as "Last edited". Creates already
+  accept the client's dates, bounded by the server's clock (ADR 0008); updates could too.
+- **Google Keep import leaves some things out.** Attachments, labels and Keep's rich-text
+  formatting (`textContentHtml`) are not imported (ADR 0008). Attachments and labels need
+  those features first; formatting needs a sample of the HTML Keep exports.
 - **Offline in a second tab.** Only one tab per user keeps the outbox; changes made offline
   in another tab roll back. Moving the outbox into a shared worker would lift this.
 - **TanStack DB is pre-1.0.** Keep its usage in `apps/web/src/lib/collections.ts`,

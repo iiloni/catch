@@ -45,6 +45,17 @@ function trimBareUrl(match: string) {
   return url;
 }
 
+/**
+ * The web addresses written out in plain text, each with where it starts. Punctuation that
+ * ends the sentence around an address is left out of it.
+ */
+export function findBareUrls(text: string): { index: number; url: string }[] {
+  return [...text.matchAll(BARE_URL)].flatMap((match) => {
+    const url = trimBareUrl(match[0]);
+    return normalizeUrl(url) ? [{ index: match.index, url }] : [];
+  });
+}
+
 function visitInline(
   content: unknown,
   onLink: (href: string) => void,
@@ -102,7 +113,7 @@ export function extractLinks(blocks: readonly Json[]): NoteLink[] {
     if (url && !links.has(url)) links.set(url, { url, href: href.trim() });
   };
   visitBlocks(blocks, add, (text) => {
-    for (const match of text.matchAll(BARE_URL)) add(trimBareUrl(match[0]));
+    for (const { url } of findBareUrls(text)) add(url);
   });
   return [...links.values()];
 }

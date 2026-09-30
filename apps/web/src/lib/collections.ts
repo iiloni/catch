@@ -4,6 +4,7 @@ import {
   createNoteSchema,
   type LinkPreview,
   linkPreviewSchema,
+  MAX_NOTES_PER_REQUEST,
   noteSchema,
   type TxidResponse,
   updateBoardColumnSchema,
@@ -29,7 +30,7 @@ import {
   type Transaction,
   useLiveQuery,
 } from '@tanstack/react-db';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ApiError, api } from './api';
@@ -149,12 +150,12 @@ const SYNC_WAIT_MS = 30_000;
  * this throws, except `NonRetriableError`, which drops the write and rolls it back.
  */
 async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
-  let sent: { mutation: PendingMutation; txid: TxidResponse['txid'] }[];
+  let sent: { collectionId: string; txid: TxidResponse['txid'] }[];
   try {
     sent = await Promise.all(
-      transaction.mutations.map(async (mutation) => ({
-        mutation,
-        txid: (await send(mutation))?.txid ?? null,
+      requestsFor(transaction.mutations).map(async ({ collectionId, request }) => ({
+        collectionId,
+        txid: (await request())?.txid ?? null,
       })),
     );
   } catch (error) {
@@ -165,14 +166,39 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
   updateSyncStatus({ offline: false, signedOut: false });
   settlePendingWrite(transaction.id);
   await Promise.all(
-    sent.flatMap(({ mutation, txid }) => {
+    sent.flatMap(({ collectionId, txid }) => {
       if (txid === null) return [];
       const collection =
-        mutation.collection.id === notesCollection.id ? notesCollection : boardColumnsCollection;
+        collectionId === notesCollection.id ? notesCollection : boardColumnsCollection;
       // The server has the write; a slow stream only delays the hand-over.
       return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
     }),
   );
+}
+
+/**
+ * The API calls a transaction makes. New notes go together, a request's worth at a time,
+ * so an import or a copy of many notes does not send a request for each.
+ */
+function requestsFor(mutations: readonly PendingMutation[]) {
+  const newNotes = mutations.filter(
+    (mutation) => mutation.collection.id === notesCollection.id && mutation.type === 'insert',
+  );
+  const batched = newNotes.length > 1 ? new Set(newNotes) : new Set<PendingMutation>();
+  const requests = mutations
+    .filter((mutation) => !batched.has(mutation))
+    .map((mutation) => ({ collectionId: mutation.collection.id, request: () => send(mutation) }));
+  for (let start = 0; start < batched.size; start += MAX_NOTES_PER_REQUEST) {
+    const chunk = newNotes.slice(start, start + MAX_NOTES_PER_REQUEST);
+    requests.push({
+      collectionId: notesCollection.id,
+      request: () =>
+        api.createNotes({
+          notes: chunk.map((mutation) => createNoteSchema.parse(mutation.modified)),
+        }),
+    });
+  }
+  return requests;
 }
 
 /** The API call for one mutation, or null when there is nothing to send. */
@@ -307,6 +333,25 @@ export async function clearLocalData() {
   executor.dispose();
   await database?.destroy();
   if (user) deleteOutbox(user.id);
+}
+
+/**
+ * Keeps the user's notes synced while the calling page is open, for pages that change notes
+ * without showing them: an import has to know which notes are here and where they end.
+ * Returns whether the notes have synced with the server, which offline they never do.
+ */
+export function useSyncedNotes() {
+  const [synced, setSynced] = useState(() => notesCollection.isReady());
+  useEffect(() => {
+    // A subscriber also keeps the collection from being cleaned up while the page is open.
+    const subscription = notesCollection.subscribeChanges(() => {});
+    const stopWaiting = notesCollection.onFirstReady(() => setSynced(true));
+    return () => {
+      stopWaiting();
+      subscription.unsubscribe();
+    };
+  }, []);
+  return synced;
 }
 
 /** The signed-in user's Deck columns, unordered. */

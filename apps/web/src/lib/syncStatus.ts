@@ -46,13 +46,20 @@ export function settlePendingWrite(id: string) {
   if (pendingIds.delete(id)) updateSyncStatus({ pending: pendingIds.size });
 }
 
-function subscribe(listener: () => void) {
+/** Whether the write with this transaction id is waiting for the server. */
+export function isPendingWrite(id: string) {
+  return pendingIds.has(id);
+}
+
+export function subscribeToSyncStatus(listener: () => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function useSyncStatus(): SyncStatus {
-  return useSyncExternalStore(subscribe, getSyncStatus);
+  return useSyncExternalStore(subscribeToSyncStatus, getSyncStatus);
 }
 
 /**

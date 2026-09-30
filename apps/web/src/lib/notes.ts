@@ -1,6 +1,7 @@
 import {
   blocksHaveContent,
   DEFAULT_BOARD_STATUS,
+  MAX_NOTES_PER_REQUEST,
   type Note,
   type NoteColor,
   positionBetween,
@@ -20,6 +21,14 @@ function firstExistingPosition() {
     if (first === null || note.position < first) first = note.position;
   }
   return first;
+}
+
+function lastExistingPosition() {
+  let last: string | null = null;
+  for (const note of notesCollection.values()) {
+    if (last === null || note.position > last) last = note.position;
+  }
+  return last;
 }
 
 /** A position ahead of every note, so new notes land first, as in Keep. */
@@ -336,4 +345,54 @@ export function discardIfEmpty(id: string) {
   write(() => notesCollection.delete(id));
   toast('Empty note discarded');
   return true;
+}
+
+/** A note brought in from another app, with the id and dates it will keep here. */
+export type ImportedNote = Pick<
+  Note,
+  'id' | 'content' | 'color' | 'isPinned' | 'isArchived' | 'createdAt' | 'updatedAt'
+>;
+
+/**
+ * Whether a note is here, in any place. Importers give notes ids that stay the same across
+ * imports, so this spots the notes an earlier import of the same export added.
+ */
+export const hasNote = (id: string) => notesCollection.has(id);
+
+/** One write of an import: its outbox transaction, and how many notes it holds. */
+export type ImportBatch = { id: string; count: number; persisted: Promise<unknown> };
+
+// Fewer notes than a request can take, so an import's progress moves in visible steps. The
+// outbox sends one write at a time, each waiting for the server to sync it back.
+const IMPORT_BATCH = Math.min(50, MAX_NOTES_PER_REQUEST);
+
+/**
+ * Adds imported notes after every other note, in the order given, leaving out any already
+ * here. They show on this device at once; each batch is its own write, so one the server
+ * refuses rolls back alone. Each batch's `persisted` settles once the server has it, which
+ * offline can be much later.
+ */
+export function importNotes(userId: string, notes: readonly ImportedNote[]): ImportBatch[] {
+  const fresh = notes.filter((note) => !hasNote(note.id));
+  const positions = positionsBetween(lastExistingPosition(), null, fresh.length);
+  const batches: ImportBatch[] = [];
+  for (let start = 0; start < fresh.length; start += IMPORT_BATCH) {
+    const batch = fresh.slice(start, start + IMPORT_BATCH).map((note, index) => ({
+      ...note,
+      userId,
+      status: null,
+      // Archived notes are never pinned here (see `setNoteArchived`).
+      isPinned: note.isPinned && !note.isArchived,
+      position: positions[start + index] ?? firstPosition(),
+      hiddenLinks: [],
+      deletedAt: null,
+    }));
+    const transaction = write(() => notesCollection.insert(batch));
+    batches.push({
+      id: transaction.id,
+      count: batch.length,
+      persisted: transaction.isPersisted.promise,
+    });
+  }
+  return batches;
 }

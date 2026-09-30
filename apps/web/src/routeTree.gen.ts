@@ -20,6 +20,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
 
 const AppRoute = AppRouteImport.update({
@@ -76,6 +77,11 @@ const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
+  id: '/data',
+  path: '/data',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   id: '/general',
   path: '/general',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings/': typeof AppSettingsIndexRoute
 }
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/trash': typeof AppTrashRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings': typeof AppSettingsIndexRoute
 }
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/_app/trash': typeof AppTrashRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/general': typeof AppSettingsGeneralRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
 }
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trash'
     | '/settings/account'
+    | '/settings/data'
     | '/settings/general'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/trash'
     | '/'
     | '/settings/account'
+    | '/settings/data'
     | '/settings/general'
     | '/settings'
   id:
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '/_app/trash'
     | '/_app/'
     | '/_app/settings/account'
+    | '/_app/settings/data'
     | '/_app/settings/general'
     | '/_app/settings/'
   fileRoutesById: FileRoutesById
@@ -249,6 +261,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAccountRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/data': {
+      id: '/_app/settings/data'
+      path: '/data'
+      fullPath: '/settings/data'
+      preLoaderRoute: typeof AppSettingsDataRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/general': {
       id: '/_app/settings/general'
       path: '/general'
@@ -261,12 +280,14 @@ declare module '@tanstack/react-router' {
 
 interface AppSettingsRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsDataRoute: typeof AppSettingsDataRoute
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsDataRoute: AppSettingsDataRoute,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }

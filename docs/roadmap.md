@@ -26,6 +26,8 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [ ] Hybrid search on the server (see `docs/decisions/0002-search.md`); keyword search runs on the client today.
 - [ ] Long-press to select several notes, with actions in the dock.
 - [ ] Markdown import and export.
+- [x] Google Keep import from a Takeout export, in Settings > Data Management (see `docs/decisions/0008-importing-notes.md`).
+- [ ] Backup and restore, in Settings > Data Management.
 
 ## Later
 - [ ] User-defined board columns.

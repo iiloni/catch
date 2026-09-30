@@ -1,5 +1,5 @@
 import { useRouter } from '@tanstack/react-router';
-import { CircleUser, type LucideIcon, SlidersHorizontal } from 'lucide-react';
+import { CircleUser, Database, type LucideIcon, SlidersHorizontal } from 'lucide-react';
 import { useCallback } from 'react';
 import { useViewport } from './splitView';
 
@@ -10,6 +10,7 @@ import { useViewport } from './splitView';
 export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal },
   { path: '/settings/account', label: 'Account', icon: CircleUser },
+  { path: '/settings/data', label: 'Data Management', icon: Database },
 ] as const satisfies ReadonlyArray<{ path: string; label: string; icon: LucideIcon }>;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];

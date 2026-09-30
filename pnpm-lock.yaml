@@ -278,6 +278,9 @@ importers:
       '@journeyapps/wa-sqlite':
         specifier: ^1.7.2
         version: 1.7.2
+      '@noble/hashes':
+        specifier: ^2.4.0
+        version: 2.4.0
       '@tanstack/browser-db-sqlite-persistence':
         specifier: ^0.2.23
         version: 0.2.23(@journeyapps/wa-sqlite@1.7.2)(typescript@7.0.2)
