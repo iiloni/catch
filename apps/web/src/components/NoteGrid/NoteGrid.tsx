@@ -1,4 +1,4 @@
-import type { Note } from '@catch/shared';
+import { blocksToPlainText, type Note } from '@catch/shared';
 import {
   DndContext,
   type DragMoveEvent,
@@ -11,7 +11,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { animate, type MotionValue, motion, motionValue } from 'motion/react';
-import { useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { SwipeArchiveCard } from '@/components/SwipeArchiveCard/SwipeArchiveCard';
@@ -54,6 +54,72 @@ export function columnsFor(width: number) {
   return Math.max(2, Math.floor((width + GAP) / (MIN_COLUMN_WIDTH + GAP)));
 }
 
+// A card's parts (see NoteCard and NotePreview), for guessing heights.
+const CARD_PADDING_X = 28;
+const CARD_PADDING_Y = 26;
+const CARD_MIN_HEIGHT = 48;
+/** The card's actions, which take no room on touch screens. */
+const TOOLBAR_HEIGHT = 36;
+/** `text-sm leading-snug`, and a rough average glyph width at that size. */
+const LINE_HEIGHT = 19.25;
+const CHAR_WIDTH = 7;
+const BLOCK_GAP = 4;
+const PREVIEW_BLOCKS = 10;
+
+const hasToolbar = () =>
+  typeof window.matchMedia !== 'function' || !window.matchMedia('(pointer: coarse)').matches;
+
+/**
+ * A guess at a card's height from its content, for a card that has not been rendered.
+ * It only has to be close: cards are measured before they scroll into view.
+ */
+export function estimateCardHeight(content: Note['content'], width: number, toolbar: boolean) {
+  const perLine = Math.max(1, (width - CARD_PADDING_X) / CHAR_WIDTH);
+  const lines = blocksToPlainText(content).split('\n').slice(0, PREVIEW_BLOCKS);
+  let height = CARD_PADDING_Y;
+  for (const line of lines) {
+    if (line) height += Math.ceil(line.length / perLine) * LINE_HEIGHT + BLOCK_GAP;
+  }
+  for (const block of content.slice(0, PREVIEW_BLOCKS)) {
+    if (block.type === 'image') height += width * 0.75;
+  }
+  return Math.max(CARD_MIN_HEIGHT, height) + (toolbar ? TOOLBAR_HEIGHT : 0);
+}
+
+type Size = { width: number; height: number };
+
+/**
+ * Card heights by note id, and the column width each was measured at. Shared by every
+ * grid and kept across pages, so a page comes back laid out as it was left.
+ */
+const measured = new Map<string, Size>();
+const estimates = new WeakMap<Note['content'], Size>();
+
+const isMeasured = (note: Note, width: number) => measured.get(note.id)?.width === width;
+
+function heightOf(note: Note, width: number) {
+  const measurement = measured.get(note.id);
+  if (measurement?.width === width) return measurement.height;
+  if (measurement) {
+    // Measured at another width, as after a resize: its text reflows, its padding does not.
+    const fixed = CARD_PADDING_Y + (hasToolbar() ? TOOLBAR_HEIGHT : 0);
+    const text = Math.max(0, measurement.height - fixed);
+    return fixed + (text * (measurement.width - CARD_PADDING_X)) / (width - CARD_PADDING_X);
+  }
+  let estimate = estimates.get(note.content);
+  if (estimate?.width !== width) {
+    estimate = { width, height: estimateCardHeight(note.content, width, hasToolbar()) };
+    estimates.set(note.content, estimate);
+  }
+  return estimate.height;
+}
+
+/**
+ * The page's viewport in the grid's coordinates, rounded to half a screen so scrolling
+ * only re-renders the grid now and then.
+ */
+type View = { top: number; screen: number };
+
 type Drag = {
   id: string;
   /** Where the card was when it was picked up. */
@@ -77,11 +143,15 @@ type Place = {
  * Masonry grid: each note goes to the top of the shortest column, so reading order runs
  * across rows (first note top-left), as in Keep. Cards are positioned absolutely from
  * their measured heights, which lets them spring out of the way while one is dragged.
+ *
+ * Only cards within a screen of the viewport are rendered, so thousands of notes stay
+ * cheap. The rest are laid out from their last measured height, or a guess from their
+ * content, and measured as they come near.
  */
 export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const heights = useRef(new Map<string, number>());
+  const [view, setView] = useState<View | null>(null);
   const [, remeasured] = useReducer((count: number) => count + 1, 0);
   const elements = useRef(new Map<string, HTMLElement>());
   const resizes = useRef<ResizeObserver | null>(null);
@@ -103,6 +173,7 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
   const columns = columnsFor(width);
   const columnWidth = Math.max(0, (width - GAP * (columns - 1)) / columns);
   const grid = { columns, columnWidth, gap: GAP };
+  const measuredWidth = useRef(columnWidth);
 
   const basis = notes.map((note) => note.id).join();
   if (dropped && dropped.basis !== basis) setDropped(null);
@@ -118,13 +189,22 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
     dragged && drag
       ? [...others.slice(0, drag.index), dragged, ...others.slice(drag.index)]
       : ordered;
-  const measured = width > 0 && shown.every((note) => heights.current.has(note.id));
-  const layout = measured
-    ? masonry(
-        shown.map((note) => heights.current.get(note.id) ?? 0),
-        grid,
-      )
-    : null;
+  const heights = shown.map((note) => heightOf(note, columnWidth));
+  const layout = width > 0 ? masonry(heights, grid) : null;
+
+  const rendered = new Set<string>();
+  if (layout && view) {
+    const from = view.top - view.screen;
+    const to = view.top + view.screen / 2 + 2 * view.screen;
+    shown.forEach((note, index) => {
+      const slot = layout.slots[index];
+      if (slot && slot.y <= to && slot.y + (heights[index] ?? 0) >= from) rendered.add(note.id);
+    });
+  }
+  if (drag) rendered.add(drag.id);
+  // Cards rendered for the first time (at this width) are measured before anything moves,
+  // so nothing springs from a guessed height to its real one.
+  const pending = shown.some((note) => rendered.has(note.id) && !isMeasured(note, columnWidth));
 
   function placeOf(id: string) {
     let place = places.current.get(id);
@@ -136,15 +216,27 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
   }
 
   const measure = useCallback(() => {
+    const width = measuredWidth.current;
+    if (width === 0) return;
     let changed = false;
     for (const [id, element] of elements.current) {
       const height = element.offsetHeight;
-      if (heights.current.get(id) !== height) {
-        heights.current.set(id, height);
+      const previous = measured.get(id);
+      if (previous?.width !== width || previous.height !== height) {
+        measured.set(id, { width, height });
         changed = true;
       }
     }
     if (changed) remeasured();
+  }, []);
+
+  const updateView = useCallback(() => {
+    const element = container.current;
+    if (!element) return;
+    const screen = window.innerHeight;
+    const step = screen / 2;
+    const top = Math.floor(-element.getBoundingClientRect().top / step) * step;
+    setView((view) => (view?.top === top && view.screen === screen ? view : { top, screen }));
   }, []);
 
   const register = useCallback((id: string, element: HTMLElement | null) => {
@@ -162,37 +254,72 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
     const element = container.current;
     if (!element) return;
     setWidth(element.clientWidth);
-    if (typeof ResizeObserver === 'undefined') return;
+    // Captured, so it also hears a scrolling element around the page.
+    window.addEventListener('scroll', updateView, { capture: true, passive: true });
+    window.addEventListener('resize', updateView);
+    const stopListening = () => {
+      window.removeEventListener('scroll', updateView, { capture: true });
+      window.removeEventListener('resize', updateView);
+    };
+    if (typeof ResizeObserver === 'undefined') return stopListening;
     const widths = new ResizeObserver(() => setWidth(element.clientWidth));
     widths.observe(element);
     // Content can change size later, such as when a note is edited elsewhere.
     resizes.current = new ResizeObserver(measure);
     for (const card of elements.current.values()) resizes.current.observe(card);
     return () => {
+      stopListening();
       widths.disconnect();
       resizes.current?.disconnect();
       resizes.current = null;
     };
-  }, [measure]);
+  }, [measure, updateView]);
+
+  useLayoutEffect(() => {
+    measuredWidth.current = columnWidth;
+  });
 
   // Measure new cards before the first paint, so they appear already in place.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: remeasure when the notes or width change
-  useLayoutEffect(measure, [measure, basis, columnWidth]);
+  useLayoutEffect(measure);
 
-  // Send every card to its slot: new cards jump there, moved ones spring.
+  // The grid also moves without scrolling, such as when the pinned notes above it change.
+  useLayoutEffect(updateView);
+
+  // Send every card to its slot: new cards jump there, moved ones spring. Only cards that
+  // are or will be on screen spring; the rest are just outside it and jump.
   useLayoutEffect(() => {
-    if (!layout) return;
+    for (const id of places.current.keys()) {
+      if (!rendered.has(id)) places.current.delete(id);
+    }
+    if (!layout || pending) return;
+    let visible: { top: number; bottom: number } | undefined;
+    const onScreen = (y: number, height: number) => {
+      if (!visible) {
+        // A margin, so cards scrolled into view while the grid settles are already moving.
+        const margin = window.innerHeight / 2;
+        const top = -(container.current?.getBoundingClientRect().top ?? 0) - margin;
+        visible = { top, bottom: top + window.innerHeight + 2 * margin };
+      }
+      return y + height >= visible.top && y <= visible.bottom;
+    };
     shown.forEach((note, index) => {
       const slot = layout.slots[index];
-      if (!slot || note.id === drag?.id) return;
+      if (!slot || note.id === drag?.id || !rendered.has(note.id)) return;
       const place = placeOf(note.id);
       if (!place.target) {
         place.x.jump(slot.x);
         place.y.jump(slot.y);
       } else if (place.released || place.target.x !== slot.x || place.target.y !== slot.y) {
-        animate(place.x, slot.x, springs.smooth);
-        // A card let go of drops back under the header and dock once it lands.
-        animate(place.y, slot.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
+        const height = heights[index] ?? 0;
+        if (onScreen(place.y.get(), height) || onScreen(slot.y, height)) {
+          animate(place.x, slot.x, springs.smooth);
+          // A card let go of drops back under the header and dock once it lands.
+          animate(place.y, slot.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
+        } else {
+          place.x.jump(slot.x);
+          place.y.jump(slot.y);
+          place.z.set(0);
+        }
       }
       place.target = slot;
       place.released = false;
@@ -202,8 +329,9 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     const index = ordered.findIndex((note) => note.id === id);
-    const height = heights.current.get(id);
-    if (index < 0 || height === undefined) return;
+    const note = ordered[index];
+    if (!note) return;
+    const height = heightOf(note, columnWidth);
     const place = placeOf(id);
     place.x.stop();
     place.y.stop();
@@ -222,7 +350,7 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
     place.y.set(y);
     const index = dropIndex({
       ...grid,
-      heights: others.map((note) => heights.current.get(note.id) ?? 0),
+      heights: others.map((note) => heightOf(note, columnWidth)),
       height: drag.height,
       center: { x: x + columnWidth / 2, y: y + drag.height / 2 },
       current: drag.index,
@@ -251,28 +379,32 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
       onDragCancel={() => handleDragEnd(false)}
     >
       <div ref={container} className="relative" style={{ height: layout?.height }}>
-        {ordered.map((note) => (
-          <GridCard
-            key={note.id}
-            note={note}
-            place={placeOf(note.id)}
-            width={columnWidth}
-            placed={layout !== null}
-            lifted={note.id === drag?.id}
-            movable={Boolean(onMove)}
-            selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
-            onSelect={onSelect}
-            register={register}
-            onOpen={onOpen}
-            onArchive={onArchive}
-          />
-        ))}
+        {ordered.map(
+          (note) =>
+            rendered.has(note.id) && (
+              <GridCard
+                key={note.id}
+                note={note}
+                place={placeOf(note.id)}
+                width={columnWidth}
+                placed={isMeasured(note, columnWidth)}
+                lifted={note.id === drag?.id}
+                movable={Boolean(onMove)}
+                selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
+                onSelect={onSelect}
+                register={register}
+                onOpen={onOpen}
+                onArchive={onArchive}
+              />
+            ),
+        )}
       </div>
     </DndContext>
   );
 }
 
-function GridCard({
+// Memoized, so scrolling renders only the cards it brings in.
+const GridCard = memo(function GridCard({
   note,
   place,
   width,
@@ -373,4 +505,4 @@ function GridCard({
       {onSelect && <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />}
     </motion.div>
   );
-}
+});

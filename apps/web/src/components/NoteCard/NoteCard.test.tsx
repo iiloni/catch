@@ -1,5 +1,5 @@
 import type { Note } from '@catch/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { linkOverlay } from '@/lib/linkPreviews';
@@ -54,9 +54,17 @@ describe('NoteCard', () => {
     expect(onOpen).toHaveBeenCalledWith(note, expect.any(HTMLElement));
   });
 
+  it('builds its actions once focus enters the card', () => {
+    renderCard();
+    expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    expect(screen.getByRole('button', { name: 'Move to trash' })).toBeInTheDocument();
+  });
+
   it('pins and trashes without opening the note', () => {
     const onOpen = vi.fn();
     renderCard({ onOpen });
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Move to trash' }));
     expect(setNotePinned).toHaveBeenCalledWith(note.id, true);
@@ -78,6 +86,7 @@ describe('NoteCard', () => {
 
   it('offers restore instead of editing actions for trashed notes', () => {
     renderCard({ note: { ...note, deletedAt: new Date() } });
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
     expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument();
   });

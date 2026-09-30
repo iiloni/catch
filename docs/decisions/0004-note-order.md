@@ -32,6 +32,11 @@ reserves the slot nearest to the card's centre (`dropIndex` in `lib/masonry.ts`)
 little hysteresis so it does not flicker between two slots. The held card rides above the
 header and dock and drops back once it lands.
 
+The grid renders only the cards within a screen of the viewport, so an import of thousands
+of notes stays fast. The rest are laid out from their last measured height (kept per note and
+column width), or a guess from their content, and measured before they scroll into view.
+Only cards on or near the screen spring to new slots; the rest jump.
+
 **Deck.** Each column shows notes by position, including pinned notes. The board's existing
 drag gesture also chooses an insertion slot within the destination column. Moving across
 columns updates status and position together; reordering within one column updates position
