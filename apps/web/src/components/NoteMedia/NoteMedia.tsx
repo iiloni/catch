@@ -1,5 +1,6 @@
 import { type Attachment, attachmentUrl } from '@catch/shared';
 import { Download, Ellipsis, HardDriveDownload, ImagePlus, Pencil, Trash2 } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -58,7 +59,16 @@ export function NoteMedia({
           </li>
         ))}
       </ul>
-      {viewing && <MediaViewer file={viewing} files={files} onClose={() => setViewingId(null)} />}
+      <AnimatePresence>
+        {viewing && (
+          <MediaViewer
+            key={viewing.id}
+            file={viewing}
+            files={files}
+            onClose={() => setViewingId(null)}
+          />
+        )}
+      </AnimatePresence>
     </section>
   );
 }

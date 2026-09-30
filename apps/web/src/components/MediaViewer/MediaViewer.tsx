@@ -8,6 +8,7 @@ import {
   HardDriveDownload,
   X,
 } from 'lucide-react';
+import { motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
@@ -31,6 +32,14 @@ export function MediaViewer({
   onClose: () => void;
 }) {
   const narrow = useSyncExternalStore(subscribeWidth, isNarrow);
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  const fade = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+    transition: { duration: reducedMotion ? 0 : 0.18 },
+  };
   const [currentId, setCurrentId] = useState(file.id);
   const content = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -44,6 +53,14 @@ export function MediaViewer({
     [files, index],
   );
   useBackHandler(true, onClose);
+
+  useEffect(() => {
+    if (!isPresent) {
+      for (const player of content.current?.querySelectorAll('video, audio') ?? []) {
+        if (player instanceof HTMLMediaElement) player.pause();
+      }
+    }
+  }, [isPresent]);
 
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
@@ -63,11 +80,15 @@ export function MediaViewer({
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay
-          data-attachment-menu
-          className="fixed inset-0 z-[90] bg-black/95 backdrop-blur-md"
-        />
+        <DialogPrimitive.Overlay asChild>
+          <motion.div
+            data-attachment-menu
+            className="fixed inset-0 z-[90] bg-black/95 backdrop-blur-md"
+            {...fade}
+          />
+        </DialogPrimitive.Overlay>
         <DialogPrimitive.Content
+          asChild
           ref={content}
           data-media-viewer
           data-attachment-menu
@@ -83,62 +104,68 @@ export function MediaViewer({
             if (previousFocus.current?.isConnected) previousFocus.current.focus();
           }}
         >
-          <ViewerContent
-            key={current.id}
-            file={current}
-            narrow={narrow}
-            onNavigate={files.length > 1 ? navigate : undefined}
-          />
-          <div
-            className={cn(
-              'absolute top-[calc(var(--safe-top)+0.75rem)] z-20 flex items-center gap-2',
-              narrow ? 'left-1/2 -translate-x-1/2' : 'right-16',
-            )}
+          <motion.div
+            {...fade}
+            inert={!isPresent}
+            style={{ pointerEvents: isPresent ? 'auto' : 'none' }}
           >
-            {files.length > 1 && (
-              <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-10 rounded-full"
-                  aria-label="Previous attachment"
-                  onClick={() => navigate(-1)}
-                >
-                  <ChevronLeft />
-                </Button>
-                <span
-                  className="min-w-12 text-center text-xs tabular-nums"
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
-                  {index + 1} / {files.length}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-10 rounded-full"
-                  aria-label="Next attachment"
-                  onClick={() => navigate(1)}
-                >
-                  <ChevronRight />
-                </Button>
-              </div>
-            )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'absolute right-3 z-30 size-11 rounded-full glass-thick text-foreground',
-              narrow
-                ? 'bottom-[calc(var(--safe-bottom)+1rem)]'
-                : 'top-[calc(var(--safe-top)+0.75rem)]',
-            )}
-            aria-label="Close media viewer"
-            onClick={onClose}
-          >
-            <X />
-          </Button>
+            <ViewerContent
+              key={current.id}
+              file={current}
+              narrow={narrow}
+              onNavigate={files.length > 1 ? navigate : undefined}
+            />
+            <div
+              className={cn(
+                'absolute top-[calc(var(--safe-top)+0.75rem)] z-20 flex items-center gap-2',
+                narrow ? 'left-1/2 -translate-x-1/2' : 'right-16',
+              )}
+            >
+              {files.length > 1 && (
+                <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-10 rounded-full"
+                    aria-label="Previous attachment"
+                    onClick={() => navigate(-1)}
+                  >
+                    <ChevronLeft />
+                  </Button>
+                  <span
+                    className="min-w-12 text-center text-xs tabular-nums"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    {index + 1} / {files.length}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-10 rounded-full"
+                    aria-label="Next attachment"
+                    onClick={() => navigate(1)}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'absolute right-3 z-30 size-11 rounded-full glass-thick text-foreground',
+                narrow
+                  ? 'bottom-[calc(var(--safe-bottom)+1rem)]'
+                  : 'top-[calc(var(--safe-top)+0.75rem)]',
+              )}
+              aria-label="Close media viewer"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </motion.div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

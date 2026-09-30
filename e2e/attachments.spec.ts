@@ -423,6 +423,7 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   await thumbnail.click();
   const viewer = page.locator('[data-media-viewer]');
   await expect(viewer).toHaveAccessibleName('landscape.png');
+  await expect(viewer).toHaveCSS('opacity', '1');
   await expect(viewer).toContainText('800 × 600');
   const frame = await viewer.boundingBox();
   const viewport = page.viewportSize();
@@ -618,6 +619,18 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     await page.screenshot({ path: testInfo.outputPath('media-viewer-small-phone.png') });
   }
   await page.keyboard.press('Escape');
+  const exitOpacity = await page.evaluate(async () => {
+    const samples: number[] = [];
+    const started = performance.now();
+    while (performance.now() - started < 350) {
+      const viewer = document.querySelector('[data-media-viewer]');
+      if (!viewer) break;
+      samples.push(Number(getComputedStyle(viewer).opacity));
+      await new Promise(requestAnimationFrame);
+    }
+    return samples;
+  });
+  expect(exitOpacity.some((opacity) => opacity > 0 && opacity < 1)).toBe(true);
   await expect(viewer).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
   await expect(thumbnail).toBeFocused();

@@ -108,7 +108,7 @@ describe('LinkPreviewOverlay', () => {
     expect(screen.queryByRole('button', { name: 'Open note' })).not.toBeInTheDocument();
   });
 
-  it('places the media catalog before links and returns to it after viewing an image', () => {
+  it('places the media catalog before links and returns to it after viewing an image', async () => {
     files = [image];
     show();
     const media = screen.getByRole('region', { name: 'Media' });
@@ -118,7 +118,7 @@ describe('LinkPreviewOverlay', () => {
     expect(screen.getByRole('dialog', { name: 'photo.png' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close media viewer' }));
     expect(linkOverlay.get()).not.toBeNull();
-    expect(screen.getByRole('dialog', { name: 'Media · 1' })).toHaveTextContent('photo.png');
+    expect(await screen.findByRole('dialog', { name: 'Media · 1' })).toHaveTextContent('photo.png');
   });
 
   it('keeps attachments available when the last link is removed, and closes when empty', () => {
