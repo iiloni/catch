@@ -6,6 +6,7 @@ import { HOLD_MS } from '@/lib/longPress';
 import {
   moveNoteToDeck,
   restoreNote,
+  sendNoteToGallery,
   setNoteArchived,
   setNoteColor,
   setNotePinned,
@@ -52,7 +53,7 @@ describe('NoteDock', () => {
     renderDock();
     fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
     expect(setNotePinned).toHaveBeenCalledWith(note.id, true);
-    expect(screen.getByRole('button', { name: 'Add to deck' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move note' })).toBeInTheDocument();
   });
 
   it('grows a palette out of the dock', () => {
@@ -65,17 +66,50 @@ describe('NoteDock', () => {
     expect(setNoteColor).toHaveBeenCalledWith(note.id, 'teal');
   });
 
-  it('adds a tapped note to the default column', () => {
-    renderDock();
-    fireEvent.click(screen.getByRole('button', { name: 'Add to deck' }));
-    expect(moveNoteToDeck).toHaveBeenCalledWith(note.id);
-    expect(screen.queryByRole('region', { name: 'Deck columns' })).toBeNull();
+  it.each([null, 'new'])('opens the same move picker from %s without moving the note', (status) => {
+    renderDock({ status });
+    const move = screen.getByRole('button', { name: 'Move note' });
+    expect(move).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(move);
+    expect(move).toHaveAttribute('aria-expanded', 'true');
+    expect(moveNoteToDeck).not.toHaveBeenCalled();
+    expect(sendNoteToGallery).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'Deck columns' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send to gallery' })).toBeInTheDocument();
   });
 
-  it('opens the columns when the deck button is held', () => {
+  it('moves a deck note to another column without closing the editor', () => {
+    renderDock({ status: 'new' });
+    fireEvent.click(screen.getByRole('button', { name: 'Move note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
+    expect(moveNoteToDeck).toHaveBeenCalledWith(note.id, 'in_progress');
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Move note' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('sends a deck note to Gallery without closing the editor', () => {
+    renderDock({ status: 'new' });
+    fireEvent.click(screen.getByRole('button', { name: 'Move note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to gallery' }));
+    expect(sendNoteToGallery).toHaveBeenCalledWith(note.id);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('closes the picker without writing when choosing the current location', () => {
+    renderDock();
+    fireEvent.click(screen.getByRole('button', { name: 'Move note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send to gallery' }));
+    expect(moveNoteToDeck).not.toHaveBeenCalled();
+    expect(sendNoteToGallery).not.toHaveBeenCalled();
+  });
+
+  it('opens the columns when the move button is held', () => {
     vi.useFakeTimers();
     renderDock();
-    const deck = screen.getByRole('button', { name: 'Add to deck' });
+    const deck = screen.getByRole('button', { name: 'Move note' });
     fireEvent.pointerDown(deck, { button: 0, pointerId: 1 });
     act(() => vi.advanceTimersByTime(HOLD_MS));
     fireEvent.pointerUp(deck, { button: 0, pointerId: 1 });

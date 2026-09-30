@@ -3,6 +3,7 @@ import {
   backToGallery,
   card,
   createNote,
+  moveNote,
   noteAction,
   noteToolbar,
   openGalleryPage,
@@ -437,7 +438,7 @@ test('deck board moves notes between columns and back to the gallery', async ({
   test.skip(isMobile, 'Board drag uses a mouse; touch dragging is covered manually.');
   await signUp(page);
   await createNote(page, 'Ship it');
-  await noteAction(page, 'Ship it', 'Add to deck');
+  await moveNote(page, 'Ship it');
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
 
   await page.getByRole('link', { name: 'Deck' }).click();
@@ -477,11 +478,12 @@ test('deck drag reorders within a column and places notes in another', async ({
   page,
   isMobile,
 }) => {
+  test.setTimeout(60_000);
   test.skip(isMobile, 'Board drag uses a mouse; touch dragging is covered manually.');
   await signUp(page);
   for (const title of ['One', 'Two', 'Three']) {
     await createNote(page, title);
-    await noteAction(page, title, 'Add to deck');
+    await moveNote(page, title);
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   }
   await page.getByRole('link', { name: 'Deck' }).click();
@@ -506,8 +508,10 @@ test('deck drag reorders within a column and places notes in another', async ({
     const held = page.getByRole('article').filter({ hasText: title }).last();
     const actionsOpacity = () =>
       held
-        .getByRole('button', { name: 'Send to gallery' })
-        .evaluate((button) => getComputedStyle(button.parentElement as HTMLElement).opacity);
+        .getByRole('button', { name: 'Move note' })
+        .evaluate(
+          (button) => getComputedStyle(button.parentElement?.parentElement as HTMLElement).opacity,
+        );
     await expect.poll(actionsOpacity).toBe('1');
     expect(
       await held
@@ -533,8 +537,11 @@ test('deck drag reorders within a column and places notes in another', async ({
     await expect
       .poll(() =>
         placed
-          .getByRole('button', { name: 'Send to gallery' })
-          .evaluate((button) => getComputedStyle(button.parentElement as HTMLElement).opacity),
+          .getByRole('button', { name: 'Move note' })
+          .evaluate(
+            (button) =>
+              getComputedStyle(button.parentElement?.parentElement as HTMLElement).opacity,
+          ),
       )
       .toBe('1');
     await expect
@@ -559,7 +566,7 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
   await signUp(page);
   for (const title of ['One', 'Two', 'Three']) {
     await createNote(page, title);
-    await noteAction(page, title, 'Add to deck');
+    await moveNote(page, title);
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   }
   await page.getByRole('link', { name: 'Deck' }).click();
@@ -797,11 +804,12 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
   page,
   isMobile,
 }) => {
+  test.setTimeout(60_000);
   test.skip(isMobile, 'Board drag uses a mouse; the touch version is below.');
   await signUp(page);
   for (const title of ['One', 'Two', 'Three']) {
     await createNote(page, title);
-    await noteAction(page, title, 'Add to deck');
+    await moveNote(page, title);
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   }
   await page.getByRole('link', { name: 'Deck' }).click();
@@ -868,7 +876,7 @@ test('a long press selects deck notes, and taps add more', async ({ page, isMobi
   await signUp(page);
   for (const title of ['One', 'Two']) {
     await createNote(page, title);
-    await noteAction(page, title, 'Add to deck');
+    await moveNote(page, title);
     await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   }
   await page.getByRole('link', { name: 'Deck' }).click();

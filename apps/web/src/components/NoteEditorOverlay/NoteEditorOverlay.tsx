@@ -19,7 +19,7 @@ import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
-import { editorControls, editorNote } from '@/lib/dockState';
+import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useNoteLinks } from '@/lib/linkPreviews';
 import { curves, springs } from '@/lib/motion';
@@ -418,6 +418,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           // Focusing the editor would raise the keyboard before the user asks for it.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => {
+            // The dock folds its open picker before Escape leaves the note.
+            if (noteDockPanelOpen.get()) event.preventDefault();
+          }}
           // Using the dock (or a toast) is not leaving the editor. On touch, Radix checks the
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
           // detached target counts as ours too. Beside the page, the page is not outside.

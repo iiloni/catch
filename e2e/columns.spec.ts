@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   card,
   createNote,
-  noteAction,
+  moveNote,
   noteToolbar,
   openNote,
   signUp,
@@ -16,7 +16,7 @@ test('columns can be added, reordered and deleted without losing notes', async (
   test.skip(isMobile, 'This test moves a card with the mouse.');
   await signUp(page);
   await createNote(page, 'Ship it');
-  await noteAction(page, 'Ship it', 'Add to deck');
+  await moveNote(page, 'Ship it');
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await page.getByRole('link', { name: 'Deck' }).click();
   await waitForPageTransition(page);
@@ -190,7 +190,7 @@ test('column handles reorder independently of the sheet grip on touch', async ({
   await expect(sheet).toHaveCount(0);
 });
 
-test('holding the deck button drops the open note into a chosen column', async ({
+test('holding the move button drops the open note into a chosen column', async ({
   page,
   isMobile,
 }) => {
@@ -198,14 +198,14 @@ test('holding the deck button drops the open note into a chosen column', async (
   await createNote(page, 'Hold me');
   await createNote(page, 'Tap me');
 
-  // A tap still uses the default column.
-  await noteAction(page, 'Tap me', 'Add to deck');
-  await expect(noteToolbar(page).getByRole('button', { name: 'Send to gallery' })).toBeVisible();
+  // A tap opens the picker; choosing New uses the default column.
+  await moveNote(page, 'Tap me');
+  await expect(noteToolbar(page).getByRole('button', { name: 'Move note' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await openNote(page, 'Hold me');
-  const deck = await noteToolbar(page).getByRole('button', { name: 'Add to deck' }).boundingBox();
+  const deck = await noteToolbar(page).getByRole('button', { name: 'Move note' }).boundingBox();
   if (!deck) throw new Error('Missing deck button');
   const start = { x: deck.x + deck.width / 2, y: deck.y + deck.height / 2 };
   const session = isMobile ? await page.context().newCDPSession(page) : null;
@@ -252,7 +252,7 @@ test('holding the deck button drops the open note into a chosen column', async (
   await session?.detach();
 
   await expect(columns).toHaveCount(0);
-  await expect(noteToolbar(page).getByRole('button', { name: 'Send to gallery' })).toBeVisible();
+  await expect(noteToolbar(page).getByRole('button', { name: 'Move note' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await page.getByRole('link', { name: 'Deck' }).click();
   await waitForPageTransition(page);
@@ -262,4 +262,53 @@ test('holding the deck button drops the open note into a chosen column', async (
   ).toBeVisible();
   if (isMobile) await page.getByRole('tab', { name: /New/ }).click();
   await expect(page.getByRole('region', { name: 'New column' }).getByText('Tap me')).toBeVisible();
+});
+
+test('the move picker shows every destination and the current location', async ({ page }) => {
+  await signUp(page);
+  await createNote(page, 'Move me');
+  await openNote(page, 'Move me');
+  const move = noteToolbar(page).getByRole('button', { name: 'Move note' });
+  const picker = page.getByRole('group', { name: 'Move note', exact: true });
+  const gallery = picker.getByRole('button', { name: 'Send to gallery' });
+  const columns = picker.getByRole('region', { name: 'Deck columns' });
+  const progress = columns.getByRole('button', { name: 'In progress' });
+
+  await move.click();
+  await expect(move).toHaveAttribute('aria-expanded', 'true');
+  await expect(gallery).toHaveAttribute('aria-current', 'location');
+  await expect(columns.getByRole('button')).toHaveCount(3);
+  const deckBox = await columns.boundingBox();
+  const galleryBox = await gallery.boundingBox();
+  if (!deckBox || !galleryBox) throw new Error('Missing move picker layout');
+  expect(deckBox.width).toBeGreaterThan(galleryBox.width);
+  expect(galleryBox.x).toBeGreaterThan(deckBox.x + deckBox.width);
+  await expect
+    .poll(() =>
+      picker.evaluate((element) => {
+        const deck = element.querySelector('[data-deck-columns]')?.getBoundingClientRect();
+        const gallery = element.querySelector('[data-move-gallery]')?.getBoundingClientRect();
+        return deck && gallery ? Math.abs(deck.height - gallery.height) : Number.POSITIVE_INFINITY;
+      }),
+    )
+    .toBeLessThan(1);
+  await progress.click();
+  await expect(move).toHaveAttribute('aria-expanded', 'false');
+
+  await move.click();
+  await expect(progress).toHaveAttribute('aria-current', 'location');
+  await expect(gallery).not.toHaveAttribute('aria-current');
+  await columns.getByRole('button', { name: 'On hold' }).click();
+  await move.click();
+  await expect(columns.getByRole('button', { name: 'On hold' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  await gallery.click();
+  await move.click();
+  await expect(gallery).toHaveAttribute('aria-current', 'location');
+  await page.keyboard.press('Escape');
+  await expect(move).toHaveAttribute('aria-expanded', 'false');
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toBeVisible();
 });
