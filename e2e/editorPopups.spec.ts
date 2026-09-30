@@ -99,3 +99,71 @@ test('clicking the editor gutter still focuses the nearby block', async ({ page,
   await page.keyboard.type('!');
   await expect(paragraph).toHaveText('Last paragraph!');
 });
+
+test('block handles stay inset and align with the first line, including touch-sized lists', async ({
+  page,
+  isMobile,
+}) => {
+  await page.evaluate(async () => {
+    document.documentElement.style.setProperty('--safe-area-inset-left', '12px');
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
+    const { transaction } = createNote({
+      userId: getSignedInUser().id,
+      content: [
+        { id: 'title', type: 'heading', props: { level: 3 }, content: 'Handle alignment' },
+        { id: 'heading', type: 'heading', props: { level: 2 }, content: 'A larger heading' },
+        {
+          id: 'wrapped',
+          type: 'paragraph',
+          content: 'A paragraph with several lines of text to check the first line. '.repeat(3),
+        },
+        { id: 'bullet', type: 'bulletListItem', content: 'A bullet item' },
+        { id: 'numbered', type: 'numberedListItem', content: 'A numbered item' },
+        { id: 'checkbox', type: 'checkListItem', content: 'A checklist item' },
+        { id: 'empty', type: 'paragraph', content: [] },
+      ],
+    });
+    await transaction.isPersisted.promise;
+  });
+  const dialog = await openNote(page, 'Handle alignment');
+  const editor = dialog.locator('.bn-editor');
+  for (const id of ['title', 'heading', 'wrapped', 'bullet', 'numbered', 'checkbox', 'empty']) {
+    const inline = editor.locator(`[data-id="${id}"] .bn-inline-content`).first();
+    await inline.scrollIntoViewIfNeeded();
+    const box = await inline.boundingBox();
+    if (!box) throw new Error('Missing block layout');
+    await page.mouse.move(box.x + 1, box.y + 4);
+    const handle = dialog.getByRole('button', { name: 'Open block menu' });
+    await expect(handle).toBeVisible();
+    await expect
+      .poll(() =>
+        inline.evaluate((inline) => {
+          const icon = document.querySelector('[data-test="dragHandle"]');
+          if (!icon) return Number.POSITIVE_INFINITY;
+          const iconBounds = icon.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(inline);
+          const firstLine = Array.from(range.getClientRects()).find((rect) => rect.height > 0);
+          const line = firstLine ?? inline.getBoundingClientRect();
+          return Math.abs(iconBounds.y + iconBounds.height / 2 - (line.y + line.height / 2));
+        }),
+      )
+      .toBeLessThan(2);
+    const target = await handle.boundingBox();
+    const editorBounds = await editor.boundingBox();
+    if (!target || !editorBounds) throw new Error('Missing handle layout');
+    expect(target.x - editorBounds.x).toBeGreaterThanOrEqual(isMobile ? 16 : 8);
+    expect(target.x + target.width).toBeLessThanOrEqual(box.x + 1);
+    if (isMobile) {
+      expect(target.width).toBe(32);
+      expect(target.height).toBe(32);
+      const blockBounds = await editor.locator(`[data-id="${id}"]`).first().boundingBox();
+      if (!blockBounds) throw new Error('Missing block bounds');
+      expect(blockBounds.x - (target.x + target.width)).toBeCloseTo(4, 0);
+    }
+  }
+  await page.screenshot({ path: `test-results/block-handle-${isMobile ? 'touch' : 'mouse'}.png` });
+  await dialog.getByRole('button', { name: 'Open block menu' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Add block', exact: true })).toBeVisible();
+});

@@ -1,26 +1,80 @@
 import { act, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { updateSyncStatus } from '@/lib/syncStatus';
 import { SaveStatus } from './SaveStatus';
 
-afterEach(() => act(() => updateSyncStatus({ offline: false })));
+// These checks cover status timing; browser tests cover the entrance, width and exit motion.
+vi.mock('motion/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('motion/react')>()),
+  AnimatePresence: ({ children }: { children: ReactNode }) => children,
+}));
+
+afterEach(() => {
+  act(() => updateSyncStatus({ offline: false, pending: 0 }));
+  vi.useRealTimers();
+});
 
 describe('SaveStatus', () => {
   it('shows a save in progress', () => {
-    render(<SaveStatus state="saving" updatedAt={new Date()} />);
-    expect(screen.getByText('Saving…')).toBeInTheDocument();
+    render(<SaveStatus state="saving" />);
+    expect(screen.getByText('Syncing…')).toBeInTheDocument();
   });
 
   it('says an offline save is kept on the device', () => {
     act(() => updateSyncStatus({ offline: true }));
-    render(<SaveStatus state="saving" updatedAt={new Date()} />);
+    render(<SaveStatus state="saving" />);
     expect(screen.getByText('Saved on this device')).toBeInTheDocument();
-    expect(screen.queryByText('Saving…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
   });
 
-  it('shows when the note was last edited once saved', () => {
-    act(() => updateSyncStatus({ offline: true }));
-    render(<SaveStatus state="saved" updatedAt={new Date()} />);
-    expect(screen.getByText(/^Edited/)).toBeInTheDocument();
+  it('stays quiet when opening a saved note', () => {
+    render(<SaveStatus state="saved" />);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('shows confirmation for two seconds after syncing', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<SaveStatus state="saving" />);
+    rerender(<SaveStatus state="saved" />);
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1999));
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('keeps syncing until queued writes reach the server', () => {
+    act(() => updateSyncStatus({ pending: 1 }));
+    const { rerender } = render(<SaveStatus state="saving" />);
+    rerender(<SaveStatus state="saved" />);
+    expect(screen.getByText('Syncing…')).toBeInTheDocument();
+    expect(screen.queryByText('Synced')).not.toBeInTheDocument();
+    act(() => updateSyncStatus({ pending: 0 }));
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+  });
+
+  it('does not hide a new save when the previous confirmation expires', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<SaveStatus state="saving" />);
+    rerender(<SaveStatus state="saved" />);
+    act(() => vi.advanceTimersByTime(1000));
+    rerender(<SaveStatus state="saving" />);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByText('Syncing…')).toBeInTheDocument();
+    rerender(<SaveStatus state="saved" />);
+    act(() => vi.advanceTimersByTime(1999));
+    expect(screen.getByText('Synced')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('keeps a save failure visible', () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<SaveStatus state="saving" />);
+    rerender(<SaveStatus state="error" />);
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getByText('Not saved')).toBeInTheDocument();
+    expect(screen.queryByText('Synced')).not.toBeInTheDocument();
   });
 });

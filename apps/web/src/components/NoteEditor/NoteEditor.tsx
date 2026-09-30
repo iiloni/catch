@@ -80,6 +80,31 @@ const slashMenuFloatingOptions: FloatingUIOptions = {
   },
 };
 
+const sideMenuFloatingOptions: FloatingUIOptions = {
+  useFloatingOptions: {
+    middleware: [
+      offset(({ elements, rects }) => {
+        const reference =
+          elements.reference instanceof Element
+            ? elements.reference
+            : elements.reference.contextElement;
+        const inline = reference?.querySelector('.bn-inline-content');
+        if (!inline) return 0;
+        const bounds = inline.getBoundingClientRect();
+        const lineHeight = Number.parseFloat(getComputedStyle(inline).lineHeight) || bounds.height;
+        // Wrapped text and touch-sized lists need their first line, not the whole block's center.
+        return {
+          crossAxis:
+            bounds.top +
+            Math.min(lineHeight, bounds.height) / 2 -
+            elements.reference.getBoundingClientRect().top -
+            rects.floating.height / 2,
+        };
+      }),
+    ],
+  },
+};
+
 type Props = {
   initialContent?: Note['content'];
   onChange?: (content: Note['content']) => void;
@@ -175,7 +200,7 @@ export function NoteEditor({
       onClick={focusAboveBlankSpace}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
-      <SideMenuController sideMenu={NoteSideMenu} />
+      <NoteSideMenuController />
       <SuggestionMenuController
         triggerCharacter="/"
         shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
@@ -183,6 +208,16 @@ export function NoteEditor({
         floatingUIOptions={slashMenuFloatingOptions}
       />
     </BlockNoteView>
+  );
+}
+
+function NoteSideMenuController() {
+  const block = useExtensionState(SideMenuExtension, { selector: (state) => state?.block });
+  return (
+    <SideMenuController
+      sideMenu={NoteSideMenu}
+      floatingUIOptions={Array.isArray(block?.content) ? sideMenuFloatingOptions : undefined}
+    />
   );
 }
 
@@ -340,7 +375,8 @@ function useCaretAboveKeyboard(editor: AnyEditor) {
 
       const bounds = area.getBoundingClientRect();
       const caret = view.coordsAtPos(view.state.selection.head);
-      const top = Math.max(0, bounds.top) + 12;
+      const header = area.closest('[role="dialog"]')?.querySelector('[data-note-header]');
+      const top = Math.max(0, bounds.top, header?.getBoundingClientRect().bottom ?? 0) + 12;
       let bottom = Math.min(bounds.bottom, window.innerHeight - height) - 12;
       // The dock sits outside the scroll area and rises with the keyboard.
       for (const toolbar of document.querySelectorAll('[data-note-toolbar]')) {

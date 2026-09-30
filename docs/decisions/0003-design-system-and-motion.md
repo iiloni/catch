@@ -45,6 +45,16 @@ holding it (or sliding off it) grows the dock upward into the Deck's columns, an
 on one puts the note there. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
 
+On phones the note scrolls behind its floating back and trash controls, with the Gallery's
+masked edge blurs at the top and above the keyboard at the bottom. The centered glass sync
+pill slides down from the top while writes are pending and stays for two seconds after they
+finish before sliding away; save failures remain visible. Its measured width follows the
+same spring as the header toolbars while its icon and text crossfade. The edited timestamp
+follows the note content, centered in the scroll area.
+The pill's slide is clipped at the header's safe top edge, so it never draws over Android's
+status bar. Motion uses pixel translations within that clip instead of resolving a
+percentage/calc transform against changing native insets.
+
 **Header toolbars.** Page controls sit in toolbars in the header's top corners (the
 Gallery's sort and settings, the Deck's column editor, Archive and Trash's back button and
 Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
@@ -136,6 +146,12 @@ its sibling group, with its nested children. Moving before the hold expires scro
 usual; checkbox taps keep toggling, and links keep opening. A drop marker and edge scrolling
 guide the move, which is committed as one undo step on release. The mouse drag handle
 remains available.
+
+Block menu handles sit in a compact 40 px gutter on touch screens, with a 32 px button and
+a 4 px gap before the block. Their
+vertical position follows the rendered first line, including larger headings and touch-sized
+lists. The editor's opening preview and link insets share that gutter so mounting it does not
+shift the content.
 
 ## Consequences
 

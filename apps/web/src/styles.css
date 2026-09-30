@@ -486,13 +486,22 @@
   pointer-events: none;
 }
 
-/* Room for the drag handle, which only exists with a mouse. */
+/* Keep the compact block menu inset from the edge and clear of the text. */
 .bn-container.note-editor .bn-editor {
   padding-inline: 2.25rem 1rem;
 }
 @media (pointer: coarse) {
   .bn-container.note-editor .bn-editor {
-    padding-inline: 1.25rem;
+    padding-inline: calc(var(--safe-left) + 2.5rem) calc(var(--safe-right) + 1.25rem);
+  }
+  .bn-root.note-editor .bn-side-menu {
+    padding-inline-end: 4px;
+  }
+  .bn-root.note-editor .bn-side-menu .bn-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    flex-shrink: 0;
   }
 }
 /* The editor's preview and its links line up with the editor's text. */
@@ -503,7 +512,7 @@
 @media (pointer: coarse) {
   .note-preview-editor,
   .note-links-inset {
-    padding-inline: 1.25rem;
+    padding-inline: calc(var(--safe-left) + 2.5rem) calc(var(--safe-right) + 1.25rem);
   }
 }
 

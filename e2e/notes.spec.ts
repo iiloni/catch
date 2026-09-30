@@ -23,7 +23,7 @@ test('notes are created, edited, and synced across tabs', async ({ page, context
   await dialog.getByText('Oat milk').click();
   await otherTab.keyboard.press('End');
   await otherTab.keyboard.type(' and eggs');
-  await expect(dialog.getByText(/^Edited/)).toBeVisible();
+  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
 
   await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');

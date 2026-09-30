@@ -11,12 +11,13 @@ import {
   useTransform,
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
+import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote } from '@/lib/dockState';
@@ -158,6 +159,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     [viewportWidth, viewportHeight],
   );
   const target = targetRect({ ...pane, split }, insets);
+  const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
   targetRef.current = target;
   const editable = !note.deletedAt;
@@ -353,14 +355,47 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     onDismiss: requestClose,
     enabled: isPresent && !split,
   });
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
+  const attachScroll = useCallback(
+    (element: HTMLDivElement | null) => {
+      scrollRef(element);
+      setScrollElement(element);
+    },
+    [scrollRef],
+  );
+
+  useEffect(() => {
+    if (!fullscreen || !scrollElement) return;
+    const update = () => {
+      const top = scrollElement.scrollTop > 1;
+      const bottom =
+        scrollElement.scrollTop + scrollElement.clientHeight < scrollElement.scrollHeight - 1;
+      setScrollEdges((edges) =>
+        edges.top === top && edges.bottom === bottom ? edges : { top, bottom },
+      );
+    };
+    update();
+    scrollElement.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(scrollElement);
+    if (scrollElement.firstElementChild) observer.observe(scrollElement.firstElementChild);
+    return () => {
+      scrollElement.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, [fullscreen, scrollElement]);
 
   const scrollArea = (
     <div
-      ref={scrollRef}
+      ref={attachScroll}
       data-note-scroll
       data-note-color={note.color}
       className={cn(
-        'relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pt-2',
+        'relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain',
+        fullscreen
+          ? 'scroll-pt-[calc(var(--safe-top)+4rem)] pt-[calc(var(--safe-top)+4rem)]'
+          : 'pt-2',
         split
           ? cn(
               'rounded-3xl border border-transparent bg-note pb-6 shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
@@ -389,6 +424,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           <NotePreview content={note.content} maxBlocks={200} variant="editor" />
         )}
         {!sideLinks && <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />}
+        <NoteTimestamp updatedAt={note.updatedAt} />
         {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
         <div
           aria-hidden
@@ -475,12 +511,28 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             )}
 
             <motion.div
-              className="flex min-h-0 flex-1 flex-col"
+              className="relative flex min-h-0 flex-1 flex-col"
               style={{ opacity: contentOpacity, y: contentY }}
             >
+              {fullscreen && (
+                <>
+                  <div
+                    aria-hidden
+                    className="page-top-blur pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(var(--safe-top)+8rem)] transition-opacity duration-200"
+                    style={{ opacity: scrollEdges.top ? 1 : 0 }}
+                  />
+                  <div
+                    aria-hidden
+                    className="page-bottom-blur pointer-events-none absolute inset-x-0 bottom-[var(--keyboard)] z-10 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
+                    style={{ opacity: scrollEdges.bottom ? 1 : 0 }}
+                  />
+                </>
+              )}
               <header
+                data-note-header
                 className={cn(
                   'flex shrink-0 items-center gap-2',
+                  fullscreen && 'absolute inset-x-0 top-0 z-20',
                   // In the pane the toolbars line up with the card's edges below them.
                   split ? 'pr-3 pb-3' : 'px-3 pb-1 sm:px-4',
                   target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
@@ -495,8 +547,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                     <ChevronLeft />
                   </IconButton>
                 </div>
-                <div className="flex min-w-0 flex-1 justify-center">
-                  <SaveStatus state={state} updatedAt={note.updatedAt} />
+                <div className="relative h-[50px] min-w-0 flex-1">
+                  <SaveStatus state={state} />
                 </div>
                 <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
                   <IconButton

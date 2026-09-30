@@ -1,50 +1,114 @@
 import { CloudAlert, CloudCheck, CloudOff, LoaderCircle } from 'lucide-react';
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { springs } from '@/lib/motion';
 import { useSyncStatus } from '@/lib/syncStatus';
 import type { SaveState } from '@/lib/useNoteAutosave';
 
-const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' });
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+export function SaveStatus({ state }: { state: SaveState }) {
+  // Offline, a save waits in the outbox until the connection comes back.
+  const { offline, pending } = useSyncStatus();
+  const syncing = state === 'saving' || pending > 0;
+  const wasSyncing = useRef(syncing);
+  const [recentlySynced, setRecentlySynced] = useState(false);
 
-function formatEdited(date: Date) {
-  const sameDay = date.toDateString() === new Date().toDateString();
-  return sameDay ? timeFormat.format(date) : dateFormat.format(date);
+  useEffect(() => {
+    const finished = wasSyncing.current && !syncing && state === 'saved';
+    wasSyncing.current = syncing;
+    setRecentlySynced(finished);
+    if (!finished) return;
+    const timer = window.setTimeout(() => setRecentlySynced(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [syncing, state]);
+
+  const local = syncing && offline;
+  const visible = syncing || recentlySynced || state === 'error';
+  const mode = state === 'error' ? 'error' : local ? 'local' : syncing ? 'syncing' : 'synced';
+  return (
+    <div
+      role="status"
+      className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 flex items-center justify-center overflow-hidden py-2"
+    >
+      <AnimatePresence>{visible && <StatusPill key="pill" mode={mode} />}</AnimatePresence>
+    </div>
+  );
 }
 
-type Props = {
-  state: SaveState;
-  updatedAt: Date;
-};
+type Mode = 'error' | 'local' | 'syncing' | 'synced';
 
-export function SaveStatus({ state, updatedAt }: Props) {
-  // Offline, a save waits in the outbox until the connection comes back.
-  const { offline } = useSyncStatus();
-  const local = state === 'saving' && offline;
+const labels = {
+  error: 'Not saved',
+  local: 'Saved on this device',
+  syncing: 'Syncing…',
+  synced: 'Synced',
+} satisfies Record<Mode, string>;
+
+const icons = { error: CloudAlert, local: CloudOff, syncing: LoaderCircle, synced: CloudCheck };
+
+function StatusPill({ mode }: { mode: Mode }) {
+  const reducedMotion = useReducedMotion();
+  const pillRef = useRef<HTMLDivElement>(null);
+  const width = useMotionValue<number | 'auto'>('auto');
+  // Animate the measured width, like the header toolbars, so text and icons never stretch.
+  const measure = useCallback(
+    (element: HTMLParagraphElement | null) => {
+      if (!element) return;
+      const update = () => {
+        const next = element.offsetWidth + 2;
+        if (width.get() === 'auto' || reducedMotion) width.jump(next);
+        else animate(width, next, springs.smooth);
+      };
+      update();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(update);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+    [width, reducedMotion],
+  );
+  const Icon = icons[mode];
+  // The header clips the slide below the status bar. Pixel translations avoid resolving
+  // a percentage/calc transform against Android's changing safe-area insets.
+  const hidden = () => ({
+    opacity: 0,
+    y: reducedMotion ? 0 : -(pillRef.current?.parentElement?.clientHeight ?? 64),
+  });
+
   return (
-    <p className="flex items-center gap-1.5 text-muted-foreground text-xs" aria-live="polite">
-      {local && (
-        <>
-          <CloudOff className="size-3.5" aria-hidden />
-          Saved on this device
-        </>
-      )}
-      {state === 'saving' && !local && (
-        <>
-          <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
-          Saving…
-        </>
-      )}
-      {state === 'saved' && (
-        <>
-          <CloudCheck className="size-3.5" aria-hidden />
-          Edited {formatEdited(updatedAt)}
-        </>
-      )}
-      {state === 'error' && (
-        <>
-          <CloudAlert className="size-3.5 text-destructive" aria-hidden />
-          Not saved
-        </>
-      )}
-    </p>
+    <motion.div
+      ref={pillRef}
+      data-sync-pill
+      className="glass relative h-9 overflow-hidden rounded-full text-muted-foreground text-xs"
+      style={{ width }}
+      variants={{ hidden, shown: { opacity: 1, y: 0 } }}
+      initial="hidden"
+      animate="shown"
+      exit="hidden"
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+    >
+      <AnimatePresence initial={false}>
+        <motion.p
+          key={mode}
+          ref={measure}
+          className="absolute inset-y-0 left-0 flex w-max items-center gap-1.5 whitespace-nowrap px-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.14 }}
+        >
+          <Icon
+            className={
+              mode === 'syncing'
+                ? 'size-3.5 shrink-0 motion-safe:animate-spin'
+                : mode === 'error'
+                  ? 'size-3.5 shrink-0 text-destructive'
+                  : 'size-3.5 shrink-0'
+            }
+            aria-hidden
+          />
+          {labels[mode]}
+        </motion.p>
+      </AnimatePresence>
+    </motion.div>
   );
 }
