@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { cn } from '@/lib/utils';
 
 type Json = Record<string, unknown>;
@@ -148,9 +149,17 @@ function PreviewBlock({
       );
       break;
     case 'image':
+    case 'video':
+    case 'audio':
+    case 'file':
       body =
         typeof props.url === 'string' && props.url ? (
-          <img src={props.url} alt={String(props.caption ?? '')} className="w-full rounded" />
+          <MediaPreview
+            url={props.url}
+            name={String(props.caption || props.name || 'Attachment')}
+            kind={String(block.type)}
+            compact={variant === 'card'}
+          />
         ) : null;
       break;
     default:
@@ -202,7 +211,11 @@ function renderBlocks(blocks: readonly Json[], variant: Variant, topLevel: boole
 function isEmptyBlock(block: Json) {
   const children = Array.isArray(block.children) ? block.children : [];
   const empty = Array.isArray(block.content) ? block.content.length === 0 : !block.content;
-  return empty && children.length === 0 && block.type !== 'image';
+  return (
+    empty &&
+    children.length === 0 &&
+    !['image', 'video', 'audio', 'file'].includes(String(block.type))
+  );
 }
 
 /** Read-only rendering of a BlockNote document, light enough for a grid of cards. */

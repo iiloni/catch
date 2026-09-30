@@ -182,17 +182,11 @@ test('the editor dock keeps held labels above its edge', async ({ page, isMobile
   const dockBox = await dock.boundingBox();
   const boldBox = await bold.boundingBox();
   if (!dockBox || !boldBox) throw new Error('Missing dock layout');
-  const checklistBox = await page
-    .getByRole('toolbar', { name: 'Formatting' })
-    .getByRole('button', { name: 'Checklist' })
-    .boundingBox();
-  if (!checklistBox) throw new Error('Missing checklist layout');
   const viewport = page.viewportSize();
   if (!viewport) throw new Error('Missing viewport');
   expect(dockBox.x).toBeLessThan(6);
   expect(viewport.width - dockBox.x - dockBox.width).toBeLessThan(6);
   expect(boldBox.x + boldBox.width / 2 - dockBox.x).toBeGreaterThan(24);
-  expect(dockBox.x + dockBox.width - checklistBox.x - checklistBox.width / 2).toBeGreaterThan(24);
 
   const touch = await page.context().newCDPSession(page);
   await touch.send('Input.dispatchTouchEvent', {

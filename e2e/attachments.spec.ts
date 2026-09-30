@@ -1,0 +1,299 @@
+import { expect, test } from '@playwright/test';
+import {
+  card,
+  createNote,
+  openGalleryPage,
+  openNote,
+  signIn,
+  signUp,
+  waitForPageTransition,
+} from './helpers';
+
+test.use({
+  launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+});
+
+const picture = {
+  name: 'pixel.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=',
+    'base64',
+  ),
+};
+
+async function upload(page: Parameters<typeof openNote>[0], file = picture) {
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Add attachment' });
+  await expect(picker).toBeVisible();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    picker.getByRole('button', { name: 'Files', exact: true }).click(),
+  ]);
+  await chooser.setFiles(file);
+}
+
+test('attachments preview, retain their catalog without blocks, and remove privately', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(60000);
+  const email = await signUp(page);
+  await createNote(page, 'Attachments');
+  await openNote(page, 'Attachments');
+  await upload(page);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
+  await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+  await expect(media.getByText('Waiting to upload')).toBeHidden();
+  const id = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  const headers = await page.evaluate(() => ({
+    Authorization: `Bearer ${localStorage.getItem('catch-auth-token')}`,
+  }));
+  const url = `/api/attachments/${id}/content`;
+  expect((await page.request.get(url, { headers: { Cookie: '' } })).status()).toBe(401);
+  const response = await page.request.get(url, { headers });
+  expect(response.status()).toBe(200);
+  expect(await response.body()).toEqual(picture.buffer);
+  const ranged = await page.request.get(url, { headers: { ...headers, Range: 'bytes=0-7' } });
+  expect(ranged.status()).toBe(206);
+  expect(await ranged.body()).toEqual(picture.buffer.subarray(0, 8));
+  expect(
+    (await page.request.get(url, { headers: { ...headers, Range: 'bytes=99999-' } })).status(),
+  ).toBe(416);
+
+  // Removing an inline placement leaves the independent catalog intact.
+  await page.evaluate(async (attachmentId) => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    editorControls.get().removeAttachment(attachmentId);
+  }, id);
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
+  await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
+  await page.waitForTimeout(700);
+  await page.reload();
+  await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
+
+  const other = await browser.newContext();
+  const second = await other.newPage();
+  await signIn(second, email);
+  await openNote(second, 'Attachments');
+  await expect(second.getByRole('region', { name: 'Media' }).getByRole('img')).toBeVisible();
+
+  await media.getByRole('button', { name: 'Manage pixel.png' }).click();
+  await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+  await page.getByRole('textbox', { name: 'File name' }).fill('Renamed.png');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(media.getByTitle('Renamed.png', { exact: true })).toBeVisible();
+  await media.getByRole('button', { name: 'Manage Renamed.png' }).click();
+  await page.getByRole('menuitem', { name: 'Show in note' }).click();
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
+  await page.waitForTimeout(700);
+  await second.reload();
+  await expect(second.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
+  await media.getByRole('button', { name: 'Manage Renamed.png' }).click();
+  await page.getByRole('menuitem', { name: 'Remove attachment' }).click();
+  await page
+    .getByRole('dialog')
+    .filter({ hasText: 'Remove attachment?' })
+    .getByRole('button', { name: 'Remove attachment' })
+    .click();
+  await expect(media).toBeHidden();
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
+  await expect.poll(async () => (await page.request.get(url, { headers })).status()).toBe(404);
+  await expect(second.getByRole('region', { name: 'Media' })).toBeHidden();
+  await expect(second.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
+  await other.close();
+});
+
+test('an offline attachment survives reload and uploads on reconnect', async ({ page }) => {
+  await signUp(page);
+  await createNote(page, 'Offline media');
+  await openNote(page, 'Offline media');
+  await page.waitForTimeout(1000);
+  await page.route('**/api/**', (route) => route.abort());
+  await upload(page);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByRole('img')).toBeVisible();
+  await expect(media.getByText('Waiting to upload')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await page.reload();
+  await openNote(page, 'Offline media');
+  await expect(media.getByRole('img')).toBeVisible();
+  await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+  await page.unroute('**/api/**');
+  await page.reload();
+  await expect(media.getByText('Waiting to upload')).toBeHidden({ timeout: 30000 });
+  const id = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  const headers = await page.evaluate(() => ({
+    Authorization: `Bearer ${localStorage.getItem('catch-auth-token')}`,
+  }));
+  await expect
+    .poll(
+      async () => (await page.request.get(`/api/attachments/${id}/content`, { headers })).status(),
+      { timeout: 30000 },
+    )
+    .toBe(200);
+});
+
+test('the quick-note formatting attachment button expands the picker', async ({ page }) => {
+  await signUp(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.locator('[contenteditable]')).toBeFocused();
+  await page.keyboard.type('Quick attachment');
+  await upload(page);
+  await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+  await page.getByRole('button', { name: 'Close new note' }).click();
+  await expect(card(page, 'Quick attachment')).toBeVisible();
+  await openNote(page, 'Quick attachment');
+  await expect(page.getByRole('region', { name: 'Media' }).getByRole('img')).toBeVisible();
+});
+
+test('copied notes keep independent attachments and files use download blocks', async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.setTimeout(60000);
+  await signUp(page);
+  await createNote(page, 'Copy with files');
+  await openNote(page, 'Copy with files');
+  const file = {
+    name: 'details.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Private attachment details'),
+  };
+  await upload(page, file);
+  await expect(page.locator('.note-editor [data-content-type="file"]')).toHaveCount(1);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByText('Waiting to upload')).toBeHidden();
+  const originalId = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  const headers = await page.evaluate(() => ({
+    Authorization: `Bearer ${localStorage.getItem('catch-auth-token')}`,
+  }));
+  const noteId = new URL(page.url()).searchParams.get('note');
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  const original = card(page, 'Copy with files');
+  await waitForPageTransition(page);
+  if (isMobile) {
+    const box = await original.boundingBox();
+    if (!box) throw new Error('Missing note layout');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2, id: 1 }],
+    });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    const cell = page.locator('[data-note-cell]').filter({ has: original });
+    await cell.hover();
+    await cell.getByRole('button', { name: 'Select note' }).click();
+  }
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Make a copy' })
+    .click();
+  await expect(card(page, 'Copy with files')).toHaveCount(2);
+  await card(page, 'Copy with files').first().getByRole('button', { name: 'Open note' }).click();
+  await expect(media.getByTitle('details.txt')).toBeVisible();
+  await expect(media.getByText('Waiting to upload')).toBeHidden();
+  const copyId = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  expect(copyId).not.toBe(originalId);
+  const copyUrl = `/api/attachments/${copyId}/content`;
+  await expect.poll(async () => (await page.request.get(copyUrl, { headers })).status()).toBe(200);
+  const response = await page.request.get(copyUrl, { headers });
+  expect(await response.body()).toEqual(file.buffer);
+  expect(response.headers()['content-disposition']).toContain('attachment');
+  expect(response.headers()['content-type']).toBe('application/octet-stream');
+
+  const other = await browser.newContext();
+  const stranger = await other.newPage();
+  await signUp(stranger);
+  const strangerHeaders = await stranger.evaluate(() => ({
+    Authorization: `Bearer ${localStorage.getItem('catch-auth-token')}`,
+  }));
+  expect((await stranger.request.get(copyUrl, { headers: strangerHeaders })).status()).toBe(404);
+  await stranger.request.patch(`/api/attachments/${copyId}`, {
+    headers: strangerHeaders,
+    data: { deletedAt: new Date().toISOString() },
+  });
+  expect((await page.request.get(copyUrl, { headers })).status()).toBe(200);
+  await other.close();
+  await page.request.delete(`/api/notes/${noteId}`, { headers });
+  expect(
+    (await page.request.get(`/api/attachments/${originalId}/content`, { headers })).status(),
+  ).toBe(404);
+  expect((await page.request.get(copyUrl, { headers })).status()).toBe(200);
+});
+
+test('archive moves to the header and the attachment dock has the requested order', async ({
+  page,
+}) => {
+  await signUp(page);
+  await createNote(page, 'Toolbar changes');
+  const dialog = await openNote(page, 'Toolbar changes');
+  const toolbar = page.getByRole('toolbar', { name: 'Note actions' });
+  await expect(toolbar.getByRole('button')).toHaveCount(4);
+  await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Attach files');
+  await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Pin');
+  await dialog.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await openGalleryPage(page, 'Archive');
+  await openNote(page, 'Toolbar changes');
+  await dialog.getByRole('button', { name: 'Unarchive', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
+});
+
+test.describe('live capture', () => {
+  test.use({
+    permissions: ['camera', 'microphone'],
+  });
+
+  test('camera photos, video, and audio recordings attach inline and in the catalog', async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    await signUp(page);
+    await createNote(page, 'Captured media');
+    await openNote(page, 'Captured media');
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await page.getByRole('button', { name: 'Camera', exact: true }).click();
+    await expect
+      .poll(() =>
+        page
+          .locator('[aria-label="Camera"] video')
+          .evaluate((element: HTMLVideoElement) => element.videoWidth),
+      )
+      .toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Take photo', exact: true }).click();
+    await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Add attachment' })).toBeHidden();
+
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await page.getByRole('button', { name: 'Record audio', exact: true }).click();
+    await page.getByRole('button', { name: 'Record', exact: true }).click();
+    await expect(
+      page.getByRole('group', { name: 'Audio recorder' }).getByRole('status'),
+    ).toContainText('0:01');
+    await page.getByRole('button', { name: 'Save recording', exact: true }).click();
+    await expect(page.locator('.note-editor [data-content-type="audio"] audio')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Add attachment' })).toBeHidden();
+
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await page.getByRole('button', { name: 'Camera', exact: true }).click();
+    await page.getByRole('button', { name: 'Record', exact: true }).click();
+    await expect(page.getByRole('group', { name: 'Camera' }).getByRole('status')).toContainText(
+      '0:01',
+    );
+    await page.getByRole('button', { name: 'Save recording', exact: true }).click();
+    await expect(page.locator('.note-editor [data-content-type="video"] video')).toBeVisible();
+    const media = page.getByRole('region', { name: 'Media' });
+    await expect(media.getByRole('listitem')).toHaveCount(3);
+    await expect(media.getByText('Waiting to upload')).toHaveCount(0);
+    await expect(page.getByRole('dialog').getByText(/^Edited /)).toBeVisible({ timeout: 30000 });
+    await page.reload();
+    await expect(page.locator('.note-editor [data-content-type="audio"] audio')).toBeVisible();
+    await expect(page.locator('.note-editor [data-content-type="video"] video')).toBeVisible();
+    await expect(media.getByRole('listitem')).toHaveCount(3);
+  });
+});

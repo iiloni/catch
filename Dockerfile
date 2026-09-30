@@ -31,6 +31,7 @@ COPY --from=build /out/package.json ./package.json
 COPY --from=build /workspace/apps/server/dist ./dist
 COPY --from=build /workspace/apps/server/drizzle ./drizzle
 COPY --from=build /workspace/apps/web/dist ./web
+RUN mkdir -p /data/attachments && chown node:node /data/attachments
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node dist/db/migrate.mjs && node dist/index.mjs"]

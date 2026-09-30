@@ -10,9 +10,10 @@ import { zValidator } from '@hono/zod-validator';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
+import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { notes } from '../db/schema';
+import { attachments, notes } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
 
@@ -139,6 +140,10 @@ export const notesRoutes = new Hono<AppEnv>()
   .delete('/:id', idParam, async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
+    const files = await db
+      .select({ id: attachments.id })
+      .from(attachments)
+      .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)));
     const result = await db.transaction(async (tx) => {
       const deleted = await tx
         .delete(notes)
@@ -146,6 +151,7 @@ export const notesRoutes = new Hono<AppEnv>()
         .returning({ id: notes.id });
       return deleted.length > 0 ? currentTxid(tx) : null;
     });
+    await deleteFiles(files.map((file) => file.id));
     // Already gone, perhaps deleted by an earlier try of this same queued write.
     if (result === null) return c.json({ txid: null });
     return c.json({ txid: result });

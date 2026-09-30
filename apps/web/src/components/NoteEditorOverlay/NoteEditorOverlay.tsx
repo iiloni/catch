@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { ChevronLeft, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronLeft, Trash2 } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -16,14 +16,16 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
+import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
+import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useNoteLinks } from '@/lib/linkPreviews';
 import { curves, springs } from '@/lib/motion';
-import { deleteNoteForever, discardIfEmpty, trashNote } from '@/lib/notes';
+import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
 import {
   editorProgress,
   hideCard,
@@ -162,7 +164,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   targetRef.current = target;
   const editable = !note.deletedAt;
   const hasLinks = useNoteLinks(note).length > 0;
-  const sideLinks = split && target.width >= SIDE_LINKS_MIN && hasLinks;
+  const hasMedia = useNoteAttachments(note.id).length > 0;
+  const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia);
 
   // The dock shows this note's actions (see NoteDock).
   useEffect(() => editorNote.set(note), [note]);
@@ -378,6 +381,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       <div className="flex min-h-full flex-col">
         {settled ? (
           <LazyNoteEditor
+            noteId={note.id}
             initialContent={note.content}
             onChange={save}
             onControls={editorControls.set}
@@ -387,6 +391,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           />
         ) : (
           <NotePreview content={note.content} maxBlocks={200} variant="editor" />
+        )}
+        {!sideLinks && (
+          <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
         )}
         {!sideLinks && <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />}
         {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
@@ -431,7 +438,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             if (
               !target.isConnected ||
               target.closest(
-                '[data-dock], [data-sonner-toaster], [data-link-overlay], .bn-suggestion-menu',
+                '[data-dock], [data-sonner-toaster], [data-link-overlay], [data-attachment-menu], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
               )
             ) {
               event.preventDefault();
@@ -499,6 +506,21 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   <SaveStatus state={state} updatedAt={note.updatedAt} />
                 </div>
                 <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
+                  {editable && (
+                    <IconButton
+                      label={note.isArchived ? 'Unarchive' : 'Archive'}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        haptics.selection();
+                        flush();
+                        setNoteArchived(note.id, !note.isArchived);
+                        if (!note.isArchived) requestClose();
+                      }}
+                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                    >
+                      {note.isArchived ? <ArchiveRestore /> : <Archive />}
+                    </IconButton>
+                  )}
                   <IconButton
                     label={editable ? 'Move to trash' : 'Delete forever'}
                     onClick={() => {
@@ -514,23 +536,26 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 </div>
               </header>
 
-              {sideLinks ? (
-                // The column sits outside the note's card: the links belong to the note but
-                // are not part of its text.
-                <div className="mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] flex min-h-0 flex-1 gap-3">
-                  {scrollArea}
+              <div
+                className={cn(
+                  'flex min-h-0 flex-1',
+                  sideLinks &&
+                    'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] gap-3',
+                )}
+              >
+                {scrollArea}
+                {sideLinks && (
                   <motion.aside
                     className="w-64 shrink-0 overflow-y-auto overscroll-contain pb-6"
                     initial={{ opacity: 0, x: 16 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={springs.smooth}
                   >
+                    <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
                     <NoteLinks note={note} variant="side" />
                   </motion.aside>
-                </div>
-              ) : (
-                scrollArea
-              )}
+                )}
+              </div>
             </motion.div>
           </motion.div>
         </DialogPrimitive.Content>

@@ -8,6 +8,7 @@ import {
   ListIndentIncrease,
   ListOrdered,
   type LucideIcon,
+  Paperclip,
   Strikethrough,
   Underline,
 } from 'lucide-react';
@@ -26,12 +27,14 @@ import { cn } from '@/lib/utils';
 
 type Tool =
   | { label: string; action: 'slash' }
+  | { label: string; icon: LucideIcon; action: 'attachments' }
   | { label: string; icon: LucideIcon; style: TextStyle }
   | { label: string; icon: LucideIcon; block: BlockKind }
   | { label: string; icon: LucideIcon; action: 'indent' | 'outdent' };
 
 const TOOLS: Tool[] = [
   { label: 'Slash menu', action: 'slash' },
+  { label: 'Attach files', icon: Paperclip, action: 'attachments' },
   { label: 'Bold', icon: Bold, style: 'bold' },
   { label: 'Italic', icon: Italic, style: 'italic' },
   { label: 'Underline', icon: Underline, style: 'underline' },
@@ -58,7 +61,7 @@ function isActive(tool: Tool, state: FormattingState | null) {
 function isEnabled(tool: Tool, state: FormattingState | null) {
   if (!state) return false;
   if ('action' in tool) {
-    if (tool.action === 'slash') return true;
+    if (tool.action === 'slash' || tool.action === 'attachments') return true;
     return tool.action === 'indent' ? state.canIndent : state.canOutdent;
   }
   return true;
@@ -70,9 +73,13 @@ function isEnabled(tool: Tool, state: FormattingState | null) {
  */
 export function FormattingBar({
   controls,
+  attachmentsOpen = false,
+  onAttachments,
   className,
 }: {
   controls: EditorControls | null;
+  attachmentsOpen?: boolean;
+  onAttachments?: () => void;
   className?: string;
 }) {
   const state = useSyncExternalStore(
@@ -86,6 +93,7 @@ export function FormattingBar({
     if ('style' in tool) controls.toggleStyle(tool.style);
     else if ('block' in tool) controls.toggleBlock(tool.block);
     else if (tool.action === 'slash') controls.insertSlash();
+    else if (tool.action === 'attachments') onAttachments?.();
     else if (tool.action === 'indent') controls.indent();
     else controls.outdent();
   }
@@ -104,7 +112,12 @@ export function FormattingBar({
         <FormattingButton
           key={tool.label}
           tool={tool}
-          active={isActive(tool, state)}
+          active={
+            'action' in tool && tool.action === 'attachments'
+              ? attachmentsOpen
+              : isActive(tool, state)
+          }
+          expanded={'action' in tool && tool.action === 'attachments' ? attachmentsOpen : undefined}
           enabled={isEnabled(tool, state)}
           onPress={() => run(tool)}
         />
@@ -116,11 +129,13 @@ export function FormattingBar({
 function FormattingButton({
   tool,
   active,
+  expanded,
   enabled,
   onPress,
 }: {
   tool: Tool;
   active: boolean | undefined;
+  expanded?: boolean;
   enabled: boolean;
   onPress: () => void;
 }) {
@@ -165,7 +180,8 @@ function FormattingButton({
         <motion.button
           type="button"
           aria-label={tool.label}
-          aria-pressed={active}
+          aria-pressed={expanded === undefined ? active : undefined}
+          aria-expanded={expanded}
           disabled={!enabled}
           onPointerDown={pointerDown}
           onPointerMove={pointerMove}

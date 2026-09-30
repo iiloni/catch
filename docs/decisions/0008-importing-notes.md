@@ -57,8 +57,9 @@ synced, which offline it never does.
 
 ## Consequences
 
-- What Catch cannot hold yet is left out and listed before importing: Keep's attachments
-  (images, drawings, recordings), labels, and notes in its trash.
+- The importer leaves out and lists Keep's attachments (images, drawings, recordings),
+  labels, and notes in its trash. Catch supports attachments (ADR 0009), but reading and
+  matching Takeout's binary files is not implemented yet.
 - Keep's rich-text formatting is not imported: notes come in from `textContent`, the plain
   text every export has, rather than the newer `textContentHtml`.
 - A note deleted forever after an import comes back if the same export is imported again.
