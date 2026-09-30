@@ -122,7 +122,11 @@ function AttachmentCard({
         type="button"
         aria-label={`View ${file.name}`}
         onClick={onView}
-        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div
+        data-media-thumbnail
+        className="pointer-events-none flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl"
       >
         <MediaPreview
           key={file.status}
@@ -131,7 +135,7 @@ function AttachmentCard({
           kind={file.kind}
           thumbnail
         />
-      </button>
+      </div>
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium" title={file.name}>
@@ -144,7 +148,7 @@ function AttachmentCard({
         </div>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <IconButton label={`Manage ${file.name}`}>
+            <IconButton label={`Manage ${file.name}`} className="relative z-20">
               <Ellipsis />
             </IconButton>
           </DropdownMenuTrigger>

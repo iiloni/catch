@@ -54,17 +54,18 @@ Slash-menu upload and drag/paste upload use the same storage path through `uploa
 shares the links column beside editors at least 700 px wide. Images, video and audio also
 render inline; gallery previews use image thumbnails and compact labels for other files.
 The dock's preview overlay also shows a Media card above Links, using the same catalog and
-menus. Inline actions are tied to the matching editor and return to that note; opening a
-thumbnail keeps the catalog beneath the viewer so closing it returns to the attachments.
+menus. Inline actions are tied to the matching editor and return to that note. Opening the
+viewer keeps the catalog beneath it so closing it returns to the attachments. The full
+row opens the viewer, with its management menu as a separate control.
 Catalog rows share a fixed 64 px thumbnail size with link previews, without a background fill
-behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
+behind images. Tapping a row opens a full-screen dark media stage without a surrounding
 card. The viewer and its backdrop fade in and out linearly over 180 ms, skipping the fade when
 reduced motion is requested. The backdrop opens immediately with a loading indicator; the
 content's entrance starts once the image is loaded and decoded, or playback has its first
 data, so a late preview still receives the full fade. Errors reveal the fallback view.
 Playback stops when closing begins, and focus returns after the fade.
 A small metadata card at the top left offers download and Keep offline.
-Control bars use the metadata card's glass surface. Attachment navigation sits at the top
+Control bars use the metadata card's glass surface and the dock's radius tokens. Attachment navigation sits at the top
 right beside close on wide screens. Below 640 px, navigation is centered at the top, close
 sits at the bottom right and an Info button sits at the bottom left. Metadata starts hidden
 in a sheet that slides up to rest above the zoom controls. Dragging the Info button or the
@@ -75,5 +76,6 @@ Images support wheel and pinch zoom at the focal point, bounded dragging, double
 keyboard zoom/reset/pan. Arrows and unzoomed swipes navigate the note's attachments, resetting
 the view and stopping playback on each change. Video/audio use native playback controls;
 other files show download details. Focus stays in the viewer, and Escape or Android back
-closes the viewer first.
+closes the viewer first. Right-clicking anywhere in the viewer also closes it and suppresses
+the browser context menu.
 Media-only imported notes show their first attachment and file count on their gallery card.

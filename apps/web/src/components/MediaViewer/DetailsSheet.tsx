@@ -192,7 +192,7 @@ export function DetailsSheet({
         aria-label="Attachment details"
         aria-expanded={open}
         aria-controls="media-details"
-        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-3 z-30 size-11 touch-none rounded-full glass-thick text-foreground"
+        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-3 z-30 size-11 touch-none rounded-[calc(var(--dock-radius)-0.25rem)] glass-thick text-foreground"
         {...gestures}
         onClick={toggle}
       >

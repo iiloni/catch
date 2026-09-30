@@ -95,6 +95,10 @@ export function MediaViewer({
           data-media-viewer
           data-attachment-menu
           className="fixed inset-0 z-[100] overflow-hidden outline-none"
+          onContextMenu={(event) => {
+            event.preventDefault();
+            if (isPresent) onClose();
+          }}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             previousFocus.current =
@@ -135,11 +139,11 @@ export function MediaViewer({
                 )}
               >
                 {files.length > 1 && (
-                  <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
+                  <div className="flex items-center gap-1 rounded-[calc(var(--dock-radius)-0.25rem)] glass-thick p-1 text-foreground">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-10 rounded-full"
+                      className="size-10 rounded-[calc(var(--dock-radius)-0.5rem)]"
                       aria-label="Previous attachment"
                       onClick={() => navigate(-1)}
                     >
@@ -155,7 +159,7 @@ export function MediaViewer({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="size-10 rounded-full"
+                      className="size-10 rounded-[calc(var(--dock-radius)-0.5rem)]"
                       aria-label="Next attachment"
                       onClick={() => navigate(1)}
                     >
@@ -170,7 +174,7 @@ export function MediaViewer({
               variant="ghost"
               size="icon"
               className={cn(
-                'absolute right-3 z-30 size-11 rounded-full glass-thick text-foreground',
+                'absolute right-3 z-30 size-11 rounded-[calc(var(--dock-radius)-0.25rem)] glass-thick text-foreground',
                 narrow
                   ? 'bottom-[calc(var(--safe-bottom)+1rem)]'
                   : 'top-[calc(var(--safe-top)+0.75rem)]',

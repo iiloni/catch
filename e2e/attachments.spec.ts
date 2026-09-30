@@ -380,7 +380,7 @@ test('catalog actions insert at the cursor and toolbar uploads retain their capt
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-media-viewer]')).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
-  const thumbnails = await media.locator('button[aria-label^="View "]').evaluateAll((buttons) =>
+  const thumbnails = await media.locator('[data-media-thumbnail]').evaluateAll((buttons) =>
     buttons.map((button) => ({
       width: button.getBoundingClientRect().width,
       height: button.getBoundingClientRect().height,
@@ -429,7 +429,15 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
         : decoded;
     };
   });
-  await thumbnail.click();
+  await media.getByRole('button', { name: 'Manage landscape.png' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Keep offline' })).toBeVisible();
+  await expect(page.locator('[data-media-viewer]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  const row = await thumbnail.boundingBox();
+  if (!row) throw new Error('Missing media row');
+  expect(row.width).toBeGreaterThan(160);
+  // Click the filename area, beyond the 64 px thumbnail and away from the menu.
+  await thumbnail.click({ position: { x: row.width / 2, y: row.height / 2 } });
   const viewer = page.locator('[data-media-viewer]');
   const fadingContent = viewer.locator('[data-media-viewer-content]');
   await expect(viewer).toHaveAccessibleName('landscape.png');
@@ -641,7 +649,8 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     expect(controls.x + controls.width).toBeLessThan(close.x);
     await page.screenshot({ path: testInfo.outputPath('media-viewer-small-phone.png') });
   }
-  await page.keyboard.press('Escape');
+  if (isMobile) await page.keyboard.press('Escape');
+  else await stage.click({ button: 'right', position: center });
   const exitOpacity = await page.evaluate(async () => {
     const samples: number[] = [];
     const started = performance.now();

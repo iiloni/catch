@@ -286,13 +286,13 @@ export function ImageStage({
         )}
       </div>
       <fieldset
-        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-1/2 z-10 flex -translate-x-1/2 items-center gap-0 rounded-full glass-thick p-1 text-foreground sm:gap-1"
+        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-1/2 z-10 flex -translate-x-1/2 items-center gap-0 rounded-[calc(var(--dock-radius)-0.25rem)] glass-thick p-1 text-foreground sm:gap-1"
         aria-label="Image controls"
       >
         <Button
           variant="ghost"
           size="icon"
-          className="size-9 rounded-full sm:size-10"
+          className="size-9 rounded-[calc(var(--dock-radius)-0.5rem)] sm:size-10"
           aria-label="Zoom out"
           title="Zoom out (−)"
           disabled={transform.scale <= 1}
@@ -302,7 +302,7 @@ export function ImageStage({
         </Button>
         <Button
           variant="ghost"
-          className="h-9 min-w-12 rounded-full px-2 text-xs tabular-nums sm:h-10 sm:min-w-16"
+          className="h-9 min-w-12 rounded-[calc(var(--dock-radius)-0.5rem)] px-2 text-xs tabular-nums sm:h-10 sm:min-w-16"
           aria-label="Reset zoom"
           title="Reset zoom (0)"
           onClick={() => {
@@ -315,7 +315,7 @@ export function ImageStage({
         <Button
           variant="ghost"
           size="icon"
-          className="size-9 rounded-full sm:size-10"
+          className="size-9 rounded-[calc(var(--dock-radius)-0.5rem)] sm:size-10"
           aria-label="Zoom in"
           title="Zoom in (+)"
           disabled={transform.scale >= 8}
@@ -327,7 +327,7 @@ export function ImageStage({
         <Button
           variant="ghost"
           size="icon"
-          className="size-9 rounded-full sm:size-10"
+          className="size-9 rounded-[calc(var(--dock-radius)-0.5rem)] sm:size-10"
           aria-label={fill ? 'Fit image to screen' : 'Fill screen'}
           title={fill ? 'Fit image to screen' : 'Fill screen'}
           onClick={() => {

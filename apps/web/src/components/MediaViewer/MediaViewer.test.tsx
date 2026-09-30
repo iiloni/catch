@@ -106,6 +106,20 @@ describe('MediaViewer', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it.each(['image', 'controls'])(
+    'closes on right-clicking %s and suppresses the context menu',
+    (target) => {
+      const close = vi.fn();
+      render(<MediaViewer file={file} onClose={close} />);
+      const node =
+        target === 'image'
+          ? screen.getByRole('img')
+          : screen.getByRole('button', { name: 'Reset zoom' });
+      expect(fireEvent.contextMenu(node)).toBe(false);
+      expect(close).toHaveBeenCalledOnce();
+    },
+  );
+
   it.each(['audio', 'video'] as const)('offers playback controls for %s', (kind) => {
     const { container } = render(<MediaViewer file={{ ...file, kind }} onClose={vi.fn()} />);
     expect(container.ownerDocument.querySelector(kind)).toHaveAttribute('controls');
