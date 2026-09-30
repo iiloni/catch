@@ -171,7 +171,7 @@ async function ensureLinkNotes(userId: string) {
         isPinned: isPinned ?? false,
         position,
       });
-      found.push(...(await trackNoteLinks(tx, userId, content)));
+      found.push(...(await trackNoteLinks(tx, userId, [content])));
     }
     return found;
   });

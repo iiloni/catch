@@ -40,7 +40,8 @@ export type Note = z.infer<typeof noteSchema>;
 
 /**
  * Clients generate the UUIDv7 so notes can be created offline. Without a position, the
- * server puts the note first.
+ * server puts the note first. Dates are when the note was made on the device (or in the app
+ * it was imported from); the server replaces any later than its own clock.
  */
 export const createNoteSchema = noteSchema
   .pick({
@@ -49,12 +50,36 @@ export const createNoteSchema = noteSchema
     color: true,
     status: true,
     isPinned: true,
+    isArchived: true,
     position: true,
     hiddenLinks: true,
+    createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
   })
-  .partial({ color: true, status: true, isPinned: true, position: true, hiddenLinks: true });
+  .partial({
+    color: true,
+    status: true,
+    isPinned: true,
+    isArchived: true,
+    position: true,
+    hiddenLinks: true,
+    createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
+  });
 
 export type CreateNote = z.infer<typeof createNoteSchema>;
+
+/** The most notes one request may create; the client splits larger batches. */
+export const MAX_NOTES_PER_REQUEST = 100;
+
+/** Several new notes at once, created together or not at all. */
+export const createNotesSchema = z.object({
+  notes: z.array(createNoteSchema).min(1).max(MAX_NOTES_PER_REQUEST),
+});
+
+export type CreateNotes = z.infer<typeof createNotesSchema>;
 
 export const updateNoteSchema = noteSchema
   .pick({

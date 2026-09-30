@@ -59,7 +59,9 @@ Creating a note with another user's id is a 409.
 different fields of a note on two devices both survive. Edits to the same field, including
 a note's content, are applied in the order they reach the server: an offline edit sent later
 replaces what another device saved in the meantime. The server still stamps `updatedAt` when
-it applies a write, so "Last edited" is the sync time for offline edits.
+it applies an update, so "Last edited" is the sync time for offline edits. A new note keeps
+the dates it was made with on the device (ADR 0008), unless they are later than the server's
+clock.
 
 **Status.** `lib/syncStatus.ts` tracks pending writes, whether the device is offline (or the
 server did not answer), and whether the session was refused. The page headers show a cloud

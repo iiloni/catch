@@ -133,5 +133,8 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Collections open the signed-in user's local database when the module loads (top-level
   await), so signing in does a full page load. Offline, collections never become ready (that
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
+- Importers (Settings > Data Management) read exports on the device and add notes with
+  `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
+  (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.
 - The dev server has no service worker, so a page cannot load code offline in development.
   E2E tests for offline behavior block `/api` instead, or warm lazy chunks before going offline.

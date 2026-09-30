@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
 import { clearLocalData } from '@/lib/collections';
+import { forgetImport } from '@/lib/imports';
 import { getServerUrl } from '@/lib/serverUrl';
 import { useSyncStatus } from '@/lib/syncStatus';
 
@@ -25,6 +26,7 @@ async function signOut() {
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();
+  forgetImport();
   clearAuthToken();
   // A full reload drops this user's synced notes from memory.
   window.location.assign('/login');

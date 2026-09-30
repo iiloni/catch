@@ -146,18 +146,24 @@ export async function fetchPreviewsNow(userId: string, urls: readonly string[]) 
 const RETRY_FAILED_AFTER = sql`now() - interval '1 day'`;
 
 /**
- * Adds a pending preview for each new link in a note's content, inside the note's own
- * transaction so the rows sync with it. Returns the URLs to fetch once it commits.
+ * Adds a pending preview for each new link in the content of notes, inside the notes' own
+ * transaction so the rows sync with them. Returns the URLs to fetch once it commits.
  */
 export async function trackNoteLinks(
   tx: Tx,
   userId: string,
-  content: Note['content'],
+  contents: readonly Note['content'][],
 ): Promise<string[]> {
   if (!env.LINK_PREVIEWS) return [];
-  const urls = extractLinks(content)
-    .slice(0, MAX_NOTE_LINKS)
-    .map((link) => link.url);
+  const urls = [
+    ...new Set(
+      contents.flatMap((content) =>
+        extractLinks(content)
+          .slice(0, MAX_NOTE_LINKS)
+          .map((link) => link.url),
+      ),
+    ),
+  ];
   if (urls.length === 0) return [];
 
   const added = await tx

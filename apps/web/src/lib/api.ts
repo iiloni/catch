@@ -1,6 +1,7 @@
 import type {
   CreateBoardColumn,
   CreateNote,
+  CreateNotes,
   RefreshLinkPreview,
   TxidResponse,
   UpdateBoardColumn,
@@ -35,6 +36,8 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 export const api = {
   createNote: (body: CreateNote) =>
     request<TxidResponse>('/notes', { method: 'POST', body: JSON.stringify(body) }),
+  createNotes: (body: CreateNotes) =>
+    request<TxidResponse>('/notes/batch', { method: 'POST', body: JSON.stringify(body) }),
   updateNote: (id: string, body: UpdateNote) =>
     request<TxidResponse>(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteNote: (id: string) => request<TxidResponse>(`/notes/${id}`, { method: 'DELETE' }),

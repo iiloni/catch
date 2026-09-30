@@ -1,12 +1,14 @@
 import {
   blocksToPlainText,
+  type CreateNote,
   createNoteSchema,
-  positionBetween,
+  createNotesSchema,
+  positionsBetween,
   updateNoteSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, sql } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
@@ -27,50 +29,88 @@ async function currentTxid(tx: Tx): Promise<number> {
   return Number(row?.txid);
 }
 
-/** A position before all of the user's notes, for clients that do not send one. */
-async function firstPosition(tx: Tx, userId: string) {
+/** Positions before all of the user's notes, for clients that do not send one. */
+async function firstPositions(tx: Tx, userId: string, count: number) {
+  if (count === 0) return [];
   // The "C" collation compares by byte, as positions require.
   const [row] = await tx
     .select({ first: sql<string | null>`min(${notes.position} collate "C")` })
     .from(notes)
     .where(eq(notes.userId, userId));
-  return positionBetween(null, row?.first ?? null);
+  return positionsBetween(null, row?.first ?? null, count);
+}
+
+/** A client's clock may run ahead; a note cannot have been made after it reached us. */
+const notLater = (date: Date | undefined, now: Date) => (date && date > now ? now : date);
+
+class NoteIdTaken extends Error {}
+
+/**
+ * Adds new notes, skipping any the user already has: clients replay queued writes, so a
+ * note may be here from an earlier try. Returns null when every note was already here, and
+ * throws `NoteIdTaken` when another user has one of the ids.
+ */
+async function insertNotes(tx: Tx, userId: string, bodies: readonly CreateNote[]) {
+  const now = new Date();
+  const positions = await firstPositions(
+    tx,
+    userId,
+    bodies.filter((body) => !body.position).length,
+  );
+  const rows = bodies.map((body) => ({
+    ...body,
+    position: body.position ?? (positions.shift() as string),
+    createdAt: notLater(body.createdAt, now),
+    updatedAt: notLater(body.updatedAt, now),
+    userId,
+    searchText: blocksToPlainText(body.content),
+  }));
+  const inserted = await tx
+    .insert(notes)
+    .values(rows)
+    .onConflictDoNothing()
+    .returning({ id: notes.id });
+  const added = new Set(inserted.map((row) => row.id));
+  const replayed = rows.filter((row) => !added.has(row.id)).map((row) => row.id);
+  if (replayed.length > 0) {
+    const mine = await tx
+      .select({ id: notes.id })
+      .from(notes)
+      .where(and(eq(notes.userId, userId), inArray(notes.id, replayed)));
+    if (mine.length < new Set(replayed).size) throw new NoteIdTaken();
+  }
+  if (added.size === 0) return null;
+  const links = await trackNoteLinks(
+    tx,
+    userId,
+    rows.filter((row) => added.has(row.id)).map((row) => row.content),
+  );
+  return { txid: await currentTxid(tx), links };
+}
+
+async function createNotes(c: Context<AppEnv>, bodies: readonly CreateNote[]) {
+  const user = c.get('user')!;
+  let result: Awaited<ReturnType<typeof insertNotes>>;
+  try {
+    result = await db.transaction((tx) => insertNotes(tx, user.id, bodies));
+  } catch (error) {
+    if (error instanceof NoteIdTaken) return c.json({ error: 'Note id is taken' }, 409);
+    throw error;
+  }
+  if (result === null) return c.json({ txid: null });
+  queuePreviews(user.id, result.links);
+  return c.json({ txid: result.txid }, 201);
 }
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
 export const notesRoutes = new Hono<AppEnv>()
   .use(requireUser)
-  .post('/', zValidator('json', createNoteSchema), async (c) => {
-    const user = c.get('user')!;
-    const body = c.req.valid('json');
-    const result = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(notes)
-        .values({
-          ...body,
-          position: body.position ?? (await firstPosition(tx, user.id)),
-          userId: user.id,
-          searchText: blocksToPlainText(body.content),
-        })
-        .onConflictDoNothing()
-        .returning({ id: notes.id });
-      if (inserted.length === 0) return null;
-      const links = await trackNoteLinks(tx, user.id, body.content);
-      return { txid: await currentTxid(tx), links };
-    });
-    if (result === null) {
-      // Clients replay queued writes, so the note may already be here from an earlier try.
-      const [existing] = await db
-        .select({ id: notes.id })
-        .from(notes)
-        .where(and(eq(notes.id, body.id), eq(notes.userId, user.id)));
-      if (!existing) return c.json({ error: 'Note id is taken' }, 409);
-      return c.json({ txid: null });
-    }
-    queuePreviews(user.id, result.links);
-    return c.json({ txid: result.txid }, 201);
-  })
+  .post('/', zValidator('json', createNoteSchema), (c) => createNotes(c, [c.req.valid('json')]))
+  // Imports and copies of several notes arrive together.
+  .post('/batch', zValidator('json', createNotesSchema), (c) =>
+    createNotes(c, c.req.valid('json').notes),
+  )
   .patch('/:id', idParam, zValidator('json', updateNoteSchema), async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
@@ -89,7 +129,7 @@ export const notesRoutes = new Hono<AppEnv>()
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
       if (updated.length === 0) return null;
-      const links = body.content ? await trackNoteLinks(tx, user.id, body.content) : [];
+      const links = body.content ? await trackNoteLinks(tx, user.id, [body.content]) : [];
       return { txid: await currentTxid(tx), links };
     });
     if (result === null) return c.json({ error: 'Note not found' }, 404);

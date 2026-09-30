@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractLinks, isLinkOnly, linkDomain, normalizeUrl } from './links';
+import { extractLinks, findBareUrls, isLinkOnly, linkDomain, normalizeUrl } from './links';
 
 const text = (value: string) => ({ type: 'text', text: value, styles: {} });
 const link = (href: string, label = href) => ({ type: 'link', href, content: [text(label)] });
@@ -50,6 +50,21 @@ describe('extractLinks', () => {
 
   it('skips links that cannot have a preview', () => {
     expect(extractLinks([paragraph(link('mailto:me@example.com'))])).toEqual([]);
+  });
+});
+
+describe('findBareUrls', () => {
+  it('finds each web address and where it starts, without the punctuation after it', () => {
+    expect(
+      findBareUrls('See https://a.example/x. Or (http://b.example), not ftp://c.example'),
+    ).toEqual([
+      { index: 4, url: 'https://a.example/x' },
+      { index: 29, url: 'http://b.example' },
+    ]);
+  });
+
+  it('skips addresses that are not web links', () => {
+    expect(findBareUrls('http://localhost:3000 and plain text')).toEqual([]);
   });
 });
 
