@@ -10,5 +10,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HapticFeedbackPlugin.class);
         registerPlugin(KeyboardInsetsPlugin.class);
         super.onCreate(savedInstanceState);
+        // The page scrollbar is drawn by the WebView separately from nested CSS scrollers.
+        getBridge().getWebView().setVerticalScrollBarEnabled(false);
+        getBridge().getWebView().setHorizontalScrollBarEnabled(false);
     }
 }
