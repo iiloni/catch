@@ -3,10 +3,7 @@ import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from '
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
-import {
-  HISTORY_HEADER_MIN_WIDTH,
-  HistoryToolbar,
-} from '@/components/HistoryToolbar/HistoryToolbar';
+import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
 import {
@@ -261,7 +258,6 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
         <NoteLinkTray />
-        {width - GUTTER < HISTORY_HEADER_MIN_WIDTH && <FloatingHistoryToolbar />}
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
           initial={false}

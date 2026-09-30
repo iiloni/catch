@@ -85,6 +85,9 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
   await expect(body).toHaveText('Original body changed');
   await expect(redo).toBeDisabled();
   await undo.click();
+  await expect(body).toHaveText('Original body');
+  await expect(editor).toBeFocused();
+  await page.keyboard.press('End');
   await page.keyboard.insertText(' replacement');
   await expect(body).toHaveText('Original body replacement');
   await expect(redo).toBeDisabled();
@@ -124,12 +127,17 @@ test('checkbox edits use the same undo and redo history', async ({ page }) => {
   await expect(checkbox).toBeChecked();
 });
 
-test('a narrow split pane floats history above its dock and keeps the sync pill centered', async ({
+test('a narrow split pane keeps history in the header and the sync pill centered', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 720, height: 820 });
   await signUp(page);
   await createNote(page, 'Narrow history', 'Keep the header steady');
+  // Exercise the minimum pane width, where full status labels would overlap history.
+  await page.evaluate(async () => {
+    const { listRatio } = await import('/src/lib/splitView.ts');
+    listRatio.set(0.7);
+  });
   const dialog = await openNote(page, 'Narrow history');
   const status = dialog.getByRole('status');
   const before = await status.boundingBox();
@@ -139,7 +147,8 @@ test('a narrow split pane floats history above its dock and keeps the sync pill 
   await page.keyboard.insertText('!');
   const history = page.getByRole('toolbar', { name: 'Undo and redo' });
   await expect(history).toBeVisible();
-  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toHaveCount(0);
+  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
+  await expect(history).toHaveCount(1);
   await expect(status.getByText('Synced', { exact: true })).toBeVisible();
   await expect
     .poll(async () => {
@@ -151,16 +160,26 @@ test('a narrow split pane floats history above its dock and keeps the sync pill 
     .toBeLessThan(1);
   expect(await status.boundingBox()).toEqual(before);
   const box = await history.boundingBox();
-  const actions = await page.getByRole('toolbar', { name: 'Note actions' }).boundingBox();
-  if (!box || !actions) throw new Error('Missing history or note actions');
-  expect(box.y + box.height).toBeLessThan(actions.y);
-  expect(Math.abs(box.x + box.width - actions.x - actions.width)).toBeLessThan(2);
-
-  await page.setViewportSize({ width: 1180, height: 820 });
-  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
-  await expect(history).toHaveCount(1);
+  const back = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+  const pill = await dialog.locator('[data-sync-pill]').boundingBox();
+  if (!box || !back || !pill) throw new Error('Missing history, back button or sync pill');
+  expect(Math.abs(box.y + box.height / 2 - back.y - back.height / 2)).toBeLessThan(2);
+  expect(box.x).toBeGreaterThan(back.x + back.width);
+  expect(pill.x).toBeGreaterThan(box.x + box.width);
   await history.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(dialog.getByRole('textbox').locator('p').last()).toHaveText(
     'Keep the header steady',
+  );
+
+  await page.evaluate(async () => {
+    const { listRatio } = await import('/src/lib/splitView.ts');
+    listRatio.set(0.42);
+  });
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
+  await expect(history).toHaveCount(1);
+  await history.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(dialog.getByRole('textbox').locator('p').last()).toHaveText(
+    'Keep the header steady!',
   );
 });

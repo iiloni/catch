@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { springs } from '@/lib/motion';
 import { useSyncStatus } from '@/lib/syncStatus';
 import type { SaveState } from '@/lib/useNoteAutosave';
+import { cn } from '@/lib/utils';
 
-export function SaveStatus({ state }: { state: SaveState }) {
+export function SaveStatus({ state, compact = false }: { state: SaveState; compact?: boolean }) {
   // Offline, a save waits in the outbox until the connection comes back.
   const { offline, pending } = useSyncStatus();
   const syncing = state === 'saving' || pending > 0;
@@ -29,7 +30,9 @@ export function SaveStatus({ state }: { state: SaveState }) {
       role="status"
       className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 flex items-center justify-center overflow-hidden py-2"
     >
-      <AnimatePresence>{visible && <StatusPill key="pill" mode={mode} />}</AnimatePresence>
+      <AnimatePresence>
+        {visible && <StatusPill key="pill" mode={mode} compact={compact} />}
+      </AnimatePresence>
     </div>
   );
 }
@@ -45,7 +48,7 @@ const labels = {
 
 const icons = { error: CloudAlert, local: CloudOff, syncing: LoaderCircle, synced: CloudCheck };
 
-function StatusPill({ mode }: { mode: Mode }) {
+function StatusPill({ mode, compact }: { mode: Mode; compact: boolean }) {
   const reducedMotion = useReducedMotion();
   const pillRef = useRef<HTMLDivElement>(null);
   const width = useMotionValue<number | 'auto'>('auto');
@@ -78,7 +81,12 @@ function StatusPill({ mode }: { mode: Mode }) {
     <motion.div
       ref={pillRef}
       data-sync-pill
-      className="glass relative h-9 overflow-hidden rounded-full text-muted-foreground text-xs"
+      title={compact ? labels[mode] : undefined}
+      className={cn(
+        'glass relative h-9 overflow-hidden rounded-full text-muted-foreground text-xs',
+        compact && 'pointer-events-auto',
+      )}
+      onPointerDown={(event) => event.preventDefault()}
       style={{ width }}
       variants={{ hidden, shown: { opacity: 1, y: 0 } }}
       initial="hidden"
@@ -90,7 +98,10 @@ function StatusPill({ mode }: { mode: Mode }) {
         <motion.p
           key={mode}
           ref={measure}
-          className="absolute inset-y-0 left-0 flex w-max items-center gap-1.5 whitespace-nowrap px-3"
+          className={cn(
+            'absolute inset-y-0 left-0 flex w-max items-center gap-1.5 whitespace-nowrap',
+            compact ? 'px-2' : 'px-3',
+          )}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -106,7 +117,7 @@ function StatusPill({ mode }: { mode: Mode }) {
             }
             aria-hidden
           />
-          {labels[mode]}
+          <span className={compact ? 'sr-only' : undefined}>{labels[mode]}</span>
         </motion.p>
       </AnimatePresence>
     </motion.div>

@@ -18,9 +18,6 @@ const noSubscribe = () => () => {};
 const noState = () => null;
 const instant = { duration: 0 };
 
-/** Keep the centered sync pill clear of the back, history and trash controls. */
-export const HISTORY_HEADER_MIN_WIDTH = 480;
-
 export function HistoryToolbar({
   controls,
   floating = false,

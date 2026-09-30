@@ -142,10 +142,12 @@ focus, so the keyboard stays up.
 
 **Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
-redo history. From 640 px it sits beside the back button when the note is at least 480 px
-wide. It is positioned outside the header's flow so it never moves the centered sync pill.
-On phones and narrower split panes it floats at the dock's right edge above either the note
-actions or formatting bar. Keyboard scrolling keeps the caret's line above this toolbar too,
+redo history. From 640 px it sits beside the back button, including in narrow split panes.
+It is positioned outside the header's flow so it never moves the centered sync pill.
+Split panes narrower than 480 px show the sync pill's icon with an accessible status label
+and a tooltip, leaving room for every header control. On phones the history toolbar floats
+at the dock's right edge above either the note actions or formatting bar.
+Keyboard scrolling keeps the caret's line above this toolbar too,
 with enough bottom padding to reach the note's last line.
 The toolbar slides in from the top in the header or the right above the dock with `springs.smooth`,
 matching the sync pill, and skips animation when reduced motion is requested. Its final

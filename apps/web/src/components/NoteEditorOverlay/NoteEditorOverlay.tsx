@@ -12,10 +12,7 @@ import {
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  HISTORY_HEADER_MIN_WIDTH,
-  HistoryToolbar,
-} from '@/components/HistoryToolbar/HistoryToolbar';
+import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
@@ -562,15 +559,15 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       <ChevronLeft />
                     </IconButton>
                   </div>
-                  {editable && target.width >= HISTORY_HEADER_MIN_WIDTH && (
+                  {editable && (
                     <HistoryToolbar
                       controls={controls}
-                      className="absolute top-0 left-[calc(100%+0.5rem)] hidden sm:flex"
+                      className="absolute top-0 left-[calc(100%+0.25rem)] hidden sm:flex"
                     />
                   )}
                 </div>
                 <div className="pointer-events-none relative h-[50px] min-w-0 flex-1">
-                  <SaveStatus state={state} />
+                  <SaveStatus state={state} compact={split && target.width < 480} />
                 </div>
                 <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
                   <IconButton
