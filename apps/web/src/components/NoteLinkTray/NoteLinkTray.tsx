@@ -26,7 +26,7 @@ export function NoteLinkTray() {
   return (
     <AnimatePresence initial={false}>
       {shown && (
-        // Only slides: opacity below 1 here would stop the tray's glass from blurring.
+        // Fade the glass button itself; opacity on this wrapper would cut off its backdrop.
         <motion.div
           key="tray"
           className="-z-10 absolute inset-x-0 bottom-[calc(100%-0.75rem)] flex flex-col"

@@ -21,17 +21,21 @@ import {
   renameAttachment,
   useNoteAttachments,
 } from '@/lib/attachments';
-import { editorControls } from '@/lib/dockState';
+import { editorControls, editorNote } from '@/lib/dockState';
 import { cn } from '@/lib/utils';
 
 export function NoteMedia({
   noteId,
   readOnly,
   className,
+  withHeading = true,
+  onShowInNote,
 }: {
   noteId: string;
   readOnly?: boolean;
   className?: string;
+  withHeading?: boolean;
+  onShowInNote?: () => void;
 }) {
   const files = useNoteAttachments(noteId);
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -39,11 +43,18 @@ export function NoteMedia({
   if (!files.length) return null;
   return (
     <section aria-label="Media" data-note-media className={cn('flex flex-col gap-2', className)}>
-      <h2 className="px-1 text-xs font-medium text-muted-foreground">Media · {files.length}</h2>
+      {withHeading && (
+        <h2 className="px-1 text-xs font-medium text-muted-foreground">Media · {files.length}</h2>
+      )}
       <ul className="flex flex-col gap-2">
         {files.map((file) => (
           <li key={file.id}>
-            <AttachmentCard file={file} readOnly={readOnly} onView={() => setViewingId(file.id)} />
+            <AttachmentCard
+              file={file}
+              readOnly={readOnly}
+              onView={() => setViewingId(file.id)}
+              onShowInNote={onShowInNote}
+            />
           </li>
         ))}
       </ul>
@@ -58,13 +69,17 @@ function AttachmentCard({
   file,
   readOnly,
   onView,
+  onShowInNote,
 }: {
   file: Attachment;
   readOnly?: boolean;
   onView: () => void;
+  onShowInNote?: () => void;
 }) {
   const [rename, setRename] = useState(false);
-  const controls = editorControls.use();
+  const activeNote = editorNote.use();
+  const activeControls = editorControls.use();
+  const controls = activeNote?.id === file.noteId ? activeControls : null;
   const state = useSyncExternalStore(
     controls?.subscribe ?? noSubscription,
     () => controls?.getState() ?? null,
@@ -84,7 +99,9 @@ function AttachmentCard({
     }
   }
   function showInNote() {
-    if (controls && !controls.showAttachment(file.id)) controls.attachmentInserter()([file]);
+    if (!controls) return;
+    if (!controls.showAttachment(file.id)) controls.attachmentInserter()([file]);
+    onShowInNote?.();
   }
   return (
     <div

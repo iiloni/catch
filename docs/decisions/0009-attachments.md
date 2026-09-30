@@ -53,6 +53,9 @@ Slash-menu upload and drag/paste upload use the same storage path through `uploa
 **Catalog layout follows editor width.** Media follows the text on narrow editors, and
 shares the links column beside editors at least 700 px wide. Images, video and audio also
 render inline; gallery previews use image thumbnails and compact labels for other files.
+The dock's preview overlay also shows a Media card above Links, using the same catalog and
+menus. Inline actions are tied to the matching editor and return to that note; opening a
+thumbnail keeps the catalog beneath the viewer so closing it returns to the attachments.
 Catalog rows share a fixed 64 px thumbnail size with link previews, without a background fill
 behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
 card. A small metadata card at the top left offers download and Keep offline.
