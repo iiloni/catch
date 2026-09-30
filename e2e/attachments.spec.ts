@@ -497,6 +497,28 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     await details.getByRole('button', { name: 'Hide attachment details' }).click();
     await expect(details).toHaveAttribute('inert', '');
     await expect(info).toBeFocused();
+    const imageStart = { x: viewport.width / 2, y: viewport.height / 2 };
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [imageStart],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: imageStart.x, y: imageStart.y - 80 }],
+    });
+    await expect(details).not.toHaveAttribute('inert', '');
+    await expect(info).toHaveAttribute('aria-expanded', 'false');
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: imageStart.x, y: imageStart.y - 240 }],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(info).toHaveAttribute('aria-expanded', 'true');
+    await expect(details).toHaveCSS('transform', 'none');
+    await expect(viewer).toHaveAccessibleName('landscape.png');
+    await expect(viewer.getByRole('button', { name: 'Reset zoom' })).toHaveText('100%');
+    await info.click();
+    await expect(details).toHaveAttribute('inert', '');
     await session.detach();
   } else {
     await expect(viewer.getByRole('button', { name: 'Keep offline' })).toBeVisible();

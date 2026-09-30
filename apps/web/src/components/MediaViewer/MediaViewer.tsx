@@ -17,7 +17,7 @@ import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
 import { cn } from '@/lib/utils';
-import { DetailsSheet } from './DetailsSheet';
+import { type DetailsGesture, DetailsSheet } from './DetailsSheet';
 import { ImageStage } from './ImageStage';
 import type { Size } from './transform';
 
@@ -158,6 +158,7 @@ function ViewerContent({
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [size, setSize] = useState<Size | null>(null);
+  const details = useRef<DetailsGesture | null>(null);
   const mediaRef = useCallback((node: HTMLMediaElement | null) => {
     if (!node) return;
     return () => {
@@ -227,6 +228,7 @@ function ViewerContent({
           onError={() => setFailed(true)}
           onNavigate={onNavigate}
           onSize={setSize}
+          details={narrow ? details : undefined}
         />
       ) : source && !unavailable && file.kind === 'video' ? (
         // biome-ignore lint/a11y/useMediaCaption: user attachments do not include a caption track
@@ -275,7 +277,7 @@ function ViewerContent({
         </div>
       )}
       {narrow ? (
-        <DetailsSheet>{metadata}</DetailsSheet>
+        <DetailsSheet ref={details}>{metadata}</DetailsSheet>
       ) : (
         <div className="absolute top-[calc(var(--safe-top)+0.75rem)] left-3 z-20 w-72 max-w-[calc(100%-16rem)] rounded-2xl glass-thick px-3 py-2.5 text-foreground">
           {metadata}

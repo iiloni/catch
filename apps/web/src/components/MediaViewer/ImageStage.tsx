@@ -1,7 +1,16 @@
 import { Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
-import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type PointerEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import type { DetailsGesture, DetailsPointer } from './DetailsSheet';
 import {
   constrain,
   fittedSize,
@@ -18,12 +27,14 @@ export function ImageStage({
   onError,
   onNavigate,
   onSize,
+  details,
 }: {
   source: string;
   name: string;
   onError: () => void;
   onNavigate?: (direction: number) => void;
   onSize: (size: Size) => void;
+  details?: RefObject<DetailsGesture | null>;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
@@ -37,6 +48,8 @@ export function ImageStage({
   const start = useRef<Point | null>(null);
   const moved = useRef(false);
   const pinched = useRef(false);
+  const direction = useRef<'horizontal' | 'details' | null>(null);
+  const detailsStart = useRef<DetailsPointer | null>(null);
   const lastTap = useRef<{ time: number; point: Point } | null>(null);
   const media = useMemo(() => fittedSize(image, viewport, fill), [image, viewport, fill]);
   const pannable = transform.scale > 1 || fill;
@@ -115,6 +128,11 @@ export function ImageStage({
 
   function finish(event: PointerEvent<HTMLDivElement>, cancelled: boolean) {
     if (!pointers.current.has(event.pointerId)) return;
+    const wasDetails = direction.current === 'details';
+    if (wasDetails) {
+      details?.current?.finish(event, cancelled);
+      direction.current = null;
+    }
     pointers.current.delete(event.pointerId);
     if (pointers.current.size) {
       start.current = null;
@@ -123,7 +141,7 @@ export function ImageStage({
     setDragging(false);
     setSwipe(0);
     const end = point(event.clientX, event.clientY);
-    if (!cancelled && !pinched.current && start.current) {
+    if (!cancelled && !pinched.current && start.current && !wasDetails) {
       const dx = end.x - start.current.x;
       const dy = end.y - start.current.y;
       if (moved.current) {
@@ -143,6 +161,8 @@ export function ImageStage({
     }
     if (moved.current || pinched.current || cancelled) lastTap.current = null;
     start.current = null;
+    direction.current = null;
+    detailsStart.current = null;
   }
 
   return (
@@ -161,7 +181,16 @@ export function ImageStage({
             start.current = next;
             moved.current = false;
             pinched.current = false;
+            direction.current = null;
+            detailsStart.current = {
+              pointerId: event.pointerId,
+              clientY: event.clientY,
+              timeStamp: event.timeStamp,
+            };
           } else {
+            if (direction.current === 'details' && detailsStart.current)
+              details?.current?.finish(detailsStart.current, true);
+            direction.current = null;
             pinched.current = true;
             moved.current = true;
             setSwipe(0);
@@ -196,9 +225,22 @@ export function ImageStage({
                 y: live.current.y + next.y - previous.y,
               });
               setDragging(true);
-            } else if (onNavigate && start.current) {
-              setSwipe((next.x - start.current.x) * 0.5);
-              setDragging(true);
+            } else if (start.current && !pinched.current) {
+              const dx = next.x - start.current.x;
+              const dy = next.y - start.current.y;
+              if (!direction.current && moved.current) {
+                direction.current =
+                  details?.current && dy < 0 && Math.abs(dy) > Math.abs(dx)
+                    ? 'details'
+                    : 'horizontal';
+                if (direction.current === 'details' && detailsStart.current)
+                  details?.current?.begin(detailsStart.current);
+              }
+              if (direction.current === 'details') details?.current?.move(event);
+              else if (onNavigate) {
+                setSwipe(dx * 0.5);
+                setDragging(true);
+              }
             }
           }
         }}

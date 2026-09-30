@@ -207,6 +207,53 @@ describe('MediaViewer', () => {
     await waitFor(() => expect(sheet).toHaveAttribute('inert'));
   });
 
+  it('reveals details with an upward image drag even with one attachment, while zoomed drags pan', async () => {
+    vi.stubGlobal('innerWidth', 380);
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(600);
+    render(<MediaViewer file={file} onClose={vi.fn()} />);
+    const { stage, image } = loadedStage();
+    const info = screen.getByRole('button', { name: 'Attachment details' });
+    const sheet = document.querySelector('[data-media-details]');
+    fireEvent.pointerDown(stage, { pointerId: 1, button: 0, clientX: 320, clientY: 300 });
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 320, clientY: 190 });
+    expect(sheet).not.toHaveAttribute('inert');
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(haptics.threshold).toHaveBeenCalledOnce();
+    fireEvent.pointerUp(stage, { pointerId: 1, clientX: 320, clientY: 190 });
+    expect(info).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Reset zoom' })).toHaveTextContent('100%');
+    fireEvent.click(info);
+    await waitFor(() => expect(sheet).toHaveAttribute('inert'));
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    fireEvent.pointerDown(stage, { pointerId: 2, button: 0, clientX: 320, clientY: 300 });
+    fireEvent.pointerMove(stage, { pointerId: 2, clientX: 320, clientY: 190 });
+    fireEvent.pointerUp(stage, { pointerId: 2, clientX: 320, clientY: 190 });
+    expect(image.style.transform).not.toContain('translate(0px, 0px)');
+    expect(info).toHaveAttribute('aria-expanded', 'false');
+    expect(sheet).toHaveAttribute('inert');
+  });
+
+  it.each(['cancel', 'pinch'])('cancels an image details drag on %s', async (action) => {
+    vi.stubGlobal('innerWidth', 380);
+    vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(600);
+    render(<MediaViewer file={file} onClose={vi.fn()} />);
+    const { stage } = loadedStage();
+    fireEvent.pointerDown(stage, { pointerId: 1, button: 0, clientX: 320, clientY: 300 });
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 320, clientY: 190 });
+    if (action === 'pinch') {
+      fireEvent.pointerDown(stage, { pointerId: 2, button: 0, clientX: 400, clientY: 240 });
+      fireEvent.pointerUp(stage, { pointerId: 2, clientX: 400, clientY: 240 });
+      fireEvent.pointerUp(stage, { pointerId: 1, clientX: 320, clientY: 190 });
+    } else fireEvent.pointerCancel(stage, { pointerId: 1, clientX: 320, clientY: 190 });
+    expect(screen.getByRole('button', { name: 'Attachment details' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await waitFor(() =>
+      expect(document.querySelector('[data-media-details]')).toHaveAttribute('inert'),
+    );
+  });
+
   it('stops playback and releases the source when navigating away from a recording', () => {
     render(
       <MediaViewer

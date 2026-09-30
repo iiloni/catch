@@ -1,11 +1,33 @@
 import { Info } from 'lucide-react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 
-export function DetailsSheet({ children }: { children: ReactNode }) {
+export type DetailsPointer = Pick<PointerEvent, 'pointerId' | 'clientY' | 'timeStamp'>;
+export interface DetailsGesture {
+  begin: (event: DetailsPointer) => void;
+  move: (event: DetailsPointer) => void;
+  finish: (event: DetailsPointer, cancelled?: boolean) => void;
+}
+
+export function DetailsSheet({
+  children,
+  ref,
+}: {
+  children: ReactNode;
+  ref?: Ref<DetailsGesture>;
+}) {
   const [open, setOpen] = useState(false);
   const [exposed, setExposed] = useState(false);
   const [travel, setTravel] = useState(320);
@@ -54,14 +76,10 @@ export function DetailsSheet({ children }: { children: ReactNode }) {
     });
   }
 
-  function start(event: PointerEvent<HTMLElement>) {
-    if (event.button !== 0 || drag.current) return;
-    if (
-      event.target instanceof Element &&
-      event.target.closest('button') &&
-      !event.target.closest('[data-details-handle]')
-    )
-      return;
+  useImperativeHandle(ref, () => ({ begin, move, finish }));
+
+  function begin(event: DetailsPointer) {
+    if (drag.current) return;
     animation.current?.stop();
     suppressClick.current = false;
     drag.current = {
@@ -74,6 +92,17 @@ export function DetailsSheet({ children }: { children: ReactNode }) {
       moved: false,
       armed: progress.get() >= 0.5,
     };
+  }
+
+  function start(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0 || drag.current) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest('button') &&
+      !event.target.closest('[data-details-handle]')
+    )
+      return;
+    begin(event);
     // Capture on the handle itself so a tap still delivers its click to the button.
     const target =
       event.target instanceof Element
@@ -82,7 +111,7 @@ export function DetailsSheet({ children }: { children: ReactNode }) {
     target.setPointerCapture(event.pointerId);
   }
 
-  function move(event: PointerEvent<HTMLElement>) {
+  function move(event: DetailsPointer) {
     const current = drag.current;
     if (!current || current.id !== event.pointerId) return;
     const distance = current.start - event.clientY;
@@ -100,7 +129,7 @@ export function DetailsSheet({ children }: { children: ReactNode }) {
     current.armed = armed;
   }
 
-  function finish(event: PointerEvent<HTMLElement>, cancelled = false) {
+  function finish(event: DetailsPointer, cancelled = false) {
     const current = drag.current;
     if (!current || current.id !== event.pointerId) return;
     drag.current = null;
@@ -120,11 +149,12 @@ export function DetailsSheet({ children }: { children: ReactNode }) {
     onPointerCancel: (event: PointerEvent<HTMLElement>) => finish(event, true),
     onLostPointerCapture: (event: PointerEvent<HTMLElement>) => finish(event, true),
   };
-  function toggle() {
-    if (suppressClick.current) {
+  function toggle(event: MouseEvent) {
+    if (suppressClick.current && event.detail > 0) {
       suppressClick.current = false;
       return;
     }
+    suppressClick.current = false;
     settle(!open);
   }
 
