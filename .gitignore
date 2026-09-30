@@ -5,8 +5,9 @@ coverage/
 .env
 .env.local
 .env.worktree
+*.jks
+*.keystore
 *.tsbuildinfo
 .tanstack/
 test-results/
 playwright-report/
-

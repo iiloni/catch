@@ -1,0 +1,248 @@
+# Releasing and deployment
+
+Catch builds Docker images and signed Android APKs from version tags. Personal production
+Compose files, domains, credentials, and signing keys stay outside the repository.
+
+## Channels and versions
+
+| Channel | Git tag | Exact image tag | Moving image aliases | Android application |
+| --- | --- | --- | --- | --- |
+| Stable | `v0.4.1` | `0.4.1` | `stable`, `latest` | Catch (`org.iloni.catchnotes`) |
+| Preview | `v1.0.2-preview` | `1.0.2-preview` | `preview` | Catch Preview (`org.iloni.catchnotes.preview`) |
+
+The image name is `ghcr.io/<repository owner>/<repository name>`, lowercased. Stable and
+preview advance independently. Preview never changes the stable aliases or GitHub's latest
+stable release. Older releases can be published as backports without moving aliases back.
+
+Each preview has its own core `MAJOR.MINOR.PATCH` version. The `-preview` suffix selects
+the channel; there is no separate counter. For example, advance from `0.3.0-preview` to
+`0.3.1-preview` for a fix or `0.4.0-preview` for a feature. Before 1.0, SemVer allows the
+compatibility contract to change; from 1.0 onward, use major for breaking changes, minor for
+compatible features, and patch for compatible fixes.
+
+For example, stable can stay on `0.3.3` while preview advances through
+`0.4.0-preview`, `0.4.1-preview`, and `0.4.2-preview`. When the final preview is ready,
+tag its tested commit as `v0.4.2` to promote it. You do not need stable `0.4.0` or `0.4.1`
+releases first. Alternatively, while newer patch work continues on main, you can promote
+the earlier commit behind `v0.4.1-preview` as `v0.4.1`; newer work and the preview channel
+stay where they are. Use `./scripts/release.sh stable promote v0.4.1-preview` for that promotion.
+Always remove the preview suffix from the tested version, and test another preview if
+you change that commit before releasing it.
+
+Only stable tags and `-preview` tags are accepted. Components cannot have leading zeroes.
+Numbered preview suffixes, other suffixes, and build metadata are intentionally unsupported. Never
+move or reuse a published tag; tag a new version instead. Use Conventional Commits for
+commit messages, but choose release versions explicitly.
+
+## Workflows
+
+- `ci.yml`: lint, typecheck, unit tests (including release policy), web/API builds, and E2E.
+  Runs on pushes to main, pull requests to main, and manual dispatch. Superseded branch CI
+  runs are canceled. The release workflow calls it for the exact tagged commit too.
+- `release.yml`: a pushed `v*` tag validates the version. Builds and publishing proceed
+  only when the Actions repository variable `RELEASES_ENABLED` is exactly `true`.
+  Release runs are queued, with no cancellation or manual dispatch. Missing Android
+  credentials fail before the image job can build or publish.
+- Signed APK builds use Node 24, JDK 21, SDK 36, and the Gradle wrapper. The Docker job then
+  builds the production Dockerfile for `linux/amd64` and `linux/arm64`, and pushes only the
+  exact version. Once both artifacts are ready, the publishing job uploads the APK and
+  checksum to a draft release, updates the appropriate image aliases, and publishes the
+  release. Preview GitHub Releases are marked as prereleases.
+
+The release notes record the exact image, its digest, the source commit, and the Android
+version code. There is no deployment job. Actions artifacts expire after seven days; APKs
+attached to a published GitHub Release remain available there.
+
+## One-time GitHub configuration
+
+1. Make the repository public when ready. Standard GitHub-hosted runner compute is free for
+   public repositories; larger runners and excess storage have separate billing rules.
+2. Allow the pinned actions used by these workflows in Settings > Actions > General.
+   Jobs declare the required `contents: write` and `packages: write` permissions themselves;
+   the built-in `GITHUB_TOKEN` publishes releases and images, with no personal access token.
+3. Configure the four signing secrets below in Settings > Secrets and variables > Actions.
+4. Once signing is ready and you intend to release, set the Actions **repository variable**
+   `RELEASES_ENABLED` to `true`. Leaving it absent or false keeps all release builds off.
+5. After the first image is published, open the account's Packages > Catch > Package settings
+   and change visibility to Public. Repository visibility does not automatically make a new
+   GHCR package public. Anonymous production pulls work after this change.
+
+Protect main with the CI `check` and `e2e` status checks, and use a tag ruleset for `v*` to
+limit release tag creation and prevent deletion or modification. These are GitHub settings;
+the workflow files do not change them. If an existing GHCR package is already associated
+with another repository, grant this repository Actions write access to that package.
+
+## Android signing setup
+
+Create a persistent signing key outside the checkout and keep a secure backup of the key,
+alias, and password. Updates require the same signing key. For example, with JDK 21:
+
+```bash
+umask 077
+mkdir -p ~/.local/share/catch-signing
+keytool -genkeypair -storetype PKCS12 \
+  -keystore ~/.local/share/catch-signing/release.keystore \
+  -alias catch -keyalg RSA -keysize 3072 -validity 10000
+```
+
+This prompts for the password and certificate details. With PKCS12, use the keystore
+password as the key password too. Configure these repository Actions secrets:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64 encoding of the keystore file |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `catch`, if using the example above |
+| `ANDROID_KEY_PASSWORD` | Key password (same as store password for that PKCS12 key) |
+
+With the GitHub CLI, the file secret can be set without printing it:
+
+```bash
+base64 -w 0 ~/.local/share/catch-signing/release.keystore | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_ALIAS
+gh secret set ANDROID_KEY_PASSWORD
+```
+
+The other commands prompt for their values. Do not commit the key or passwords. CI decodes
+the key into a temporary file and removes it after the Android job; Gradle receives signing
+values through the environment and configuration caching is disabled for the release build.
+
+The APK's `versionName` is the full tag without `v`. Its `versionCode` is the release
+workflow's run number, shared across the two flavors. Publish forward releases in order,
+waiting for the previous release to finish. Keep `.github/workflows/release.yml` and its
+workflow identity intact: resetting the run sequence requires planning a higher version-code
+baseline. A rerun keeps its original code; retry an interrupted older release before making
+newer releases. Published releases cannot be rebuilt and overwritten.
+
+Stable and preview install together and keep separate local notes, accounts, and server
+URLs. The first signed stable installation replaces the development app only after a
+one-time uninstall because development uses a different debug key. Sync or export local
+notes first. Subsequent signed releases update normally. Download updates from GitHub
+Releases; an automatic Android updater is not included.
+
+Local release builds use `CATCH_VERSION`, `CATCH_VERSION_CODE`, `ANDROID_KEYSTORE_PATH`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Missing values
+fail the release build. Debug builds do not require them. `assembleStableDebug` is the usual
+development APK; `assemblePreviewDebug` is available for testing the second app.
+
+## Creating a release
+
+The local helper requires Node 24+ and installed dependencies (`pnpm install`). It creates
+an annotated tag on the latest commit (`HEAD`), and never fetches or pushes. Ordinary bumps
+require a clean checkout; `--dry-run` can inspect the result while changes are uncommitted.
+
+The baseline is the highest supported stable **or** preview tag reachable from HEAD. For
+example, with stable `v0.3.3` and preview `v0.4.1-preview` in the history, `preview patch`
+produces `v0.4.2-preview`, and `stable patch` produces `v0.4.2`. Major and minor bumps reset
+lower components. With no tags, the baseline is `0.0.0`. Tags on unrelated branches do not
+affect the bump, so a backport branch uses its own history. Existing tags are never overwritten.
+
+Fetch tags yourself before choosing a version if other maintainers may have released:
+
+```bash
+git fetch origin --tags
+./scripts/release.sh preview minor --dry-run
+./scripts/release.sh preview minor
+```
+
+Use `stable` in place of `preview` for a stable bump. These commands only create local tags.
+To promote a tested preview, preserve its version and commit using `promote` rather than
+bumping again:
+
+```bash
+# Promote the highest preview tag on HEAD:
+./scripts/release.sh stable promote
+# Or promote an earlier preview without switching branches or changing newer work:
+./scripts/release.sh stable promote v0.4.1-preview --dry-run
+./scripts/release.sh stable promote v0.4.1-preview
+```
+
+Promotion can run with uncommitted changes because it tags an existing preview commit.
+No version edit or separate release branch is required.
+
+First merge the workflow setup and configure signing and `RELEASES_ENABLED`. When you are
+ready to trigger real builds, push the exact tag printed by the helper, for example:
+
+```bash
+git push origin v0.4.1
+```
+
+Pushing the tag triggers the release workflow; merging ordinary code does not publish
+images or APKs. Leave `RELEASES_ENABLED` absent until you intend to enable release builds.
+
+Follow the Release workflow in Actions. An interrupted unpublished release can be retried
+using Re-run jobs; the draft and assets can be resumed. A failed publication may leave an
+exact image or draft release, but stable/preview aliases only advance after both build jobs
+succeed. Once published, choose a new version for any changes.
+
+## Production configuration outside the repository
+
+Keep a standalone deployment directory on the server, for example `~/services/catch/`,
+with `compose.yaml` and an owner-only `.env`. The server does not need a Git checkout.
+Copy the generic `docker-compose.yml` and `.env.example` there as a starting point, then
+replace the app's `build:` block with:
+
+```yaml
+image: ${CATCH_IMAGE:?Set CATCH_IMAGE}
+```
+
+Choose an exact release or channel alias in the server's `.env`:
+
+```dotenv
+CATCH_IMAGE=ghcr.io/OWNER/REPOSITORY:stable
+BETTER_AUTH_URL=https://notes.example.com
+BETTER_AUTH_SECRET=YOUR_RANDOM_SECRET
+POSTGRES_PASSWORD=YOUR_RANDOM_PASSWORD
+ELECTRIC_SECRET=YOUR_OTHER_RANDOM_SECRET
+```
+
+Use the actual lowercased image name. Generate the three credentials independently with
+`openssl rand -hex 32`, and `chmod 600 .env`. Keep Postgres/Electric and their persistent
+volumes from the generic Compose file. For Docker-based Traefik, remove the app's host
+`ports:` mapping and add this to the app service (adapt the hostname and resolver):
+
+```yaml
+networks: [default, proxy]
+labels:
+  - traefik.enable=true
+  - traefik.docker.network=proxy
+  - traefik.http.routers.catch.rule=Host(`notes.example.com`)
+  - traefik.http.routers.catch.tls=true
+  - traefik.http.routers.catch.tls.certresolver=letsencrypt
+  - traefik.http.services.catch.loadbalancer.server.port=3000
+```
+
+At the Compose file's top level, add:
+
+```yaml
+networks:
+  default: {}
+  proxy:
+    name: proxy
+    external: true
+```
+
+Only the app joins the external proxy network. Point DNS at the server and ensure the
+Traefik router names are unique if you deploy more than one Catch instance.
+
+Once the GHCR package is public, the production server needs no registry credentials:
+
+```bash
+cd ~/services/catch
+docker compose pull
+docker compose up -d --wait
+curl --fail https://notes.example.com/api/health
+```
+
+Create your account before making a new instance generally accessible: the first account
+becomes admin, and the current app allows open registration. A private instance needs access
+restriction or a future registration control; release channels do not change authentication.
+
+For preview, use a separate Compose project, hostname, `.env`, and named volumes, selecting
+`:preview`. It must have its own Postgres and Electric data rather than share production.
+
+Back up the production database and credentials off the server, and verify a restore before
+relying on it. Before an update, take a database backup and then pull/recreate the app.
+Migrations run on startup; reverting an image does not revert its database schema. Exact
+version tags or the image digest in release notes let you control which build you deploy.

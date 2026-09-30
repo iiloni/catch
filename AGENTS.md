@@ -24,6 +24,9 @@ checkout's stack. Never hard-code container or project names.
 
 - `./scripts/dev.sh up`: start this worktree's stack and print its URL. Hot reload is on.
 - `./scripts/dev.sh check`: lint, typecheck, unit tests, build. **Must pass before you finish.**
+- `./scripts/release.sh <stable|preview> <major|minor|patch> [--dry-run]`: tag HEAD locally.
+  Use `stable promote [preview-tag]` to preserve a tested preview's version and commit.
+  See `docs/releases.md`; pushing a tag explicitly can trigger release builds.
 - `./scripts/dev.sh e2e`: Playwright tests against this worktree's stack.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
@@ -74,6 +77,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 
 ## Conventions
 
+- Use Conventional Commits: `<type>(<optional scope>): <description>`, for example
+  `feat(android): add preview releases` or `fix(sync): retry interrupted writes`.
+  Use `!` or a `BREAKING CHANGE:` footer for breaking changes.
 - TypeScript strict everywhere. No `any`; validate unknown data with Zod.
 - Request and response shapes come from `packages/shared`. Do not redeclare them in an app.
 - Style with Tailwind utilities and the tokens in `apps/web/src/styles.css`. Tokens already

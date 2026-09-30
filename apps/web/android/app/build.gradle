@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+def releaseVersion = providers.environmentVariable('CATCH_VERSION').getOrElse('0.0.0-dev')
+def releaseVersionCode = providers.environmentVariable('CATCH_VERSION_CODE').getOrElse('1').toInteger()
+def releaseKeystore = providers.environmentVariable('ANDROID_KEYSTORE_PATH').orNull
+
 android {
     namespace = "org.iloni.catchnotes"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +11,8 @@ android {
         applicationId "org.iloni.catchnotes"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode
+        versionName releaseVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +20,48 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions += 'channel'
+    productFlavors {
+        stable {
+            dimension 'channel'
+        }
+        preview {
+            dimension 'channel'
+            applicationIdSuffix '.preview'
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword providers.environmentVariable('ANDROID_KEYSTORE_PASSWORD').orNull
+                keyAlias providers.environmentVariable('ANDROID_KEY_ALIAS').orNull
+                keyPassword providers.environmentVariable('ANDROID_KEY_PASSWORD').orNull
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+// Keep unsigned APKs from being mistaken for installable releases, including local builds.
+tasks.configureEach { task ->
+    if (task.name == 'preStableReleaseBuild' || task.name == 'prePreviewReleaseBuild') {
+        task.doFirst {
+            def required = ['CATCH_VERSION', 'CATCH_VERSION_CODE', 'ANDROID_KEYSTORE_PATH',
+                            'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+            def missing = required.findAll { !providers.environmentVariable(it).orNull }
+            if (missing) {
+                throw new GradleException("Release builds require: ${missing.join(', ')}")
+            }
+            if (releaseVersionCode < 1 || releaseVersionCode > 2100000000) {
+                throw new GradleException('CATCH_VERSION_CODE must be between 1 and 2100000000')
+            }
         }
     }
 }

@@ -3,7 +3,9 @@
 **/dev-dist
 apps/web/android
 .git
-.env
-.env.worktree
+.env*
+**/.env*
+**/*.jks
+**/*.keystore
 test-results
 playwright-report
