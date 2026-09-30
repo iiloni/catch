@@ -350,6 +350,7 @@
   --bn-colors-editor-background: transparent;
   --bn-colors-editor-text: var(--foreground);
   --bn-font-family: var(--font-sans);
+  position: relative;
   min-height: 100%;
 }
 /* A slash menu portalled to body must fit narrow viewports. */
@@ -365,6 +366,114 @@
 .bn-container.note-editor [data-content-type="heading"] {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
+}
+
+/* Cards keep a compact scale; the transition preview uses the editor's full geometry. */
+.note-preview-card {
+  --note-checkbox-size: 16px;
+  --note-checkbox-target: 24px;
+}
+.note-preview-editor,
+.bn-container.note-editor {
+  --note-checkbox-size: 24px;
+  --note-checkbox-target: 44px;
+}
+.note-preview-block > :first-child {
+  padding-block: 3px;
+}
+.note-preview-list {
+  display: flex;
+}
+.note-preview-list-marker {
+  flex-shrink: 0;
+  min-width: 24px;
+  padding-right: 4px;
+  text-align: center;
+}
+.note-preview-checklist,
+.bn-container.note-editor [data-content-type="checkListItem"] {
+  display: flex;
+  align-items: center;
+}
+.note-checkbox-target,
+.bn-container.note-editor [data-content-type="checkListItem"] > div:has(> input) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--note-checkbox-target);
+  height: var(--note-checkbox-target);
+}
+.bn-container.note-editor [data-content-type="checkListItem"] > div:has(> input) {
+  cursor: pointer;
+}
+.note-checkbox,
+.bn-container.note-editor [data-content-type="checkListItem"] > div > input {
+  appearance: none;
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: var(--note-checkbox-size);
+  height: var(--note-checkbox-size);
+  margin: 0;
+  border: calc(var(--note-checkbox-size) / 12) solid var(--muted-foreground);
+  border-radius: calc(var(--note-checkbox-size) / 6);
+  background: transparent;
+}
+.note-checkbox[data-checked="true"],
+.bn-container.note-editor [data-content-type="checkListItem"] > div > input:checked {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.note-checkbox[data-checked="true"]::after,
+.bn-container.note-editor [data-content-type="checkListItem"] > div > input:checked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--brand-foreground);
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4L19 6' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.bn-container.note-editor [data-content-type="checkListItem"] > div > input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.bn-container.note-editor
+  [data-content-type="checkListItem"][data-checked="true"]
+  .bn-inline-content {
+  color: var(--muted-foreground);
+}
+@media (pointer: coarse) {
+  .note-preview-editor
+    :is([data-content-type="bulletListItem"], [data-content-type="numberedListItem"]),
+  .bn-container.note-editor
+    :is([data-content-type="bulletListItem"], [data-content-type="numberedListItem"]) {
+    min-height: 44px;
+    padding-block: 10px;
+  }
+}
+.note-editor[data-list-holding] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.note-editor [data-list-dragging] {
+  position: absolute;
+  z-index: 2;
+  border-radius: 8px;
+  background: var(--note-bg, var(--card));
+  box-shadow:
+    0 0 0 2px var(--brand),
+    0 8px 20px var(--glass-shadow);
+  pointer-events: none;
+}
+.note-editor [data-list-drop] {
+  position: absolute;
+  z-index: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--brand);
+  pointer-events: none;
 }
 
 /* Room for the drag handle, which only exists with a mouse. */

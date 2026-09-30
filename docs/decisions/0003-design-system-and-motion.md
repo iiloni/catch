@@ -127,6 +127,16 @@ up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
 focus, so the keyboard stays up.
 
+**Lists on touch.** Editor checkboxes have a 24 px box inside a 44 px touch target. Cards use
+the same checkbox styling at 16 px; the opening preview matches the editor's row sizes,
+text spacing and indentation so mounting the editor does not move the content. Native
+inputs retain checkbox semantics and keyboard support, with their appearance styled locally.
+Holding a checklist, bullet or numbered item for 350 ms picks it up for reordering within
+its sibling group, with its nested children. Moving before the hold expires scrolls as
+usual; checkbox taps keep toggling, and links keep opening. A drop marker and edge scrolling
+guide the move, which is committed as one undo step on release. The mouse drag handle
+remains available.
+
 ## Consequences
 
 - Pages must not put a transform or filter on an ancestor of their fixed header or the dock.

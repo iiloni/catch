@@ -22,7 +22,7 @@ export const haptics = {
   selection: () => perform('tick'),
   /** A control changes state: + becomes ×, search opens. */
   toggle: () => perform('light'),
-  /** Long-press starts selecting notes. */
+  /** Long-press picks up an item or starts selecting notes. */
   longPress: () => perform('medium'),
   /** A note was saved or dropped into place. */
   success: () => perform('success'),
