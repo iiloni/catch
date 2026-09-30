@@ -41,6 +41,9 @@ overwrites existing accounts or notes. Rerun it with `./scripts/dev.sh seed [dem
 
 ## Create a worktree
 
+Agents must work in the checkout or worktree they are started in. They must not create
+or switch to another worktree unless the user explicitly asks them to.
+
 From any checkout:
 
 ```bash

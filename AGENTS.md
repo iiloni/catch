@@ -37,8 +37,9 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 
 ### Working in parallel
 
-- Start new work in its own worktree: `./scripts/worktree.sh create <branch>`, then
-  `./scripts/dev.sh up` inside it.
+- Work in the checkout or worktree you are started in. Agents must not create or switch
+  to their own worktrees unless the user explicitly asks them to. Run `./scripts/dev.sh up`
+  from the assigned checkout when needed.
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
 - When asked to merge a worktree into `main`, merge its branch into `main` from the primary
