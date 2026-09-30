@@ -133,6 +133,11 @@ export function NoteEditor({
 
   function focusAboveBlankSpace(event: MouseEvent<HTMLDivElement>) {
     if (!editable || !(event.target instanceof Element)) return;
+    // Floating controls share BlockNoteView's click handler, including through portals.
+    // Only clicks on the writing surface should move the caret.
+    if (event.target !== event.currentTarget && !editor.domElement?.contains(event.target)) {
+      return;
+    }
     // The checkbox's padding belongs to the same touch target as the native input.
     const checkbox = event.target.matches('[data-content-type="checkListItem"] > div')
       ? event.target.querySelector<HTMLInputElement>('input[type="checkbox"]')
