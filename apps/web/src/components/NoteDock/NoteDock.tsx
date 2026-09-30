@@ -258,6 +258,7 @@ export function NoteDock() {
   return (
     <motion.div
       ref={ref}
+      data-note-toolbar
       // Leaving, it stops taking up room so the dock can settle back to one row.
       className={cn('flex flex-col', !isPresent && 'absolute inset-x-0 bottom-0')}
       style={{ pointerEvents: isPresent ? undefined : 'none' }}

@@ -320,19 +320,54 @@ function useCaretAboveKeyboard(editor: AnyEditor) {
   useEffect(() => {
     let frame = 0;
     let previous = keyboardHeight.get();
+
+    function keepCaretVisible() {
+      frame = 0;
+      const height = keyboardHeight.get();
+      const view = editor.prosemirrorView;
+      if (height <= 0 || !view || !editor.isFocused()) return;
+
+      let area = view.dom.parentElement;
+      while (area && !/(auto|scroll)/.test(getComputedStyle(area).overflowY)) {
+        area = area.parentElement;
+      }
+      if (!area) return;
+
+      const bounds = area.getBoundingClientRect();
+      const caret = view.coordsAtPos(view.state.selection.head);
+      const top = Math.max(0, bounds.top) + 12;
+      let bottom = Math.min(bounds.bottom, window.innerHeight - height) - 12;
+      // The dock sits outside the scroll area and rises with the keyboard.
+      for (const toolbar of document.querySelectorAll('[data-note-toolbar]')) {
+        const rect = toolbar.getBoundingClientRect();
+        if (rect.right > bounds.left && rect.left < bounds.right && rect.height > 0) {
+          bottom = Math.min(bottom, rect.top - 12);
+        }
+      }
+      if (bottom <= top) return;
+      if (caret.bottom > bottom) area.scrollTop += caret.bottom - bottom;
+      else if (caret.top < top) area.scrollTop -= top - caret.top;
+    }
+
+    function schedule() {
+      if (!frame && keyboardHeight.get() > 0) frame = requestAnimationFrame(keepCaretVisible);
+    }
+
     const off = keyboardHeight.on('change', (height) => {
       const rising = height > previous;
       previous = height;
-      if (!rising || frame || !editor.isFocused()) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        const node = window.getSelection()?.focusNode;
-        const element = node instanceof Element ? node : node?.parentElement;
-        element?.scrollIntoView({ block: 'nearest' });
-      });
+      if (rising) schedule();
     });
+    const offSelection = editor.onSelectionChange(schedule);
+    const offChange = editor.onChange(schedule);
+    const root = editor.domElement;
+    root?.addEventListener('focusin', schedule);
+    schedule();
     return () => {
       off();
+      offSelection();
+      offChange();
+      root?.removeEventListener('focusin', schedule);
       cancelAnimationFrame(frame);
     };
   }, [editor]);
