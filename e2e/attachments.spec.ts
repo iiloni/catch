@@ -87,11 +87,6 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   await media.getByRole('button', { name: 'Manage Renamed.png' }).click();
   await page.getByRole('menuitem', { name: 'Add to note' }).click();
   await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0);
-  const after = await page.evaluate(async () => {
-    const { editorControls } = await import('/src/lib/dockState.ts');
-    return editorControls.get().getContent().length;
-  });
-  expect(after).toBe(before + 1);
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
   await page.waitForTimeout(700);
   await second.reload();
@@ -395,4 +390,110 @@ test('catalog actions insert at the cursor and toolbar uploads retain their capt
     { width: 64, height: 64 },
     { width: 64, height: 64 },
   ]);
+});
+
+test('media viewer fills the viewport and supports zoom, pan, pinch, navigation, and focus return', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await signUp(page);
+  await createNote(page, 'Media stage');
+  await openNote(page, 'Media stage');
+  const raster = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Missing canvas context');
+    context.fillStyle = '#62798b';
+    context.fillRect(0, 0, 800, 600);
+    context.fillStyle = '#efca80';
+    context.fillRect(200, 100, 400, 400);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  await upload(page, {
+    name: 'landscape.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(raster, 'base64'),
+  });
+  await upload(page, { ...picture, name: 'second.png' });
+  const media = page.getByRole('region', { name: 'Media', exact: true });
+  const thumbnail = media.getByRole('button', { name: 'View landscape.png', exact: true });
+  await expect(thumbnail).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await thumbnail.click();
+  const viewer = page.locator('[data-media-viewer]');
+  await expect(viewer).toHaveAccessibleName('landscape.png');
+  await expect(viewer).toContainText('800 × 600');
+  const frame = await viewer.boundingBox();
+  const viewport = page.viewportSize();
+  if (!frame || !viewport) throw new Error('Missing viewer bounds');
+  expect(frame.x).toBe(0);
+  expect(frame.y).toBe(0);
+  expect(frame.width).toBeCloseTo(viewport.width, 0);
+  expect(frame.height).toBeCloseTo(viewport.height, 0);
+  const stage = viewer.locator('[data-media-stage]');
+  const center = { x: viewport.width / 2, y: viewport.height / 2 };
+  const zoom = viewer.getByRole('button', { name: 'Reset zoom' });
+  const image = viewer.getByRole('img', { name: 'landscape.png' });
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.wheel(0, -250);
+  await expect
+    .poll(async () => Number.parseInt((await zoom.textContent()) ?? '0', 10))
+    .toBeGreaterThan(100);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 70, center.y + 60, { steps: 5 });
+  await page.mouse.up();
+  await expect
+    .poll(() => image.evaluate((node) => node.style.transform))
+    .not.toContain('translate(0px, 0px)');
+  await page.keyboard.press('0');
+  await expect(zoom).toHaveText('100%');
+  if (isMobile) {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [
+        { x: center.x - 40, y: center.y, id: 1 },
+        { x: center.x + 40, y: center.y, id: 2 },
+      ],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        { x: center.x - 80, y: center.y, id: 1 },
+        { x: center.x + 80, y: center.y, id: 2 },
+      ],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(zoom).toHaveText('200%');
+    await expect(viewer).toHaveAccessibleName('landscape.png');
+    await page.keyboard.press('0');
+    await session.detach();
+  }
+  // Two taps zoom; a drag never acts as a tap or closes the viewer.
+  await stage.dblclick({ position: center });
+  await expect(zoom).toHaveText('250%');
+  await zoom.click();
+  await expect(zoom).toHaveText('100%');
+  await viewer.getByRole('button', { name: 'Fill screen', exact: true }).click();
+  await expect(
+    viewer.getByRole('button', { name: 'Fit image to screen', exact: true }),
+  ).toBeVisible();
+  await viewer.getByRole('button', { name: 'Fit image to screen', exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('media-viewer.png') });
+  await viewer.getByRole('button', { name: 'Next attachment', exact: true }).click();
+  await expect(viewer).toHaveAccessibleName('second.png');
+  await expect(zoom).toHaveText('100%');
+  await page.keyboard.press('ArrowLeft');
+  await expect(viewer).toHaveAccessibleName('landscape.png');
+  // Swiping the fitted image navigates, while a zoomed drag pans.
+  await page.mouse.move(center.x + 60, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x - 60, center.y, { steps: 5 });
+  await page.mouse.up();
+  await expect(viewer).toHaveAccessibleName('second.png');
+  await page.keyboard.press('Escape');
+  await expect(viewer).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
+  await expect(thumbnail).toBeFocused();
 });

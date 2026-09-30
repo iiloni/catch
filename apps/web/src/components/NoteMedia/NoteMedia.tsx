@@ -34,6 +34,8 @@ export function NoteMedia({
   className?: string;
 }) {
   const files = useNoteAttachments(noteId);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const viewing = files.find((file) => file.id === viewingId);
   if (!files.length) return null;
   return (
     <section aria-label="Media" data-note-media className={cn('flex flex-col gap-2', className)}>
@@ -41,19 +43,27 @@ export function NoteMedia({
       <ul className="flex flex-col gap-2">
         {files.map((file) => (
           <li key={file.id}>
-            <AttachmentCard file={file} readOnly={readOnly} />
+            <AttachmentCard file={file} readOnly={readOnly} onView={() => setViewingId(file.id)} />
           </li>
         ))}
       </ul>
+      {viewing && <MediaViewer file={viewing} files={files} onClose={() => setViewingId(null)} />}
     </section>
   );
 }
 
 const noSubscription = () => () => {};
 
-function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boolean }) {
+function AttachmentCard({
+  file,
+  readOnly,
+  onView,
+}: {
+  file: Attachment;
+  readOnly?: boolean;
+  onView: () => void;
+}) {
   const [rename, setRename] = useState(false);
-  const [viewing, setViewing] = useState(false);
   const controls = editorControls.use();
   const state = useSyncExternalStore(
     controls?.subscribe ?? noSubscription,
@@ -84,8 +94,8 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
       <button
         type="button"
         aria-label={`View ${file.name}`}
-        onClick={() => setViewing(true)}
-        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onView}
+        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <MediaPreview
           key={file.status}
@@ -147,7 +157,6 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {viewing && <MediaViewer file={file} onClose={() => setViewing(false)} />}
       <Dialog open={rename} onOpenChange={setRename}>
         <DialogContent className="z-[80]" data-attachment-menu>
           <div className="flex flex-col gap-2">

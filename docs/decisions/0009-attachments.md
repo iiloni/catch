@@ -53,7 +53,12 @@ Slash-menu upload and drag/paste upload use the same storage path through `uploa
 **Catalog layout follows editor width.** Media follows the text on narrow editors, and
 shares the links column beside editors at least 700 px wide. Images, video and audio also
 render inline; gallery previews use image thumbnails and compact labels for other files.
-Catalog rows share a fixed 64 px thumbnail size with link previews. Tapping a thumbnail opens
-a modal viewer using the original image or native video/audio controls, with download and
-close actions; other files show download details. Android back closes the viewer first.
+Catalog rows share a fixed 64 px thumbnail size with link previews, without a background fill
+behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
+card. A small metadata card at the top left offers download and Keep offline. Images support
+wheel and pinch zoom at the focal point, bounded dragging, double-tap zoom, fit/fill, and
+keyboard zoom/reset/pan. Arrows and unzoomed swipes navigate the note's attachments, resetting
+the view and stopping playback on each change. Video/audio use native playback controls;
+other files show download details. Focus stays in the viewer, and Escape or Android back
+closes the viewer first.
 Media-only imported notes show their first attachment and file count on their gallery card.

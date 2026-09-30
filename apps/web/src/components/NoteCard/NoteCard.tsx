@@ -59,7 +59,7 @@ function MediaOnlyFace({ note }: { note: Note }) {
   if (!first) return <NotePreview content={note.content} />;
   return (
     <div className={cn('flex min-w-0 items-center gap-3 p-2', note.isPinned && 'pr-8')}>
-      <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-foreground/5">
+      <div className="size-16 shrink-0 overflow-hidden rounded-xl">
         <MediaPreview url={attachmentUrl(first.id)} name={first.name} kind={first.kind} thumbnail />
       </div>
       <div className="min-w-0">
