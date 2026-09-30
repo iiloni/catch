@@ -233,13 +233,13 @@ export function ImageStage({
         )}
       </div>
       <fieldset
-        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 text-white backdrop-blur-xl"
+        className="absolute bottom-[calc(var(--safe-bottom)+1rem)] left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full glass-thick p-1 text-foreground"
         aria-label="Image controls"
       >
         <Button
           variant="ghost"
           size="icon"
-          className="size-10 rounded-full hover:bg-white/15 hover:text-white"
+          className="size-10 rounded-full"
           aria-label="Zoom out"
           title="Zoom out (−)"
           disabled={transform.scale <= 1}
@@ -249,7 +249,7 @@ export function ImageStage({
         </Button>
         <Button
           variant="ghost"
-          className="h-10 min-w-16 rounded-full px-2 text-xs tabular-nums hover:bg-white/15 hover:text-white"
+          className="h-10 min-w-16 rounded-full px-2 text-xs tabular-nums"
           aria-label="Reset zoom"
           title="Reset zoom (0)"
           onClick={() => {
@@ -262,7 +262,7 @@ export function ImageStage({
         <Button
           variant="ghost"
           size="icon"
-          className="size-10 rounded-full hover:bg-white/15 hover:text-white"
+          className="size-10 rounded-full"
           aria-label="Zoom in"
           title="Zoom in (+)"
           disabled={transform.scale >= 8}
@@ -270,11 +270,11 @@ export function ImageStage({
         >
           <ZoomIn />
         </Button>
-        <span className="mx-1 h-5 w-px bg-white/20" />
+        <span className="mx-1 h-5 w-px bg-border" />
         <Button
           variant="ghost"
           size="icon"
-          className="size-10 rounded-full hover:bg-white/15 hover:text-white"
+          className="size-10 rounded-full"
           aria-label={fill ? 'Fit image to screen' : 'Fill screen'}
           title={fill ? 'Fit image to screen' : 'Fill screen'}
           onClick={() => {

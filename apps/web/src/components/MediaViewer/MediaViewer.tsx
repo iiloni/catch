@@ -16,6 +16,7 @@ import { DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
+import { cn } from '@/lib/utils';
 import { ImageStage } from './ImageStage';
 import type { Size } from './transform';
 
@@ -85,44 +86,46 @@ export function MediaViewer({
             file={current}
             onNavigate={files.length > 1 ? navigate : undefined}
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-[calc(var(--safe-top)+0.75rem)] right-3 z-20 size-11 rounded-full border border-white/15 bg-black/60 text-white backdrop-blur-xl hover:bg-white/15 hover:text-white"
-            aria-label="Close media viewer"
-            onClick={onClose}
-          >
-            <X />
-          </Button>
-          {files.length > 1 && (
-            <div className="absolute top-[calc(var(--safe-top)+7.75rem)] left-3 z-20 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 p-1 text-white backdrop-blur-xl">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-10 rounded-full hover:bg-white/15 hover:text-white"
-                aria-label="Previous attachment"
-                onClick={() => navigate(-1)}
-              >
-                <ChevronLeft />
-              </Button>
-              <span
-                className="min-w-12 text-center text-xs tabular-nums"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                {index + 1} / {files.length}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-10 rounded-full hover:bg-white/15 hover:text-white"
-                aria-label="Next attachment"
-                onClick={() => navigate(1)}
-              >
-                <ChevronRight />
-              </Button>
-            </div>
-          )}
+          <div className="absolute top-[calc(var(--safe-top)+0.75rem)] right-3 z-20 flex items-center gap-2">
+            {files.length > 1 && (
+              <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-10 rounded-full"
+                  aria-label="Previous attachment"
+                  onClick={() => navigate(-1)}
+                >
+                  <ChevronLeft />
+                </Button>
+                <span
+                  className="min-w-12 text-center text-xs tabular-nums"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {index + 1} / {files.length}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-10 rounded-full"
+                  aria-label="Next attachment"
+                  onClick={() => navigate(1)}
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 rounded-full glass-thick text-foreground"
+              aria-label="Close media viewer"
+              onClick={onClose}
+            >
+              <X />
+            </Button>
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -214,7 +217,14 @@ function ViewerContent({
           )}
         </div>
       )}
-      <div className="absolute top-[calc(var(--safe-top)+0.75rem)] left-3 z-20 w-72 max-w-[calc(100%-5rem)] rounded-2xl glass-thick px-3 py-2.5 text-foreground">
+      <div
+        className={cn(
+          'absolute left-3 z-20 w-72 max-w-[calc(100%-5rem)] rounded-2xl glass-thick px-3 py-2.5 text-foreground',
+          onNavigate
+            ? 'top-[calc(var(--safe-top)+4.75rem)] sm:top-[calc(var(--safe-top)+0.75rem)]'
+            : 'top-[calc(var(--safe-top)+0.75rem)]',
+        )}
+      >
         <DialogTitle className="truncate text-sm leading-5" title={file.name}>
           {file.name}
         </DialogTitle>

@@ -55,8 +55,10 @@ shares the links column beside editors at least 700 px wide. Images, video and a
 render inline; gallery previews use image thumbnails and compact labels for other files.
 Catalog rows share a fixed 64 px thumbnail size with link previews, without a background fill
 behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
-card. A small metadata card at the top left offers download and Keep offline. Images support
-wheel and pinch zoom at the focal point, bounded dragging, double-tap zoom, fit/fill, and
+card. A small metadata card at the top left offers download and Keep offline.
+Control bars use the metadata card's glass surface. Attachment navigation sits at the top
+right beside close; on narrow screens the metadata sits below that row to avoid overlap.
+Images support wheel and pinch zoom at the focal point, bounded dragging, double-tap zoom, fit/fill, and
 keyboard zoom/reset/pan. Arrows and unzoomed swipes navigate the note's attachments, resetting
 the view and stopping playback on each change. Video/audio use native playback controls;
 other files show download details. Focus stays in the viewer, and Escape or Android back
