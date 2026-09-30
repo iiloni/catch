@@ -20,7 +20,7 @@ import {
   useExtensionState,
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
-import { attachmentUrl, type Note } from '@catch/shared';
+import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
@@ -274,6 +274,7 @@ function createControls(editor: AnyEditor): EditorControls {
     attachmentInserter() {
       const anchor = editor.getTextCursorPosition().block.id;
       return (files) => {
+        if (!editor.domElement?.isConnected) return;
         let target = editor.getBlock(anchor) ?? editor.document.at(-1);
         if (!target) return;
         editor.transact(() => {
@@ -281,9 +282,9 @@ function createControls(editor: AnyEditor): EditorControls {
             if (!target) break;
             const block = fileBlock(file);
             const empty =
-              target.type === 'paragraph' &&
               Array.isArray(target.content) &&
-              target.content.length === 0;
+              target.content.length === 0 &&
+              target.children.length === 0;
             target = empty
               ? editor.updateBlock(target, block)
               : editor.insertBlocks([block], target, 'after')[0];
@@ -369,7 +370,17 @@ function createControls(editor: AnyEditor): EditorControls {
 
 function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  const attachmentIds: string[] = [];
+  editor.forEachBlock((block) => {
+    const id =
+      'url' in block.props && typeof block.props.url === 'string'
+        ? attachmentId(block.props.url)
+        : null;
+    if (id) attachmentIds.push(id);
+    return true;
+  });
   return {
+    attachmentIds,
     styles: {
       bold: Boolean(active.bold),
       italic: Boolean(active.italic),

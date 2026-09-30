@@ -2,7 +2,13 @@ import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { countNotes, dismissImport, useImport } from '@/lib/imports';
+import {
+  countAttachments,
+  countNotes,
+  dismissImport,
+  importSummary,
+  useImport,
+} from '@/lib/imports';
 import { useSyncStatus } from '@/lib/syncStatus';
 
 /**
@@ -60,20 +66,30 @@ export function ImportProgress() {
       </p>
     ) : null;
 
+  const attachmentFailedLine =
+    current.attachmentFailed > 0 ? (
+      <p>
+        {countAttachments(current.attachmentFailed)} could not be saved. Select the export again to
+        retry them.
+      </p>
+    ) : null;
+
   if (current.finished) {
     return (
       <div className="flex items-start gap-3 px-4 py-3" role="status">
         <div className="min-w-0 flex-1 text-sm">
           <p className="font-medium text-base">
-            {current.saved > 0
-              ? `${countNotes(current.saved)} imported from ${current.source}`
+            {current.saved + current.attachmentSaved > 0
+              ? `${importSummary(current)} imported from ${current.source}`
               : `Nothing was imported from ${current.source}`}
           </p>
           <div className="text-muted-foreground">
             {current.saved > 0 && (
               <p>They are in your gallery, and archived ones are in Archive.</p>
             )}
+            {current.attachmentSaved > 0 && <p>Attachments are in their notes’ Media sections.</p>}
             {failedLine}
+            {attachmentFailedLine}
           </div>
         </div>
         <Button
@@ -92,18 +108,31 @@ export function ImportProgress() {
   return (
     <ProgressRow
       label={`Importing from ${current.source}`}
-      done={current.saved + current.failed}
-      total={current.total}
+      done={current.saved + current.failed + current.attachmentSaved + current.attachmentFailed}
+      total={current.total + current.attachmentTotal}
     >
       <p>
         {numbers.format(current.saved)} of {countNotes(current.total)} saved on your server
       </p>
+      {current.attachmentTotal > 0 && (
+        <p>
+          {numbers.format(current.attachmentSaved)} of {countAttachments(current.attachmentTotal)}{' '}
+          saved on your server
+        </p>
+      )}
+      {current.preparing > 0 && (
+        <p>
+          Preparing {countAttachments(current.preparing)} on this device. Keep the app open until
+          preparation finishes.
+        </p>
+      )}
       {offline ? (
-        <p>Waiting for a connection. The rest are on this device and sync once it is back.</p>
+        <p>Waiting for a connection. Prepared files and notes sync once it is back.</p>
       ) : (
         <p>You can leave this page; the import keeps going.</p>
       )}
       {failedLine}
+      {attachmentFailedLine}
     </ProgressRow>
   );
 }

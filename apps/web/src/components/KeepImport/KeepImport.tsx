@@ -11,13 +11,11 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { hasAttachment } from '@/lib/attachments';
 import { haptics } from '@/lib/haptics';
-import { countNotes, startImport, useImport } from '@/lib/imports';
+import { countAttachments, countNotes, startImport, useImport } from '@/lib/imports';
 import { type KeepExport, KeepImportError, readKeepExport } from '@/lib/keepImport';
 import { hasNote } from '@/lib/notes';
-
-// Android's file picker filters by MIME type, the desktop ones by extension.
-const ACCEPT = 'application/zip,application/x-zip-compressed,application/json,.zip,.json';
 
 const numbers = new Intl.NumberFormat();
 
@@ -37,11 +35,17 @@ function leftOut(found: KeepExport, alreadyHere: number) {
       `${count(found.trashed, 'note in Keep’s trash stays', 'notes in Keep’s trash stay')} behind.`,
     );
   }
-  if (found.attachments > 0 || found.mediaOnly > 0) {
+  if (found.missing > 0) {
     lines.push(
-      found.mediaOnly > 0
-        ? `Images, drawings and recordings stay behind, since Catch cannot store them yet. ${count(found.mediaOnly, 'note', 'notes')} with nothing else will not be imported.`
-        : 'Images, drawings and recordings stay behind, since Catch cannot store them yet.',
+      `${countAttachments(found.missing)} could not be matched to a non-empty file. Choose every ZIP part, or the JSON and media files together.`,
+    );
+  }
+  if (found.oversized > 0) {
+    lines.push(`${countAttachments(found.oversized)} over 100 MB will not be imported.`);
+  }
+  if (found.mediaOnly > 0) {
+    lines.push(
+      `${count(found.mediaOnly, 'media-only note', 'media-only notes')} without usable files will not be imported.`,
     );
   }
   if (found.labelled > 0) lines.push('Labels stay behind, since Catch does not have them yet.');
@@ -59,7 +63,9 @@ type Reading = { read: number; total: number | null; archive: string };
 export function KeepImport({ userId, notesSynced }: { userId: string; notesSynced: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState<Reading | null>(null);
-  const [found, setFound] = useState<{ found: KeepExport; fresh: number } | null>(null);
+  const [found, setFound] = useState<{ found: KeepExport; fresh: number; files: number } | null>(
+    null,
+  );
   const controller = useRef<AbortController | null>(null);
   const running = useImport();
   const importing = running !== null && !running.finished;
@@ -79,13 +85,14 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
         onProgress: (read, total) => setReading({ read, total, archive }),
       });
       const fresh = result.notes.filter((note) => !hasNote(note.id)).length;
-      if (fresh > 0) setFound({ found: result, fresh });
+      const fileCount = result.files.filter((file) => !hasAttachment(file.id)).length;
+      if (fresh > 0 || fileCount > 0) setFound({ found: result, fresh, files: fileCount });
       else {
         toast('Nothing new to import', {
           description:
             result.notes.length > 0
-              ? 'Every note in this export is already in Catch.'
-              : 'This export has no notes with text to import.',
+              ? 'Every note and available attachment in this export is already in Catch.'
+              : 'This export has no notes with text or usable attachments to import.',
         });
       }
     } catch (error) {
@@ -103,7 +110,7 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
 
   function confirm() {
     if (!found) return;
-    startImport('Google Keep', userId, found.found.notes);
+    startImport('Google Keep', userId, found.found.notes, found.found.files);
     haptics.success();
     setFound(null);
   }
@@ -130,7 +137,6 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
         <input
           ref={input}
           type="file"
-          accept={ACCEPT}
           multiple
           hidden
           disabled={busy || !notesSynced}
@@ -169,11 +175,19 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
       )}
       <Dialog open={found !== null} onOpenChange={(open) => !open && setFound(null)}>
         <DialogContent>
-          <DialogTitle>Import {countNotes(found?.fresh ?? 0)}?</DialogTitle>
+          <DialogTitle>
+            Import {found?.fresh ? countNotes(found.fresh) : countAttachments(found?.files ?? 0)}?
+          </DialogTitle>
           <DialogDescription>
             They keep their colors, pins, archive and dates, and go after the notes you have, newest
             first. Settings shows how the import is going, and you can leave while it runs.
           </DialogDescription>
+          {found && found.files > 0 && (
+            <p className="text-muted-foreground text-sm">
+              {countAttachments(found.files)} will be added to their notes’ Media sections, without
+              inline blocks. Existing note text stays as it is.
+            </p>
+          )}
           {found && (
             <Details lines={leftOut(found.found, found.found.notes.length - found.fresh)} />
           )}

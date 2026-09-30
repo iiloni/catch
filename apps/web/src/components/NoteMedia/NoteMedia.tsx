@@ -1,9 +1,10 @@
 import { type Attachment, attachmentUrl } from '@catch/shared';
 import { Download, Ellipsis, HardDriveDownload, ImagePlus, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
+import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -40,7 +41,7 @@ export function NoteMedia({
       <ul className="flex flex-col gap-2">
         {files.map((file) => (
           <li key={file.id}>
-            <AttachmentCard key={`${file.id}:${file.status}`} file={file} readOnly={readOnly} />
+            <AttachmentCard file={file} readOnly={readOnly} />
           </li>
         ))}
       </ul>
@@ -48,8 +49,17 @@ export function NoteMedia({
   );
 }
 
+const noSubscription = () => () => {};
+
 function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boolean }) {
-  const [dialog, setDialog] = useState<'rename' | 'remove' | null>(null);
+  const [rename, setRename] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const controls = editorControls.use();
+  const state = useSyncExternalStore(
+    controls?.subscribe ?? noSubscription,
+    () => controls?.getState() ?? null,
+  );
+  const linked = state?.attachmentIds.includes(file.id) ?? false;
   const [name, setName] = useState(file.name);
   const [busy, setBusy] = useState(false);
   async function run(action: () => Promise<unknown>, success?: string) {
@@ -64,16 +74,28 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
     }
   }
   function showInNote() {
-    const controls = editorControls.get();
     if (controls && !controls.showAttachment(file.id)) controls.attachmentInserter()([file]);
   }
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-border bg-card/60 p-2"
+      className="relative flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-card/60 p-2"
       data-attachment={file.id}
     >
-      <MediaPreview url={attachmentUrl(file.id)} name={file.name} kind={file.kind} />
-      <div className="flex items-center gap-1 pt-1 pl-1">
+      <button
+        type="button"
+        aria-label={`View ${file.name}`}
+        onClick={() => setViewing(true)}
+        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground/5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <MediaPreview
+          key={file.status}
+          url={attachmentUrl(file.id)}
+          name={file.name}
+          kind={file.kind}
+          thumbnail
+        />
+      </button>
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium" title={file.name}>
             {file.name}
@@ -83,7 +105,7 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
             {busy ? ' · Loading…' : ''}
           </p>
         </div>
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <IconButton label={`Manage ${file.name}`}>
               <Ellipsis />
@@ -103,20 +125,20 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
             </DropdownMenuItem>
             {!readOnly && (
               <>
-                <DropdownMenuItem onSelect={showInNote}>
+                <DropdownMenuItem onSelect={showInNote} disabled={!controls}>
                   <ImagePlus />
-                  Show in note
+                  {linked ? 'Show in note' : 'Add to note'}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
                     setName(file.name);
-                    setDialog('rename');
+                    setRename(true);
                   }}
                 >
                   <Pencil />
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive" onSelect={() => setDialog('remove')}>
+                <DropdownMenuItem variant="destructive" onSelect={() => removeAttachment(file)}>
                   <Trash2 />
                   Remove attachment
                 </DropdownMenuItem>
@@ -125,51 +147,37 @@ function AttachmentCard({ file, readOnly }: { file: Attachment; readOnly?: boole
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <Dialog
-        open={dialog !== null}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-      >
+      {viewing && <MediaViewer file={file} onClose={() => setViewing(false)} />}
+      <Dialog open={rename} onOpenChange={setRename}>
         <DialogContent className="z-[80]" data-attachment-menu>
           <div className="flex flex-col gap-2">
-            <DialogTitle>
-              {dialog === 'rename' ? 'Rename attachment' : 'Remove attachment?'}
-            </DialogTitle>
-            <DialogDescription>
-              {dialog === 'rename'
-                ? 'Choose a name for this file.'
-                : 'This removes the file and its inline blocks from this note on every device.'}
-            </DialogDescription>
+            <DialogTitle>Rename attachment</DialogTitle>
+            <DialogDescription>Choose a name for this file.</DialogDescription>
           </div>
-          {dialog === 'rename' && (
-            <Input
-              aria-label="File name"
-              value={name}
-              maxLength={255}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && name.trim()) {
-                  renameAttachment(file.id, name);
-                  setDialog(null);
-                }
-              }}
-            />
-          )}
+          <Input
+            aria-label="File name"
+            value={name}
+            maxLength={255}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && name.trim()) {
+                renameAttachment(file.id, name);
+                setRename(false);
+              }
+            }}
+          />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setDialog(null)}>
+            <Button variant="ghost" onClick={() => setRename(false)}>
               Cancel
             </Button>
             <Button
-              disabled={dialog === 'rename' && !name.trim()}
-              variant={dialog === 'remove' ? 'destructive' : 'default'}
+              disabled={!name.trim()}
               onClick={() => {
-                if (dialog === 'rename') renameAttachment(file.id, name);
-                else removeAttachment(file);
-                setDialog(null);
+                renameAttachment(file.id, name);
+                setRename(false);
               }}
             >
-              {dialog === 'rename' ? 'Save' : 'Remove attachment'}
+              Save
             </Button>
           </div>
         </DialogContent>

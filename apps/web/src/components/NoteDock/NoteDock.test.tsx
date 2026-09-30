@@ -1,7 +1,8 @@
 import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { editorNote } from '@/lib/dockState';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
+import { editorControls, editorNote } from '@/lib/dockState';
 import { HOLD_MS } from '@/lib/longPress';
 import { moveNoteToDeck, restoreNote, setNoteColor, setNotePinned } from '@/lib/notes';
 import { NoteDock } from './NoteDock';
@@ -39,7 +40,10 @@ function renderDock(overrides: Partial<Note> = {}) {
 }
 
 afterEach(() => {
-  act(() => editorNote.set(null));
+  act(() => {
+    editorNote.set(null);
+    editorControls.set(null);
+  });
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -91,6 +95,8 @@ describe('NoteDock', () => {
 
   it('orders attachments second and pin last, with archive in the header', () => {
     renderDock();
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+    act(() => editorControls.set({} as EditorControls));
     expect(
       screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
     ).toEqual(['Background color', 'Attach files', 'Add to deck', 'Pin']);

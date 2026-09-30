@@ -8,9 +8,10 @@ Status: accepted (2026-09-30)
 SQLite-persisted Electric collection. Each attachment has a client UUIDv7, note, filename,
 MIME type, size, media kind and pending/ready status. BlockNote's existing image, video, audio
 and file blocks store `attachment:<id>` in their URL prop. Removing a block removes only that
-placement; the Media catalog continues to hold the file. Its menu can show it in the note
-(inserting a block if needed), rename, download, keep offline, or explicitly remove it.
-Removal tombstones the metadata and deletes the bytes, so replay cannot resurrect it. Trash
+placement; the Media catalog continues to hold the file. Its menu can show an existing inline
+block or add a block at the cursor (replacing an empty block or inserting below it), rename,
+download, keep offline, or explicitly remove it. Removal from the more menu takes effect
+directly and tombstones the metadata and deletes the bytes, so replay cannot resurrect it. Trash
 retains attachments; deleting a note forever deletes its files too. Copies get new attachment
 ids and independent server files, including attachments with no inline placement.
 
@@ -29,7 +30,8 @@ can select a bind mount; backups must include it and Postgres. Uploads stream to
 files and are renamed only after their exact declared size has arrived. Metadata creation
 and upload completion are replay-safe and return txids. The initial limit is 100 MiB per file;
 upload retries send the whole file. Object storage, resumable/chunked uploads, transcoding,
-video poster generation and attachment import from Takeout are deferred.
+and video poster generation are deferred. Keep imports use this same attachment path and add
+files only to the catalog (ADR 0008).
 
 **Personal media is private.** Content and thumbnails require bearer authentication or a
 signed, attachment-specific access ticket obtained with bearer auth. A ticket lasts an hour
@@ -51,3 +53,7 @@ Slash-menu upload and drag/paste upload use the same storage path through `uploa
 **Catalog layout follows editor width.** Media follows the text on narrow editors, and
 shares the links column beside editors at least 700 px wide. Images, video and audio also
 render inline; gallery previews use image thumbnails and compact labels for other files.
+Catalog rows share a fixed 64 px thumbnail size with link previews. Tapping a thumbnail opens
+a modal viewer using the original image or native video/audio controls, with download and
+close actions; other files show download details. Android back closes the viewer first.
+Media-only imported notes show their first attachment and file count on their gallery card.

@@ -7,6 +7,10 @@ import { hasNote, type ImportedNote } from '@/lib/notes';
 import { KeepImport } from './KeepImport';
 
 vi.mock('@/lib/notes');
+vi.mock('@/lib/attachments', () => ({
+  hasAttachment: vi.fn(() => false),
+  importAttachment: vi.fn(),
+}));
 vi.mock('@/lib/imports', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/imports')>()),
   startImport: vi.fn(),
@@ -41,6 +45,9 @@ function exported(overrides: Partial<KeepExport> = {}): KeepExport {
     trashed: 0,
     mediaOnly: 0,
     attachments: 0,
+    files: [],
+    missing: 0,
+    oversized: 0,
     labelled: 0,
     ...overrides,
   };
@@ -78,7 +85,7 @@ describe('KeepImport', () => {
   });
 
   it('says what an export holds, and starts importing its new notes once confirmed', async () => {
-    const found = exported({ trashed: 2, attachments: 1, labelled: 1 });
+    const found = exported({ trashed: 2, missing: 1, labelled: 1 });
     vi.mocked(readKeepExport).mockResolvedValue(found);
     vi.mocked(hasNote).mockImplementation((id) => id === 'a');
     render(<KeepImport userId="user-1" notesSynced />);
@@ -89,11 +96,11 @@ describe('KeepImport', () => {
     expect(readKeepExport).toHaveBeenCalledWith([takeout], 'user-1', expect.anything());
     expect(dialog).toHaveTextContent('1 note is already in Catch');
     expect(dialog).toHaveTextContent('2 notes in Keep’s trash stay behind');
-    expect(dialog).toHaveTextContent('Images, drawings and recordings stay behind');
+    expect(dialog).toHaveTextContent('1 attachment could not be matched');
     expect(dialog).toHaveTextContent('Labels stay behind');
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
-    expect(startImport).toHaveBeenCalledWith('Google Keep', 'user-1', found.notes);
+    expect(startImport).toHaveBeenCalledWith('Google Keep', 'user-1', found.notes, found.files);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
@@ -115,6 +122,10 @@ describe('KeepImport', () => {
       total: 100,
       saved: 50,
       failed: 0,
+      attachmentTotal: 0,
+      attachmentSaved: 0,
+      attachmentFailed: 0,
+      preparing: 0,
       finished: false,
     });
     render(<KeepImport userId="user-1" notesSynced />);
@@ -129,10 +140,25 @@ describe('KeepImport', () => {
     choose([takeout]);
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('Nothing new to import', {
-        description: 'Every note in this export is already in Catch.',
+        description: 'Every note and available attachment in this export is already in Catch.',
       }),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('adds missing attachments to notes already imported without reimporting their text', async () => {
+    const files = [{ id: 'attachment', noteId: 'a', createdAt: new Date(), read: vi.fn() }];
+    const found = exported({ attachments: 1, files });
+    vi.mocked(readKeepExport).mockResolvedValue(found);
+    vi.mocked(hasNote).mockReturnValue(true);
+    render(<KeepImport userId="user-1" notesSynced />);
+    choose([takeout]);
+    await screen.findByRole('heading', { name: 'Import 1 attachment?' });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('without inline blocks');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    expect(startImport).toHaveBeenCalledWith('Google Keep', 'user-1', found.notes, files);
+    expect(files[0]?.read).not.toHaveBeenCalled();
   });
 
   it('waits for the notes to sync', () => {

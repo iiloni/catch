@@ -41,7 +41,9 @@ export function AttachmentPicker({
     setCapture(null);
     try {
       await attachFiles(noteId, files, (added) => {
-        if (active.current) insert.current?.(added);
+        // A system picker can outlive the dock panel. Its captured insertion point still
+        // belongs to the mounted editor; that editor ignores it after switching notes.
+        insert.current?.(added);
       });
     } finally {
       if (active.current) {

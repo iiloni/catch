@@ -6,6 +6,7 @@ import { FormattingBar } from './FormattingBar';
 
 function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
   const full: FormattingState = {
+    attachmentIds: [],
     styles: { bold: false, italic: false, underline: false, strike: false },
     block: 'paragraph',
     canIndent: false,

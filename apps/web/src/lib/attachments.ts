@@ -13,6 +13,7 @@ import { uuidv7 } from 'uuidv7';
 import { forgetAttachmentBlob, getAttachmentBlob, storeAttachmentBlob } from './attachmentFiles';
 import { attachmentsCollection, notesCollection, useAttachments, write } from './collections';
 import { editorControls, editorNote } from './dockState';
+import type { ImportBatch } from './notes';
 
 export const useNoteAttachments = (noteId: string) =>
   useAttachments().filter((file) => file.noteId === noteId && !file.deletedAt);
@@ -25,13 +26,42 @@ export function useRemovedAttachmentIds(noteId: string | undefined) {
   );
 }
 
+export type ImportedAttachment = {
+  id: string;
+  noteId: string;
+  createdAt: Date;
+  read: () => Promise<File>;
+};
+
+/** Includes tombstones so importing again respects attachments deliberately removed. */
+export const hasAttachment = (id: string) => attachmentsCollection.has(id);
+
 /** Store bytes before queuing metadata; a reload can always finish the queued upload. */
 export async function addAttachment(noteId: string, file: File): Promise<Attachment> {
+  return (await storeAttachment(noteId, file, uuidv7(), new Date())).attachment;
+}
+
+export async function importAttachment(
+  source: ImportedAttachment,
+  file: File,
+  signal: AbortSignal,
+): Promise<ImportBatch | null> {
+  if (hasAttachment(source.id)) return null;
+  return (await storeAttachment(source.noteId, file, source.id, source.createdAt, signal)).batch;
+}
+
+async function storeAttachment(
+  noteId: string,
+  file: File,
+  id: string,
+  createdAt: Date,
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted();
   const note = notesCollection.get(noteId);
   if (!note || note.deletedAt) throw new Error('This note is no longer editable');
   if (!file.size) throw new Error('The file is empty');
   if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('Choose a file smaller than 100 MB');
-  const id = uuidv7();
   const mimeType = file.type.split(';')[0] || 'application/octet-stream';
   const attachment: Attachment = {
     id,
@@ -43,14 +73,14 @@ export async function addAttachment(noteId: string, file: File): Promise<Attachm
     kind: attachmentKind(mimeType),
     status: 'pending',
     sourceId: null,
-    createdAt: new Date(),
+    createdAt,
     deletedAt: null,
   };
   attachmentSchema.parse(attachment);
   await storeAttachmentBlob(id, file, true);
   // The picker may have outlived a switch to another note; keep the catalog entry on its
   // original note and never put it into the newly opened editor.
-  if (!notesCollection.has(noteId) || notesCollection.get(noteId)?.deletedAt) {
+  if (signal?.aborted || !notesCollection.has(noteId) || notesCollection.get(noteId)?.deletedAt) {
     await forgetAttachmentBlob(id);
     throw new Error('This note is no longer editable');
   }
@@ -58,7 +88,10 @@ export async function addAttachment(noteId: string, file: File): Promise<Attachm
   transaction.isPersisted.promise.catch(() =>
     toast.error(`${attachment.name} could not be uploaded`),
   );
-  return attachment;
+  return {
+    attachment,
+    batch: { id: transaction.id, count: 1, persisted: transaction.isPersisted.promise },
+  };
 }
 
 export async function attachFiles(

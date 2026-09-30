@@ -40,6 +40,7 @@ type Action = {
   /** Shown as held down: the pin of a pinned note, the open palette. */
   active?: boolean;
   expanded?: boolean;
+  disabled?: boolean;
   /** Pointer handlers for a press-and-hold gesture on top of the tap. */
   gesture?: Pick<
     ComponentProps<'button'>,
@@ -215,6 +216,7 @@ export function NoteDock() {
       },
       {
         id: 'attachments',
+        disabled: controls === null,
         label: 'Attach files',
         icon: Paperclip,
         active: showAttachments,
@@ -375,6 +377,7 @@ function DockAction({ action }: { action: Action }) {
     <motion.button
       type="button"
       aria-label={action.label}
+      disabled={action.disabled}
       aria-pressed={action.expanded === undefined ? action.active : undefined}
       aria-expanded={action.expanded}
       onPointerDown={(event) => event.preventDefault()}
@@ -383,7 +386,7 @@ function DockAction({ action }: { action: Action }) {
       whileTap={{ scale: 0.88 }}
       transition={springs.snappy}
       className={cn(
-        'relative flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+        'relative flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none disabled:opacity-40 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
         action.gesture && 'touch-none select-none [-webkit-touch-callout:none]',
         action.active
           ? 'bg-foreground/[0.08] text-foreground shadow-[inset_0_1px_0_var(--glass-highlight)]'

@@ -407,6 +407,19 @@ export function useSyncedNotes() {
   return synced;
 }
 
+export function useSyncedAttachments() {
+  const [synced, setSynced] = useState(() => attachmentsCollection.isReady());
+  useEffect(() => {
+    const subscription = attachmentsCollection.subscribeChanges(() => {});
+    const stopWaiting = attachmentsCollection.onFirstReady(() => setSynced(true));
+    return () => {
+      stopWaiting();
+      subscription.unsubscribe();
+    };
+  }, []);
+  return synced;
+}
+
 /** The signed-in user's Deck columns, unordered. */
 export function useBoardColumns() {
   const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));

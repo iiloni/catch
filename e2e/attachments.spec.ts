@@ -85,18 +85,19 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(media.getByTitle('Renamed.png', { exact: true })).toBeVisible();
   await media.getByRole('button', { name: 'Manage Renamed.png' }).click();
-  await page.getByRole('menuitem', { name: 'Show in note' }).click();
+  await page.getByRole('menuitem', { name: 'Add to note' }).click();
+  await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0);
+  const after = await page.evaluate(async () => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    return editorControls.get().getContent().length;
+  });
+  expect(after).toBe(before + 1);
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
   await page.waitForTimeout(700);
   await second.reload();
   await expect(second.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
   await media.getByRole('button', { name: 'Manage Renamed.png' }).click();
   await page.getByRole('menuitem', { name: 'Remove attachment' }).click();
-  await page
-    .getByRole('dialog')
-    .filter({ hasText: 'Remove attachment?' })
-    .getByRole('button', { name: 'Remove attachment' })
-    .click();
   await expect(media).toBeHidden();
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
   await expect.poll(async () => (await page.request.get(url, { headers })).status()).toBe(404);
@@ -296,4 +297,102 @@ test.describe('live capture', () => {
     await expect(page.locator('.note-editor [data-content-type="video"] video')).toBeVisible();
     await expect(media.getByRole('listitem')).toHaveCount(3);
   });
+});
+
+test('catalog actions insert at the cursor and toolbar uploads retain their captured position', async ({
+  page,
+}) => {
+  await signUp(page);
+  await createNote(page, 'Insertion positions', 'First paragraph');
+  await openNote(page, 'Insertion positions');
+  await upload(page);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByRole('img')).toBeVisible();
+  const id = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  await page.evaluate(async (attachmentId) => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    editorControls.get().removeAttachment(attachmentId);
+  }, id);
+  // Empty cursor block is replaced.
+  await page.evaluate(async () => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    editorControls.get().focusEnd();
+  });
+  await page.keyboard.press('Enter');
+  const before = await page.evaluate(async () => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    return editorControls.get().getContent().length;
+  });
+  await media.getByRole('button', { name: 'Manage pixel.png' }).click();
+  await page.getByRole('menuitem', { name: 'Add to note' }).click();
+  await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0);
+  const after = await page.evaluate(async () => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    return editorControls.get().getContent().length;
+  });
+  expect(after).toBe(before + 1);
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
+  await media.getByRole('button', { name: 'Manage pixel.png' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Show in note' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.evaluate(async (attachmentId) => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    editorControls.get().removeAttachment(attachmentId);
+  }, id);
+  const paragraph = page
+    .locator('.note-editor [data-content-type="paragraph"]')
+    .filter({ hasText: 'First paragraph' });
+  await paragraph.click();
+  await page.keyboard.press('End');
+  await media.getByRole('button', { name: 'Manage pixel.png' }).click();
+  await page.getByRole('menuitem', { name: 'Add to note' }).click();
+  const order = await page.locator('.note-editor [data-content-type]').evaluateAll((blocks) =>
+    blocks.map((block) => ({
+      type: block.getAttribute('data-content-type'),
+      text: block.textContent,
+    })),
+  );
+  const index = order.findIndex((block) => block.text?.includes('First paragraph'));
+  expect(order[index + 1]?.type).toBe('image');
+
+  // Close the picker while its selected file is being stored. The callback must still
+  // insert into this editor, even though the picker component has unmounted.
+  await paragraph.click();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Add attachment' })
+    .getByRole('button', { name: 'Files', exact: true })
+    .click();
+  await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('[aria-label="Choose files"]');
+    const toggle = document.querySelector<HTMLButtonElement>(
+      '[data-note-toolbar] [aria-label="Attach files"]',
+    );
+    if (!input || !toggle) throw new Error('Missing attachment controls');
+    const selected = new DataTransfer();
+    selected.items.add(new File(['Toolbar file bytes'], 'toolbar.txt', { type: 'text/plain' }));
+    input.files = selected.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    toggle.click();
+  });
+  await expect(media.getByTitle('toolbar.txt', { exact: true })).toBeVisible();
+  await expect(page.locator('.note-editor [data-content-type="file"]')).toHaveCount(1);
+  await media.getByRole('button', { name: 'View toolbar.txt' }).click();
+  await expect(page.locator('[data-media-viewer]')).toContainText('Download this file to open it.');
+  await page.getByRole('button', { name: 'Close media viewer' }).click();
+  await media.getByRole('button', { name: 'View pixel.png' }).click();
+  await expect(page.locator('[data-media-viewer] img')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-media-viewer]')).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
+  const thumbnails = await media.locator('button[aria-label^="View "]').evaluateAll((buttons) =>
+    buttons.map((button) => ({
+      width: button.getBoundingClientRect().width,
+      height: button.getBoundingClientRect().height,
+    })),
+  );
+  expect(thumbnails).toEqual([
+    { width: 64, height: 64 },
+    { width: 64, height: 64 },
+  ]);
 });

@@ -13,7 +13,8 @@ while, so importing the same notes twice must not duplicate them.
 ## Decisions
 
 **Exports are read on the device.** The importer (`lib/keepImport.ts` for Keep) turns the
-files the user chose into notes; the server only ever sees notes. Takeout's `.zip` is read
+files the user chose into notes and attachment sources; the server receives normal note
+writes and attachment uploads, never the archive. Takeout's `.zip` is read
 from its central directory with `Blob.slice` and the browser's `DecompressionStream`
 (`lib/zip.ts`), so only the directory and the files an importer asks for are read, never
 the whole archive, and there is no zip dependency. Each importer validates its source's
@@ -50,18 +51,34 @@ again. The user id is part of the hash so two users importing a shared note do n
 **Notes keep their dates.** A create may carry `createdAt`, `updatedAt`, `isArchived` and
 `deletedAt`. The server replaces a date later than its own clock with the current time.
 
-**The page waits for the notes to sync.** Telling which notes are already here, and where
-the user's notes end, needs the synced collection. The Data Management page keeps the notes
-collection subscribed while open (`useSyncedNotes`) and enables importing once it has
-synced, which offline it never does.
+**The page waits for notes and attachments to sync.** Telling which notes are already here,
+and where the user's notes end, needs the synced collection. The Data Management page keeps the notes
+and attachment collections subscribed while open (`useSyncedNotes` and
+`useSyncedAttachments`) and enables importing once both have synced, which offline they
+never do.
+
+**Keep files become catalog attachments, without inline blocks.** References are matched
+relative to the JSON file, then by archive path across all chosen ZIP parts. Unpacked JSON
+and media files can also be selected together; a basename fallback is allowed only when
+unambiguous. Media-only notes come in when at least one usable file is matched. Missing,
+empty, ambiguous and oversized files are reported before confirmation; extraction or
+storage failures are reported in the final progress summary without stopping other files.
+
+Attachment ids derive from the imported note id and normalized reference path. Re-importing
+adds missing attachments to existing notes without changing their content or settings;
+tombstoned attachments remain removed. After confirmation, files are extracted and stored
+in IndexedDB one at a time before their metadata is queued, after note creation (ADR 0009).
+Progress tracks notes, file preparation and uploads separately. Preparation continues across
+page navigation, but selected file handles cannot survive an app restart: unprepared files
+are then reported as failed and selecting the export again retries them. Prepared uploads
+are durable and resume through the outbox.
 
 ## Consequences
 
-- The importer leaves out and lists Keep's attachments (images, drawings, recordings),
-  labels, and notes in its trash. Catch supports attachments (ADR 0009), but reading and
-  matching Takeout's binary files is not implemented yet.
+- The importer leaves out and lists Keep's labels and notes in its trash.
 - Keep's rich-text formatting is not imported: notes come in from `textContent`, the plain
   text every export has, rather than the newer `textContentHtml`.
 - A note deleted forever after an import comes back if the same export is imported again.
-- Split Takeout exports can be chosen together, as can the `.json` files of an unpacked one.
+- Split Takeout exports can be chosen together, as can the JSON and media files of an
+  unpacked one.
   `.tgz` exports are refused with a hint to export as `.zip`.

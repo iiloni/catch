@@ -11,6 +11,7 @@ export type BlockKind =
   | 'checkListItem';
 
 export type FormattingState = {
+  attachmentIds: readonly string[];
   styles: Record<TextStyle, boolean>;
   /** The type of the block holding the cursor. */
   block: string;
