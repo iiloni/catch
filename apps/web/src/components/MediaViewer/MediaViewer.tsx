@@ -34,11 +34,13 @@ export function MediaViewer({
   const narrow = useSyncExternalStore(subscribeWidth, isNarrow);
   const isPresent = useIsPresent();
   const reducedMotion = useReducedMotion();
+  const [ready, setReady] = useState(file.kind === 'file');
+  const reveal = useCallback(() => setReady(true), []);
   const fade = {
     initial: { opacity: 0 },
     animate: { opacity: 1 },
     exit: { opacity: 0 },
-    transition: { duration: reducedMotion ? 0 : 0.18 },
+    transition: { duration: reducedMotion ? 0 : 0.18, ease: 'linear' as const },
   };
   const [currentId, setCurrentId] = useState(file.id);
   const content = useRef<HTMLDivElement>(null);
@@ -104,54 +106,67 @@ export function MediaViewer({
             if (previousFocus.current?.isConnected) previousFocus.current.focus();
           }}
         >
-          <motion.div
-            {...fade}
-            inert={!isPresent}
-            style={{ pointerEvents: isPresent ? 'auto' : 'none' }}
-          >
-            <ViewerContent
-              key={current.id}
-              file={current}
-              narrow={narrow}
-              onNavigate={files.length > 1 ? navigate : undefined}
-            />
-            <div
-              className={cn(
-                'absolute top-[calc(var(--safe-top)+0.75rem)] z-20 flex items-center gap-2',
-                narrow ? 'left-1/2 -translate-x-1/2' : 'right-16',
-              )}
+          <div inert={!isPresent} style={{ pointerEvents: isPresent ? 'auto' : 'none' }}>
+            {!ready && (
+              <p
+                aria-hidden
+                className="absolute inset-0 flex items-center justify-center text-sm text-white/70"
+              >
+                Loading preview…
+              </p>
+            )}
+            <motion.div
+              data-media-viewer-content
+              className="absolute inset-0"
+              {...fade}
+              animate={{ opacity: ready ? 1 : 0 }}
             >
-              {files.length > 1 && (
-                <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-10 rounded-full"
-                    aria-label="Previous attachment"
-                    onClick={() => navigate(-1)}
-                  >
-                    <ChevronLeft />
-                  </Button>
-                  <span
-                    className="min-w-12 text-center text-xs tabular-nums"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  >
-                    {index + 1} / {files.length}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-10 rounded-full"
-                    aria-label="Next attachment"
-                    onClick={() => navigate(1)}
-                  >
-                    <ChevronRight />
-                  </Button>
-                </div>
-              )}
-            </div>
+              <ViewerContent
+                key={current.id}
+                file={current}
+                narrow={narrow}
+                onReady={reveal}
+                onNavigate={files.length > 1 ? navigate : undefined}
+              />
+              <div
+                className={cn(
+                  'absolute top-[calc(var(--safe-top)+0.75rem)] z-20 flex items-center gap-2',
+                  narrow ? 'left-1/2 -translate-x-1/2' : 'right-16',
+                )}
+              >
+                {files.length > 1 && (
+                  <div className="flex items-center gap-1 rounded-full glass-thick p-1 text-foreground">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-10 rounded-full"
+                      aria-label="Previous attachment"
+                      onClick={() => navigate(-1)}
+                    >
+                      <ChevronLeft />
+                    </Button>
+                    <span
+                      className="min-w-12 text-center text-xs tabular-nums"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {index + 1} / {files.length}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-10 rounded-full"
+                      aria-label="Next attachment"
+                      onClick={() => navigate(1)}
+                    >
+                      <ChevronRight />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
             <Button
+              asChild
               variant="ghost"
               size="icon"
               className={cn(
@@ -163,9 +178,11 @@ export function MediaViewer({
               aria-label="Close media viewer"
               onClick={onClose}
             >
-              <X />
+              <motion.button {...fade}>
+                <X />
+              </motion.button>
             </Button>
-          </motion.div>
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -176,10 +193,12 @@ function ViewerContent({
   file,
   onNavigate,
   narrow,
+  onReady,
 }: {
   file: Attachment;
   onNavigate?: (direction: number) => void;
   narrow: boolean;
+  onReady: () => void;
 }) {
   const { source, error } = useAttachmentUrl(attachmentUrl(file.id));
   const [failed, setFailed] = useState(false);
@@ -195,6 +214,9 @@ function ViewerContent({
     };
   }, []);
   const unavailable = error || failed;
+  useEffect(() => {
+    if (unavailable || file.kind === 'file') onReady();
+  }, [unavailable, file.kind, onReady]);
   async function run(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
     try {
@@ -255,6 +277,7 @@ function ViewerContent({
           onError={() => setFailed(true)}
           onNavigate={onNavigate}
           onSize={setSize}
+          onReady={onReady}
           details={narrow ? details : undefined}
         />
       ) : source && !unavailable && file.kind === 'video' ? (
@@ -267,6 +290,7 @@ function ViewerContent({
           autoPlay
           aria-label={file.name}
           onError={() => setFailed(true)}
+          onLoadedData={onReady}
           className={cn(
             'absolute inset-0 h-full w-full object-contain',
             narrow && 'h-[calc(100%-var(--safe-bottom)-5rem)]',
@@ -283,6 +307,7 @@ function ViewerContent({
             autoPlay
             aria-label={file.name}
             onError={() => setFailed(true)}
+            onLoadedData={onReady}
             className="w-full max-w-lg"
           />
         </div>

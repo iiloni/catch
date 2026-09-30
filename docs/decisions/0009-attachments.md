@@ -58,8 +58,11 @@ menus. Inline actions are tied to the matching editor and return to that note; o
 thumbnail keeps the catalog beneath the viewer so closing it returns to the attachments.
 Catalog rows share a fixed 64 px thumbnail size with link previews, without a background fill
 behind images. Tapping a thumbnail opens a full-screen dark media stage without a surrounding
-card. The viewer and its backdrop fade in and out over 180 ms, skipping the fade when reduced
-motion is requested. Playback stops when closing begins, and focus returns after the fade.
+card. The viewer and its backdrop fade in and out linearly over 180 ms, skipping the fade when
+reduced motion is requested. The backdrop opens immediately with a loading indicator; the
+content's entrance starts once the image is loaded and decoded, or playback has its first
+data, so a late preview still receives the full fade. Errors reveal the fallback view.
+Playback stops when closing begins, and focus returns after the fade.
 A small metadata card at the top left offers download and Keep offline.
 Control bars use the metadata card's glass surface. Attachment navigation sits at the top
 right beside close on wide screens. Below 640 px, navigation is centered at the top, close

@@ -1,5 +1,5 @@
 import type { Attachment } from '@catch/shared';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
@@ -79,6 +79,23 @@ function loadedStage() {
 }
 
 describe('MediaViewer', () => {
+  it('waits for a late image decode before starting the content fade and keeps close available', async () => {
+    const close = vi.fn();
+    render(<MediaViewer file={file} onClose={close} />);
+    const image = screen.getByRole('img');
+    let finishDecode = () => {};
+    const decoding = new Promise<void>((resolve) => {
+      finishDecode = resolve;
+    });
+    Object.defineProperty(image, 'decode', { value: vi.fn(() => decoding) });
+    loadedStage();
+    const content = document.querySelector('[data-media-viewer-content]');
+    expect(content).toHaveStyle({ opacity: '0' });
+    expect(screen.getByRole('button', { name: 'Close media viewer' })).toBeInTheDocument();
+    await act(async () => finishDecode());
+    await waitFor(() => expect(content).toHaveStyle({ opacity: '1' }));
+  });
+
   it('shows the original image in an accessible dialog and closes it', () => {
     const close = vi.fn();
     render(<MediaViewer file={file} onClose={close} />);

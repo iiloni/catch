@@ -420,11 +420,34 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   const media = page.getByRole('region', { name: 'Media', exact: true });
   const thumbnail = media.getByRole('button', { name: 'View landscape.png', exact: true });
   await expect(thumbnail).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await page.evaluate(() => {
+    const decode = HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode = function () {
+      const decoded = decode.call(this);
+      return this.closest('[data-media-stage]')
+        ? decoded.then(() => new Promise<void>((resolve) => setTimeout(resolve, 350)))
+        : decoded;
+    };
+  });
   await thumbnail.click();
   const viewer = page.locator('[data-media-viewer]');
+  const fadingContent = viewer.locator('[data-media-viewer-content]');
   await expect(viewer).toHaveAccessibleName('landscape.png');
-  await expect(viewer).toHaveCSS('opacity', '1');
+  await expect(fadingContent).toHaveCSS('opacity', '0');
   await expect(viewer).toContainText('800 × 600');
+  const entrance = await fadingContent.evaluate(async (node) => {
+    const samples: number[] = [];
+    const started = performance.now();
+    while (performance.now() - started < 750) {
+      const opacity = Number(getComputedStyle(node).opacity);
+      samples.push(opacity);
+      if (opacity === 1) break;
+      await new Promise(requestAnimationFrame);
+    }
+    return samples;
+  });
+  expect(entrance.some((opacity) => opacity > 0 && opacity < 1)).toBe(true);
+  await expect(fadingContent).toHaveCSS('opacity', '1');
   const frame = await viewer.boundingBox();
   const viewport = page.viewportSize();
   if (!frame || !viewport) throw new Error('Missing viewer bounds');
@@ -623,7 +646,7 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     const samples: number[] = [];
     const started = performance.now();
     while (performance.now() - started < 350) {
-      const viewer = document.querySelector('[data-media-viewer]');
+      const viewer = document.querySelector('[data-media-viewer-content]');
       if (!viewer) break;
       samples.push(Number(getComputedStyle(viewer).opacity));
       await new Promise(requestAnimationFrame);

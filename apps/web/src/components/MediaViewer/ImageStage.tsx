@@ -27,6 +27,7 @@ export function ImageStage({
   onError,
   onNavigate,
   onSize,
+  onReady,
   details,
 }: {
   source: string;
@@ -34,6 +35,7 @@ export function ImageStage({
   onError: () => void;
   onNavigate?: (direction: number) => void;
   onSize: (size: Size) => void;
+  onReady: () => void;
   details?: RefObject<DetailsGesture | null>;
 }) {
   const stage = useRef<HTMLDivElement>(null);
@@ -262,6 +264,13 @@ export function ImageStage({
             };
             setImage(size);
             onSize(size);
+            const image = event.currentTarget;
+            const source = image.currentSrc;
+            const ready = () => {
+              if (image.isConnected && image.currentSrc === source) onReady();
+            };
+            if (typeof image.decode === 'function') void image.decode().then(ready, ready);
+            else ready();
           }}
           className="pointer-events-none max-w-none shrink-0 object-contain"
           style={{

@@ -277,14 +277,14 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                 }
                 note={note}
                 fromEditor={fromEditor}
-                className="glass-thick shrink-0 rounded-t-3xl border-b-0"
+                className="glass-thick shrink-0 rounded-t-3xl border-b-0! shadow-none"
               />
               <div
                 data-link-overlay-scroll
                 className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-b-3xl"
               >
                 {files.length > 0 && (
-                  <section className="glass-thick shrink-0 rounded-b-3xl border-t-0">
+                  <section className="glass-thick shrink-0 rounded-b-3xl border-t-0! shadow-none">
                     <NoteMedia
                       noteId={note.id}
                       readOnly={Boolean(note.deletedAt)}
@@ -299,7 +299,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                     aria-label="Links"
                     className={cn(
                       'glass-thick shrink-0',
-                      files.length ? 'rounded-3xl' : 'rounded-b-3xl border-t-0',
+                      files.length ? 'rounded-3xl' : 'rounded-b-3xl border-t-0! shadow-none',
                     )}
                   >
                     {files.length > 0 && (
