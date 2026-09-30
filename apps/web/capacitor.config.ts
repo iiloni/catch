@@ -4,6 +4,7 @@ const config: CapacitorConfig = {
   appId: 'org.iloni.catchnotes',
   appName: 'Catch',
   webDir: 'dist',
+  android: { flavor: 'stable' },
   plugins: {
     SystemBars: {
       // KeyboardInsetsPlugin.java owns the insets instead: it keeps the WebView full size when

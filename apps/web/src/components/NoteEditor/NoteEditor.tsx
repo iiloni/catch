@@ -1,6 +1,6 @@
 import '@blocknote/shadcn/style.css';
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core';
-import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
+import { HistoryExtension, SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import {
   BlockColorsItem,
@@ -80,6 +80,31 @@ const slashMenuFloatingOptions: FloatingUIOptions = {
   },
 };
 
+const sideMenuFloatingOptions: FloatingUIOptions = {
+  useFloatingOptions: {
+    middleware: [
+      offset(({ elements, rects }) => {
+        const reference =
+          elements.reference instanceof Element
+            ? elements.reference
+            : elements.reference.contextElement;
+        const inline = reference?.querySelector('.bn-inline-content');
+        if (!inline) return 0;
+        const bounds = inline.getBoundingClientRect();
+        const lineHeight = Number.parseFloat(getComputedStyle(inline).lineHeight) || bounds.height;
+        // Wrapped text and touch-sized lists need their first line, not the whole block's center.
+        return {
+          crossAxis:
+            bounds.top +
+            Math.min(lineHeight, bounds.height) / 2 -
+            elements.reference.getBoundingClientRect().top -
+            rects.floating.height / 2,
+        };
+      }),
+    ],
+  },
+};
+
 type Props = {
   initialContent?: Note['content'];
   onChange?: (content: Note['content']) => void;
@@ -133,6 +158,11 @@ export function NoteEditor({
 
   function focusAboveBlankSpace(event: MouseEvent<HTMLDivElement>) {
     if (!editable || !(event.target instanceof Element)) return;
+    // Floating controls share BlockNoteView's click handler, including through portals.
+    // Only clicks on the writing surface should move the caret.
+    if (event.target !== event.currentTarget && !editor.domElement?.contains(event.target)) {
+      return;
+    }
     // The checkbox's padding belongs to the same touch target as the native input.
     const checkbox = event.target.matches('[data-content-type="checkListItem"] > div')
       ? event.target.querySelector<HTMLInputElement>('input[type="checkbox"]')
@@ -170,7 +200,7 @@ export function NoteEditor({
       onClick={focusAboveBlankSpace}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
-      <SideMenuController sideMenu={NoteSideMenu} />
+      <NoteSideMenuController />
       <SuggestionMenuController
         triggerCharacter="/"
         shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
@@ -178,6 +208,16 @@ export function NoteEditor({
         floatingUIOptions={slashMenuFloatingOptions}
       />
     </BlockNoteView>
+  );
+}
+
+function NoteSideMenuController() {
+  const block = useExtensionState(SideMenuExtension, { selector: (state) => state?.block });
+  return (
+    <SideMenuController
+      sideMenu={NoteSideMenu}
+      floatingUIOptions={Array.isArray(block?.content) ? sideMenuFloatingOptions : undefined}
+    />
   );
 }
 
@@ -289,6 +329,16 @@ function createControls(editor: AnyEditor): EditorControls {
       if (editor.canUnnestBlock()) editor.unnestBlock();
       refresh();
     },
+    undo() {
+      editor.undo();
+      editor.focus();
+      refresh();
+    },
+    redo() {
+      editor.redo();
+      editor.focus();
+      refresh();
+    },
     focusEnd() {
       const last = editor.document.at(-1);
       if (last) editor.setTextCursorPosition(last, 'end');
@@ -299,6 +349,7 @@ function createControls(editor: AnyEditor): EditorControls {
 
 function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
+  const history = editor.getExtension(HistoryExtension);
   return {
     styles: {
       bold: Boolean(active.bold),
@@ -309,6 +360,8 @@ function readState(editor: AnyEditor): FormattingState {
     block: editor.getTextCursorPosition().block.type,
     canIndent: editor.canNestBlock(),
     canOutdent: editor.canUnnestBlock(),
+    canUndo: history ? editor.canExec(history.undoCommand) : false,
+    canRedo: history ? editor.canExec(history.redoCommand) : false,
   };
 }
 
@@ -335,12 +388,18 @@ function useCaretAboveKeyboard(editor: AnyEditor) {
 
       const bounds = area.getBoundingClientRect();
       const caret = view.coordsAtPos(view.state.selection.head);
-      const top = Math.max(0, bounds.top) + 12;
+      const header = area.closest('[role="dialog"]')?.querySelector('[data-note-header]');
+      const top = Math.max(0, bounds.top, header?.getBoundingClientRect().bottom ?? 0) + 12;
       let bottom = Math.min(bounds.bottom, window.innerHeight - height) - 12;
       // The dock sits outside the scroll area and rises with the keyboard.
       for (const toolbar of document.querySelectorAll('[data-note-toolbar]')) {
         const rect = toolbar.getBoundingClientRect();
-        if (rect.right > bounds.left && rect.left < bounds.right && rect.height > 0) {
+        if (
+          rect.right > bounds.left &&
+          rect.left < bounds.right &&
+          rect.bottom > top &&
+          rect.height > 0
+        ) {
           bottom = Math.min(bottom, rect.top - 12);
         }
       }

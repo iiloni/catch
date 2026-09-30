@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Check, ChevronLeft, Columns3, LayoutGrid, Plus, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
+import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
 import {
@@ -10,7 +11,15 @@ import {
   SettingsTabSelector,
 } from '@/components/SettingsTabPicker/SettingsTabPicker';
 import { useBackHandler } from '@/lib/backButton';
-import { lastBrowsingTab, quickNote, searchQuery, type TabPath, tabFor } from '@/lib/dockState';
+import {
+  editorControls,
+  editorNote,
+  lastBrowsingTab,
+  quickNote,
+  searchQuery,
+  type TabPath,
+  tabFor,
+} from '@/lib/dockState';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
@@ -29,7 +38,7 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { path: '/deck', label: 'Deck', icon: Columns3 },
-  { path: '/', label: 'Gallery', icon: LayoutGrid },
+  { path: '/', label: 'Gallery', icon: LayoutDashboard },
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
 
@@ -126,7 +135,7 @@ export function Dock() {
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
-          'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center',
+          'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center overflow-x-clip',
           quickNoteOpen && 'z-[75]!',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
@@ -166,6 +175,7 @@ export function Dock() {
                 {/* Isolated so the link tray can tuck behind the dock's glass. */}
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && <NoteLinkTray />}
+                  {mode === 'note' && <FloatingHistoryToolbar className="sm:hidden" />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField inputRef={inputRef} active={mode === 'search'} />
                     <AnimatePresence initial={false}>
@@ -218,6 +228,20 @@ export function Dock() {
   );
 }
 
+function FloatingHistoryToolbar({ className }: { className?: string }) {
+  const note = editorNote.use();
+  const controls = editorControls.use();
+  if (!note || note.deletedAt) return null;
+
+  return (
+    <HistoryToolbar
+      controls={controls}
+      floating
+      className={cn('absolute right-0 bottom-full mb-3', className)}
+    />
+  );
+}
+
 /**
  * The note's dock under its pane, sliding in and out with it. Not `data-dock`: that name is
  * for the page's dock (the page transition names it), and the editor ignores every
@@ -227,7 +251,7 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
   return (
     <div
       className={cn(
-        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center',
+        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center overflow-x-clip',
         compact ? 'pr-1' : 'pr-3',
       )}
       style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}

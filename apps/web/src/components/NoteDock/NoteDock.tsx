@@ -1,8 +1,9 @@
+import { type ColumnColor, DEFAULT_BOARD_STATUS } from '@catch/shared';
 import {
   Archive,
   ArchiveRestore,
   Columns3,
-  LayoutGrid,
+  LayoutDashboard,
   type LucideIcon,
   Palette,
   Pin,
@@ -11,8 +12,8 @@ import {
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type ComponentProps, type PointerEvent, useEffect, useRef, useState } from 'react';
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
-import { DeckColumnPicker, deckColumnAt } from '@/components/DeckColumnPicker/DeckColumnPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
+import { NoteMovePicker, noteDestinationAt } from '@/components/NoteMovePicker/NoteMovePicker';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns } from '@/lib/collections';
@@ -41,6 +42,7 @@ type Action = {
   /** Shown as held down: the pin of a pinned note, the open palette. */
   active?: boolean;
   expanded?: boolean;
+  columnColor?: ColumnColor;
   /** Pointer handlers for a press-and-hold gesture on top of the tap. */
   gesture?: Pick<
     ComponentProps<'button'>,
@@ -55,7 +57,7 @@ type Hold = {
   timer: number;
   /** The column picker is open under the finger. */
   holding: boolean;
-  column: string | null;
+  column: string | null | undefined;
 };
 
 /**
@@ -72,7 +74,7 @@ export function NoteDock() {
   const columns = sortBoardColumns(useBoardColumns());
   const ref = useRef<HTMLDivElement>(null);
   const [panel, setPanel] = useState<'palette' | 'columns' | null>(null);
-  const [hoveredColumn, setHoveredColumn] = useState<string | null>(null);
+  const [hoveredColumn, setHoveredColumn] = useState<string | null | undefined>(undefined);
   const hold = useRef<Hold | null>(null);
   useBackHandler(panel !== null, () => setPanel(null));
 
@@ -80,7 +82,7 @@ export function NoteDock() {
   const formatting = keyboardOpen && editable && controls !== null;
   const showPanel = editable && !formatting && isPresent;
   const showPalette = panel === 'palette' && showPanel;
-  const showColumns = panel === 'columns' && showPanel && note?.status === null;
+  const showColumns = panel === 'columns' && showPanel;
 
   useEffect(() => () => window.clearTimeout(hold.current?.timer), []);
 
@@ -98,13 +100,27 @@ export function NoteDock() {
       if (!ref.current?.contains(event.target as Node)) setPanel(null);
     };
     document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
   }, [showColumns]);
+
+  useEffect(() => {
+    if (!grown) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPanel(null);
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [grown]);
 
   function endHold() {
     window.clearTimeout(hold.current?.timer);
     hold.current = null;
-    setHoveredColumn(null);
+    setHoveredColumn(undefined);
   }
 
   function openColumns() {
@@ -116,15 +132,16 @@ export function NoteDock() {
     setPanel('columns');
   }
 
-  function addToColumn(id: string, status: string) {
-    haptics.success();
+  function moveTo(id: string, status: string | null) {
     setPanel(null);
-    moveNoteToDeck(id, status);
+    if (status === note?.status) return;
+    haptics.success();
+    if (status === null) sendNoteToGallery(id);
+    else moveNoteToDeck(id, status);
   }
 
-  // Holding the deck button (or sliding off it) opens the columns; the same finger then
-  // slides onto one and lets go to put the note there. A tap uses the default column.
-  const deckGesture: Action['gesture'] = {
+  // Holding or sliding off the move button also opens the picker under the finger.
+  const moveGesture: Action['gesture'] = {
     onPointerDown(event: PointerEvent<HTMLButtonElement>) {
       if (event.button !== 0) return;
       event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -135,7 +152,7 @@ export function NoteDock() {
         y: event.clientY,
         timer: window.setTimeout(openColumns, HOLD_MS),
         holding: false,
-        column: null,
+        column: undefined,
       };
     },
     onPointerMove(event: PointerEvent<HTMLButtonElement>) {
@@ -146,10 +163,10 @@ export function NoteDock() {
         if (distance <= LONG_PRESS_TOLERANCE) return;
         openColumns();
       }
-      const column = deckColumnAt(ref.current, event.clientX, event.clientY);
+      const column = noteDestinationAt(ref.current, event.clientX, event.clientY);
       if (column === state.column) return;
       state.column = column;
-      if (column) haptics.selection();
+      if (column !== undefined) haptics.selection();
       setHoveredColumn(column);
     },
     onPointerUp(event: PointerEvent<HTMLButtonElement>) {
@@ -160,8 +177,8 @@ export function NoteDock() {
       swallowNextClick();
       // Hit-test at release too: the last move may have been dropped. Letting go anywhere
       // else leaves the columns open to tap.
-      const column = deckColumnAt(ref.current, event.clientX, event.clientY) ?? state.column;
-      if (column) addToColumn(note.id, column);
+      const column = noteDestinationAt(ref.current, event.clientX, event.clientY);
+      if (column !== undefined) moveTo(note.id, column);
     },
     onPointerCancel: endHold,
     onContextMenu: (event) => event.preventDefault(),
@@ -210,33 +227,25 @@ export function NoteDock() {
               },
             },
           ]),
-      note.status === null
-        ? {
-            id: 'deck',
-            label: 'Add to deck',
-            icon: Columns3,
-            active: showColumns,
-            expanded: showColumns,
-            gesture: deckGesture,
-            onPress: () => {
-              if (showColumns) {
-                haptics.toggle();
-                setPanel(null);
-                return;
-              }
-              haptics.selection();
-              moveNoteToDeck(note.id);
-            },
-          }
-        : {
-            id: 'deck',
-            label: 'Send to gallery',
-            icon: LayoutGrid,
-            onPress: () => {
-              haptics.selection();
-              sendNoteToGallery(note.id);
-            },
-          },
+      {
+        id: 'move',
+        label: 'Move note',
+        icon: note.status === null ? LayoutDashboard : Columns3,
+        columnColor:
+          note.status === null
+            ? undefined
+            : ((
+                columns.find((column) => column.id === note.status) ??
+                columns.find((column) => column.id === DEFAULT_BOARD_STATUS)
+              )?.color ?? 'amber'),
+        active: showColumns,
+        expanded: showColumns,
+        gesture: moveGesture,
+        onPress: () => {
+          haptics.toggle();
+          setPanel(showColumns ? null : 'columns');
+        },
+      },
       note.isArchived
         ? {
             id: 'archive',
@@ -293,10 +302,11 @@ export function NoteDock() {
             exit={{ height: 0, opacity: 0 }}
             transition={springs.smooth}
           >
-            <DeckColumnPicker
+            <NoteMovePicker
               columns={columns}
+              current={note.status}
               hovered={hoveredColumn}
-              onSelect={(status) => addToColumn(note.id, status)}
+              onSelect={(status) => moveTo(note.id, status)}
             />
           </motion.div>
         )}
@@ -359,10 +369,21 @@ function DockAction({ action }: { action: Action }) {
           : 'text-foreground/80',
       )}
     >
-      <Icon
-        className={cn('size-6', action.active && action.icon === Pin && 'fill-current')}
-        aria-hidden
-      />
+      <span
+        className="relative flex size-6 items-center justify-center"
+        data-column-color={action.columnColor}
+      >
+        <Icon
+          className={cn('size-6', action.active && action.icon === Pin && 'fill-current')}
+          aria-hidden
+        />
+        {action.columnColor && (
+          <span
+            aria-hidden
+            className="absolute -bottom-1 inset-x-0 h-0.5 rounded-full bg-[var(--column-accent)]"
+          />
+        )}
+      </span>
     </motion.button>
   );
 }

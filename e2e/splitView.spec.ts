@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, createNote, noteAction, noteToolbar, openNote, signUp } from './helpers';
+import { card, createNote, moveNote, noteToolbar, openNote, signUp } from './helpers';
 
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
@@ -123,7 +123,7 @@ test('a quick note and its dock center over the split view with one formatting b
 test('on the deck a note pops up over the board instead', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Ship it');
-  await noteAction(page, 'Ship it', 'Add to deck');
+  await moveNote(page, 'Ship it');
 
   // The page beside the pane stays usable, and leaving for the deck closes the note.
   await page.getByRole('link', { name: 'Deck' }).click();

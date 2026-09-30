@@ -39,11 +39,24 @@ Sheets float above the bottom safe area or keyboard with a small gap and rounded
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
-pin, deck, archive); the color button grows the dock upward into a palette, and trashing
-lives in the editor's top right. Tapping the deck button adds the note to the default column;
-holding it (or sliding off it) grows the dock upward into the Deck's columns, and letting go
-on one puts the note there. The editor therefore is a non-modal dialog, with the page
+pin, move, archive); the color button grows the dock upward into a palette, and trashing
+lives in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
+stack in a wider left column, with one full-height Gallery target on the right. A brand
+border and check mark show the current location. The move button also shows its location:
+a dashboard for Gallery, or columns with the current column's accent line underneath. Holding the button (or sliding off it)
+also opens the picker, and letting go on a destination moves the note there. Desktop
+card toolbars expand the same picker vertically. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
+
+On phones the note scrolls behind its floating back and trash controls, with the Gallery's
+masked edge blurs at the top and above the keyboard at the bottom. The centered glass sync
+pill slides down from the top while writes are pending and stays for two seconds after they
+finish before sliding away; save failures remain visible. Its measured width follows the
+same spring as the header toolbars while its icon and text crossfade. The edited timestamp
+follows the note content, centered in the scroll area.
+The pill's slide is clipped at the header's safe top edge, so it never draws over Android's
+status bar. Motion uses pixel translations within that clip instead of resolving a
+percentage/calc transform against changing native insets.
 
 **Header toolbars.** Page controls sit in toolbars in the header's top corners (the
 Gallery's sort and settings, the Deck's column editor, Archive and Trash's back button and
@@ -129,6 +142,19 @@ up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
 focus, so the keyboard stays up.
 
+**Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
+Its toolbar appears once an edit can be undone, and stays available while there is undo or
+redo history. From 640 px it sits beside the back button, including in narrow split panes.
+It is positioned outside the header's flow so it never moves the centered sync pill.
+Split panes narrower than 480 px show the sync pill's icon with an accessible status label
+and a tooltip, leaving room for every header control. On phones the history toolbar floats
+at the dock's right edge above either the note actions or formatting bar.
+Keyboard scrolling keeps the caret's line above this toolbar too,
+with enough bottom padding to reach the note's last line.
+The toolbar slides in from the top in the header or the right above the dock with `springs.smooth`,
+matching the sync pill, and skips animation when reduced motion is requested. Its final
+footprint is reserved for caret scrolling during the slide.
+
 **Lists on touch.** Editor checkboxes have a 24 px box inside a 44 px touch target. Cards use
 the same checkbox styling at 16 px; the opening preview matches the editor's row sizes,
 text spacing and indentation so mounting the editor does not move the content. Native
@@ -138,6 +164,12 @@ its sibling group, with its nested children. Moving before the hold expires scro
 usual; checkbox taps keep toggling, and links keep opening. A drop marker and edge scrolling
 guide the move, which is committed as one undo step on release. The mouse drag handle
 remains available.
+
+Block menu handles sit in a compact 40 px gutter on touch screens, with a 32 px button and
+a 4 px gap before the block. Their
+vertical position follows the rendered first line, including larger headings and touch-sized
+lists. The editor's opening preview and link insets share that gutter so mounting it does not
+shift the content.
 
 ## Consequences
 

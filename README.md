@@ -13,6 +13,9 @@ docker compose up -d --build
 The app listens on port 3000 (`CATCH_PORT` to change it). Put it behind HTTPS; the Android
 app requires it. The first account you create becomes the instance admin.
 
+For published Docker images, signed Android APKs, stable/preview channels, and a production
+configuration kept outside this checkout, see [Releasing and deployment](docs/releases.md).
+
 ## Development
 
 Requires Docker and, for end-to-end tests and editor support on the host, Node 24 and pnpm
@@ -53,8 +56,12 @@ A standalone build bundles the web app and asks for your server URL on first lau
 
 ```bash
 pnpm --filter @catch/web android:sync
-pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDebug
+pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleStableDebug
 ```
+
+Stable is the default Android flavor. `assemblePreviewDebug` builds the separate Catch
+Preview app; release builds read their version and signing credentials from the environment
+(see [Releasing and deployment](docs/releases.md)).
 
 The approved Gentle Drop masters and exact values live in `branding/`. To regenerate the
 browser and PWA icons, Android launcher layers, and splash images, run

@@ -1,5 +1,6 @@
 import '@fontsource-variable/bricolage-grotesque/standard.css';
 import '@fontsource-variable/figtree';
+import { Capacitor } from '@capacitor/core';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -7,6 +8,8 @@ import { pageTransition } from './lib/dockState';
 import { startKeyboardTracking } from './lib/keyboard';
 import { routeTree } from './routeTree.gen';
 import './styles.css';
+
+document.documentElement.dataset.platform = Capacitor.getPlatform();
 
 const router = createRouter({
   routeTree,

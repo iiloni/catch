@@ -8,7 +8,9 @@ RUN npm install -g "pnpm@$(node -p "require('./package.json').packageManager.spl
 # Used by scripts/dev.sh: the checkout is bind-mounted and dependencies live in volumes.
 FROM base AS development
 ENV NODE_ENV=development
-RUN mkdir -p /pnpm-store && chown node:node /pnpm-store /workspace
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /pnpm-store && chown node:node /pnpm-store /workspace
 CMD ["sh", "scripts/dev-entrypoint.sh"]
 
 FROM base AS build
