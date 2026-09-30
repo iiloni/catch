@@ -123,3 +123,44 @@ test('checkbox edits use the same undo and redo history', async ({ page }) => {
   await toolbar.getByRole('button', { name: 'Redo', exact: true }).click();
   await expect(checkbox).toBeChecked();
 });
+
+test('a narrow split pane floats history above its dock and keeps the sync pill centered', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 720, height: 820 });
+  await signUp(page);
+  await createNote(page, 'Narrow history', 'Keep the header steady');
+  const dialog = await openNote(page, 'Narrow history');
+  const status = dialog.getByRole('status');
+  const before = await status.boundingBox();
+  if (!before) throw new Error('Missing sync status area');
+  await dialog.getByRole('textbox').locator('p').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.insertText('!');
+  const history = page.getByRole('toolbar', { name: 'Undo and redo' });
+  await expect(history).toBeVisible();
+  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toHaveCount(0);
+  await expect(status.getByText('Synced', { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const pill = await dialog.locator('[data-sync-pill]').boundingBox();
+      return pill
+        ? Math.abs(pill.x + pill.width / 2 - before.x - before.width / 2)
+        : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(1);
+  expect(await status.boundingBox()).toEqual(before);
+  const box = await history.boundingBox();
+  const actions = await page.getByRole('toolbar', { name: 'Note actions' }).boundingBox();
+  if (!box || !actions) throw new Error('Missing history or note actions');
+  expect(box.y + box.height).toBeLessThan(actions.y);
+  expect(Math.abs(box.x + box.width - actions.x - actions.width)).toBeLessThan(2);
+
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
+  await expect(history).toHaveCount(1);
+  await history.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(dialog.getByRole('textbox').locator('p').last()).toHaveText(
+    'Keep the header steady',
+  );
+});

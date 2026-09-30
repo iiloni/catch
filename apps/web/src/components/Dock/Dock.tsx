@@ -3,7 +3,10 @@ import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from '
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
-import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
+import {
+  HISTORY_HEADER_MIN_WIDTH,
+  HistoryToolbar,
+} from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
 import {
@@ -175,7 +178,7 @@ export function Dock() {
                 {/* Isolated so the link tray can tuck behind the dock's glass. */}
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && <NoteLinkTray />}
-                  {mode === 'note' && <FloatingHistoryToolbar />}
+                  {mode === 'note' && <FloatingHistoryToolbar className="sm:hidden" />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField inputRef={inputRef} active={mode === 'search'} />
                     <AnimatePresence initial={false}>
@@ -228,7 +231,7 @@ export function Dock() {
   );
 }
 
-function FloatingHistoryToolbar() {
+function FloatingHistoryToolbar({ className }: { className?: string }) {
   const note = editorNote.use();
   const controls = editorControls.use();
   if (!note || note.deletedAt) return null;
@@ -237,7 +240,7 @@ function FloatingHistoryToolbar() {
     <HistoryToolbar
       controls={controls}
       floating
-      className="absolute right-0 bottom-full mb-3 sm:hidden"
+      className={cn('absolute right-0 bottom-full mb-3', className)}
     />
   );
 }
@@ -251,13 +254,14 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
   return (
     <div
       className={cn(
-        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center',
+        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center overflow-x-clip',
         compact ? 'pr-1' : 'pr-3',
       )}
       style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
         <NoteLinkTray />
+        {width - GUTTER < HISTORY_HEADER_MIN_WIDTH && <FloatingHistoryToolbar />}
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
           initial={false}

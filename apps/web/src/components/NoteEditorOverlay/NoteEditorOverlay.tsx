@@ -12,7 +12,10 @@ import {
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
+import {
+  HISTORY_HEADER_MIN_WIDTH,
+  HistoryToolbar,
+} from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
@@ -549,17 +552,24 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
                 )}
               >
-                <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
-                  <IconButton
-                    label="Close"
-                    onClick={requestClose}
-                    className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
-                  >
-                    <ChevronLeft />
-                  </IconButton>
+                <div className="relative shrink-0">
+                  <div className="glass flex rounded-[var(--dock-radius)] p-1">
+                    <IconButton
+                      label="Close"
+                      onClick={requestClose}
+                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                    >
+                      <ChevronLeft />
+                    </IconButton>
+                  </div>
+                  {editable && target.width >= HISTORY_HEADER_MIN_WIDTH && (
+                    <HistoryToolbar
+                      controls={controls}
+                      className="absolute top-0 left-[calc(100%+0.5rem)] hidden sm:flex"
+                    />
+                  )}
                 </div>
-                {editable && <HistoryToolbar controls={controls} className="hidden sm:flex" />}
-                <div className="relative h-[50px] min-w-0 flex-1">
+                <div className="pointer-events-none relative h-[50px] min-w-0 flex-1">
                   <SaveStatus state={state} />
                 </div>
                 <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">

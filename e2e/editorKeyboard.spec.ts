@@ -57,6 +57,7 @@ async function expectCaretVisible(page: Page) {
 for (const [layout, viewport] of [
   ['phone', { width: 412, height: 839 }],
   ['panel', { width: 900, height: 450 }],
+  ['narrow pane', { width: 720, height: 820 }],
   ['pane', { width: 1100, height: 900 }],
 ] as const) {
   test(`${layout}: the caret clears an overlay keyboard on every opening`, async ({ page }) => {

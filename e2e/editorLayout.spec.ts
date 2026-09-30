@@ -88,6 +88,10 @@ test('the sync pill slides from above and changes width without moving the heade
   expect((await status.boundingBox())?.y).toBe(40);
   const close = dialog.getByRole('button', { name: 'Close', exact: true });
   const closeBefore = await close.boundingBox();
+  const statusBefore = await status.boundingBox();
+  const editorBefore = await dialog.getByRole('textbox').boundingBox();
+  if (!statusBefore || !editorBefore) throw new Error('Missing sync status area or editor');
+  const statusCenter = statusBefore.x + statusBefore.width / 2;
 
   let releaseWrite = () => {};
   const holdWrite = new Promise<void>((resolve) => {
@@ -100,12 +104,15 @@ test('the sync pill slides from above and changes width without moving the heade
   await dialog.getByText('Read a few pages').click();
   await page.keyboard.press('End');
   const entrance = page.evaluate(() => {
-    return new Promise<number[]>((resolve) => {
-      const positions: number[] = [];
+    return new Promise<{ top: number; center: number }[]>((resolve) => {
+      const positions: { top: number; center: number }[] = [];
       const start = performance.now();
       function sample() {
         const pill = document.querySelector('[data-sync-pill]');
-        if (pill) positions.push(pill.getBoundingClientRect().y);
+        if (pill) {
+          const rect = pill.getBoundingClientRect();
+          positions.push({ top: rect.y, center: rect.x + rect.width / 2 });
+        }
         if (performance.now() - start >= 1500) return resolve(positions);
         requestAnimationFrame(sample);
       }
@@ -116,7 +123,14 @@ test('the sync pill slides from above and changes width without moving the heade
   await expect(status.getByText('Syncing…')).toBeVisible();
   const positions = await entrance;
   expect(positions.length).toBeGreaterThan(2);
-  expect(Math.min(...positions)).toBeLessThan(positions.at(-1) ?? 0);
+  expect(Math.min(...positions.map(({ top }) => top))).toBeLessThan(positions.at(-1)?.top ?? 0);
+  expect(positions.every(({ center }) => Math.abs(center - statusCenter) < 1)).toBe(true);
+  expect(await status.boundingBox()).toEqual(statusBefore);
+  expect(await dialog.getByRole('textbox').boundingBox()).toMatchObject({
+    x: editorBefore.x,
+    y: editorBefore.y,
+    width: editorBefore.width,
+  });
   expect(await close.boundingBox()).toEqual(closeBefore);
   const pill = dialog.locator('[data-sync-pill]');
   const restingPill = await pill.boundingBox();
