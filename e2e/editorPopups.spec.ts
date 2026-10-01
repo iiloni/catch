@@ -22,6 +22,8 @@ test.beforeEach(async ({ page }) => {
 test('the image embed field keeps focus and accepts a URL', async ({ page }) => {
   const dialog = await openNote(page, 'Popup focus');
   await dialog.getByText('Add image', { exact: true }).click();
+  // Uploads are attachments now, so the panel opens on its Upload tab.
+  await page.getByRole('tab', { name: 'Embed', exact: true }).click();
   const field = page.locator('[data-test="embed-input"]');
   await field.click();
   await expect(field).toBeFocused();
