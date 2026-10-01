@@ -1,7 +1,6 @@
 import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { editorControls, editorNote } from '@/lib/dockState';
 import { HOLD_MS } from '@/lib/longPress';
 import {
@@ -134,8 +133,7 @@ describe('NoteDock', () => {
 
   it('orders attachments second and pin last, with archive in the header', () => {
     renderDock();
-    expect(screen.getByRole('button', { name: 'Attach files' })).toBeDisabled();
-    act(() => editorControls.set({} as EditorControls));
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeEnabled();
     expect(
       screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
     ).toEqual(['Background color', 'Attach files', 'Move note', 'Pin']);

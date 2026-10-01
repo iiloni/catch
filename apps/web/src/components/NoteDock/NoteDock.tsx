@@ -219,7 +219,6 @@ export function NoteDock() {
       },
       {
         id: 'attachments',
-        disabled: controls === null,
         label: 'Attach files',
         icon: Paperclip,
         active: showAttachments,

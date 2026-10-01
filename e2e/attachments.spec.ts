@@ -25,6 +25,35 @@ async function upload(page: Parameters<typeof openNote>[0], file = picture) {
   await chooser.setFiles(file);
 }
 
+test('attachments open immediately and insert when a delayed editor loads', async ({ page }) => {
+  let releaseEditor = () => {};
+  const editorReady = new Promise<void>((resolve) => {
+    releaseEditor = resolve;
+  });
+  await page.route('**/src/components/NoteEditor/NoteEditor.tsx*', async (route) => {
+    await editorReady;
+    await route.continue();
+  });
+  try {
+    await signUp(page);
+    await seedNotes(page, ['Early attachment']);
+    await card(page, 'Early attachment').getByRole('button', { name: 'Open note' }).click();
+    const attach = page.getByRole('button', { name: 'Attach files', exact: true });
+    await expect(attach).toBeVisible();
+    await expect(attach).toBeEnabled();
+    await expect(page.getByRole('dialog').getByRole('textbox')).toHaveCount(0);
+    await upload(page);
+    await expect(page.getByRole('region', { name: 'Media' }).getByRole('img')).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('textbox')).toHaveCount(0);
+
+    releaseEditor();
+    await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+    await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
+  } finally {
+    releaseEditor();
+  }
+});
+
 test('video posters and playback work on the upload device and another device', async ({
   page,
   browser,

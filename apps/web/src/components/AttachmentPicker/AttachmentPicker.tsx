@@ -4,8 +4,8 @@ import { Camera, FilePlus2, Images, Mic, Square, Video, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
+import { captureAttachmentInsertion } from '@/lib/attachmentInsertion';
 import { attachFiles } from '@/lib/attachments';
-import { editorControls } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { pickNativeFiles, startNativeRecording, stopNativeRecording } from '@/lib/mediaPicker';
 
@@ -23,7 +23,7 @@ export function AttachmentPicker({
   const fileInput = useRef<HTMLInputElement>(null);
   const [capture, setCapture] = useState<'audio' | 'camera' | null>(null);
   const [busy, setBusy] = useState(false);
-  const insert = useRef<((files: Attachment[]) => void) | null>(null);
+  const insert = useRef<Promise<((files: Attachment[]) => void) | null> | null>(null);
 
   const active = useRef(true);
   useEffect(() => {
@@ -34,16 +34,19 @@ export function AttachmentPicker({
   }, []);
 
   function rememberPosition() {
-    insert.current = (controls ?? editorControls.get())?.attachmentInserter() ?? null;
+    insert.current = controls
+      ? Promise.resolve(controls.attachmentInserter())
+      : captureAttachmentInsertion(noteId);
   }
   async function receive(files: readonly File[]) {
+    const insertion = insert.current;
     setBusy(true);
     setCapture(null);
     try {
       await attachFiles(noteId, files, (added) => {
         // A system picker can outlive the dock panel. Its captured insertion point still
         // belongs to the mounted editor; that editor ignores it after switching notes.
-        insert.current?.(added);
+        void insertion?.then((insert) => insert?.(added));
       });
     } finally {
       if (active.current) {

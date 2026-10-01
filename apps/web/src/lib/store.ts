@@ -10,6 +10,7 @@ export function createStore<T>(initial: T) {
   };
   return {
     get: () => value,
+    subscribe,
     set(next: T) {
       if (Object.is(next, value)) return;
       value = next;

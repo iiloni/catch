@@ -24,7 +24,7 @@ import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection } from '@/lib/collections';
-import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
+import { editorControls, noteDockPanelOpen } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useNoteLinks } from '@/lib/linkPreviews';
 import { afterPaint, animateSteady, curves, springs } from '@/lib/motion';
@@ -42,6 +42,7 @@ import { useOpenNote } from '@/lib/openNote';
 import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
+import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 type Props = {
@@ -173,22 +174,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   targetRef.current = target;
   const editable = !note.deletedAt;
   const [controls, setControls] = useState<EditorControls | null>(null);
-  const publishControls = useCallback((next: EditorControls | null) => {
-    setControls(next);
-    editorControls.set(next);
-  }, []);
+  useEditorDock(note, controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
   const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia);
-
-  // The dock shows this note's actions (see NoteDock).
-  useEffect(() => editorNote.set(note), [note]);
-  useEffect(
-    () => () => {
-      if (editorNote.get()?.id === note.id) editorNote.set(null);
-    },
-    [note.id],
-  );
 
   useEffect(() => {
     if (!split || !isPresent) return;
@@ -440,7 +429,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             noteId={note.id}
             initialContent={note.content}
             onChange={save}
-            onControls={publishControls}
+            onControls={setControls}
             editable={editable}
             className="min-h-0"
             fallback={<NotePreview content={note.content} maxBlocks={200} variant="editor" />}

@@ -33,6 +33,24 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   ).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(1);
 
+  const attach = noteToolbar(page).getByRole('button', { name: 'Attach files', exact: true });
+  await expect(attach).toBeEnabled();
+  await attach.click();
+  const picker = page.getByRole('region', { name: 'Add attachment' });
+  await expect(picker).toBeVisible();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    picker.getByRole('button', { name: 'Files', exact: true }).click(),
+  ]);
+  await chooser.setFiles({
+    name: 'beta.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Attached to the second note'),
+  });
+  const fileBlock = page.getByRole('dialog').locator('[data-content-type="file"]');
+  await expect(fileBlock).toBeVisible();
+  await expect(fileBlock).toContainText('beta.txt');
+
   // Switching notes replaced the history entry, so one step back closes the pane.
   await page.goBack();
   await expect(page.getByRole('dialog')).toBeHidden();
