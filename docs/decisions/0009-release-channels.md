@@ -41,8 +41,9 @@ and preview must advance independently, including preview versions ahead of stab
   build identification, not a new official release channel. Preview and dev browser/PWA icons
   use distinct `/preview/` and `/dev/` paths, and their Android flavors overlay
   launcher/background resources independently of debug/release build type.
-  Both reuse the stable adaptive foreground and monochrome geometry. Only distribution
-  icons change: application UI and theme colors remain stable (see [brand assets](../branding.md)).
+  Both reuse the stable adaptive foreground and monochrome geometry. Distribution icons and
+  the Settings > Update icon identify the channel; other application UI and theme colors
+  remain stable (see [brand assets](../branding.md)).
 - Stable Android uses `org.iloni.catchnotes`; preview uses `org.iloni.catchnotes.preview`
   and the name Catch Preview. They can coexist and keep separate device data. Both are
   signed with the operator's persistent release key, held in Actions secrets and backed up

@@ -59,7 +59,9 @@ background and the shared main foreground and monochrome resources. The foregrou
 the unchanged `catch-adaptive-foreground.svg`, retaining transparency, scale 0.76,
 position and safe area. Maskable PWA icons composite that same foreground with the
 channel's full-bleed background. System tint removes channel colors from themed icons.
-Splash images and all application styling remain unchanged.
+Settings > Update shows the installed app's channel icon on Android and the server's channel
+icon on the web, falling back to development while channel metadata is unavailable.
+Splash images and other application styling remain unchanged.
 
 ## Channel selection
 
