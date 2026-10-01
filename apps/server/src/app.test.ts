@@ -23,4 +23,23 @@ describe('api', () => {
     const res = await app.request('/api/shapes/notes?offset=-1');
     expect(res.status).toBe(401);
   });
+
+  it('rejects unauthenticated administrative reads and writes', async () => {
+    expect((await app.request('/api/admin/users')).status).toBe(401);
+    expect(
+      (await app.request('/api/admin/users/some-user/reset-password', { method: 'POST' })).status,
+    ).toBe(401);
+    expect((await app.request('/api/admin/users/some-user', { method: 'DELETE' })).status).toBe(
+      401,
+    );
+    expect(
+      (
+        await app.request('/api/admin/users/some-user/role', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'admin' }),
+        })
+      ).status,
+    ).toBe(401);
+  });
 });

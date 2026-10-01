@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import { auth } from './auth';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
+import { adminRoutes } from './routes/admin';
 import { attachmentRoutes } from './routes/attachments';
 import { boardColumnRoutes } from './routes/boardColumns';
 import { linkPreviewRoutes } from './routes/linkPreviews';
@@ -53,6 +54,7 @@ export function createApp() {
   const api = app
     .basePath('/api')
     .get('/health', (c) => c.json({ ok: true }))
+    .route('/admin', adminRoutes)
     .route('/notes', notesRoutes)
     .route('/attachments', attachmentRoutes)
     .route('/board-columns', boardColumnRoutes)

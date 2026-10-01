@@ -1,14 +1,20 @@
 import type {
+  AdminUser,
   AttachmentAccess,
   CreateAttachment,
   CreateBoardColumn,
   CreateNote,
   CreateNotes,
+  ListUsers,
   RefreshLinkPreview,
+  ResetUserPasswordResponse,
   TxidResponse,
   UpdateAttachment,
   UpdateBoardColumn,
   UpdateNote,
+  UpdateUserRole,
+  UserActionResponse,
+  UsersResponse,
 } from '@catch/shared';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
@@ -37,6 +43,22 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const api = {
+  resetUserPassword: (id: string) =>
+    request<ResetUserPasswordResponse>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
+      method: 'POST',
+    }),
+  deleteUser: (id: string) =>
+    request<UserActionResponse>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  listUsers: (query: ListUsers, signal?: AbortSignal) =>
+    request<UsersResponse>(
+      `/admin/users?${new URLSearchParams({ search: query.search, offset: String(query.offset), limit: String(query.limit) })}`,
+      { method: 'GET', signal },
+    ),
+  updateUserRole: (id: string, body: UpdateUserRole) =>
+    request<AdminUser>(`/admin/users/${encodeURIComponent(id)}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   createAttachment: (body: CreateAttachment) =>
     request<TxidResponse>('/attachments', { method: 'POST', body: JSON.stringify(body) }),
   uploadAttachment: (id: string, blob: Blob) =>

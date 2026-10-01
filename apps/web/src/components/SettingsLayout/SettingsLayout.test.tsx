@@ -27,12 +27,28 @@ describe('SettingsLayout', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Account' })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Settings pages' });
     expect(nav).toHaveTextContent('General');
+    expect(screen.getByRole('region', { name: 'User' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'General' })).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Account page')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalled();
+  });
+
+  it('groups server settings separately for admins', () => {
+    render(
+      <SettingsLayout current={SETTINGS_TABS[3]} wide isAdmin onBack={vi.fn()}>
+        <p>Users page</p>
+      </SettingsLayout>,
+    );
+    expect(screen.getByRole('region', { name: 'User' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Admin' })).toContainElement(
+      screen.getByRole('link', { name: 'Users' }),
+    );
+    expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('shows only the open page under its own title when narrow', () => {

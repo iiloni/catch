@@ -80,6 +80,15 @@ describe('settingsTabAt', () => {
 });
 
 describe('SettingsTabSelector', () => {
+  it('only offers the Admin section to admins', () => {
+    const props = { open: true, current: null, hovered: null, onSelect: vi.fn() };
+    const { rerender } = render(<SettingsTabPicker {...props} />);
+    expect(screen.queryByRole('button', { name: 'Users' })).not.toBeInTheDocument();
+    rerender(<SettingsTabPicker {...props} isAdmin />);
+    expect(screen.getByRole('region', { name: 'Admin' })).toContainElement(
+      screen.getByRole('button', { name: 'Users' }),
+    );
+  });
   it('names the open page and opens the picker on a tap', () => {
     const onSelect = vi.fn();
     render(<Harness onSelect={onSelect} />);

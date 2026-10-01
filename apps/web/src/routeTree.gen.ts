@@ -20,8 +20,10 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
+import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -77,6 +79,11 @@ const AppSettingsAccountRoute = AppSettingsAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsAdminRoute = AppSettingsAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
   id: '/data',
   path: '/data',
@@ -86,6 +93,11 @@ const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   id: '/general',
   path: '/general',
   getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAdminUsersRoute = AppSettingsAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppSettingsAdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -98,9 +110,11 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings/': typeof AppSettingsIndexRoute
+  '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -111,9 +125,11 @@ export interface FileRoutesByTo {
   '/trash': typeof AppTrashRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
+  '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings': typeof AppSettingsIndexRoute
+  '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -127,9 +143,11 @@ export interface FileRoutesById {
   '/_app/trash': typeof AppTrashRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
+  '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/general': typeof AppSettingsGeneralRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -143,9 +161,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trash'
     | '/settings/account'
+    | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
     | '/settings/'
+    | '/settings/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -156,9 +176,11 @@ export interface FileRouteTypes {
     | '/trash'
     | '/'
     | '/settings/account'
+    | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
     | '/settings'
+    | '/settings/admin/users'
   id:
     | '__root__'
     | '/_app'
@@ -171,9 +193,11 @@ export interface FileRouteTypes {
     | '/_app/trash'
     | '/_app/'
     | '/_app/settings/account'
+    | '/_app/settings/admin'
     | '/_app/settings/data'
     | '/_app/settings/general'
     | '/_app/settings/'
+    | '/_app/settings/admin/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -261,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAccountRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/admin': {
+      id: '/_app/settings/admin'
+      path: '/admin'
+      fullPath: '/settings/admin'
+      preLoaderRoute: typeof AppSettingsAdminRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/data': {
       id: '/_app/settings/data'
       path: '/data'
@@ -275,11 +306,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsGeneralRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/admin/users': {
+      id: '/_app/settings/admin/users'
+      path: '/users'
+      fullPath: '/settings/admin/users'
+      preLoaderRoute: typeof AppSettingsAdminUsersRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
   }
 }
 
+interface AppSettingsAdminRouteChildren {
+  AppSettingsAdminUsersRoute: typeof AppSettingsAdminUsersRoute
+}
+
+const AppSettingsAdminRouteChildren: AppSettingsAdminRouteChildren = {
+  AppSettingsAdminUsersRoute: AppSettingsAdminUsersRoute,
+}
+
+const AppSettingsAdminRouteWithChildren =
+  AppSettingsAdminRoute._addFileChildren(AppSettingsAdminRouteChildren)
+
 interface AppSettingsRouteChildren {
   AppSettingsAccountRoute: typeof AppSettingsAccountRoute
+  AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
   AppSettingsDataRoute: typeof AppSettingsDataRoute
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
@@ -287,6 +337,7 @@ interface AppSettingsRouteChildren {
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountRoute: AppSettingsAccountRoute,
+  AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
   AppSettingsDataRoute: AppSettingsDataRoute,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
