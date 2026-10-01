@@ -70,6 +70,7 @@ jobs:
     timeout-minutes: 30
     env:
       CATCH_VERSION: ${{ needs.version.outputs.version }}
+      CATCH_CHANNEL: ${{ needs.version.outputs.channel }}
       CATCH_VERSION_CODE: ${{ needs.version.outputs.version_code }}
       RELEASE_FLAVOR: ${{ needs.version.outputs.flavor }}
       RELEASE_TASK: ${{ needs.version.outputs.gradle_task }}
@@ -162,6 +163,8 @@ jobs:
         with:
           context: .
           target: production
+          build-args: |
+            CATCH_CHANNEL=${{ needs.version.outputs.channel }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ needs.version.outputs.image }}:${{ needs.version.outputs.version }}

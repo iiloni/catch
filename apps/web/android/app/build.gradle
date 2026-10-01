@@ -22,6 +22,12 @@ android {
     }
     flavorDimensions += 'channel'
     productFlavors {
+        // Its own id keeps a debug-signed install from replacing a released app and its notes.
+        dev {
+            dimension 'channel'
+            applicationIdSuffix '.dev'
+            isDefault = true
+        }
         stable {
             dimension 'channel'
         }
@@ -51,6 +57,11 @@ android {
 
 // Keep unsigned APKs from being mistaken for installable releases, including local builds.
 tasks.configureEach { task ->
+    if (task.name == 'preDevReleaseBuild') {
+        task.doFirst {
+            throw new GradleException('The dev flavor is not distributed; build stable or preview for release.')
+        }
+    }
     if (task.name == 'preStableReleaseBuild' || task.name == 'prePreviewReleaseBuild') {
         task.doFirst {
             def required = ['CATCH_VERSION', 'CATCH_VERSION_CODE', 'ANDROID_KEYSTORE_PATH',

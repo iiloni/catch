@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Catch Preview small app icon">
+<defs><linearGradient id="preview-field" gradientUnits="userSpaceOnUse" x1="0" y1="768" x2="1024" y2="256"><stop offset="0" stop-color="#6654B0"/><stop offset="0.55" stop-color="#504389"/><stop offset="1" stop-color="#363166"/></linearGradient></defs>
+<rect id="preview-tile" x="0" y="0" width="1024" height="1024" rx="210" fill="url(#preview-field)"/><g id="scaled-canonical-note" transform="translate(520 505) scale(1.08) translate(-520 -505)"><g id="note" transform="translate(520 505) rotate(16.5)"><rect id="card" x="-255" y="-245" width="510" height="490" rx="56" fill="#FFF9F0"/><g id="note-lines" fill="#292B2D"><rect x="-145" y="-48" width="300" height="50" rx="25"/><rect x="-145" y="68" width="278" height="50" rx="25"/></g></g></g>
+</svg>

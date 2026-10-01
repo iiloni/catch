@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 CMD ["sh", "scripts/dev-entrypoint.sh"]
 
 FROM base AS build
+ARG CATCH_CHANNEL=dev
 COPY . .
 RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
     export PNPM_CONFIG_STORE_DIR=/pnpm-store \

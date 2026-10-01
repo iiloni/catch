@@ -1,0 +1,104 @@
+{
+  "tokenFormatVersion": 1,
+  "brand": "Catch",
+  "releaseChannel": "preview",
+  "scope": ["launcherIcons", "adaptiveIcons", "pwaIcons", "favicons", "browserIcons"],
+  "applicationUiOverrides": {},
+  "baseTokens": "../catch-brand-tokens.json",
+  "sourceIntegrity": {
+    "catch-icon-master.svg": "0915b80979f5de88f7df217573c12ebb402fddda6e0bda7effa69737e053974c",
+    "catch-icon-small.svg": "1681122fdf99e86bbaf95a0814a573925751ce1fa7bc6c561ffa0c6157a5d50a",
+    "catch-favicon-mark.svg": "903a88604db11b1c31125e415cf62c0bb6ba56c27712462fa7bd718230b3d336",
+    "catch-adaptive-background.svg": "d8cb0d021be30a4043e1ba25d92d917d45f6a756423301932496cf54e49901be",
+    "catch-adaptive-foreground.svg": "665eee6633322e1a12aacdfca97ada28331e55a0722e667fad078869b7104b23",
+    "catch-mark-mono-dark.svg": "69e3d1aa31423a050b645cac8b9cbfedefdc2ad300804caf5e6bbae537e7e691",
+    "catch-mark-mono-light.svg": "942f0bc79a60ed30db1fc392cff996b5f6c7e13a7b2c3d036ad7151ebd52a390",
+    "catch-brand-tokens.json": "7ec6bb657154edc350ecb21a3936be7443fe215667b2edc5333cf4ed99e85a04"
+  },
+  "palette": {
+    "previewGradientStart": {
+      "hex": "#6654B0",
+      "rgb": [102, 84, 176],
+      "alpha": 1,
+      "usage": "icon background gradient start"
+    },
+    "previewGradientMid": {
+      "hex": "#504389",
+      "rgb": [80, 67, 137],
+      "alpha": 1,
+      "usage": "icon background gradient 55% stop"
+    },
+    "previewGradientEnd": {
+      "hex": "#363166",
+      "rgb": [54, 49, 102],
+      "alpha": 1,
+      "usage": "icon background gradient end"
+    },
+    "previewLandingShadow": {
+      "hex": "#18122E",
+      "rgb": [24, 18, 46],
+      "alpha": 0.22,
+      "usage": "primary preview landing ellipse only"
+    }
+  },
+  "iconOverrides": {
+    "gradient": {
+      "inheritsFrom": "../catch-brand-tokens.json#/gradient",
+      "id": "preview-field",
+      "stops": [
+        {
+          "offset": 0,
+          "color": "previewGradientStart"
+        },
+        {
+          "offset": 0.55,
+          "color": "previewGradientMid"
+        },
+        {
+          "offset": 1,
+          "color": "previewGradientEnd"
+        }
+      ]
+    },
+    "landingShadow": {
+      "inheritsFrom": "../catch-brand-tokens.json#/geometry/landingShadow",
+      "color": "previewLandingShadow",
+      "opacity": 0.22
+    }
+  },
+  "derivedAssets": [
+    {
+      "stableSource": "../catch-icon-master.svg",
+      "output": "catch-icon-preview.svg"
+    },
+    {
+      "stableSource": "../catch-icon-small.svg",
+      "output": "catch-icon-preview-small.svg"
+    },
+    {
+      "stableSource": "../catch-favicon-mark.svg",
+      "output": "catch-favicon-preview.svg"
+    },
+    {
+      "stableSource": "../catch-adaptive-background.svg",
+      "output": "catch-adaptive-preview-background.svg"
+    }
+  ],
+  "sharedAssets": {
+    "adaptiveForeground": "../catch-adaptive-foreground.svg",
+    "monochromeDark": "../catch-mark-mono-dark.svg",
+    "monochromeLight": "../catch-mark-mono-light.svg"
+  },
+  "inheritUnchanged": [
+    "canvas",
+    "geometry except landing-shadow tint and opacity",
+    "cream",
+    "charcoal",
+    "motion accent color",
+    "gradient vector and stop positions",
+    "clear space",
+    "adaptive safe area",
+    "variant transforms",
+    "sizeRules"
+  ]
+}

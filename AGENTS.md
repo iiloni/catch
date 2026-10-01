@@ -107,6 +107,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - BlockNote is lazy-loaded (`LazyNoteEditor`). E2E tests must wait for the editor to be
   focused before typing.
 - `catch` is a Java keyword, so the Android application id is `org.iloni.catchnotes`.
+- A build with no `CATCH_CHANNEL` is the `dev` channel (`scripts/build-channel.ts`, ADR 0009).
+  On Android it is the Catch Dev app, `org.iloni.catchnotes.dev`, so development installs sit
+  beside the released stable and preview apps instead of replacing them.
 - The Android app runs on `https://localhost`, a different origin than the server, so all
   clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not cookies.
 - Android blocks cleartext HTTP by default, so the Android app needs the server on HTTPS.
