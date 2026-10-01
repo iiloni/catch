@@ -321,9 +321,22 @@ test('toasts close from their button, or with a swipe by touch or mouse', async 
   await expect(toast).toHaveCount(0, dismissed);
 });
 
-test('archive and unarchive', async ({ page }) => {
+test('archive with undo restores the pin, and unarchive', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'Old receipts');
+
+  const pinned = await noteAction(page, 'Old receipts', 'Pin');
+  await pinned.getByRole('button', { name: 'Close' }).click();
+  await noteAction(page, 'Old receipts', 'Archive');
+  await expect(card(page, 'Old receipts')).toBeHidden();
+  const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Note archived' });
+  await expect(toast).toBeVisible();
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(card(page, 'Old receipts')).toBeVisible();
+  await page.reload();
+  const restored = await openNote(page, 'Old receipts');
+  await expect(noteToolbar(page).getByRole('button', { name: 'Unpin' })).toBeVisible();
+  await restored.getByRole('button', { name: 'Close' }).click();
 
   await noteAction(page, 'Old receipts', 'Archive');
   await expect(card(page, 'Old receipts')).toBeHidden();
@@ -379,8 +392,12 @@ test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
   await expect(card(page, 'Swipe me')).toBeHidden();
-  await openGalleryPage(page, 'Archive');
+  const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Note archived' });
+  await expect(toast).toBeVisible();
+  await toast.getByRole('button', { name: 'Undo' }).click();
   await expect(card(page, 'Swipe me')).toBeVisible();
+  await openGalleryPage(page, 'Archive');
+  await expect(card(page, 'Swipe me')).toBeHidden();
 });
 
 test('swiping the open note down or up closes it', async ({ page, isMobile }) => {

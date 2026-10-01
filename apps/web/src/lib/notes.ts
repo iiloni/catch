@@ -152,9 +152,17 @@ export const setNoteColor = (id: string, color: NoteColor) => updateNote(id, { c
 
 export const setNotePinned = (id: string, isPinned: boolean) => updateNote(id, { isPinned });
 
-export const setNoteArchived = (id: string, isArchived: boolean) =>
+export function setNoteArchived(id: string, isArchived: boolean) {
+  const isPinned = notesCollection.get(id)?.isPinned ?? false;
   // Archiving unpins, as in Keep.
-  updateNote(id, isArchived ? { isArchived, isPinned: false } : { isArchived });
+  const transaction = updateNote(id, isArchived ? { isArchived, isPinned: false } : { isArchived });
+  if (isArchived) {
+    toast('Note archived', {
+      action: { label: 'Undo', onClick: () => updateNote(id, { isArchived: false, isPinned }) },
+    });
+  }
+  return transaction;
+}
 
 export const moveNoteToDeck = (id: string, status = DEFAULT_BOARD_STATUS) =>
   updateNote(id, { status });
