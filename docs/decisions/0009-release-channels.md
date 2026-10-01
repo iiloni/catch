@@ -18,7 +18,14 @@ and preview must advance independently, including preview versions ahead of stab
   stable or preview tag reachable from HEAD; `stable promote` preserves a tested preview's
   version and commit, including an earlier preview. The helper never fetches or pushes.
 - Ordinary CI runs checks and E2E on main pushes and pull requests. The tag-triggered
-  release workflow reuses those checks, builds a signed APK, publishes a multi-platform
+  release workflow waits for successful CI at the exact tagged commit and verifies checks
+  and both E2E projects succeeded. If no CI run appears within a minute, it requests CI
+  on the release tag, including for an intermediate commit in a batch push. CI runs for
+  the same commit queue without cancellation and check for a previous pass before running
+  tests, so competing push and release requests do not duplicate E2E. A release waits up
+  to 30 minutes; without a previous pass, unsuccessful CI blocks release until rerun
+  successfully.
+  It then builds a signed APK, publishes a multi-platform
   container image to GHCR, and publishes a GitHub Release with the APK and checksum.
 - Publishing is opt-in through the repository variable `RELEASES_ENABLED=true`. The release
   workflow has no manual dispatch trigger and never deploys to a production server.

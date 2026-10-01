@@ -38,8 +38,14 @@ commit messages, but choose release versions explicitly.
 ## Workflows
 
 - `ci.yml`: lint, typecheck, unit tests (including release policy), web/API builds, and E2E.
-  Runs on pushes to main, pull requests to main, and manual dispatch. Superseded branch CI
-  runs are canceled. The release workflow calls it for the exact tagged commit too.
+  Runs on pushes to main, pull requests to main, and manual dispatch. Runs for the same
+  commit queue without cancellation and reuse a previous pass instead of testing again.
+  A release reuses successful CI for its exact tagged commit, requiring `check` and both
+  E2E projects to have succeeded. It waits up to 30 minutes for queued or running CI.
+  If no run appears within a minute, it requests CI on the release tag; this covers an
+  intermediate commit in a batch push that only tested the tip. Without a previous pass,
+  failed or canceled CI blocks release until CI is rerun successfully. No release runs
+  its own copy of E2E.
 - `release.yml`: a pushed `v*` tag validates the version. Builds and publishing proceed
   only when the Actions repository variable `RELEASES_ENABLED` is exactly `true`.
   Release runs are queued, with no cancellation or manual dispatch. Missing Android
