@@ -176,24 +176,23 @@ test('the editor dock keeps held labels above its edge', async ({ page, isMobile
     keyboardHeight.jump(320);
   });
   const dock = page.locator('[data-dock] .glass').first();
-  const bold = page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', {
-    name: 'Bold',
-  });
+  const bar = page.getByRole('toolbar', { name: 'Formatting' });
+  const bold = bar.getByRole('button', { name: 'Bold' });
   await expect(bold).toBeVisible();
   const dockBox = await dock.boundingBox();
+  const firstBox = await bar.getByRole('button').first().boundingBox();
+  // The row scrolls on a phone, so its last tool is measured at the end of the row.
+  await bar.evaluate((row) => row.scrollTo({ left: row.scrollWidth, behavior: 'instant' }));
+  const lastBox = await bar.getByRole('button').last().boundingBox();
+  await bar.evaluate((row) => row.scrollTo({ left: 0, behavior: 'instant' }));
   const boldBox = await bold.boundingBox();
-  if (!dockBox || !boldBox) throw new Error('Missing dock layout');
-  const checklistBox = await page
-    .getByRole('toolbar', { name: 'Formatting' })
-    .getByRole('button', { name: 'Checklist' })
-    .boundingBox();
-  if (!checklistBox) throw new Error('Missing checklist layout');
+  if (!dockBox || !firstBox || !lastBox || !boldBox) throw new Error('Missing dock layout');
   const viewport = page.viewportSize();
   if (!viewport) throw new Error('Missing viewport');
   expect(dockBox.x).toBeLessThan(6);
   expect(viewport.width - dockBox.x - dockBox.width).toBeLessThan(6);
-  expect(boldBox.x + boldBox.width / 2 - dockBox.x).toBeGreaterThan(24);
-  expect(dockBox.x + dockBox.width - checklistBox.x - checklistBox.width / 2).toBeGreaterThan(24);
+  expect(firstBox.x + firstBox.width / 2 - dockBox.x).toBeGreaterThan(24);
+  expect(dockBox.x + dockBox.width - lastBox.x - lastBox.width / 2).toBeGreaterThan(24);
 
   const touch = await page.context().newCDPSession(page);
   await touch.send('Input.dispatchTouchEvent', {

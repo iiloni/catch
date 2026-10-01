@@ -113,9 +113,17 @@ test('touch scrolling cancels a pending hold and touchcancel discards a drag', a
   });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(dialog.locator('[data-list-holding]')).toHaveCount(0);
+  const scrollTop = () => dialog.locator('[data-note-scroll]').evaluate((area) => area.scrollTop);
+  await expect.poll(scrollTop).toBeGreaterThan(0);
+  // The swipe ends in a fling, which keeps scrolling over a `scrollTop` set while it runs.
+  let last = -1;
   await expect
-    .poll(() => dialog.locator('[data-note-scroll]').evaluate((area) => area.scrollTop))
-    .toBeGreaterThan(0);
+    .poll(async () => {
+      const previous = last;
+      last = await scrollTop();
+      return last === previous;
+    })
+    .toBe(true);
   await dialog.locator('[data-note-scroll]').evaluate((area) => {
     area.scrollTop = 0;
   });
