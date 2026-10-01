@@ -6,11 +6,13 @@ RUN npm install -g "pnpm@$(node -p "require('./package.json').packageManager.spl
     && rm package.json
 
 # Used by scripts/dev.sh: the checkout is bind-mounted and dependencies live in volumes.
+# Do not create the volume mount points here: Docker resets an empty volume's owner to
+# the image directory's on every mount, undoing the chown to the host user in dev.sh.
 FROM base AS development
 ENV NODE_ENV=development
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /pnpm-store && chown node:node /pnpm-store /workspace
+    && chown node:node /workspace
 CMD ["sh", "scripts/dev-entrypoint.sh"]
 
 FROM base AS build
