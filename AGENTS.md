@@ -126,6 +126,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   viewport's breakpoints.
 - The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
   anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
+- `NoteGrid` renders only cards near the viewport, so a note's card may not be in the DOM.
+  A card builds its actions (and their tooltips) on hover or focus; E2E tests hover a card
+  before clicking its toolbar.
 - While a note is open, its actions live in the dock (`NoteDock`), outside the editor dialog.
   The dialog is non-modal and ignores interactions inside `[data-dock]`; the page behind is
   `inert`. The editor publishes its note and controls through `editorNote`/`editorControls`

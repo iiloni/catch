@@ -1,7 +1,7 @@
 import type { Note } from '@catch/shared';
 import { Pin } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useReducer, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
@@ -63,6 +63,12 @@ export function NoteCard({
   const selecting = selected !== undefined;
   const actions = withActions && !selecting;
   const canPin = actions && !note.deletedAt && !note.isArchived;
+  // The actions stay hidden until a pointer hovers the card or focus enters it, so they
+  // (and their tooltips) are only built then; a grid of thousands of cards need not.
+  const [armed, arm] = useReducer(() => true, false);
+  // A card dropped from a drag is still under the pointer once it stops forcing hover.
+  if (forceHover && !armed) arm();
+  const revealed = armed || forceHover;
   const hidden = useIsCardHidden(note.id);
   const openBeside = paneNoteId.use() === note.id;
   const links = useNoteLinks(note);
@@ -94,6 +100,10 @@ export function NoteCard({
       // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
       whileTap={{ scale: pressable ? 0.97 : 1 }}
       transition={springs.snappy}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== 'touch') arm();
+      }}
+      onFocus={arm}
       className={cn(
         'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
         forceHover && 'shadow-md',
@@ -125,7 +135,7 @@ export function NoteCard({
         animate={{ opacity: selected ? 1 : 0 }}
         transition={{ duration: 0.15 }}
       />
-      {canPin && (
+      {canPin && (note.isPinned || revealed) && (
         <IconButton
           label={note.isPinned ? 'Unpin' : 'Pin'}
           onClick={() => setNotePinned(note.id, !note.isPinned)}
@@ -141,7 +151,12 @@ export function NoteCard({
           <Pin className={cn(note.isPinned && 'fill-current')} />
         </IconButton>
       )}
-      {actions && (
+      {actions && !revealed && (
+        // Holds the toolbar's height (its buttons and bottom padding), so the card does not
+        // grow when it arrives.
+        <div aria-hidden className="h-9 pointer-coarse:hidden" />
+      )}
+      {actions && revealed && (
         <NoteToolbar
           note={note}
           className={cn(
