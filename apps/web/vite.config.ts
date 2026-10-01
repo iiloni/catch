@@ -2,15 +2,22 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
+import { defaultAllowedOrigins } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
 import { buildChannel } from '../../scripts/build-channel.ts';
+import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.CATCH_CHANNEL);
 const iconBase = channel === 'stable' ? '' : `/${channel}`;
 
 export default defineConfig({
+  define: {
+    'import.meta.env.CATCH_DEV_SERVER_URL': JSON.stringify(
+      developmentServerUrl(channel, process.env.CATCH_DEV_SERVER_URL),
+    ),
+  },
   plugins: [
     {
       name: 'channel-icons',
@@ -26,6 +33,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       manifest: {
         name: 'Catch',
         short_name: 'Catch',
@@ -34,6 +44,17 @@ export default defineConfig({
         background_color: '#f7f6f2',
         display: 'standalone',
         start_url: '/',
+        share_target: {
+          action: '/share',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [{ name: 'files', accept: ['*/*'] }],
+          },
+        },
         icons: [
           { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
           { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
@@ -45,24 +66,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            // Preview thumbnails and icons are named by their hash and never change, so they
-            // can be served from the cache, which keeps them showing offline.
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/link-previews/assets/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'link-preview-assets',
-              expiration: { maxEntries: 1000 },
-              // The Android app loads them from another origin, as opaque responses.
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
     }),
   ],
@@ -79,6 +84,8 @@ export default defineConfig({
     // and over Tailscale.
     host: process.env.CATCH_DEV_HOST,
     allowedHosts: process.env.CATCH_DEV_ALLOWED_HOSTS?.split(','),
+    // Vite answers preflights before the API proxy; native auth sends credentials.
+    cors: { origin: [defaultAllowedOrigins, 'capacitor://localhost'], credentials: true },
     proxy: { '/api': 'http://localhost:3000' },
   },
   test: {

@@ -90,7 +90,7 @@ CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync
 CATCH_CHANNEL=dev pnpm --filter @catch/web android:sync
 (cd apps/web/android && ./gradlew assembleDevDebug)
 # Install the dev flavor with live reload on a connected phone:
-./scripts/dev.sh android [--usb]
+./scripts/dev.sh android [--static] [--usb]
 ```
 
 Release signing still requires the values in [Releasing and deployment](releases.md).

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ShareRouteImport } from './routes/share'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppDeckRouteImport } from './routes/_app/deck'
@@ -39,6 +40,11 @@ const LoginRoute = LoginRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareRoute = ShareRouteImport.update({
+  id: '/share',
+  path: '/share',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/share': typeof ShareRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/search': typeof AppSearchRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/share': typeof ShareRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/search': typeof AppSearchRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/share': typeof ShareRoute
   '/_app/archive': typeof AppArchiveRoute
   '/_app/deck': typeof AppDeckRoute
   '/_app/search': typeof AppSearchRoute
@@ -173,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/setup'
+    | '/share'
     | '/archive'
     | '/deck'
     | '/search'
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/setup'
+    | '/share'
     | '/archive'
     | '/deck'
     | '/search'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/setup'
+    | '/share'
     | '/_app/archive'
     | '/_app/deck'
     | '/_app/search'
@@ -228,6 +240,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
+  ShareRoute: typeof ShareRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share': {
+      id: '/share'
+      path: '/share'
+      fullPath: '/share'
+      preLoaderRoute: typeof ShareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -413,6 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
+  ShareRoute: ShareRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

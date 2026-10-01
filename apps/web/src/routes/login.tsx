@@ -14,11 +14,11 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 });
 
-// The seeded admin from apps/server/src/db/seed.ts, so dev builds (including the live-reload
-// Android app) sign in with one tap. Production builds strip this.
-const devCredentials = import.meta.env.DEV
-  ? { email: 'admin@example.com', password: 'adminadmin' }
-  : undefined;
+// Prefill the seeded admin for Vite and bundled worktree builds. Other bundles strip this.
+const devCredentials =
+  import.meta.env.DEV || import.meta.env.CATCH_DEV_SERVER_URL
+    ? { email: 'admin@example.com', password: 'adminadmin' }
+    : undefined;
 
 function LoginPage() {
   const { redirect: returnTo } = Route.useSearch();
@@ -33,17 +33,26 @@ function LoginPage() {
     const password = String(form.get('password'));
     setPending(true);
     setError(null);
-    const result =
-      mode === 'sign-in'
-        ? await authClient.signIn.email({ email, password })
-        : await authClient.signUp.email({ email, password, name: String(form.get('name') ?? '') });
-    if (result.error) {
+    try {
+      const result =
+        mode === 'sign-in'
+          ? await authClient.signIn.email({ email, password })
+          : await authClient.signUp.email({
+              email,
+              password,
+              name: String(form.get('name') ?? ''),
+            });
+      if (result.error) {
+        setError(result.error.message ?? 'Something went wrong');
+        return;
+      }
+      // A full load, so the collections open this user's copy of their notes on the device.
+      window.location.assign(returnTo ?? '/');
+    } catch {
+      setError('Could not reach the Catch server. Check your connection and try again.');
+    } finally {
       setPending(false);
-      setError(result.error.message ?? 'Something went wrong');
-      return;
     }
-    // A full load, so the collections open this user's copy of their notes on the device.
-    window.location.assign(returnTo ?? '/');
   }
 
   return (

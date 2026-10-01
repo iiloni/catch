@@ -35,8 +35,10 @@ checkout's stack. Never hard-code container or project names.
   this worktree's stack. `scripts/backup.sh` and `scripts/update.sh` are the production host
   wrappers (see `docs/backups.md`); do not run them against a dev stack.
 - `pnpm format` (host): apply Biome formatting and import sorting.
-- `./scripts/dev.sh android [--usb]` (host): install a live-reload debug app on a connected
-  phone. It loads this worktree's Vite server, so it only needs rerunning after native changes.
+- `./scripts/dev.sh android [--static] [--usb]` (host): install Catch Dev on a connected
+  phone. By default it loads Vite with live reload; `--static` bundles the frontend while
+  using this worktree's HTTP API. Static installs need rerunning after web or native changes.
+  `--usb` reaches the backend through adb instead of Tailscale in either mode.
 - `pnpm --filter @catch/web android:sync` (host): build the web app into the Android project.
 
 Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.

@@ -44,13 +44,14 @@ function firstPosition() {
  * the server has the change.
  */
 export function createNote(input: {
+  id?: string;
   userId: string;
   content: Note['content'];
   color?: NoteColor;
   status?: string | null;
 }) {
   const now = new Date();
-  const id = uuidv7();
+  const id = input.id ?? uuidv7();
   const transaction = write(() =>
     notesCollection.insert({
       id,
