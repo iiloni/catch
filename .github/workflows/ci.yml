@@ -94,14 +94,15 @@ jobs:
           node --input-type=module -e "$launch" || pnpm exec playwright install-deps chromium
       # Builds the development image into this builder from layers kept between runs, so its
       # Debian packages are only fetched when the Dockerfile changes. `dev.sh up` then builds
-      # the same image and finds every layer here.
+      # the same image and finds every layer here. One job keeps the layers: four would each
+      # store a copy of their own after a change.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: development
           cache-from: type=gha,scope=dev-image
-          cache-to: type=gha,scope=dev-image,mode=max
+          cache-to: ${{ env.PROJECT == 'desktop' && matrix.shard == 1 && 'type=gha,scope=dev-image,mode=max' || '' }}
       # Exercises the same worktree stack developers and agents use.
       - run: ./scripts/dev.sh up
       # Server backups and video posters are tested against a real Postgres with its client
@@ -114,7 +115,6 @@ jobs:
       # few tests would move desktop's cut to the far side of its largest file.
       - if: env.PROJECT == 'desktop' && matrix.shard == 1
         run: ./scripts/dev.sh e2e --project=api --workers=1
-      - run: nproc && free -m
       - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/2 --workers=1
       - if: failure()
         run: ./scripts/dev.sh logs-once
