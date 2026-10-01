@@ -1,15 +1,16 @@
 import { expect, type Page, test } from '@playwright/test';
+import { z } from 'zod';
 import {
   backToGallery,
   card,
   createNote,
-  moveNote,
   noteAction,
   noteToolbar,
+  openDeck,
   openGalleryPage,
   openNote,
+  seedNotes,
   signUp,
-  waitForPageTransition,
 } from './helpers';
 
 test('notes are created, edited, and synced across tabs', async ({ page, context }) => {
@@ -30,15 +31,6 @@ test('notes are created, edited, and synced across tabs', async ({ page, context
   await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
   await page.reload();
   await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
-});
-
-test('an empty quick note creates nothing', async ({ page }) => {
-  await signUp(page);
-  await page.getByRole('button', { name: 'New note' }).click();
-  await expect(page.getByRole('region', { name: 'New note' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close new note' }).click();
-  await expect(page.getByRole('region', { name: 'New note' })).toBeHidden();
-  await expect(page.getByRole('article')).toHaveCount(0);
 });
 
 test('swiping the quick-note handle up expands after the release threshold', async ({
@@ -99,7 +91,9 @@ test('swiping the quick-note handle up expands after the release threshold', asy
   await expect(window).toBeHidden();
 });
 
-test('opening a quick note folds the gallery switcher away', async ({ page }) => {
+test('an empty quick note folds the gallery switcher away and creates nothing', async ({
+  page,
+}) => {
   await signUp(page);
   const switcher = page.getByRole('navigation', { name: 'Gallery pages' });
   await page.getByRole('link', { name: 'Gallery' }).click();
@@ -108,7 +102,9 @@ test('opening a quick note folds the gallery switcher away', async ({ page }) =>
   await expect(page.getByRole('region', { name: 'New note' })).toBeVisible();
   await expect(switcher).toBeHidden();
   await page.getByRole('button', { name: 'Close new note' }).click();
+  await expect(page.getByRole('region', { name: 'New note' })).toBeHidden();
   await expect(switcher).toBeHidden();
+  await expect(page.getByRole('article')).toHaveCount(0);
 });
 
 test('a quick note can go straight to the deck', async ({ page }) => {
@@ -168,7 +164,7 @@ test('holding a formatting button on Android shows its label', async ({ page, is
 test('the editor dock keeps held labels above its edge', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Checks the touch toolbar layout.');
   await signUp(page);
-  await createNote(page, 'Groceries', 'Oat milk');
+  await seedNotes(page, [{ title: 'Groceries', body: 'Oat milk' }]);
   await openNote(page, 'Groceries');
   // Chromium emulation has no on-screen keyboard; report its height as Android does.
   await page.evaluate(async () => {
@@ -213,7 +209,7 @@ test('tapping blank space below a short note focuses its last block', async ({
 }) => {
   test.skip(!isMobile, 'Checks the touch editing surface.');
   await signUp(page);
-  await createNote(page, 'Groceries', 'Oat milk');
+  await seedNotes(page, [{ title: 'Groceries', body: 'Oat milk' }]);
   const dialog = await openNote(page, 'Groceries');
   const lastBlock = dialog.locator('[data-content-type="paragraph"]').last();
   const box = await lastBlock.boundingBox();
@@ -226,8 +222,10 @@ test('tapping blank space below a short note focuses its last block', async ({
 
 test('search finds notes by any word, including archived ones', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Groceries', 'Oat milk');
-  await createNote(page, 'Old receipts', 'Milk crate');
+  await seedNotes(page, [
+    { title: 'Groceries', body: 'Oat milk' },
+    { title: 'Old receipts', body: 'Milk crate' },
+  ]);
   await noteAction(page, 'Old receipts', 'Archive');
 
   await page.getByRole('link', { name: 'Search' }).click();
@@ -246,19 +244,61 @@ test('search finds notes by any word, including archived ones', async ({ page })
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
 });
 
-test('users only see their own notes', async ({ browser }) => {
-  const alice = await (await browser.newContext()).newPage();
-  await signUp(alice);
-  await createNote(alice, 'Alice secret');
+test('users only see and change their own notes', { tag: '@api' }, async ({
+  playwright,
+  baseURL,
+  extraHTTPHeaders,
+}) => {
+  // A context each, so neither account's session cookie rides along with the other's token.
+  async function account() {
+    const context = await playwright.request.newContext({ baseURL, extraHTTPHeaders });
+    const response = await context.post('/api/auth/sign-up/email', {
+      headers: { Origin: 'https://localhost' },
+      data: {
+        email: `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+        name: '',
+        password: 'password123',
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const { token } = z.object({ token: z.string() }).parse(await response.json());
+    const headers = { Authorization: `Bearer ${token}` };
+    /** The ids of the notes this account's shape syncs. */
+    async function noteIds() {
+      const shape = await context.get('/api/shapes/notes?offset=-1', { headers });
+      expect(shape.ok()).toBeTruthy();
+      const rows = z.array(z.object({ value: z.object({ id: z.string() }).optional() }));
+      return rows.parse(await shape.json()).flatMap((row) => (row.value ? [row.value.id] : []));
+    }
+    return { context, headers, noteIds };
+  }
+  const alice = await account();
+  const bob = await account();
+  const id = crypto.randomUUID().replace(/^(.{14})./, '$17');
+  const created = await alice.context.post('/api/notes', {
+    headers: alice.headers,
+    data: { id, content: [{ type: 'paragraph', content: 'Alice secret' }] },
+  });
+  expect(created.status()).toBe(201);
 
-  const bob = await (await browser.newContext()).newPage();
-  await signUp(bob);
-  await expect(bob.getByText('Alice secret')).toBeHidden();
+  expect(await alice.noteIds()).toEqual([id]);
+  expect(await bob.noteIds()).toEqual([]);
+  const edit = await bob.context.patch(`/api/notes/${id}`, {
+    headers: bob.headers,
+    data: { isArchived: true },
+  });
+  expect(edit.status()).toBe(404);
+  // Deleting answers as a replayed write would, and removes nothing.
+  const removal = await bob.context.delete(`/api/notes/${id}`, { headers: bob.headers });
+  expect(await removal.json()).toEqual({ txid: null });
+  expect(await alice.noteIds()).toEqual([id]);
+  await alice.context.dispose();
+  await bob.context.dispose();
 });
 
 test('trash with undo, restore, and delete forever', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Dentist');
+  await seedNotes(page, ['Dentist']);
 
   await noteAction(page, 'Dentist', 'Move to trash');
   await expect(card(page, 'Dentist')).toBeHidden();
@@ -284,8 +324,7 @@ test('toasts close from their button, or with a swipe by touch or mouse', async 
   isMobile,
 }) => {
   await signUp(page);
-  await createNote(page, 'Dentist');
-  await createNote(page, 'Plumber');
+  await seedNotes(page, ['Dentist', 'Plumber']);
   const toast = page.locator('[data-sonner-toast]');
   // Well inside the four seconds after which a toast closes by itself.
   const dismissed = { timeout: 1000 };
@@ -321,13 +360,19 @@ test('toasts close from their button, or with a swipe by touch or mouse', async 
   await expect(toast).toHaveCount(0, dismissed);
 });
 
-test('archive with undo restores the pin, and unarchive', async ({ page }) => {
+test('archive from the note header, undo restoring the pin, and unarchive', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Old receipts');
+  await seedNotes(page, ['Old receipts']);
 
-  const pinned = await noteAction(page, 'Old receipts', 'Pin');
-  await pinned.getByRole('button', { name: 'Close' }).click();
-  await noteAction(page, 'Old receipts', 'Archive');
+  // Archive sits in the header, which leaves the dock these four in this order.
+  const opened = await openNote(page, 'Old receipts');
+  const toolbar = noteToolbar(page);
+  await expect(toolbar.getByRole('button')).toHaveCount(4);
+  await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Attach files');
+  await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Pin');
+  await toolbar.getByRole('button', { name: 'Pin', exact: true }).click();
+  await opened.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(opened).toBeHidden();
   await expect(card(page, 'Old receipts')).toBeHidden();
   const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Note archived' });
   await expect(toast).toBeVisible();
@@ -335,13 +380,15 @@ test('archive with undo restores the pin, and unarchive', async ({ page }) => {
   await expect(card(page, 'Old receipts')).toBeVisible();
   await page.reload();
   const restored = await openNote(page, 'Old receipts');
-  await expect(noteToolbar(page).getByRole('button', { name: 'Unpin' })).toBeVisible();
+  await expect(toolbar.getByRole('button', { name: 'Unpin' })).toBeVisible();
   await restored.getByRole('button', { name: 'Close' }).click();
 
   await noteAction(page, 'Old receipts', 'Archive');
   await expect(card(page, 'Old receipts')).toBeHidden();
   await openGalleryPage(page, 'Archive');
-  const dialog = await noteAction(page, 'Old receipts', 'Unarchive');
+  const dialog = await openNote(page, 'Old receipts');
+  await dialog.getByRole('button', { name: 'Unarchive', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
   await backToGallery(page);
   await expect(card(page, 'Old receipts')).toBeVisible();
@@ -350,7 +397,7 @@ test('archive with undo restores the pin, and unarchive', async ({ page }) => {
 test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Gallery swipe is a touch gesture.');
   await signUp(page);
-  await createNote(page, 'Swipe me');
+  await seedNotes(page, ['Swipe me']);
 
   const bounds = await card(page, 'Swipe me').boundingBox();
   if (!bounds) throw new Error('Missing gallery card');
@@ -403,7 +450,7 @@ test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
 test('swiping the open note down or up closes it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'The editor swipe is a touch gesture.');
   await signUp(page);
-  await createNote(page, 'Swipe to close');
+  await seedNotes(page, ['Swipe to close']);
   const cdp = await page.context().newCDPSession(page);
 
   for (const direction of [1, -1]) {
@@ -434,7 +481,11 @@ test('opening and closing a note leaves the page where it was scrolled', async (
   await page.setViewportSize({ width: 400, height: 360 });
   await signUp(page);
   const body = 'Wraps over a few lines of a narrow card to make it tall';
-  for (const title of ['Last', 'Third', 'Second', 'First']) await createNote(page, title, body);
+  await seedNotes(
+    page,
+    ['Last', 'Third', 'Second', 'First'].map((title) => ({ title, body })),
+  );
+  await expect(card(page, 'First')).toBeVisible();
 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await card(page, 'Last').scrollIntoViewIfNeeded();
@@ -450,8 +501,7 @@ test('opening and closing a note leaves the page where it was scrolled', async (
 
 test('color and pin', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'First');
-  await createNote(page, 'Second');
+  await seedNotes(page, ['First', 'Second']);
 
   const dialog = await openNote(page, 'First');
   // The palette grows out of the dock rather than opening a popup.
@@ -472,15 +522,12 @@ test('deck board moves notes between columns and back to the gallery', async ({
 }) => {
   test.skip(isMobile, 'Board drag uses a mouse; touch dragging is covered manually.');
   await signUp(page);
-  await createNote(page, 'Ship it');
-  await moveNote(page, 'Ship it');
-  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  await seedNotes(page, ['Ship it'], 'new');
 
-  await page.getByRole('link', { name: 'Deck' }).click();
+  await openDeck(page);
   const newColumn = page.getByRole('region', { name: 'New column' });
   const holdColumn = page.getByRole('region', { name: 'On hold column' });
   await expect(newColumn.getByText('Ship it')).toBeVisible();
-  await waitForPageTransition(page);
 
   async function drag(from: typeof newColumn, to: typeof newColumn) {
     const source = await from.getByRole('article').first().boundingBox();
@@ -513,16 +560,10 @@ test('deck drag reorders within a column and places notes in another', async ({
   page,
   isMobile,
 }) => {
-  test.setTimeout(60_000);
   test.skip(isMobile, 'Board drag uses a mouse; touch dragging is covered manually.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) {
-    await createNote(page, title);
-    await moveNote(page, title);
-    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  }
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await seedNotes(page, ['One', 'Two', 'Three'], 'new');
+  await openDeck(page);
   const newColumn = page.getByRole('region', { name: 'New column' });
   const progressColumn = page.getByRole('region', { name: 'In progress column' });
   const order = async (column: typeof newColumn) =>
@@ -598,15 +639,9 @@ test('deck drag reorders within a column and places notes in another', async ({
 
 test('a long press reorders deck notes on touch', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
-  test.setTimeout(60000);
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) {
-    await createNote(page, title);
-    await moveNote(page, title);
-    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  }
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await seedNotes(page, ['One', 'Two', 'Three'], 'new');
+  await openDeck(page);
   const column = page.getByRole('region', { name: 'New column' });
   const order = () => column.getByRole('article').getByRole('heading').allTextContents();
   await expect.poll(order).toEqual(['Three', 'Two', 'One']);
@@ -655,7 +690,7 @@ async function centerOf(page: Page, title: string) {
 test('gallery notes are rearranged by dragging', async ({ page, isMobile }) => {
   test.skip(isMobile, 'The touch version is below.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await seedNotes(page, ['One', 'Two', 'Three']);
   // New notes go first.
   await expect.poll(() => galleryOrder(page)).toEqual(['Three', 'Two', 'One']);
 
@@ -678,7 +713,7 @@ test('gallery notes are rearranged by dragging', async ({ page, isMobile }) => {
 test('a long press picks up a gallery note to move it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await seedNotes(page, ['One', 'Two', 'Three']);
   await expect.poll(() => galleryOrder(page)).toEqual(['Three', 'Two', 'One']);
 
   const from = await centerOf(page, 'One');
@@ -717,7 +752,7 @@ async function hoverSelect(page: Page, title: string) {
 test('a long press starts selecting notes, and taps add more', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await seedNotes(page, ['One', 'Two', 'Three']);
 
   const point = await centerOf(page, 'One');
   const cdp = await page.context().newCDPSession(page);
@@ -747,7 +782,7 @@ test('a long press starts selecting notes, and taps add more', async ({ page, is
 test('selected notes are recolored, archived and trashed together', async ({ page, isMobile }) => {
   test.skip(isMobile, 'The check that starts selecting appears on hover.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await seedNotes(page, ['One', 'Two', 'Three']);
 
   await hoverSelect(page, 'One');
   const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
@@ -790,7 +825,7 @@ test('archived and trashed notes are selected, unarchived, restored and deleted'
 }) => {
   test.skip(isMobile, 'The check that starts selecting appears on hover.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) await createNote(page, title);
+  await seedNotes(page, ['One', 'Two', 'Three']);
   const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
   for (const title of ['One', 'Two']) await hoverSelect(page, title);
   await toolbar.getByRole('button', { name: 'Archive' }).click();
@@ -840,16 +875,10 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
   page,
   isMobile,
 }) => {
-  test.setTimeout(60_000);
   test.skip(isMobile, 'Board drag uses a mouse; the touch version is below.');
   await signUp(page);
-  for (const title of ['One', 'Two', 'Three']) {
-    await createNote(page, title);
-    await moveNote(page, title);
-    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  }
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await seedNotes(page, ['One', 'Two', 'Three'], 'new');
+  await openDeck(page);
   const newColumn = page.getByRole('region', { name: 'New column' });
   const holdColumn = page.getByRole('region', { name: 'On hold column' });
   const order = (column: typeof newColumn) =>
@@ -910,13 +939,8 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
 test('a long press selects deck notes, and taps add more', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
   await signUp(page);
-  for (const title of ['One', 'Two']) {
-    await createNote(page, title);
-    await moveNote(page, title);
-    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  }
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await seedNotes(page, ['One', 'Two'], 'new');
+  await openDeck(page);
 
   const box = await boardCell(page, 'One').boundingBox();
   if (!box) throw new Error('Missing card');

@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { createNote, openNote, signUp } from './helpers';
+import { openNote, seedNotes, signUp } from './helpers';
 
 test('history buttons follow edits and shortcuts, preserve focus, and reset on reopen', async ({
   page,
 }) => {
   await signUp(page);
-  await createNote(page, 'History toolbar', 'Original body');
+  await seedNotes(page, [{ title: 'History toolbar', body: 'Original body' }]);
   const dialog = await openNote(page, 'History toolbar');
   const editor = dialog.getByRole('textbox');
   const body = editor.locator('p').last();
@@ -132,7 +132,7 @@ test('a narrow split pane keeps history in the header and the sync pill centered
 }) => {
   await page.setViewportSize({ width: 720, height: 820 });
   await signUp(page);
-  await createNote(page, 'Narrow history', 'Keep the header steady');
+  await seedNotes(page, [{ title: 'Narrow history', body: 'Keep the header steady' }]);
   // Exercise the minimum pane width, where full status labels would overlap history.
   await page.evaluate(async () => {
     const { listRatio } = await import('/src/lib/splitView.ts');

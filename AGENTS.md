@@ -191,3 +191,16 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.
 - The dev server has no service worker, so a page cannot load code offline in development.
   E2E tests for offline behavior block `/api` instead, or warm lazy chunks before going offline.
+- E2E setup goes through `e2e/helpers.ts`: `signUp` makes the account through the API, and
+  `seedNotes` adds the notes a test is not about writing. An element is visible before its
+  animation ends, so a raw pointer gesture (`page.mouse`, CDP touch) first waits for its target
+  to arrive (`settledBox`, `openDeck`, `waitForPageTransition`). A CDP touch lifted while still
+  moving is a fling to Chrome, which drops the click of the next tap; rest before `touchEnd`.
+- An E2E test that only uses `request` is tagged `@api` and runs once in the `api` project
+  instead of once per layout. A test of behavior no layout changes (sync, the outbox,
+  importers) skips one layout with `test.skip(isMobile, reason)`, provided another test in the
+  file still drives the same screens on both.
+- `pnpm check` on a machine without FFmpeg or the Postgres client tools skips the tests that
+  need them; `./scripts/dev.sh check` and CI's stack run them.
+- Traces slow every E2E test, so only the rerun of a failed test records one
+  (`playwright.config.ts`). A test that passes on its rerun is reported as flaky, which fails CI.

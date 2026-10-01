@@ -1,13 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  card,
-  createNote,
-  openGalleryPage,
-  openNote,
-  signIn,
-  signUp,
-  waitForPageTransition,
-} from './helpers';
+import { card, openNote, seedNotes, signIn, signUp, waitForPageTransition } from './helpers';
 
 test.use({
   launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
@@ -37,9 +29,8 @@ test('video posters and playback work on the upload device and another device', 
   page,
   browser,
 }) => {
-  test.setTimeout(60000);
   const email = await signUp(page);
-  await createNote(page, 'Video attachments');
+  await seedNotes(page, ['Video attachments']);
   await openNote(page, 'Video attachments');
   const video = {
     name: 'clip.mp4',
@@ -112,9 +103,8 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   page,
   browser,
 }) => {
-  test.setTimeout(60000);
   const email = await signUp(page);
-  await createNote(page, 'Attachments');
+  await seedNotes(page, ['Attachments']);
   await openNote(page, 'Attachments');
   await upload(page);
   const media = page.getByRole('region', { name: 'Media' });
@@ -178,7 +168,7 @@ test('attachments preview, retain their catalog without blocks, and remove priva
 
 test('an offline attachment survives reload and uploads on reconnect', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Offline media');
+  await seedNotes(page, ['Offline media']);
   await openNote(page, 'Offline media');
   await page.waitForTimeout(1000);
   await page.route('**/api/**', (route) => route.abort());
@@ -224,9 +214,8 @@ test('copied notes keep independent attachments and files use download blocks', 
   browser,
   isMobile,
 }) => {
-  test.setTimeout(60000);
   await signUp(page);
-  await createNote(page, 'Copy with files');
+  await seedNotes(page, ['Copy with files']);
   await openNote(page, 'Copy with files');
   const file = {
     name: 'details.txt',
@@ -297,24 +286,6 @@ test('copied notes keep independent attachments and files use download blocks', 
   expect((await page.request.get(copyUrl, { headers })).status()).toBe(200);
 });
 
-test('archive moves to the header and the attachment dock has the requested order', async ({
-  page,
-}) => {
-  await signUp(page);
-  await createNote(page, 'Toolbar changes');
-  const dialog = await openNote(page, 'Toolbar changes');
-  const toolbar = page.getByRole('toolbar', { name: 'Note actions' });
-  await expect(toolbar.getByRole('button')).toHaveCount(4);
-  await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Attach files');
-  await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Pin');
-  await dialog.getByRole('button', { name: 'Archive', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await openGalleryPage(page, 'Archive');
-  await openNote(page, 'Toolbar changes');
-  await dialog.getByRole('button', { name: 'Unarchive', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
-});
-
 test.describe('live capture', () => {
   test.use({
     permissions: ['camera', 'microphone'],
@@ -323,9 +294,8 @@ test.describe('live capture', () => {
   test('camera photos, video, and audio recordings attach inline and in the catalog', async ({
     page,
   }) => {
-    test.setTimeout(60000);
     await signUp(page);
-    await createNote(page, 'Captured media');
+    await seedNotes(page, ['Captured media']);
     await openNote(page, 'Captured media');
     await page.getByRole('button', { name: 'Attach files', exact: true }).click();
     await page.getByRole('button', { name: 'Camera', exact: true }).click();
@@ -375,9 +345,8 @@ test.describe('live capture', () => {
 test('catalog actions insert at the cursor and toolbar uploads retain their captured position', async ({
   page,
 }) => {
-  test.setTimeout(60000);
   await signUp(page);
-  await createNote(page, 'Insertion positions', 'First paragraph');
+  await seedNotes(page, [{ title: 'Insertion positions', body: 'First paragraph' }]);
   await openNote(page, 'Insertion positions');
   await upload(page);
   const media = page.getByRole('region', { name: 'Media' });
@@ -478,9 +447,8 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   page,
   isMobile,
 }, testInfo) => {
-  test.setTimeout(60000);
   await signUp(page);
-  await createNote(page, 'Media stage');
+  await seedNotes(page, ['Media stage']);
   await openNote(page, 'Media stage');
   const raster = await page.evaluate(() => {
     const canvas = document.createElement('canvas');

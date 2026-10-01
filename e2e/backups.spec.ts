@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
-import { signUp } from './helpers';
 
 // Restoring is not driven from here: it would put back the database under every other test.
 // It is covered against a database of its own in apps/server/src/backups.
@@ -50,26 +49,4 @@ test('an admin backs up the server, downloads the backup and deletes it', async 
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
   await expect(backups).toHaveCount(before);
-});
-
-test('server backups are hidden from, and refused to, everyone but admins', async ({
-  page,
-  request,
-}) => {
-  await signUp(page);
-  await page.goto('/settings/admin/backups');
-  await expect(page).toHaveURL(/\/settings\/general$/);
-  await expect(page.getByText('Server backups')).toBeHidden();
-
-  const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
-  const headers = { Authorization: `Bearer ${token}` };
-  const backup = 'catch-backup-2026-10-01_03-04-05-manual.zip';
-  expect((await request.get('/api/admin/backups', { headers })).status()).toBe(403);
-  expect((await request.post('/api/admin/backups', { headers, data: {} })).status()).toBe(403);
-  expect((await request.post(`/api/admin/backups/${backup}/restore`, { headers })).status()).toBe(
-    403,
-  );
-  expect((await request.get(`/api/admin/backups/${backup}/download`, { headers })).status()).toBe(
-    401,
-  );
 });

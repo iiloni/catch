@@ -6,9 +6,9 @@ import {
 } from '../packages/shared/src/protocol';
 import { card, createNote, signIn, signUp } from './helpers';
 
-test('the server refuses unsupported writes and shapes while recovery stays reachable', async ({
-  request,
-}) => {
+test('the server refuses unsupported writes and shapes while recovery stays reachable', {
+  tag: '@api',
+}, async ({ request }) => {
   for (const [path, method] of [
     ['/api/notes', 'POST'],
     ['/api/shapes/notes', 'GET'],
@@ -30,7 +30,9 @@ test('the server refuses unsupported writes and shapes while recovery stays reac
 test('an incompatible server pauses sync, retains queued edits through reload, and resumes', async ({
   page,
   browser,
+  isMobile,
 }) => {
+  test.skip(isMobile, 'Pausing sync does not depend on the layout; the test below runs on both.');
   test.setTimeout(90_000);
   const email = await signUp(page);
   const firstSave = page.waitForResponse(
@@ -50,6 +52,8 @@ test('an incompatible server pauses sync, retains queued edits through reload, a
     if (path.startsWith('/api/auth/') || path.startsWith('/api/updates') || path === '/api/health')
       return route.continue();
     if (route.request().method() === 'POST') rejectedWrites++;
+    // A shape poll that met the upgrade first would pause sync before the write is sent.
+    else if (rejectedWrites === 0) return route.continue();
     return route.fulfill({
       status: 426,
       json: { code: 'INCOMPATIBLE_PROTOCOL', error: 'Update required', protocol },

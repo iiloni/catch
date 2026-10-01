@@ -2,6 +2,10 @@ import { expect, test } from '@playwright/test';
 import { makeZip } from '../apps/web/src/test/zip';
 import { card, openGalleryPage, signUp } from './helpers';
 
+// The first test opens this page and imports on both layouts. What the import then does
+// with a larger or richer export is the same code on either.
+const layoutIndependent = 'Importing does not depend on the layout.';
+
 const usec = (iso: string) => new Date(iso).getTime() * 1000;
 
 /** A Google Takeout archive of Keep, as the export writes it. */
@@ -83,7 +87,9 @@ test('notes are imported from a Google Keep export, once', async ({ page }) => {
 
 test('an import keeps going when the page is left, and shows its progress on return', async ({
   page,
+  isMobile,
 }) => {
+  test.skip(isMobile, layoutIndependent);
   await signUp(page);
   const zip = await makeZip(
     Array.from({ length: 120 }, (_, index) => ({
@@ -175,8 +181,9 @@ async function mediaTakeout(includeMedia = true) {
 
 test('Keep attachments fill the catalog without inline blocks and reimports preserve edits and removals', async ({
   page,
+  isMobile,
 }) => {
-  test.setTimeout(60000);
+  test.skip(isMobile, layoutIndependent);
   await signUp(page);
   await page.goto('/settings/data');
   const importButton = page.getByRole('button', { name: 'Import from Google Keep' });
@@ -257,7 +264,8 @@ test('Keep attachments fill the catalog without inline blocks and reimports pres
   ).toBeVisible();
 });
 
-test('prepared Keep attachment uploads survive an offline reload', async ({ page }) => {
+test('prepared Keep attachment uploads survive an offline reload', async ({ page, isMobile }) => {
+  test.skip(isMobile, layoutIndependent);
   await signUp(page);
   await page.goto('/settings/data');
   await expect(page.getByRole('button', { name: 'Import from Google Keep' })).toBeEnabled();

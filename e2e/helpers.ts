@@ -1,18 +1,44 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
+import { z } from 'zod';
 
 // Signing in reloads the page to open that user's local database. The dev server sends the
-// app unbundled, so on a busy machine that load outlasts the default five seconds.
-const APP_LOAD_TIMEOUT = 15_000;
+// app unbundled, so on a busy machine that load far outlasts the default five seconds.
+const APP_LOAD_TIMEOUT = 30_000;
 
-/** Signs up a fresh user, so each test starts with no notes. */
+const signUpResponse = z.object({
+  token: z.string(),
+  user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
+});
+
+/**
+ * Signs up a fresh user, so each test starts with no notes. The account is made through the
+ * API and its session stored as the app stores one, which takes one page load where the form
+ * takes two. `auth.spec.ts` covers the form.
+ */
 export async function signUp(page: Page) {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+  const origin = new URL(test.info().project.use.baseURL ?? '').origin;
+  const response = await page.request.post('/api/auth/sign-up/email', {
+    headers: { Origin: origin },
+    data: { email, name: '', password: 'password123' },
+  });
+  expect(response.ok()).toBeTruthy();
+  const { token, user } = signUpResponse.parse(await response.json());
+  const context = page.context();
+  await context.setStorageState({
+    // The form's request leaves the session cookie in the browser too.
+    cookies: await context.cookies(),
+    origins: [
+      {
+        origin,
+        localStorage: [
+          { name: 'catch-auth-token', value: response.headers()['set-auth-token'] ?? token },
+          { name: 'catch-user', value: JSON.stringify(user) },
+        ],
+      },
+    ],
+  });
   await page.goto('/');
-  await expect(page).toHaveURL(/\/login(?:\?|$)/);
-  await page.getByRole('button', { name: 'Need an account? Sign up' }).click();
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
   });
@@ -45,6 +71,37 @@ export async function createNote(page: Page, title: string, body?: string) {
   }
   await page.getByRole('button', { name: 'Close new note' }).click();
   await expect(card(page, title)).toBeVisible();
+}
+
+/**
+ * Adds notes without typing them, for tests that are about something other than writing a
+ * note. Each lands first, as a typed note does, so the last one listed leads the page.
+ * `status` puts them in that deck column instead of the gallery.
+ */
+export async function seedNotes(
+  page: Page,
+  notes: readonly (string | { title: string; body: string })[],
+  status?: string,
+) {
+  await page.evaluate(
+    async ({ notes, status }) => {
+      const { createNote } = await import('/src/lib/notes.ts');
+      const { getSignedInUser } = await import('/src/lib/auth.ts');
+      const saved = notes.map((note) => {
+        const { title, body } = typeof note === 'string' ? { title: note, body: null } : note;
+        return createNote({
+          userId: getSignedInUser().id,
+          status,
+          content: [
+            { type: 'heading', props: { level: 3 }, content: title },
+            ...(body === null ? [] : [{ type: 'paragraph', content: body }]),
+          ],
+        }).transaction.isPersisted.promise;
+      });
+      await Promise.all(saved);
+    },
+    { notes, status },
+  );
 }
 
 /** Opens Archive or Trash from the switcher floating above the dock. */
@@ -94,6 +151,31 @@ export async function noteAction(page: Page, title: string, action: string) {
  */
 export async function waitForPageTransition(page: Page) {
   await page.waitForFunction(() => !document.documentElement.matches(':active-view-transition'));
+}
+
+/**
+ * Where an element rests once it has stopped moving. Something that animates in is visible
+ * before it arrives, and a raw pointer gesture aimed at it then lands on whatever is there.
+ */
+export async function settledBox(locator: Locator) {
+  let box = await locator.boundingBox();
+  await expect
+    .poll(async () => {
+      const previous = box;
+      box = await locator.boundingBox();
+      return previous !== null && box !== null && previous.x === box.x && previous.y === box.y;
+    })
+    .toBe(true);
+  if (!box) throw new Error('Missing layout');
+  return box;
+}
+
+/** Opens the Deck and waits for it to slide in, so a raw pointer gesture can follow. */
+export async function openDeck(page: Page) {
+  await page.getByRole('link', { name: 'Deck' }).click();
+  // The slide starts once the page has rendered; any sooner there is nothing to wait for.
+  await expect(page.getByRole('heading', { name: 'Deck' })).toBeVisible();
+  await waitForPageTransition(page);
 }
 
 /** Opens the note's move picker and chooses a deck column or Gallery. */

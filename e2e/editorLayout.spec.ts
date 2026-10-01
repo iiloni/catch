@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createNote, openNote, signUp } from './helpers';
+import { openNote, seedNotes, signUp } from './helpers';
 
 test('mobile notes scroll behind the controls and keep their timestamp below the content', async ({
   page,
@@ -80,7 +80,7 @@ test('the sync pill slides from above and changes width without moving the heade
   await page.evaluate(() => {
     document.documentElement.style.setProperty('--safe-area-inset-top', '40px');
   });
-  await createNote(page, 'A quiet afternoon', 'Read a few pages');
+  await seedNotes(page, [{ title: 'A quiet afternoon', body: 'Read a few pages' }]);
   const dialog = await openNote(page, 'A quiet afternoon');
   const status = dialog.getByRole('status');
   await expect(status).toBeEmpty();
