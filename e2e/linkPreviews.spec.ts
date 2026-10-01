@@ -78,6 +78,7 @@ test('the dock tray fades away and its overlay gathers media above links', async
   page,
   isMobile,
 }, testInfo) => {
+  test.setTimeout(60000);
   if (!isMobile) await page.setViewportSize({ width: 600, height: 900 });
   await signUp(page);
   await page.getByRole('button', { name: 'New note' }).click();

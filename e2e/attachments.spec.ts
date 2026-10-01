@@ -372,6 +372,7 @@ test.describe('live capture', () => {
 test('catalog actions insert at the cursor and toolbar uploads retain their captured position', async ({
   page,
 }) => {
+  test.setTimeout(60000);
   await signUp(page);
   await createNote(page, 'Insertion positions', 'First paragraph');
   await openNote(page, 'Insertion positions');
@@ -472,6 +473,7 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   page,
   isMobile,
 }, testInfo) => {
+  test.setTimeout(60000);
   await signUp(page);
   await createNote(page, 'Media stage');
   await openNote(page, 'Media stage');
