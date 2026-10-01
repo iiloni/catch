@@ -51,6 +51,10 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       # Exercises the same worktree stack developers and agents use.
       - run: ./scripts/dev.sh up
+      # Server backups are tested against a real Postgres with its client tools, which the
+      # check job's bare runner lacks (the tests skip themselves there) and this stack has.
+      - if: matrix.project == 'desktop'
+        run: ./scripts/dev.sh test
       - run: ./scripts/dev.sh e2e --project=${{ matrix.project }} --workers=1
       - if: failure()
         run: ./scripts/dev.sh logs-once

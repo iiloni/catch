@@ -10,6 +10,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { account, attachments, session, user } from '../db/schema';
 import { requireAdmin } from '../lib/requireAdmin';
+import { backupRoutes } from './backups';
 
 const userColumns = {
   id: user.id,
@@ -141,4 +142,5 @@ export const adminRoutes = new Hono<AppEnv>()
     if (!result) return c.json({ error: 'User not found' }, 404);
     await deleteFiles(result);
     return c.json({ ok: true });
-  });
+  })
+  .route('/backups', backupRoutes);

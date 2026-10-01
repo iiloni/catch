@@ -165,6 +165,7 @@ jobs:
           target: production
           build-args: |
             CATCH_CHANNEL=${{ needs.version.outputs.channel }}
+            CATCH_VERSION=${{ needs.version.outputs.version }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ needs.version.outputs.image }}:${{ needs.version.outputs.version }}

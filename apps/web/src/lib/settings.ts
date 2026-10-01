@@ -1,5 +1,12 @@
 import { useRouter } from '@tanstack/react-router';
-import { CircleUser, Database, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
+import {
+  CircleUser,
+  Database,
+  DatabaseBackup,
+  type LucideIcon,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 import { useCallback } from 'react';
 import { useViewport } from './splitView';
 
@@ -12,6 +19,7 @@ export const SETTINGS_TABS = [
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
   { path: '/settings/data', label: 'Data Management', icon: Database, section: 'User' },
   { path: '/settings/admin/users', label: 'Users', icon: Users, section: 'Admin' },
+  { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
   path: string;
   label: string;

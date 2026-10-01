@@ -18,8 +18,23 @@ configuration kept outside this checkout, see [Releasing and deployment](docs/re
 
 Attachments live in the `attachment_data` Docker volume. Set `CATCH_ATTACHMENTS_MOUNT`
 to a host directory for a bind mount, writable by the container's `node` user (UID 1000).
-Back up this directory or volume together with Postgres. Files can be up to 100 MiB;
-uploads made offline stay on the device and resume when it reconnects.
+Files can be up to 100 MiB; uploads made offline stay on the device and resume when it
+reconnects.
+
+### Backups and updates
+
+Admins back up and restore the whole server (database and attachments) in Settings > Admin >
+Backups, and can schedule a daily backup there. Backups go to the `backup_data` volume;
+set `CATCH_BACKUPS_MOUNT` to a directory on another disk so they outlive this one.
+
+```bash
+./scripts/update.sh                  # back up the database, pull, rebuild, restart
+./scripts/backup.sh create           # a full backup from the host
+./scripts/backup.sh restore <backup> # also works when Catch cannot start
+```
+
+The server also backs up its database by itself before a new version migrates it. See
+[Server backups](docs/backups.md).
 
 ## Development
 

@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { createApp } from './app';
+import { startBackupSchedule } from './backups/service';
 import { env } from './env';
 import { resumePendingPreviews } from './linkPreviews';
 
@@ -22,4 +23,5 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   resumePendingPreviews().catch((error: unknown) => {
     console.error('Could not resume link previews', error);
   });
+  startBackupSchedule();
 });

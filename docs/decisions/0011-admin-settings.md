@@ -7,7 +7,8 @@ Status: accepted (2026-10-01)
 Settings groups personal pages under User and server-wide pages under Admin, in both the
 desktop navigation and the phone picker. Only a live admin session shows the Admin group.
 All admin pages live under `/settings/admin` with a shared route guard; all administrative
-API endpoints live under `/api/admin` with a shared server guard.
+API endpoints live under `/api/admin` with a shared server guard. The one route ahead of that
+guard is a backup's download link, which carries a ticket issued behind it (ADR 0012).
 
 The user directory exposes only account id, name, email, role, creation date and last login. It is an
 explicit exception to per-user reads: authenticated admins can list accounts across the

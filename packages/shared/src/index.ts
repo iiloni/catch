@@ -1,4 +1,5 @@
 export * from './attachments';
+export * from './backups';
 export * from './board';
 export * from './colors';
 export * from './content';
