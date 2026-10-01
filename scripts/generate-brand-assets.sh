@@ -14,6 +14,7 @@ case "$channel" in
   all)
     "$0" stable
     "$0" preview
+    "$0" dev
     exit 0
     ;;
   stable)
@@ -32,7 +33,17 @@ case "$channel" in
     public_dir="$public_dir/preview"
     res_dir="$repo_dir/apps/web/android/app/src/preview/res"
     ;;
-  *) echo 'Usage: generate-brand-assets.sh [stable|preview|all]' >&2; exit 1 ;;
+  dev)
+    python3 "$brand_dir/dev/derive-dev-icons.py"
+    python3 "$brand_dir/dev/derive-dev-icons.py" --check
+    primary_source="$brand_dir/dev/catch-icon-dev.svg"
+    small_source="$brand_dir/dev/catch-icon-dev-small.svg"
+    favicon_source="$brand_dir/dev/catch-favicon-dev.svg"
+    background_source="$brand_dir/dev/catch-adaptive-dev-background.svg"
+    public_dir="$public_dir/dev"
+    res_dir="$repo_dir/apps/web/android/app/src/dev/res"
+    ;;
+  *) echo 'Usage: generate-brand-assets.sh [stable|preview|dev|all]' >&2; exit 1 ;;
 esac
 mkdir -p "$public_dir"
 temp_dir="$(mktemp -d)"
@@ -135,7 +146,7 @@ for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:32
   render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background.png"
 
   # Flavor overlays change only channel paint. Android resolves the adaptive XML,
-  # foreground and themed geometry from main for both flavors.
+  # foreground and themed geometry from main for every flavor.
   [[ "$channel" == stable ]] || continue
   render "$brand_dir/catch-adaptive-foreground.svg" "$layer_size" \
     "$mipmap_dir/ic_launcher_foreground.png"

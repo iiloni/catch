@@ -28,6 +28,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: python3 branding/preview/derive-preview-icons.py --check
+      - run: python3 branding/dev/derive-dev-icons.py --check
       - run: pnpm check
 
   e2e:
