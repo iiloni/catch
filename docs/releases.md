@@ -68,8 +68,9 @@ attached to a published GitHub Release remain available there.
    and change visibility to Public. Repository visibility does not automatically make a new
    GHCR package public. Anonymous production pulls work after this change.
 
-Protect main with the CI `check` and `e2e` status checks, and use a tag ruleset for `v*` to
-limit release tag creation and prevent deletion or modification. These are GitHub settings;
+Protect main with the CI `check`, `e2e (desktop)` and `e2e (android)` status checks, and use
+a tag ruleset for `v*` to limit release tag creation and prevent deletion or modification.
+These are GitHub settings;
 the workflow files do not change them. If an existing GHCR package is already associated
 with another repository, grant this repository Actions write access to that package.
 

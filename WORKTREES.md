@@ -87,6 +87,9 @@ Playwright uses two workers per suite by default. Each worker also runs Chromium
 so the worker count is not a CPU core limit. Pass `--workers=N` to `e2e` if a run needs a
 different limit. `pnpm e2e` goes through the same shared lock as `./scripts/dev.sh e2e`.
 
+CI runs each Playwright project on its own two-core runner with one worker. To reproduce a
+CI failure, run that project the same way: `./scripts/dev.sh e2e --project=android --workers=1`.
+
 ## Shared settings
 
 Optional settings shared by every worktree, such as future AI provider keys, go in the
