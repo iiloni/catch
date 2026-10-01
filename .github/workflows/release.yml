@@ -56,7 +56,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[][] | {tagName: .tag_name, isDraft: .draft}]' > "$RUNNER_TEMP/releases.json"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq '[.[][] | {tagName: .tag_name, isDraft: .draft}]' > "$RUNNER_TEMP/releases.json"
           node scripts/release.ts promotion "$RELEASE_TAG" "$RUNNER_TEMP/releases.json"
 
   checks:
@@ -209,7 +210,8 @@ jobs:
       - name: Determine whether to advance channel
         id: promotion
         run: |
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[][] | {tagName: .tag_name, isDraft: .draft}]' > "$RUNNER_TEMP/releases.json"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq '[.[][] | {tagName: .tag_name, isDraft: .draft}]' > "$RUNNER_TEMP/releases.json"
           node scripts/release.ts promotion "$RELEASE_TAG" "$RUNNER_TEMP/releases.json"
       - name: Prepare release notes
         run: |
