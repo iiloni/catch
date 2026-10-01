@@ -99,6 +99,50 @@ test('video posters and playback work on the upload device and another device', 
   }
 });
 
+test('a card opens when its thumbnail arrives during the press', async ({
+  page,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'A press on a card does not depend on the layout.');
+  const email = await signUp(page);
+  await seedNotes(page, ['Pressed']);
+  await openNote(page, 'Pressed');
+  await upload(page);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByText('Waiting to upload')).toBeHidden();
+  await expect(page.getByRole('dialog').getByText('Synced', { exact: true })).toBeVisible();
+
+  // Another device has to download the picture, and its card shows a placeholder until then.
+  const other = await browser.newContext();
+  try {
+    const second = await other.newPage();
+    let deliver = () => {};
+    const held = new Promise<void>((resolve) => {
+      deliver = resolve;
+    });
+    await second.route('**/api/attachments/*/content*', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await signIn(second, email);
+    const pressed = card(second, 'Pressed');
+    const placeholder = await pressed.getByText('pixel.png').boundingBox();
+    if (!placeholder) throw new Error('Missing placeholder');
+    await second.mouse.move(
+      placeholder.x + placeholder.width / 2,
+      placeholder.y + placeholder.height / 2,
+    );
+    await second.mouse.down();
+    deliver();
+    await expect(pressed.getByRole('img', { name: 'pixel.png' })).toBeVisible();
+    await second.mouse.up();
+    await expect(second.getByRole('dialog')).toBeVisible();
+  } finally {
+    await other.close();
+  }
+});
+
 test('attachments preview, retain their catalog without blocks, and remove privately', async ({
   page,
   browser,
