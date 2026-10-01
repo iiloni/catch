@@ -2,11 +2,11 @@
 
 ## 1. Purpose
 
-Preview distribution uses the approved Gentle Drop icon with a restrained purple/indigo background. This treatment identifies preview launcher, PWA and browser icons. It defines no application UI colors or theme changes.
+Preview distribution uses the approved Gentle Drop icon with a rich violet-to-indigo background matching the primary icon in the approved “Gentle Drop Preview” board. This corrects the earlier muted treatment. It identifies preview launcher, PWA and browser icons and defines no application UI colors or theme changes.
 
 ## 2. Relationship to stable
 
-`../catch-icon-master.svg` and `../catch-brand-tokens.json` remain the canonical geometry and brand sources. Stable source files and the original stable ZIP are preserved. Preview SVGs are derived by substituting paint values and descriptive IDs/labels in the corresponding stable SVGs. Every shape, path, dimension, corner radius, transform, position, viewBox and element order is identical to its stable counterpart.
+`../catch-icon-master.svg` and `../catch-brand-tokens.json` remain the canonical geometry and shared foreground color sources. Stable source files and assets are preserved. Preview SVGs are derived by substituting gradient colors and direction, shadow paint and descriptive IDs/labels in the corresponding stable SVGs. Every shape, path, dimension, corner radius, transform, position, viewBox and element order is identical to its stable counterpart.
 
 `catch-preview-brand-tokens.json` is an icon-only overlay. Its `palette` and `iconOverrides` are authoritative preview paint values. Relative paths resolve from this directory. `inheritsFrom` is a documented reference to stable values, not a claim that standard JSON readers automatically resolve or merge these files. Use the supplied derivation script or explicitly apply only the listed icon overrides. Do not merge this overlay into application UI tokens.
 
@@ -16,14 +16,18 @@ All colors are sRGB, with straight alpha and normal compositing. Alpha is applie
 
 | Semantic name | HEX | RGB | Alpha | Use |
 |---|---|---|---:|---|
-| previewGradientStart | `#6654B0` | 102, 84, 176 | 1 | Background start: muted purple |
-| previewGradientMid | `#504389` | 80, 67, 137 | 1 | Background 55% stop |
-| previewGradientEnd | `#363166` | 54, 49, 102 | 1 | Background end: dark indigo |
-| previewLandingShadow | `#18122E` | 24, 18, 46 | 0.22 | Primary preview landing ellipse only |
+| previewGradientStart | `#8C68FF` | 140, 104, 255 | 1 | Background start, left: bright violet |
+| previewGradientMid | `#6044CF` | 96, 68, 207 | 1 | Background 55% stop: saturated violet-indigo |
+| previewGradientEnd | `#3B2AA6` | 59, 42, 166 | 1 | Background end, right: deep indigo |
+| previewLandingShadow | `#231457` | 35, 20, 87 | 0.32 | Primary preview landing ellipse only |
 
-The stable gradient vector and stop positions are inherited exactly: `userSpaceOnUse`, `(0,768) → (1024,256)`; offsets `0`, `0.55`, `1`. The three preview colors replace those three stops. There is no additional highlight, glow, texture or blend mode.
+The preview gradient is linear, `userSpaceOnUse`, left to right: `(0,512) → (1024,512)`; offsets `0`, `0.55`, `1`. Stop positions remain the stable positions; direction is an explicit preview paint override. There is no additional highlight, glow, texture or blend mode.
 
-The shadow inherits center `(514,820)`, radii `(275,45)` and Gaussian standard deviation `11`; only its tint and opacity change. The cool shadow avoids carrying the stable brown tint onto purple. It remains absent from small, favicon and adaptive artwork.
+The board's printed `#7A5CFF` and `#3B2AA6` were evaluated against its primary artwork. Interior samples near the bright upper-left edge, away from antialiasing and foreground, include RGB `(140,106,252)` at image pixel `(105,280)` and `(137,102,252)` at `(130,280)`. These support the brighter `#8C68FF` production start rather than `#7A5CFF`. Right-side background samples include `(67,45,167)` at `(440,440)`, supporting the deep `#3B2AA6` endpoint. The middle stop retains that visible saturation. Coordinates refer to the supplied 1448 × 1086 PNG, “Catch Preview Icon System.png”.
+
+The primary artwork keeps its left side violet at both the top and bottom and its right side indigo. A horizontal vector captures this distribution without the earlier stable vector's upper-left darkening. The board contains lighting variations that are not additional production layers. Its smaller examples, foreground labels, wordmark and shadow label are not geometry or foreground color specifications. The superseded `#6654B0`, `#504389` and `#363166` stops must not be used for this treatment.
+
+The shadow inherits center `(514,820)`, radii `(275,45)` and Gaussian standard deviation `11`; only its tint and opacity change. The indigo tint at 32% opacity keeps the established soft ellipse visible on the brighter field. Alpha is applied once. It remains absent from small, favicon and adaptive artwork.
 
 ## 4. Inherited geometry and colors
 
@@ -48,15 +52,15 @@ No foreground color adjustment was necessary. No wordmark, standalone mark, UI p
 
 ## 6. Small-size checks
 
-Stable and preview primary, small and favicon SVGs were rendered at 512, 192, 128, 64, 48, 32, 24 and 16 px, with the stable size rules used for the assigned exports.
+Corrected and previous preview primary, small and favicon SVGs were rendered at 512, 192, 128, 64, 48, 32, 24 and 16 px, with the stable size rules used for the assigned exports and the board's primary icon beside them as the appearance reference.
 
 | Sizes | Assigned variant | Observed behavior |
 |---|---|---|
-| 512, 192, 128 | Primary | Exact Gentle Drop silhouette and tilt; clear two lines and motion accents; restrained landing shadow. |
+| 512, 192, 128 | Primary | Exact Gentle Drop silhouette and tilt; clear two lines and motion accents; soft indigo landing shadow. |
 | 64, 48 | Small | Same stable simplifications; no shadow smear or motion specks. |
-| 32, 24, 16 | Favicon | Purple background remains distinct from amber; two antialiased dark line clusters remain separated. |
+| 32, 24, 16 | Favicon | Brighter violet and deep indigo remain visible; two antialiased dark line clusters remain separated. |
 
-The gradient is intentionally darker and less saturated than the generated board's bright violet. Cream-to-background contrast at the three stop colors is approximately 5.80:1, 8.01:1 and 11.22:1. These are color measurements for the artwork, not an application accessibility certification. At 16 px the card and purple tile are the dominant cues; preserve the same antialiasing and sampling approach as stable. Sixteen pixels remains the supplied minimum.
+The corrected, previous preview and approved primary reference were compared beside one another at all eight sizes. The correction is visibly brighter and more saturated in both the SVG renders and generated browser/launcher outputs. Cream-to-background contrast at the three stop colors is approximately 3.62:1, 6.22:1 and 9.70:1. These are color measurements for the artwork, not an application accessibility certification. At 16 px the card and violet tile are the dominant cues; preserve the same antialiasing and sampling approach as stable. Sixteen pixels remains the supplied minimum. Small and favicon variants retain their stable omissions, regardless of detail shown in the board's small examples.
 
 ## 7. Android adaptive guidance
 
@@ -66,19 +70,19 @@ For a themed monochrome icon, reuse the stable knockout geometry and stable adap
 
 ## 8. Engineering handoff
 
-Extract this extension alongside the stable package so the directory is `branding/preview/`. Keep the stable files at `branding/`. The extension intentionally depends on those files and contains no duplicate foreground or mono sources.
+The integrated overlay lives in `branding/preview/`, alongside the stable sources in `branding/`. It intentionally depends on those files and contains no duplicate foreground or mono sources.
 
-From the package root, run `python3 branding/preview/derive-preview-icons.py` to regenerate the four preview SVGs. Run the same command with `--check` to verify them without writing. The script resolves its dependencies relative to its own location. It verifies SHA-256 fingerprints of the referenced stable baseline, applies only listed paint/label substitutions, and checks that reversing the substitutions recovers the stable SVGs exactly. If stable sources later change, review the preview derivation before updating the fingerprints; do not silently maintain an independent geometry fork.
+From the repository root, run `python3 branding/preview/derive-preview-icons.py` to regenerate the four preview SVGs. Run the same command with `--check` to verify them without writing. The script resolves its dependencies relative to its own location. It verifies SHA-256 fingerprints of the referenced stable baseline, checks HEX/RGB pairs and shadow alpha, retains stable stop positions and gradient type, applies only listed gradient/paint/label substitutions, and checks that reversing the substitutions recovers the stable SVGs exactly. If stable sources later change, review the preview derivation before updating the fingerprints; do not silently maintain an independent geometry fork.
 
-The later Codex integration task should mechanically generate preview PNGs, PWA icons, favicon assets, Android legacy launcher icons and adaptive background resources from these masters, pairing the latter with the shared foreground. Use preview-specific paths or channel build selection for distribution assets. Preserve stable icon outputs and configuration where required for the stable channel. Apply the existing size rules; preserve the source palette, gradient vector and stop positions, exact geometry, safe area, shadow geometry and variant omissions.
+Run `./scripts/generate-brand-assets.sh preview` to derive and check the SVGs, then regenerate preview PNGs, PWA icons, favicon assets, Android legacy launcher icons and adaptive background resources. The existing pipeline renders SVGs and resizes with Lanczos; raster files are outputs, never sources. It pairs the adaptive background with the unchanged shared foreground and retains existing resource names and `/preview/` browser paths. Do not run stable regeneration for a preview-only correction. See `../../docs/branding.md` for channel builds and resource selection.
 
-Codex must not reinterpret or redesign preview artwork. Do not change application note colors, page backgrounds, controls, typography, content cards, theme colors, general UI tokens or in-app accents to these preview colors. No codebase integration is included in this source extension.
+Do not change application note colors, page backgrounds, controls, typography, content cards, theme colors, general UI tokens or in-app accents to these preview colors. Do not introduce badges, letters, a new wordmark or redesigned geometry.
 
 ## 9. Production decisions
 
 1. Used the current stable source package as the exact geometry baseline, rather than tracing the preview board.
-2. Selected muted purple and dark indigo production colors; ignored all printed board hex labels, including its different cream and charcoal labels.
-3. Preserved the stable gradient direction and three-stop positions for a deterministic paint-only substitution.
-4. Changed only the large icon's shadow tint and opacity to suit the dark background, retaining its exact shape, blur and placement.
+2. Selected bright violet and deep indigo from the primary artwork; used printed gradient labels as candidates, while preserving the stable cream and charcoal values.
+3. Kept the stable three-stop positions and explicitly overrode the gradient vector to match the primary reference's left-to-right appearance.
+4. Changed only the large icon's shadow tint and opacity to suit the corrected background, retaining its exact shape, blur and placement.
 5. Reused the stable adaptive foreground and mono marks; documented the themed-icon channel-differentiation limitation.
 6. Supplied a small derivation script to prevent geometry drift. No raster artwork is used as source.

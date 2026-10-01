@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive preview SVGs by replacing stable paint values; never redraw shapes."""
+"""Derive preview SVGs by replacing stable paint and gradient direction; never redraw shapes."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -29,7 +29,19 @@ def main():
             raise SystemExit(f'HEX/RGB mismatch for {name}')
 
     override = tokens['iconOverrides']
-    replacements = []
+    gradient = override['gradient']
+    if gradient['type'] != base['gradient']['type'] or gradient['units'] != base['gradient']['units']:
+        raise SystemExit('Preview must use the stable linear, user-space gradient type.')
+
+    def gradient_vector(value):
+        coordinates = value['from'] + value['to']
+        if len(value['from']) != 2 or len(value['to']) != 2 or not all(
+            isinstance(n, (int, float)) and 0 <= n <= base['canvas']['width'] for n in coordinates
+        ) or value['from'] == value['to']:
+            raise SystemExit('Expected two distinct gradient points within the source canvas.')
+        return ' '.join(f'{key}="{n}"' for key, n in zip(('x1', 'y1', 'x2', 'y2'), coordinates, strict=True))
+
+    replacements = [(gradient_vector(base['gradient']), gradient_vector(gradient))]
     for stable_stop, preview_stop in zip(base['gradient']['stops'], override['gradient']['stops'], strict=True):
         if stable_stop['offset'] != preview_stop['offset']:
             raise SystemExit('Preview stop positions must remain the stable positions.')
@@ -54,7 +66,7 @@ def main():
         output = original
         for before, after in replacements:
             output = output.replace(before, after)
-        # All non-paint content is preserved, including every transform and path.
+        # Reversing gradient/paint substitutions must recover every source byte.
         restored = output
         for before, after in reversed(replacements):
             restored = restored.replace(after, before)

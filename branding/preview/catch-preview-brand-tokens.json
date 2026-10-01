@@ -17,27 +17,27 @@
   },
   "palette": {
     "previewGradientStart": {
-      "hex": "#6654B0",
-      "rgb": [102, 84, 176],
+      "hex": "#8C68FF",
+      "rgb": [140, 104, 255],
       "alpha": 1,
-      "usage": "icon background gradient start"
+      "usage": "icon background gradient start, left: bright violet"
     },
     "previewGradientMid": {
-      "hex": "#504389",
-      "rgb": [80, 67, 137],
+      "hex": "#6044CF",
+      "rgb": [96, 68, 207],
       "alpha": 1,
-      "usage": "icon background gradient 55% stop"
+      "usage": "icon background gradient 55% stop: saturated violet-indigo"
     },
     "previewGradientEnd": {
-      "hex": "#363166",
-      "rgb": [54, 49, 102],
+      "hex": "#3B2AA6",
+      "rgb": [59, 42, 166],
       "alpha": 1,
-      "usage": "icon background gradient end"
+      "usage": "icon background gradient end, right: deep indigo"
     },
     "previewLandingShadow": {
-      "hex": "#18122E",
-      "rgb": [24, 18, 46],
-      "alpha": 0.22,
+      "hex": "#231457",
+      "rgb": [35, 20, 87],
+      "alpha": 0.32,
       "usage": "primary preview landing ellipse only"
     }
   },
@@ -45,6 +45,10 @@
     "gradient": {
       "inheritsFrom": "../catch-brand-tokens.json#/gradient",
       "id": "preview-field",
+      "type": "linear",
+      "units": "userSpaceOnUse",
+      "from": [0, 512],
+      "to": [1024, 512],
       "stops": [
         {
           "offset": 0,
@@ -63,7 +67,7 @@
     "landingShadow": {
       "inheritsFrom": "../catch-brand-tokens.json#/geometry/landingShadow",
       "color": "previewLandingShadow",
-      "opacity": 0.22
+      "opacity": 0.32
     }
   },
   "derivedAssets": [
@@ -95,7 +99,7 @@
     "cream",
     "charcoal",
     "motion accent color",
-    "gradient vector and stop positions",
+    "gradient stop positions",
     "clear space",
     "adaptive safe area",
     "variant transforms",

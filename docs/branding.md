@@ -2,7 +2,13 @@
 
 Stable Gentle Drop SVGs and tokens in `branding/` are the canonical geometry sources.
 The approved icon-only overlay in `branding/preview/` changes the icon gradient and primary
-icon shadow paint. It never supplies application UI tokens or theme colors.
+icon shadow paint. Its corrected gradient runs left to right, `(0,512) → (1024,512)`, with
+`#8C68FF`, `#6044CF` and `#3B2AA6` at 0%, 55% and 100%. The primary landing shadow uses
+`#231457` at 32% opacity with the stable shape and blur. These values follow the approved
+primary artwork's bright violet and deep indigo; the preview spec records the reference
+samples and the superseded muted palette. Stable cream `#FFF9F0`, charcoal `#292B2D`,
+geometry and all size rules remain authoritative. The overlay never supplies application
+UI tokens or theme colors.
 
 ## Regeneration
 
@@ -17,6 +23,7 @@ python3 branding/preview/derive-preview-icons.py --check
 ./scripts/generate-brand-assets.sh all
 ```
 
+For a preview-only correction, run only the preview command so stable outputs stay untouched.
 The generator defaults to stable for compatibility. Preview generation first derives the
 four SVGs and runs `--check`; both derivation modes (write and check) enforce the fingerprint
 guard. CI also runs
