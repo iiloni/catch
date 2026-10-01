@@ -68,6 +68,14 @@ describe('NoteCard', () => {
     expect(screen.getByRole('button', { name: 'Move to trash' })).toBeInTheDocument();
   });
 
+  it('leaves its actions unbuilt on a touch screen, which hides them', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }));
+    renderCard();
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it('pins and trashes without opening the note', () => {
     const onOpen = vi.fn();
     renderCard({ onOpen });

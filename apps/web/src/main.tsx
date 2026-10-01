@@ -6,6 +6,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { pageTransition } from './lib/dockState';
 import { startKeyboardTracking } from './lib/keyboard';
+import { keepScrollAcrossNotes } from './lib/openNote';
 import { routeTree } from './routeTree.gen';
 import './styles.css';
 
@@ -29,6 +30,7 @@ declare module '@tanstack/react-router' {
   }
 }
 
+keepScrollAcrossNotes(router);
 startKeyboardTracking();
 
 const root = document.getElementById('root');

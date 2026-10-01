@@ -106,7 +106,12 @@ native; CSS `linear()` springs can mimic the curve but not the interruption.
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor is translated onto the card and
 clipped to its size, then both animate to full screen. Content is never scaled, so text stays
-crisp. A note whose card is off screen when it closes (editing re-sorted it, or the grid no
+crisp. It runs on the main thread, where mounting the editor competes with it, so it waits for
+the mounted surface to be painted (still looking like the card) and then advances by frames
+rather than by the clock (`animateSteady`): a late frame delays it instead of skipping part of
+it. Opening and closing a note are navigations that leave the page's scroll alone
+(`lib/openNote.ts`); the router's default is to scroll to the top, away from the card.
+A note whose card is off screen when it closes (editing re-sorted it, or the grid no
 longer renders it) fades out in place, as after archiving, rather than jumping the page to
 the card. A capped vertical drag dismisses the editor when the note is scrolled to the matching
 edge, with a haptic tick at the release threshold. We chose this over the View

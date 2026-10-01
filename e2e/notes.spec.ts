@@ -412,6 +412,25 @@ test('swiping the open note down or up closes it', async ({ page, isMobile }) =>
   }
 });
 
+test('opening and closing a note leaves the page where it was scrolled', async ({ page }) => {
+  // Short enough that a few notes scroll, and narrow enough for the full-screen editor.
+  await page.setViewportSize({ width: 400, height: 360 });
+  await signUp(page);
+  const body = 'Wraps over a few lines of a narrow card to make it tall';
+  for (const title of ['Last', 'Third', 'Second', 'First']) await createNote(page, title, body);
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await card(page, 'Last').scrollIntoViewIfNeeded();
+  const scrolled = await page.evaluate(() => window.scrollY);
+  expect(scrolled).toBeGreaterThan(0);
+
+  const dialog = await openNote(page, 'Last');
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolled);
+});
+
 test('color and pin', async ({ page }) => {
   await signUp(page);
   await createNote(page, 'First');
