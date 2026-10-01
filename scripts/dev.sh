@@ -168,7 +168,9 @@ case "$command" in
             host=localhost
             forward=(--forwardPorts "$port:$port")
         fi
-        [[ -d "$repo_root/node_modules" ]] || pnpm --dir "$repo_root" install
+        # The directory alone says nothing: Docker creates an empty one on the host for each
+        # node_modules volume it mounts.
+        [[ -x "$repo_root/apps/web/node_modules/.bin/cap" ]] || pnpm --dir "$repo_root" install
         # Always the dev app, whatever the caller's environment says: a debug-signed build under
         # a released id makes the installer uninstall that app, along with its unsynced notes.
         export CATCH_CHANNEL=dev
