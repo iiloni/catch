@@ -4,7 +4,12 @@ import { type PointerEvent, useEffect, useRef } from 'react';
 import { haptics } from '@/lib/haptics';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
-import { SETTINGS_TABS, type SettingsPath, type SettingsTab } from '@/lib/settings';
+import {
+  SETTINGS_TABS,
+  type SettingsPath,
+  type SettingsTab,
+  settingsSectionsFor,
+} from '@/lib/settings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -31,6 +36,7 @@ export function settingsTabAt(root: ParentNode | null, x: number, y: number): Se
 
 type PickerProps = {
   open: boolean;
+  isAdmin?: boolean;
   current: SettingsTab | null;
   /** The page under a finger held on the selector; the indicator follows it. */
   hovered: SettingsPath | null;
@@ -41,7 +47,13 @@ type PickerProps = {
  * Settings' pages as a card floating above the dock with a gap, like the Gallery switcher.
  * The dock's tab selector opens it.
  */
-export function SettingsTabPicker({ open, current, hovered, onSelect }: PickerProps) {
+export function SettingsTabPicker({
+  open,
+  isAdmin = false,
+  current,
+  hovered,
+  onSelect,
+}: PickerProps) {
   const shown = hovered ?? current?.path;
 
   return (
@@ -60,36 +72,43 @@ export function SettingsTabPicker({ open, current, hovered, onSelect }: PickerPr
           exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.16 } }}
           transition={springs.snappy}
         >
-          {SETTINGS_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const selected = shown === tab.path;
-            return (
-              <motion.button
-                key={tab.path}
-                type="button"
-                data-settings-tab={tab.path}
-                aria-current={current?.path === tab.path ? 'page' : undefined}
-                onClick={() => onSelect(tab.path)}
-                animate={{ scale: hovered === tab.path ? 1.03 : 1 }}
-                transition={springs.snappy}
-                className={cn(
-                  'relative z-0 flex h-12 items-center gap-3 rounded-[calc(var(--dock-radius)-0.25rem)] px-4 text-left font-medium outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-                  selected ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {selected && (
-                  <motion.span
-                    layoutId="settings-tab"
-                    aria-hidden
-                    className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+          {settingsSectionsFor(isAdmin).map((section) => (
+            <section key={section.label} aria-label={section.label} className="flex flex-col gap-1">
+              <h2 className="px-4 pt-2 pb-1 font-medium text-muted-foreground text-xs">
+                {section.label}
+              </h2>
+              {section.tabs.map((tab) => {
+                const Icon = tab.icon;
+                const selected = shown === tab.path;
+                return (
+                  <motion.button
+                    key={tab.path}
+                    type="button"
+                    data-settings-tab={tab.path}
+                    aria-current={current?.path === tab.path ? 'page' : undefined}
+                    onClick={() => onSelect(tab.path)}
+                    animate={{ scale: hovered === tab.path ? 1.03 : 1 }}
                     transition={springs.snappy}
-                  />
-                )}
-                <Icon className="size-5" aria-hidden />
-                {tab.label}
-              </motion.button>
-            );
-          })}
+                    className={cn(
+                      'relative z-0 flex h-12 items-center gap-3 rounded-[calc(var(--dock-radius)-0.25rem)] px-4 text-left font-medium outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                      selected ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                  >
+                    {selected && (
+                      <motion.span
+                        layoutId="settings-tab"
+                        aria-hidden
+                        className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                        transition={springs.snappy}
+                      />
+                    )}
+                    <Icon className="size-5" aria-hidden />
+                    {tab.label}
+                  </motion.button>
+                );
+              })}
+            </section>
+          ))}
         </motion.nav>
       )}
     </AnimatePresence>

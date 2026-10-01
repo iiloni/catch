@@ -10,6 +10,7 @@ import {
   SettingsTabPicker,
   SettingsTabSelector,
 } from '@/components/SettingsTabPicker/SettingsTabPicker';
+import { useAdminAccess } from '@/lib/admin';
 import { useBackHandler } from '@/lib/backButton';
 import {
   editorControls,
@@ -55,6 +56,7 @@ function asGalleryPage(pathname: string): GalleryPage | null {
  * dock steps aside.
  */
 export function Dock() {
+  const isAdmin = useAdminAccess();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const noteOpen = useRouterState({
     select: (state) => Boolean((state.location.search as { note?: string }).note),
@@ -167,6 +169,7 @@ export function Dock() {
                   onSelect={selectGalleryPage}
                 />
                 <SettingsTabPicker
+                  isAdmin={isAdmin}
                   open={switcherOpen && mode === 'settings'}
                   current={settingsTab}
                   hovered={settingsHover}

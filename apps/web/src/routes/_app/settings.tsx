@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router';
 import { SettingsLayout } from '@/components/SettingsLayout/SettingsLayout';
+import { useAdminAccess } from '@/lib/admin';
 import { settingsTabFor, useSettingsNavigation, useWideSettings } from '@/lib/settings';
 
 export const Route = createFileRoute('/_app/settings')({
@@ -11,7 +12,12 @@ function SettingsPage() {
   const { leave } = useSettingsNavigation();
 
   return (
-    <SettingsLayout current={settingsTabFor(pathname)} wide={useWideSettings()} onBack={leave}>
+    <SettingsLayout
+      current={settingsTabFor(pathname)}
+      wide={useWideSettings()}
+      isAdmin={useAdminAccess()}
+      onBack={leave}
+    >
       <Outlet />
     </SettingsLayout>
   );

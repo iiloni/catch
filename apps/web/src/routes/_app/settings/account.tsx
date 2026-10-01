@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { LogOut, Server } from 'lucide-react';
 import { useState } from 'react';
 import { AccountSummary } from '@/components/AccountSummary/AccountSummary';
+import { ChangePassword } from '@/components/ChangePassword/ChangePassword';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,7 @@ function AccountSettings() {
           <SettingsRow icon={Server} label="Server" description={getServerUrl()} />
         )}
       </SettingsSection>
+      <ChangePassword />
       <div className="rounded-2xl bg-foreground/[0.05]">
         <button
           type="button"

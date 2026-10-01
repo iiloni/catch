@@ -1,5 +1,5 @@
 import { useRouter } from '@tanstack/react-router';
-import { CircleUser, Database, type LucideIcon, SlidersHorizontal } from 'lucide-react';
+import { CircleUser, Database, type LucideIcon, SlidersHorizontal, Users } from 'lucide-react';
 import { useCallback } from 'react';
 import { useViewport } from './splitView';
 
@@ -8,13 +8,25 @@ import { useViewport } from './splitView';
  * `routes/_app/settings/`.
  */
 export const SETTINGS_TABS = [
-  { path: '/settings/general', label: 'General', icon: SlidersHorizontal },
-  { path: '/settings/account', label: 'Account', icon: CircleUser },
-  { path: '/settings/data', label: 'Data Management', icon: Database },
-] as const satisfies ReadonlyArray<{ path: string; label: string; icon: LucideIcon }>;
+  { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
+  { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
+  { path: '/settings/data', label: 'Data Management', icon: Database, section: 'User' },
+  { path: '/settings/admin/users', label: 'Users', icon: Users, section: 'Admin' },
+] as const satisfies ReadonlyArray<{
+  path: string;
+  label: string;
+  icon: LucideIcon;
+  section: 'User' | 'Admin';
+}>;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export type SettingsPath = SettingsTab['path'];
+
+export function settingsSectionsFor(isAdmin: boolean) {
+  return (['User', 'Admin'] as const)
+    .filter((section) => section === 'User' || isAdmin)
+    .map((label) => ({ label, tabs: SETTINGS_TABS.filter((tab) => tab.section === label) }));
+}
 
 export function isSettingsPath(pathname: string) {
   return pathname === '/settings' || pathname.startsWith('/settings/');

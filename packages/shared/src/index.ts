@@ -7,3 +7,4 @@ export * from './notes';
 export * from './plainText';
 export * from './position';
 export * from './sync';
+export * from './users';

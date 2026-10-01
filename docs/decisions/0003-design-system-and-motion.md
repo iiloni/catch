@@ -27,7 +27,8 @@ button. Tapping Gallery while on a gallery page shows a separate segmented contr
 floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment.
 Settings is a page of its own (`/settings/<page>`) behind the gear in the Gallery's header,
-split into pages listed in `SETTINGS_TABS` (`src/lib/settings.ts`), each a route file under
+split into User and admin-only Admin sections (ADR 0011), with pages listed in
+`SETTINGS_TABS` (`src/lib/settings.ts`), each a route file under
 `routes/_app/settings/`. On phones it shows one page at a time: the dock's tabs become a
 selector naming the open page and the compose button becomes a back button. Tapping the
 selector floats a card of the pages above the dock (`SettingsTabPicker`), and holding it (or

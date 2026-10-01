@@ -2,7 +2,7 @@ import { BOARD_COLUMNS } from '@catch/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
-import { count } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { db } from './db/client';
 import * as schema from './db/schema';
 import { env, NATIVE_APP_ORIGINS } from './env';
@@ -24,6 +24,20 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
+    session: {
+      create: {
+        after: async (session, context) => {
+          if (context?.path === '/change-password') return;
+          // Refreshes update the session instead; only a new sign-in advances this timestamp.
+          await db
+            .update(schema.user)
+            .set({
+              lastLoginAt: sql`greatest(${schema.user.lastLoginAt}, ${session.createdAt.toISOString()}::timestamptz)`,
+            })
+            .where(eq(schema.user.id, session.userId));
+        },
+      },
+    },
     user: {
       create: {
         // The first account on a self-hosted instance becomes its admin.
