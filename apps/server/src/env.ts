@@ -34,6 +34,17 @@ const envSchema = z.object({
   /** Directory containing the built web app. Served when set. */
   WEB_DIST_DIR: z.string().optional(),
   ATTACHMENTS_DIR: z.string().default('/data/attachments'),
+  /** Where server backups are written. Mount a volume here, ideally on another disk. */
+  BACKUPS_DIR: z.string().default('/data/backups'),
+  /** The release this image was built from, recorded in backups. Unset in development. */
+  CATCH_VERSION: z.string().optional(),
+  /** Back up the database at startup before a new version migrates it. */
+  UPDATE_BACKUPS: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
+  /** How many of those backups to keep. */
+  UPDATE_BACKUPS_KEPT: z.coerce.number().int().min(1).default(10),
 });
 
 export const env = envSchema.parse(process.env);

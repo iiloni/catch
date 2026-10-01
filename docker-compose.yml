@@ -20,8 +20,13 @@ services:
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
       LINK_PREVIEWS: ${LINK_PREVIEWS:-true}
       ATTACHMENTS_DIR: /data/attachments
+      BACKUPS_DIR: /data/backups
+      UPDATE_BACKUPS: ${UPDATE_BACKUPS:-true}
+      UPDATE_BACKUPS_KEPT: ${UPDATE_BACKUPS_KEPT:-10}
     volumes:
       - ${CATCH_ATTACHMENTS_MOUNT:-attachment_data}:/data/attachments
+      # Server backups (docs/backups.md). A directory on another disk outlives this one.
+      - ${CATCH_BACKUPS_MOUNT:-backup_data}:/data/backups
     healthcheck:
       test:
         - CMD
@@ -39,6 +44,8 @@ services:
         condition: service_started
 
   postgres:
+    # The app image's pg_dump must be at least this major version (POSTGRES_MAJOR in the
+    # Dockerfile), or backups fail.
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     command: postgres -c wal_level=logical
@@ -69,5 +76,6 @@ services:
 
 volumes:
   attachment_data:
+  backup_data:
   postgres_data:
   electric_data:

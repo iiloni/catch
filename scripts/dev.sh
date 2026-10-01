@@ -58,7 +58,8 @@ install_dependencies() {
     docker volume create catch-pnpm-store >/dev/null
     "${compose[@]}" run --rm --no-deps -u root app sh -c '
         chown "$1:$2" /workspace/node_modules /workspace/apps/*/node_modules \
-            /workspace/packages/*/node_modules /pnpm-store /pnpm-cache /data/attachments
+            /workspace/packages/*/node_modules /pnpm-store /pnpm-cache /data/attachments \
+            /data/backups
     ' sh "$CATCH_UID" "$CATCH_GID"
     "${compose[@]}" run --rm --no-deps app pnpm install --frozen-lockfile
 }
@@ -183,6 +184,10 @@ case "$command" in
     shell)
         "${compose[@]}" exec app bash
         ;;
+    backup)
+        # The server's backup CLI, against this worktree's database and backups volume.
+        "${compose[@]}" exec -T app pnpm --silent --filter @catch/server backup "$@"
+        ;;
     psql)
         "${compose[@]}" exec postgres psql -U catch -d catch "$@"
         ;;
@@ -223,6 +228,7 @@ Usage: ./scripts/dev.sh <command>
   android [--usb]     Start the stack and install the live-reload Catch Dev app on Android
                       (--usb reaches the dev server via adb instead of Tailscale)
   shell               Open a shell in the app container
+  backup <command>    Server backups: create, list, inspect, restore, ... (backup help)
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user
   reset [-y]          Delete this worktree's volumes and start fresh

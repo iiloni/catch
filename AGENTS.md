@@ -31,6 +31,9 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
+- `./scripts/dev.sh backup <create|list|inspect|restore|...>`: the server backup tool against
+  this worktree's stack. `scripts/backup.sh` and `scripts/update.sh` are the production host
+  wrappers (see `docs/backups.md`); do not run them against a dev stack.
 - `pnpm format` (host): apply Biome formatting and import sorting.
 - `./scripts/dev.sh android [--usb]` (host): install a live-reload debug app on a connected
   phone. It loads this worktree's Vite server, so it only needs rerunning after native changes.
@@ -149,6 +152,16 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Collections open the signed-in user's local database when the module loads (top-level
   await), so signing in does a full page load. Offline, collections never become ready (that
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
+- Server backups (ADR 0012, `apps/server/src/backups`, Settings > Admin > Backups) are
+  admin-only server state, not a synced collection: `lib/serverBackups.ts` makes plain
+  requests. Their routes sit in the admin routes behind `requireAdmin`, except the download
+  link, which carries a ticket and is mounted ahead of that guard in `app.ts`. A restore truncates and
+  reloads the live tables in one transaction and never drops them, because Electric follows
+  tables by identity; while it runs, every `/api` route but the health check answers 503.
+  The backup code names no tables beyond counting rows for display, so a new table needs no
+  change there. `POSTGRES_MAJOR` in the Dockerfile must follow the postgres image's version.
+- `db/migrate` backs up the database before migrating when migrations are pending, so a
+  dev stack collects `update` backups too; they live in the `backup_data` volume.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.

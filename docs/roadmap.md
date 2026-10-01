@@ -27,7 +27,7 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [ ] Long-press to select several notes, with actions in the dock.
 - [ ] Markdown import and export.
 - [x] Google Keep import from a Takeout export, in Settings > Data Management (see `docs/decisions/0008-importing-notes.md`).
-- [ ] Backup and restore, in Settings > Data Management.
+- [x] Server backup and restore for admins, in Settings > Admin > Backups, with scheduled and pre-update backups (see `docs/decisions/0012-server-backups.md`).
 
 ## Later
 - [ ] User-defined board columns.

@@ -131,7 +131,8 @@ under the released ids, which cannot be installed over a signed release. The dev
 has no release build.
 
 The workflow forwards the tag parser's channel as build-only `CATCH_CHANNEL` to Android
-web sync and the Docker build. Local preview sync uses
+web sync and the Docker build. The Docker build also receives the version as `CATCH_VERSION`,
+which the server records in its backups and uses to notice an update. Local preview sync uses
 `CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync` before building the preview
 flavor; an unset channel is dev. See [Brand assets](branding.md) for regeneration
 and the channel-specific icon paths. Application UI and theme colors are shared unchanged.
@@ -245,6 +246,10 @@ docker compose up -d --wait
 curl --fail https://notes.example.com/api/health
 ```
 
+Copy `scripts/backup.sh` and `scripts/update.sh` next to `compose.yaml` as well. From then
+on `./update.sh` is the update: it backs up the database, pulls the image and waits for the
+new version to be healthy. [Server backups](backups.md) covers both scripts.
+
 Create your account before making a new instance generally accessible: the first account
 becomes admin, and the current app allows open registration. A private instance needs access
 restriction or a future registration control; release channels do not change authentication.
@@ -252,7 +257,13 @@ restriction or a future registration control; release channels do not change aut
 For preview, use a separate Compose project, hostname, `.env`, and named volumes, selecting
 `:preview`. It must have its own Postgres and Electric data rather than share production.
 
-Back up the production database and credentials off the server, and verify a restore before
-relying on it. Before an update, take a database backup and then pull/recreate the app.
-Migrations run on startup; reverting an image does not revert its database schema. Exact
-version tags or the image digest in release notes let you control which build you deploy.
+Keep the `backup_data` volume from the generic Compose file, or set `CATCH_BACKUPS_MOUNT`
+to a directory on another disk. A new version backs up the database into it before migrating,
+however the update was started, and admins make, schedule, download and restore full backups
+in Settings > Admin > Backups. See [Server backups](backups.md), including how to go back
+after a bad update. Keep copies of the backups and the `.env` credentials off the server, and
+verify a restore before relying on it.
+
+Migrations run on startup; reverting an image does not revert its database schema, which is
+what the pre-update backup is for. Exact version tags or the image digest in release notes
+let you control which build you deploy.

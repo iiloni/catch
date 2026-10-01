@@ -23,6 +23,7 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 
 const AppRoute = AppRouteImport.update({
@@ -94,6 +95,11 @@ const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => AppSettingsAdminRoute,
+} as any)
 const AppSettingsAdminUsersRoute = AppSettingsAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings/': typeof AppSettingsIndexRoute
+  '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRoutesByTo {
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
   '/settings': typeof AppSettingsIndexRoute
+  '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRoutesById {
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/general': typeof AppSettingsGeneralRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRouteTypes {
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/settings/data'
     | '/settings/general'
     | '/settings/'
+    | '/settings/admin/backups'
     | '/settings/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/settings/data'
     | '/settings/general'
     | '/settings'
+    | '/settings/admin/backups'
     | '/settings/admin/users'
   id:
     | '__root__'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/_app/settings/data'
     | '/_app/settings/general'
     | '/_app/settings/'
+    | '/_app/settings/admin/backups'
     | '/_app/settings/admin/users'
   fileRoutesById: FileRoutesById
 }
@@ -306,6 +318,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsGeneralRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/admin/backups': {
+      id: '/_app/settings/admin/backups'
+      path: '/backups'
+      fullPath: '/settings/admin/backups'
+      preLoaderRoute: typeof AppSettingsAdminBackupsRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
     '/_app/settings/admin/users': {
       id: '/_app/settings/admin/users'
       path: '/users'
@@ -317,10 +336,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppSettingsAdminRouteChildren {
+  AppSettingsAdminBackupsRoute: typeof AppSettingsAdminBackupsRoute
   AppSettingsAdminUsersRoute: typeof AppSettingsAdminUsersRoute
 }
 
 const AppSettingsAdminRouteChildren: AppSettingsAdminRouteChildren = {
+  AppSettingsAdminBackupsRoute: AppSettingsAdminBackupsRoute,
   AppSettingsAdminUsersRoute: AppSettingsAdminUsersRoute,
 }
 
