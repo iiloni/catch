@@ -142,7 +142,7 @@ async function resolveUrl(id: string, preview: boolean) {
   // Newly picked images have their original on the device before a thumbnail exists.
   if (preview) {
     const original = await getAttachmentBlob(id);
-    if (original) return resolveUrl(id, false);
+    if (original?.type.startsWith('image/')) return resolveUrl(id, false);
     const response = await authorizedFetch(`${id}/content?preview=true`);
     await storeAttachmentBlob(id, await response.blob(), false, true);
     return objectUrls.get(key)!;

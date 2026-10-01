@@ -45,9 +45,11 @@ export const attachmentRoutes = new Hono<AppEnv>()
       .from(attachments)
       .where(and(owned(id, userId), isNull(attachments.deletedAt)));
     if (row?.status !== 'ready') return c.json({ error: 'Not found' }, 404);
+    const preview = c.req.query('preview') === 'true';
+    if (preview) await createThumbnail(id, row.kind);
     return fileResponse(
       id,
-      c.req.query('preview') === 'true',
+      preview,
       row.kind === 'file' ? 'application/octet-stream' : row.mimeType,
       row.name,
       c.req.header('range'),
@@ -141,7 +143,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
       // Reserve ownership in Postgres before touching this id's files. A conflicting id
       // must never overwrite another user's bytes, even if the caller knows the UUID.
       await copyFile(filePath(body.sourceId), filePath(body.id));
-      if (attachmentKind(body.mimeType) === 'image') await createThumbnail(body.id);
+      await createThumbnail(body.id, attachmentKind(body.mimeType));
       txid = await db.transaction(async (tx) => {
         const updated = await tx
           .update(attachments)
@@ -171,7 +173,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
       if (error instanceof UploadError) return c.json({ error: error.message }, 413);
       throw error;
     }
-    if (row.kind === 'image') await createThumbnail(id);
+    await createThumbnail(id, row.kind);
     const txid = await db.transaction(async (tx) => {
       const updated = await tx
         .update(attachments)

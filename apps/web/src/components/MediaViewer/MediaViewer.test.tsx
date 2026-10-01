@@ -1,5 +1,6 @@
 import type { Attachment } from '@catch/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { keepAttachmentOffline, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { downloadAttachment } from '@/lib/attachments';
@@ -120,10 +121,17 @@ describe('MediaViewer', () => {
     },
   );
 
-  it.each(['audio', 'video'] as const)('offers playback controls for %s', (kind) => {
-    const { container } = render(<MediaViewer file={{ ...file, kind }} onClose={vi.fn()} />);
-    expect(container.ownerDocument.querySelector(kind)).toHaveAttribute('controls');
-  });
+  it.each(['audio', 'video'] as const)(
+    'reveals %s controls without waiting for media data',
+    async (kind) => {
+      const { container } = render(<MediaViewer file={{ ...file, kind }} onClose={vi.fn()} />);
+      expect(container.ownerDocument.querySelector(kind)).toHaveAttribute('controls');
+      await waitFor(() =>
+        expect(document.querySelector('[data-media-viewer-content]')).toHaveStyle({ opacity: '1' }),
+      );
+      expect(screen.queryByText('Loading preview…')).not.toBeInTheDocument();
+    },
+  );
 
   it('shows an unavailable preview without blocking download', () => {
     render(<MediaViewer file={file} onClose={vi.fn()} />);
@@ -132,6 +140,19 @@ describe('MediaViewer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Download attachment' }));
     expect(downloadAttachment).toHaveBeenCalledWith(file);
   });
+
+  it.each(['video', 'audio'] as const)(
+    'restores the %s source after Strict Mode ref cleanup',
+    (kind) => {
+      render(
+        <StrictMode>
+          <MediaViewer file={{ ...file, kind }} onClose={vi.fn()} />
+        </StrictMode>,
+      );
+      expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+      expect(document.querySelector(kind)).toHaveAttribute('src', 'blob:original');
+    },
+  );
 
   it('zooms by wheel, resets by keyboard, and pans without navigating while zoomed', () => {
     const next = { ...file, id: 'next', name: 'next.png' };

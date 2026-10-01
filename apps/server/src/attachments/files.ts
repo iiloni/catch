@@ -3,7 +3,8 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { MAX_ATTACHMENT_BYTES } from '@catch/shared';
+import { promisify } from 'node:util';
+import { type Attachment, MAX_ATTACHMENT_BYTES } from '@catch/shared';
 import sharp from 'sharp';
 import { env } from '../env';
 
@@ -43,20 +44,87 @@ export async function storeFile(id: string, body: ReadableStream<Uint8Array>, ex
   }
 }
 
-export async function createThumbnail(id: string) {
+const run = promisify(execFile);
+const thumbnails = new Map<string, Promise<void>>();
+
+/** Also repairs previews for attachments uploaded before video posters were supported. */
+export function createThumbnail(id: string, kind: Attachment['kind']) {
+  if (kind !== 'image' && kind !== 'video') return Promise.resolve();
+  const active = thumbnails.get(id);
+  if (active) return active;
+  const task = generateThumbnail(id, kind).finally(() => thumbnails.delete(id));
+  thumbnails.set(id, task);
+  return task;
+}
+
+async function generateThumbnail(id: string, kind: 'image' | 'video') {
+  const target = filePath(id, true);
+  if (
+    await stat(target).then(
+      () => true,
+      () => false,
+    )
+  )
+    return;
+  const temporary = join(env.ATTACHMENTS_DIR, `${id}.${randomUUID()}.webp`);
   try {
-    await sharp(filePath(id), { limitInputPixels: 40_000_000 })
-      .rotate()
-      .resize(720, 720, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toFile(filePath(id, true));
+    if (kind === 'image') {
+      await sharp(filePath(id), { limitInputPixels: 40_000_000 })
+        .rotate()
+        .resize(720, 720, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toFile(temporary);
+    } else {
+      // Accept direct media containers only: uploaded playlists must not fetch URLs or files.
+      await run(
+        'ffmpeg',
+        [
+          '-nostdin',
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-protocol_whitelist',
+          'file',
+          '-format_whitelist',
+          'mov,matroska,webm,avi,mpeg,mpegts,flv,ogg',
+          '-threads',
+          '1',
+          '-i',
+          filePath(id),
+          '-map',
+          '0:v:0',
+          '-frames:v',
+          '1',
+          '-an',
+          '-sn',
+          '-vf',
+          "scale=w='min(720,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease",
+          '-c:v',
+          'libwebp',
+          '-quality',
+          '80',
+          '-threads',
+          '1',
+          '-f',
+          'image2',
+          '-update',
+          '1',
+          temporary,
+        ],
+        { timeout: 10_000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 },
+      );
+    }
+    await rename(temporary, target);
   } catch {
-    // Unsupported image formats still have their original available to download.
-    await rm(filePath(id, true), { force: true });
+    // Unsupported media keeps its original available for playback or download.
+  } finally {
+    await rm(temporary, { force: true });
   }
 }
 
 export async function deleteFiles(ids: readonly string[]) {
+  // An in-flight preview must not reappear after its attachment is removed.
+  await Promise.all(ids.map((id) => thumbnails.get(id)));
   await Promise.all(
     ids.flatMap((id) => [false, true].map((preview) => rm(filePath(id, preview), { force: true }))),
   );
@@ -112,3 +180,5 @@ export async function fileResponse(
   ) as ReadableStream<Uint8Array>;
   return new Response(stream, { status: selected ? 206 : 200, headers });
 }
+
+import { execFile } from 'node:child_process';

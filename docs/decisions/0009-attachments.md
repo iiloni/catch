@@ -21,16 +21,20 @@ used for the outbox on web and Android; its Blob storage holds binaries without 
 to SQLite or serializing them into queued JSON. A restored attachment insertion uploads its
 persisted Blob after the note's creation. Files selected offline preview immediately and
 survive an app restart. Network failures retry through the existing outbox. The client keeps
-its selected originals; other devices cache image thumbnails and fetch originals on demand,
+its selected originals; other devices cache image thumbnails and video posters and fetch originals on demand,
 with Keep offline for a durable copy. Sign-out clears the user's files with the other stores.
 
-**Server files live on disk.** Originals and 720 px WebP image previews live in
+**Server files live on disk.** Originals and 720 px WebP image previews and video posters live in
 `ATTACHMENTS_DIR`, backed by a named Docker volume by default. `CATCH_ATTACHMENTS_MOUNT`
 can select a bind mount; backups must include it and Postgres. Uploads stream to temporary
 files and are renamed only after their exact declared size has arrived. Metadata creation
 and upload completion are replay-safe and return txids. The initial limit is 100 MiB per file;
-upload retries send the whole file. Object storage, resumable/chunked uploads, transcoding,
-and video poster generation are deferred. Keep imports use this same attachment path and add
+upload retries send the whole file. Sharp produces image previews; FFmpeg produces a video's
+first frame, with a timeout, limited threads, and only local media containers permitted.
+Both Docker targets include FFmpeg. Previews are written atomically; failures keep the original
+usable. Authorized preview requests also generate missing previews for existing attachments,
+sharing concurrent requests for the same file. Object storage, resumable/chunked uploads and
+playback transcoding are deferred. Keep imports use this same attachment path and add
 files only to the catalog (ADR 0008).
 
 **Personal media is private.** Content and thumbnails require bearer authentication or a
@@ -52,7 +56,7 @@ Slash-menu upload and drag/paste upload use the same storage path through `uploa
 
 **Catalog layout follows editor width.** Media follows the text on narrow editors, and
 shares the links column beside editors at least 700 px wide. Images, video and audio also
-render inline; gallery previews use image thumbnails and compact labels for other files.
+render inline; gallery previews use image thumbnails and video posters, with compact labels for other files.
 The dock's preview overlay also shows a Media card above Links, using the same catalog and
 menus. Inline actions are tied to the matching editor and return to that note. Opening the
 viewer keeps the catalog beneath it so closing it returns to the attachments. The full
@@ -61,8 +65,9 @@ Catalog rows share a fixed 64 px thumbnail size with link previews, without a ba
 behind images. Tapping a row opens a full-screen dark media stage without a surrounding
 card. The viewer and its backdrop fade in and out linearly over 180 ms, skipping the fade when
 reduced motion is requested. The backdrop opens immediately with a loading indicator; the
-content's entrance starts once the image is loaded and decoded, or playback has its first
-data, so a late preview still receives the full fade. Errors reveal the fallback view.
+content's entrance starts once the image is loaded and decoded. Native video/audio controls
+appear as soon as their source resolves, so deferred data loading or blocked autoplay cannot
+hide the player. Errors reveal the fallback view.
 Playback stops when closing begins, and focus returns after the fade.
 A small metadata card at the top left offers download and Keep offline.
 Control bars use the metadata card's glass surface and the dock's radius tokens. Attachment navigation sits at the top

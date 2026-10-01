@@ -17,10 +17,14 @@ export function MediaPreview({
   compact?: boolean;
   thumbnail?: boolean;
 }) {
-  const { source, error } = useAttachmentUrl(url, kind === 'image' && Boolean(attachmentId(url)));
+  const poster = kind === 'video' && (thumbnail || compact);
+  const { source, error } = useAttachmentUrl(
+    url,
+    (kind === 'image' || poster) && Boolean(attachmentId(url)),
+  );
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const Icon = kind === 'image' ? Image : kind === 'video' ? Video : kind === 'audio' ? Mic : File;
-  if (source && failedSource !== source && kind === 'image')
+  if (source && failedSource !== source && (kind === 'image' || poster))
     return (
       <img
         src={source}

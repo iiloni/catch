@@ -8,6 +8,8 @@ RUN npm install -g "pnpm@$(node -p "require('./package.json').packageManager.spl
 # Used by scripts/dev.sh: the checkout is bind-mounted and dependencies live in volumes.
 FROM base AS development
 ENV NODE_ENV=development
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /pnpm-store && chown node:node /pnpm-store /workspace
 CMD ["sh", "scripts/dev-entrypoint.sh"]
 
@@ -22,6 +24,8 @@ RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
 
 FROM node:24-slim AS production
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     PORT=3000 \
     WEB_DIST_DIR=/app/web \

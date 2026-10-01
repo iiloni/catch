@@ -33,6 +33,81 @@ async function upload(page: Parameters<typeof openNote>[0], file = picture) {
   await chooser.setFiles(file);
 }
 
+test('video posters and playback work on the upload device and another device', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(60000);
+  const email = await signUp(page);
+  await createNote(page, 'Video attachments');
+  await openNote(page, 'Video attachments');
+  const video = {
+    name: 'clip.mp4',
+    mimeType: 'video/mp4',
+    buffer: readFileSync(new URL('./fixtures/video.mp4', import.meta.url)),
+  };
+  await upload(page, video);
+  const media = page.getByRole('region', { name: 'Media' });
+  await expect(media.getByText('Waiting to upload')).toBeHidden();
+  await expect(media.getByRole('img', { name: 'clip.mp4' })).toBeVisible();
+  await expect
+    .poll(() => media.getByRole('img').evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBe(320);
+  const id = await media.locator('[data-attachment]').getAttribute('data-attachment');
+  const headers = await page.evaluate(() => ({
+    Authorization: `Bearer ${localStorage.getItem('catch-auth-token')}`,
+  }));
+  const poster = await page.request.get(`/api/attachments/${id}/content?preview=true`, { headers });
+  expect(poster.status()).toBe(200);
+  expect(poster.headers()['content-type']).toBe('image/webp');
+  expect(
+    (
+      await page.request.get(`/api/attachments/${id}/content?preview=true`, {
+        headers: { Cookie: '' },
+      })
+    ).status(),
+  ).toBe(401);
+
+  async function playVideo(device: typeof page) {
+    await device
+      .getByRole('region', { name: 'Media' })
+      .getByRole('button', { name: 'View clip.mp4' })
+      .click();
+    const viewer = device.locator('[data-media-viewer]');
+    await expect(viewer.locator('[data-media-viewer-content]')).toHaveCSS('opacity', '1');
+    await expect(viewer.getByText('Loading preview…')).toHaveCount(0);
+    const player = viewer.locator('video');
+    await expect(player).toBeVisible();
+    await expect(player).toHaveAttribute('controls', '');
+    await expect
+      .poll(() => player.evaluate((node: HTMLVideoElement) => node.readyState))
+      .toBeGreaterThanOrEqual(2);
+    await player.evaluate(async (node: HTMLVideoElement) => {
+      node.currentTime = 0;
+      await node.play();
+    });
+    await expect
+      .poll(() => player.evaluate((node: HTMLVideoElement) => node.currentTime))
+      .toBeGreaterThan(0);
+    await expect.poll(() => player.evaluate((node: HTMLVideoElement) => node.videoWidth)).toBe(320);
+    await viewer.getByRole('button', { name: 'Close media viewer' }).click();
+    await expect(viewer).toBeHidden();
+  }
+  await playVideo(page);
+  const other = await browser.newContext();
+  try {
+    const second = await other.newPage();
+    await signIn(second, email);
+    await openNote(second, 'Video attachments');
+    await expect(
+      second.getByRole('region', { name: 'Media' }).getByRole('img', { name: 'clip.mp4' }),
+    ).toBeVisible();
+    await playVideo(second);
+  } finally {
+    await other.close();
+  }
+});
+
 test('attachments preview, retain their catalog without blocks, and remove privately', async ({
   page,
   browser,
@@ -667,3 +742,5 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
   await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
   await expect(thumbnail).toBeFocused();
 });
+
+import { readFileSync } from 'node:fs';

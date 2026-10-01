@@ -209,18 +209,24 @@ function ViewerContent({
   const [busy, setBusy] = useState(false);
   const [size, setSize] = useState<Size | null>(null);
   const details = useRef<DetailsGesture | null>(null);
-  const mediaRef = useCallback((node: HTMLMediaElement | null) => {
-    if (!node) return;
-    return () => {
-      node.pause();
-      node.removeAttribute('src');
-      node.load();
-    };
-  }, []);
+  const mediaRef = useCallback(
+    (node: HTMLMediaElement | null) => {
+      if (!node) return;
+      // Strict Mode can reattach the same element after running its ref cleanup.
+      if (source && node.getAttribute('src') !== source) node.src = source;
+      return () => {
+        node.pause();
+        node.removeAttribute('src');
+        node.load();
+      };
+    },
+    [source],
+  );
   const unavailable = error || failed;
   useEffect(() => {
-    if (unavailable || file.kind === 'file') onReady();
-  }, [unavailable, file.kind, onReady]);
+    // Native controls must be usable even when autoplay or data loading is deferred.
+    if (unavailable || file.kind === 'file' || (source && file.kind !== 'image')) onReady();
+  }, [unavailable, file.kind, source, onReady]);
   async function run(action: () => Promise<unknown>, success?: string) {
     setBusy(true);
     try {
@@ -294,7 +300,12 @@ function ViewerContent({
           autoPlay
           aria-label={file.name}
           onError={() => setFailed(true)}
-          onLoadedData={onReady}
+          onLoadedMetadata={(event) =>
+            setSize({
+              width: event.currentTarget.videoWidth,
+              height: event.currentTarget.videoHeight,
+            })
+          }
           className={cn(
             'absolute inset-0 h-full w-full object-contain',
             narrow && 'h-[calc(100%-var(--safe-bottom)-5rem)]',
@@ -311,7 +322,6 @@ function ViewerContent({
             autoPlay
             aria-label={file.name}
             onError={() => setFailed(true)}
-            onLoadedData={onReady}
             className="w-full max-w-lg"
           />
         </div>
