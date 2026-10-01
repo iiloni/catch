@@ -47,11 +47,13 @@ FROM runtime AS production
 WORKDIR /app
 # Recorded in backups, to tell which release made one.
 ARG CATCH_VERSION=
+ARG CATCH_CHANNEL=dev
 ENV NODE_ENV=production \
     PORT=3000 \
     WEB_DIST_DIR=/app/web \
     MIGRATIONS_DIR=/app/drizzle \
-    CATCH_VERSION=${CATCH_VERSION}
+    CATCH_VERSION=${CATCH_VERSION} \
+    CATCH_CHANNEL=${CATCH_CHANNEL}
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/package.json ./package.json
 COPY --from=build /workspace/apps/server/dist ./dist

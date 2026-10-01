@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
+import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { type SettingsTab, settingsSectionsFor } from '@/lib/settings';
@@ -98,6 +99,7 @@ function SettingsNav({ current, isAdmin }: { current: SettingsTab | null; isAdmi
                 )}
                 <Icon className="size-5" aria-hidden />
                 {tab.label}
+                {tab.path === '/settings/update' && <UpdateDot className="ml-auto" />}
               </Link>
             );
           })}

@@ -7,5 +7,6 @@ export * from './links';
 export * from './notes';
 export * from './plainText';
 export * from './position';
+export * from './releases';
 export * from './sync';
 export * from './users';

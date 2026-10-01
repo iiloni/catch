@@ -1,6 +1,40 @@
 import { expect, test } from '@playwright/test';
 import { signUp, waitForPageTransition } from './helpers';
 
+test('Update is a user setting with project links and the server version', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Settings page: General' }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings pages' })
+      .getByRole('button', { name: 'Update', exact: true })
+      .click();
+  } else {
+    await page
+      .getByRole('navigation', { name: 'Settings pages' })
+      .getByRole('link', { name: 'Update', exact: true })
+      .click();
+  }
+  await expect(page).toHaveURL(/\/settings\/update$/);
+  await expect(page.getByRole('region', { name: 'Version', exact: true })).toContainText(
+    'Server version',
+  );
+  await expect(page.getByRole('link', { name: 'GitHub repository' })).toHaveAttribute(
+    'href',
+    'https://github.com/iiloni/catch',
+  );
+  await expect(page.getByRole('link', { name: 'GitHub releases' })).toHaveAttribute(
+    'href',
+    'https://github.com/iiloni/catch/releases',
+  );
+  await expect(page.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
+  await expect(page.getByText('App version', { exact: true })).toBeHidden();
+});
+
 test('settings list their pages beside the open one on wide screens', async ({
   page,
   isMobile,

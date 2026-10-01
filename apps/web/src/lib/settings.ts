@@ -3,6 +3,7 @@ import {
   CircleUser,
   Database,
   DatabaseBackup,
+  Download,
   type LucideIcon,
   SlidersHorizontal,
   Users,
@@ -18,6 +19,7 @@ export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
   { path: '/settings/data', label: 'Data Management', icon: Database, section: 'User' },
+  { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },
   { path: '/settings/admin/users', label: 'Users', icon: Users, section: 'Admin' },
   { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
@@ -69,11 +71,17 @@ let pushedFromApp = false;
 export function useSettingsNavigation() {
   const router = useRouter();
 
-  const open = useCallback(() => {
-    if (isSettingsPath(router.state.location.pathname)) return;
-    pushedFromApp = true;
-    void router.navigate({ to: SETTINGS_TABS[0].path });
-  }, [router]);
+  const open = useCallback(
+    (to: SettingsPath = SETTINGS_TABS[0].path) => {
+      if (isSettingsPath(router.state.location.pathname)) {
+        void router.navigate({ to, replace: true });
+        return;
+      }
+      pushedFromApp = true;
+      void router.navigate({ to });
+    },
+    [router],
+  );
 
   const select = useCallback(
     (to: SettingsPath) => {
