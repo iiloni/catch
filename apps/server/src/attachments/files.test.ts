@@ -17,6 +17,7 @@ describe('media thumbnails', () => {
     env.ATTACHMENTS_DIR = originalDirectory;
   });
 
+  // Generation and repair each allow FFmpeg up to ten seconds.
   it('generates a video poster and repairs a missing poster without changing the original', async () => {
     const id = randomUUID();
     const video = await readFile(new URL('../../../../e2e/fixtures/video.mp4', import.meta.url));
@@ -37,7 +38,7 @@ describe('media thumbnails', () => {
     expect((await readdir(env.ATTACHMENTS_DIR)).sort()).toEqual([id, `${id}.webp`].sort());
     await deleteFiles([id]);
     expect(await readdir(env.ATTACHMENTS_DIR)).toEqual([]);
-  });
+  }, 30_000);
 
   it('leaves unsupported videos downloadable without a partial poster', async () => {
     const id = randomUUID();

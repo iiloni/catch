@@ -361,7 +361,10 @@ test.describe('live capture', () => {
     const media = page.getByRole('region', { name: 'Media' });
     await expect(media.getByRole('listitem')).toHaveCount(3);
     await expect(media.getByText('Waiting to upload')).toHaveCount(0);
-    await expect(page.getByRole('dialog').getByText(/^Edited /)).toBeVisible({ timeout: 30000 });
+    // Upload completion does not mean the debounced note content has been saved.
+    await expect(page.getByRole('dialog').getByText('Synced', { exact: true })).toBeVisible({
+      timeout: 30000,
+    });
     await page.reload();
     await expect(page.locator('.note-editor [data-content-type="audio"] audio')).toBeVisible();
     await expect(page.locator('.note-editor [data-content-type="video"] video')).toBeVisible();

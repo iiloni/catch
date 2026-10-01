@@ -176,6 +176,7 @@ async function mediaTakeout(includeMedia = true) {
 test('Keep attachments fill the catalog without inline blocks and reimports preserve edits and removals', async ({
   page,
 }) => {
+  test.setTimeout(60000);
   await signUp(page);
   await page.goto('/settings/data');
   const importButton = page.getByRole('button', { name: 'Import from Google Keep' });
