@@ -51,6 +51,10 @@ and preview must advance independently, including preview versions ahead of stab
   Catch Dev: a debug-signed build under a released id cannot update that app, and the
   install tooling would uninstall it and its unsynced notes to make room. The flavor has
   no release build, and `./scripts/dev.sh android` installs it whatever the environment says.
+  Its `--static` option bundles the frontend without hot reload and pins native API requests
+  to the worktree's HTTP server (Tailscale, or adb with `--usb`). The build-only
+  `CATCH_DEV_SERVER_URL` enables cleartext and mixed content for that dev APK. Stable and
+  preview builds ignore it and keep their normal HTTPS server setup.
 - Preview deployments use their own database and Electric storage. Startup migrations make
   sharing production storage with preview, or treating image rollback as database rollback,
   unsafe.

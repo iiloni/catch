@@ -152,8 +152,17 @@ case "$command" in
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
     android)
-        # Installs the Catch Dev app, whose WebView loads this stack's Vite server, so
-        # web changes hot-reload on the phone. Runs on the host (adb, JDK, SDK).
+        # Runs on the host (adb, JDK, SDK). Both modes install the separate Catch Dev app.
+        static=false
+        usb=false
+        cap_args=()
+        for argument in "$@"; do
+            case "$argument" in
+                --static) static=true ;;
+                --usb) usb=true ;;
+                *) cap_args+=("$argument") ;;
+            esac
+        done
         command -v adb >/dev/null || { echo "adb not found; install Android platform-tools." >&2; exit 1; }
         if ! adb devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then
             echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
@@ -163,9 +172,8 @@ case "$command" in
         port=$(env_value CATCH_PORT)
         host=$(env_value CATCH_PUBLIC_HOST)
         forward=()
-        if [[ "${1:-}" == "--usb" ]]; then
+        if $usb; then
             # Reach the dev server through adb instead of Tailscale.
-            shift
             host=localhost
             forward=(--forwardPorts "$port:$port")
         fi
@@ -175,11 +183,20 @@ case "$command" in
         # Always the dev app, whatever the caller's environment says: a debug-signed build under
         # a released id makes the installer uninstall that app, along with its unsynced notes.
         export CATCH_CHANNEL=dev
-        # cap sync copies the web build into the APK. Live reload ignores it, so any build will do.
-        [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
-        echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
-        pnpm --dir "$repo_root/apps/web" exec cap run android \
-            --live-reload --host "$host" --port "$port" "${forward[@]}" "$@" --flavor dev
+        if $static; then
+            # Always rebuild: the bundled app cannot pick up later source changes.
+            export CATCH_DEV_SERVER_URL="http://$host:$port"
+            pnpm --dir "$repo_root/apps/web" build
+            echo "Installing bundled Catch Dev without live reload, using $CATCH_DEV_SERVER_URL for the API."
+            pnpm --dir "$repo_root/apps/web" exec cap run android "${forward[@]}" "${cap_args[@]}" --flavor dev
+        else
+            unset CATCH_DEV_SERVER_URL
+            # Live reload ignores the copied assets, so any web build will do.
+            [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
+            echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
+            pnpm --dir "$repo_root/apps/web" exec cap run android \
+                --live-reload --host "$host" --port "$port" "${forward[@]}" "${cap_args[@]}" --flavor dev
+        fi
         ;;
     shell)
         "${compose[@]}" exec app bash
@@ -225,8 +242,10 @@ Usage: ./scripts/dev.sh <command>
   test [args]         Unit tests (in the container)
   build [channel]     Build all packages (in the container; dev by default, or stable, preview)
   e2e [args]          Playwright tests from the host (one suite across worktrees)
-  android [--usb]     Start the stack and install the live-reload Catch Dev app on Android
-                      (--usb reaches the dev server via adb instead of Tailscale)
+  android [--static] [--usb]
+                      Start the stack and install Catch Dev on a connected Android device
+                      --static: fresh bundled APK without live reload; API uses this dev stack
+                      --usb: reach the dev server via adb instead of Tailscale (either mode)
   shell               Open a shell in the app container
   backup <command>    Server backups: create, list, inspect, restore, ... (backup help)
   psql [args]         Open psql against this worktree's database

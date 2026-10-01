@@ -1,9 +1,22 @@
-import { createRootRoute, type ErrorComponentProps, Outlet } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  type ErrorComponentProps,
+  Outlet,
+  useNavigate,
+} from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
+import { quickNote } from '@/lib/dockState';
+import { watchNativeShares } from '@/lib/nativeShares';
+import { receiveShare } from '@/lib/receiveShare';
+import { needsServerUrl } from '@/lib/serverUrl';
+import { pendingIncomingShares } from '@/lib/shareInbox';
 import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
 
@@ -28,6 +41,63 @@ function RootError({ error, reset }: ErrorComponentProps) {
 const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
 
 function Root() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    let stopped = false;
+    const fail = (error: unknown) => {
+      if (!stopped)
+        toast.error(
+          error instanceof Error ? error.message : 'Could not receive the shared content.',
+        );
+    };
+    const open = async (id: string) => {
+      if (stopped) return;
+      if (getAuthToken() && getSignedInUser() && !needsServerUrl()) {
+        let note: string;
+        try {
+          note = await receiveShare(id);
+        } catch (error) {
+          if (!stopped)
+            toast.error(
+              error instanceof Error ? error.message : 'Could not save the shared content.',
+              {
+                action: {
+                  label: 'Try again',
+                  onClick: () => {
+                    void open(id);
+                  },
+                },
+              },
+            );
+          return;
+        }
+        if (stopped) return;
+        // Keep the signed-in layout mounted: closing its composer saves a draft, and
+        // swapping an editor flushes that note's autosave before showing the share.
+        quickNote.set('closed');
+        await navigate({ to: '/', search: { note } });
+      } else {
+        await navigate({ to: '/share', search: { id } });
+      }
+    };
+    const stopNative = watchNativeShares(open, fail);
+    // Native acknowledgement can precede a WebView restart. Recover staging that has
+    // already moved into IndexedDB, without competing with the explicit share route.
+    if (window.location.pathname !== '/share' && getSignedInUser()) {
+      void pendingIncomingShares()
+        .then(async (shares) => {
+          const user = getSignedInUser();
+          for (const share of shares) {
+            if (!share.userId || share.userId === user?.id) await open(share.id);
+          }
+        })
+        .catch(fail);
+    }
+    return () => {
+      stopped = true;
+      stopNative();
+    };
+  }, [navigate]);
   useApplyTheme();
   useSystemBarsStyle();
   useBackButton();

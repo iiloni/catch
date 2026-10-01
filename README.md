@@ -61,6 +61,7 @@ To test inside the native app, connect the phone with USB or wireless debugging 
 ```bash
 ./scripts/dev.sh android         # the phone reaches the stack over Tailscale
 ./scripts/dev.sh android --usb   # or through adb, without Tailscale on the phone
+./scripts/dev.sh android --static # bundled APK without hot reload
 ```
 
 The command starts this worktree's stack and installs the Catch Dev app, whose WebView
@@ -70,6 +71,14 @@ is set to. Rerun it only after native changes
 (Capacitor plugins or config, anything under `apps/web/android`) or to point the app at
 another worktree. The app needs the stack running (and, with `--usb`, the device connected)
 while you use it. `chrome://inspect` works here too.
+
+With `--static`, the command rebuilds and bundles the web app, installs the APK on the
+connected device, and exits. The frontend runs from the APK while API requests still reach
+this worktree's HTTP server over Tailscale. Keep the stack running, and rerun the command
+to include later web or native changes. `--static --usb` reaches the same backend via adb.
+The bundled app uses a different WebView origin from live reload, so it has its own login
+and local web data. Capacitor options such as
+`--target <device-id>` can be passed in either mode.
 
 The requirements are a JDK 21 and the Android SDK on the host (`JAVA_HOME`, `ANDROID_HOME`).
 Use `adb pair` and `adb connect` for a wireless connection.

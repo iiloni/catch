@@ -54,6 +54,7 @@ import {
 } from './localStore';
 import { mergeQueuedWrites } from './mergeQueuedWrites';
 import { getServerUrl } from './serverUrl';
+import { clearIncomingShares } from './shareInbox';
 import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
@@ -383,6 +384,39 @@ export function write(mutate: () => void): Transaction {
   return transaction;
 }
 
+/** Incoming shares must survive a reload before they leave their staging inbox. */
+export async function waitForWriteStored(transaction: Transaction): Promise<void> {
+  await waitForQueuedWrite(transaction.id, transaction.isPersisted.promise);
+}
+
+export async function waitForQueuedWrite(id: string, completion: Promise<unknown>): Promise<void> {
+  let finished = false;
+  const persisted = completion.finally(() => {
+    finished = true;
+  });
+  const queued = (async () => {
+    const deadline = Date.now() + 10_000;
+    while (!finished && Date.now() < deadline) {
+      if ((await executor.peekOutbox()).some((queued) => queued.id === id)) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (!finished)
+      throw new Error('Could not save the share. Close other Catch windows and try again.');
+    return persisted;
+  })();
+  await Promise.race([persisted, queued]);
+}
+
+/** Hydrate device rows without waiting for Electric's first online snapshot. */
+export async function loadShareCollections() {
+  await Promise.all(
+    [notesCollection, attachmentsCollection].map(async (collection) => {
+      collection.startSyncImmediate();
+      await collection._sync.loadSubset({});
+    }),
+  );
+}
+
 /**
  * Signs out of this device: forgets writes that have not synced and deletes the device's
  * copy of the user's data. The page must reload afterwards.
@@ -391,6 +425,7 @@ export async function clearLocalData() {
   await executor.clearOutbox();
   executor.dispose();
   await clearAttachmentFiles();
+  if (user) await clearIncomingShares(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
 }
