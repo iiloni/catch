@@ -54,21 +54,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: python3 branding/preview/derive-preview-icons.py --check
       - run: python3 branding/dev/derive-dev-icons.py --check
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pnpm check
 
-  e2e:
+  # Each project's tests are split over two runners, each with a stack of its own, so the
+  # halves do not compete for one machine the way a second worker would.
+  e2e-desktop:
+    name: e2e desktop (${{ matrix.shard }}/2)
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # A hosted runner has two cores for the whole stack and the browsers. Two workers on
-    # one runner starve each other into timeouts, so each project gets its own runner.
-    strategy:
+    strategy: &e2e-shards
       fail-fast: false
       matrix:
-        project: [desktop, android]
-    steps:
+        shard: [1, 2]
+    env:
+      PROJECT: desktop
+    steps: &e2e-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -76,19 +78,80 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{ print $2 }')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # The runner image already has the libraries Chromium links against. Fetching them
+      # again goes through apt, which has taken seven minutes on a slow day, so that only
+      # happens when a launch shows one is missing.
+      - name: Install Chromium
+        run: |
+          pnpm exec playwright install chromium
+          launch="import { chromium } from '@playwright/test'; await (await chromium.launch()).close();"
+          node --input-type=module -e "$launch" || pnpm exec playwright install-deps chromium
+      # Builds the development image into this builder from layers kept between runs, so its
+      # Debian packages are only fetched when the Dockerfile changes. `dev.sh up` then builds
+      # the same image and finds every layer here.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: development
+          cache-from: type=gha,scope=dev-image
+          cache-to: type=gha,scope=dev-image,mode=max
       # Exercises the same worktree stack developers and agents use.
       - run: ./scripts/dev.sh up
-      # Server backups are tested against a real Postgres with its client tools, which the
-      # check job's bare runner lacks (the tests skip themselves there) and this stack has.
-      - if: matrix.project == 'desktop'
+      # Server backups and video posters are tested against a real Postgres with its client
+      # tools and FFmpeg, which the check job's bare runner lacks (the tests skip themselves
+      # there) and this stack has.
+      - if: env.PROJECT == 'desktop' && matrix.shard == 1
         run: ./scripts/dev.sh test
-      - run: ./scripts/dev.sh e2e --project=${{ matrix.project }} --workers=1
+      # The tests that only call the API open no page, so they run once. They get a run of
+      # their own because Playwright cuts the list of files in half by test count, and their
+      # few tests would move desktop's cut to the far side of its largest file.
+      - if: env.PROJECT == 'desktop' && matrix.shard == 1
+        run: ./scripts/dev.sh e2e --project=api --workers=1
+      - run: nproc && free -m
+      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/2 --workers=1
       - if: failure()
         run: ./scripts/dev.sh logs-once
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: playwright-${{ matrix.project }}
+          name: playwright-${{ env.PROJECT }}-${{ matrix.shard }}
           path: test-results
           retention-days: 7
+
+  e2e-android:
+    name: e2e android (${{ matrix.shard }}/2)
+    needs: reuse
+    if: needs.reuse.outputs.run_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy: *e2e-shards
+    env:
+      PROJECT: android
+    steps: *e2e-steps
+
+  # One result per project under the names the release workflow waits for
+  # (scripts/wait-for-ci.ts), however many runners its tests are split over.
+  e2e-desktop-passed:
+    name: e2e (desktop)
+    needs: [reuse, e2e-desktop]
+    if: always() && needs.reuse.outputs.run_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.e2e-desktop.result }}" = success
+
+  e2e-android-passed:
+    name: e2e (android)
+    needs: [reuse, e2e-android]
+    if: always() && needs.reuse.outputs.run_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.e2e-android.result }}" = success
