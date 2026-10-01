@@ -409,6 +409,8 @@ test('catalog actions insert at the cursor and toolbar uploads retain their capt
   await media.getByRole('button', { name: 'Manage pixel.png' }).click();
   await expect(page.getByRole('menuitem', { name: 'Show in note' })).toBeVisible();
   await page.keyboard.press('Escape');
+  // Its exit animation restores focus; finish that before reopening the same menu.
+  await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0);
   await page.evaluate(async (attachmentId) => {
     const { editorControls } = await import('/src/lib/dockState.ts');
     editorControls.get().removeAttachment(attachmentId);

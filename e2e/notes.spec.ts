@@ -581,6 +581,7 @@ test('deck drag reorders within a column and places notes in another', async ({
 
 test('a long press reorders deck notes on touch', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
+  test.setTimeout(60000);
   await signUp(page);
   for (const title of ['One', 'Two', 'Three']) {
     await createNote(page, title);

@@ -41,9 +41,10 @@ test('the formatting dropdown preserves the selected block', async ({ page, isMo
   test.skip(isMobile, 'Touch devices use the dock formatting bar.');
   const dialog = await openNote(page, 'Popup focus');
   const paragraph = dialog.locator('[data-content-type="paragraph"]').first();
-  await paragraph.click();
-  await page.keyboard.press('Home');
-  await page.keyboard.press('Shift+End');
+  // Triple-click updates the editor selection directly; keyboard selection immediately
+  // after focus can race with ProseMirror restoring its selection.
+  await paragraph.click({ clickCount: 3 });
+  await expect(dialog.locator('[contenteditable="true"]')).toBeFocused();
   await expect
     .poll(() => page.evaluate(() => window.getSelection()?.toString()))
     .toBe('Selected text');
@@ -65,10 +66,8 @@ test('the formatting link popup keeps focus and links the selected text', async 
 }) => {
   test.skip(isMobile, 'Touch devices use the dock formatting bar.');
   const dialog = await openNote(page, 'Popup focus');
-  await dialog.locator('[data-content-type="paragraph"]').first().click();
+  await dialog.locator('[data-content-type="paragraph"]').first().click({ clickCount: 3 });
   await expect(dialog.locator('[contenteditable="true"]')).toBeFocused();
-  await page.keyboard.press('Home');
-  await page.keyboard.press('Shift+End');
   await expect
     .poll(() => page.evaluate(() => window.getSelection()?.toString()))
     .toBe('Selected text');

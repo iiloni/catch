@@ -34,8 +34,10 @@ export async function signIn(page: Page, email: string) {
 /** Creates a note through the quick-note window above the dock. */
 export async function createNote(page: Page, title: string, body?: string) {
   await page.getByRole('button', { name: 'New note' }).click();
-  // The editor loads lazily; wait until it can take keystrokes.
-  await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
+  // The previous editor can still be animating closed while this one loads.
+  await expect(
+    page.getByRole('region', { name: 'New note', exact: true }).getByRole('textbox'),
+  ).toBeFocused();
   await page.keyboard.type(title);
   if (body) {
     await page.keyboard.press('Enter');
