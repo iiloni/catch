@@ -1,5 +1,10 @@
 /** A file in a zip archive, read when asked for. */
-export type ZipEntry = { name: string; text: () => Promise<string> };
+export type ZipEntry = {
+  name: string;
+  size: number;
+  text: () => Promise<string>;
+  blob: (limit?: number) => Promise<Blob>;
+};
 
 export class ZipError extends Error {}
 
@@ -66,11 +71,14 @@ export async function readZip(blob: Blob): Promise<ZipEntry[]> {
     const flags = directory.getUint16(at + 8, true);
     const method = directory.getUint16(at + 10, true);
     let compressedSize = directory.getUint32(at + 20, true);
-    const uncompressedSize = directory.getUint32(at + 24, true);
+    let uncompressedSize = directory.getUint32(at + 24, true);
     const nameLength = directory.getUint16(at + 28, true);
     const extraLength = directory.getUint16(at + 30, true);
     const commentLength = directory.getUint16(at + 32, true);
     let localOffset = directory.getUint32(at + 42, true);
+    if (at + 46 + nameLength + extraLength + commentLength > directory.byteLength) {
+      throw new ZipError('The archive is damaged.');
+    }
     const nameStart = directory.byteOffset + at + 46;
     const name = decoder.decode(new Uint8Array(directory.buffer, nameStart, nameLength));
 
@@ -86,7 +94,7 @@ export async function readZip(blob: Blob): Promise<ZipEntry[]> {
           value += 8;
           return read;
         };
-        if (uncompressedSize === 0xffffffff) next();
+        if (uncompressedSize === 0xffffffff) uncompressedSize = next();
         if (compressedSize === 0xffffffff) compressedSize = next();
         if (localOffset === 0xffffffff) localOffset = next();
       }
@@ -95,9 +103,17 @@ export async function readZip(blob: Blob): Promise<ZipEntry[]> {
     at = extraEnd + commentLength;
 
     if (name.endsWith('/')) continue;
+    const read = (limit?: number) =>
+      readEntry(
+        blob,
+        { name, flags, method, compressedSize, uncompressedSize, localOffset },
+        limit,
+      );
     entries.push({
       name,
-      text: () => readEntry(blob, { name, flags, method, compressedSize, localOffset }),
+      size: uncompressedSize,
+      blob: read,
+      text: async () => (await read()).text(),
     });
   }
   return entries;
@@ -110,18 +126,46 @@ async function readEntry(
     flags: number;
     method: number;
     compressedSize: number;
+    uncompressedSize: number;
     localOffset: number;
   },
-) {
+  limit = Number.MAX_SAFE_INTEGER,
+): Promise<Blob> {
+  if (entry.uncompressedSize > limit)
+    throw new ZipError('The file exceeds the attachment size limit.');
   if (entry.flags & 1) throw new ZipError(`${entry.name} is encrypted.`);
   const header = await view(blob, entry.localOffset, entry.localOffset + 30);
-  if (header.getUint32(0, true) !== LOCAL_HEADER) throw new ZipError('The archive is damaged.');
+  if (header.byteLength < 30 || header.getUint32(0, true) !== LOCAL_HEADER)
+    throw new ZipError('The archive is damaged.');
   // The local header's own name and extra field can differ in length from the directory's.
   const start = entry.localOffset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
+  if (start + entry.compressedSize > blob.size) throw new ZipError('The archive is damaged.');
   const data = blob.slice(start, start + entry.compressedSize);
-  if (entry.method === STORED) return data.text();
-  if (entry.method === DEFLATED) {
-    return new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  if (entry.method === STORED) {
+    if (data.size !== entry.uncompressedSize) throw new ZipError('The archive is damaged.');
+    return data;
   }
-  throw new ZipError(`${entry.name} is compressed in a way Catch cannot read.`);
+  if (entry.method !== DEFLATED) {
+    throw new ZipError(`${entry.name} is compressed in a way Catch cannot read.`);
+  }
+  const reader = data.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      // Check actual output too: a damaged directory must not bypass the memory limit.
+      if (size > limit || size > entry.uncompressedSize) {
+        throw new ZipError('The file exceeds its declared size or the attachment size limit.');
+      }
+      chunks.push(chunk.value);
+    }
+    if (size !== entry.uncompressedSize) throw new ZipError('The archive is damaged.');
+    return new Blob(chunks);
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
 }

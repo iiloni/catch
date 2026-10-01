@@ -39,8 +39,8 @@ Sheets float above the bottom safe area or keyboard with a small gap and rounded
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
-pin, move, archive); the color button grows the dock upward into a palette, and trashing
-lives in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
+attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
+live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
 stack in a wider left column, with one full-height Gallery target on the right. A brand
 border and check mark show the current location. The move button also shows its location:
 a dashboard for Gallery, or columns with the current column's accent line underneath. Holding the button (or sliding off it)
@@ -134,6 +134,9 @@ reported once with its duration and sampled easing curve, and `src/lib/keyboard.
 it on the `--keyboard` variable. Chromium browsers get the same with the VirtualKeyboard API.
 The plugin also injects the `--safe-area-inset-*` variables, so Capacitor's SystemBars inset
 handling is disabled.
+
+**Attachments.** The paperclip grows a 2×2 picker upward from the dock, including from the
+formatting row while the keyboard is up (ADR 0010).
 
 **Formatting on touch.** BlockNote's selection toolbar is turned off on coarse pointers (on
 Android it slides in from the top of the screen). `FormattingBar` takes its place: in the

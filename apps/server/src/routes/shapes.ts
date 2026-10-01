@@ -6,6 +6,22 @@ import { requireUser } from '../lib/requireUser';
 
 /** Columns clients may sync. Server-only columns (search vectors) stay out. */
 const SHAPES: Record<string, { table: string; columns: string[] }> = {
+  attachments: {
+    table: 'attachments',
+    columns: [
+      'id',
+      'user_id',
+      'note_id',
+      'name',
+      'mime_type',
+      'size',
+      'kind',
+      'status',
+      'source_id',
+      'created_at',
+      'deleted_at',
+    ],
+  },
   notes: {
     table: 'notes',
     columns: [

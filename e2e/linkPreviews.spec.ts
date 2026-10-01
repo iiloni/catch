@@ -73,3 +73,95 @@ test('the link overlay dismisses with an upward or downward touch swipe', async 
     await expect(overlay).toBeHidden();
   }
 });
+
+test('the dock tray fades away and its overlay gathers media above links', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  if (!isMobile) await page.setViewportSize({ width: 600, height: 900 });
+  await signUp(page);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.locator('[contenteditable]')).toBeFocused();
+  await page.keyboard.type('Preview tray');
+  for (let i = 0; i < 24; i++) {
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(
+      `Paragraph ${i + 1}: some longer note content to keep the attachments and links below the fold.`,
+    );
+  }
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('https://example.com and https://example.org');
+  await page.getByRole('button', { name: 'Close new note' }).click();
+  await openNote(page, 'Preview tray');
+  const noteId = new URL(page.url()).searchParams.get('note');
+  if (!noteId) throw new Error('Missing note ID');
+  await page.evaluate(async (id) => {
+    const { addAttachment } = await import('/src/lib/attachments.ts');
+    const bytes = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=',
+      ),
+      (char) => char.charCodeAt(0),
+    );
+    await addAttachment(id, new File([bytes], 'catalog.png', { type: 'image/png' }));
+    document.querySelector('[data-note-scroll]')?.scrollTo(0, 0);
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, noteId);
+  const tray = page.locator('button[data-link-underlay].glass-thick');
+  await expect(tray).toBeVisible();
+  await expect(tray).toHaveCSS('opacity', '1');
+  const fade = await page.evaluate(async () => {
+    const tray = document.querySelector<HTMLButtonElement>(
+      'button[data-link-underlay].glass-thick',
+    );
+    if (!tray) throw new Error('Missing dock tray');
+    const wrapper = tray.parentElement;
+    const samples: Array<{ connected: boolean; opacity: number; wrapperOpacity: string }> = [];
+    tray.click();
+    const start = performance.now();
+    await new Promise<void>((resolve) => {
+      function sample() {
+        samples.push({
+          connected: tray.isConnected,
+          opacity: Number(getComputedStyle(tray).opacity),
+          wrapperOpacity: wrapper ? getComputedStyle(wrapper).opacity : '',
+        });
+        if (performance.now() - start < 600) requestAnimationFrame(sample);
+        else resolve();
+      }
+      requestAnimationFrame(sample);
+    });
+    return samples;
+  });
+  const lastVisible = fade.filter((sample) => sample.connected).at(-1);
+  expect(lastVisible?.opacity).toBeLessThan(0.01);
+  expect(lastVisible?.wrapperOpacity).toBe('1');
+  const overlay = page.locator('[data-link-overlay]');
+  await expect(overlay).toHaveAccessibleName('Media · 1');
+  const media = overlay.getByRole('region', { name: 'Media', exact: true });
+  const links = overlay.getByRole('region', { name: 'Links', exact: true });
+  await expect(media.getByRole('button', { name: 'View catalog.png' })).toBeVisible();
+  const mediaBounds = await media.boundingBox();
+  const linkBounds = await links.boundingBox();
+  if (!mediaBounds || !linkBounds) throw new Error('Missing preview cards');
+  expect(mediaBounds.y + mediaBounds.height).toBeLessThan(linkBounds.y);
+  await page.screenshot({ path: testInfo.outputPath('media-and-links.png') });
+  await media.getByRole('button', { name: 'View catalog.png' }).click();
+  const viewer = page.locator('[data-media-viewer]');
+  await expect(viewer.getByRole('img', { name: 'catalog.png' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(viewer).toBeHidden();
+  await expect(overlay).toBeVisible();
+  // An inline action leaves the preview overlay and returns to this note's editor.
+  await media.getByRole('button', { name: 'Manage catalog.png' }).click();
+  await page.getByRole('menuitem', { name: 'Add to note', exact: true }).click();
+  await expect(overlay).toBeHidden();
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
+  await page.evaluate(() => document.querySelector('[data-note-scroll]')?.scrollTo(0, 0));
+  await expect(tray).toBeVisible();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Add attachment' })).toBeVisible();
+  await expect(tray).toHaveCount(0);
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await expect(tray).toBeVisible();
+});

@@ -6,6 +6,7 @@ import { FormattingBar } from './FormattingBar';
 
 function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
   const full: FormattingState = {
+    attachmentIds: [],
     styles: { bold: false, italic: false, underline: false, strike: false },
     block: 'paragraph',
     canIndent: false,
@@ -16,6 +17,10 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
   };
   return {
     getState: () => full,
+    getContent: () => [],
+    attachmentInserter: vi.fn(() => vi.fn()),
+    removeAttachment: vi.fn(),
+    showAttachment: vi.fn(),
     subscribe: () => () => {},
     toggleStyle: vi.fn(),
     toggleBlock: vi.fn(),
@@ -29,6 +34,21 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
 }
 
 describe('FormattingBar', () => {
+  it('opens the attachment panel without opening the slash menu', () => {
+    const controls = fakeControls();
+    const onAttachments = vi.fn();
+    render(
+      <TooltipProvider>
+        <FormattingBar controls={controls} onAttachments={onAttachments} attachmentsOpen />
+      </TooltipProvider>,
+    );
+    const attach = screen.getByRole('button', { name: 'Attach files' });
+    expect(attach).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(attach);
+    expect(onAttachments).toHaveBeenCalledOnce();
+    expect(controls.insertSlash).not.toHaveBeenCalled();
+  });
+
   it('shows which styles and block type are active', () => {
     render(
       <TooltipProvider>
@@ -74,6 +94,7 @@ describe('FormattingBar', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons[0]).toHaveAccessibleName('Slash menu');
     expect(buttons[0]).toHaveTextContent('/');
+    expect(buttons[1]).toHaveAccessibleName('Attach files');
   });
 
   it('disables indenting when the block cannot move', () => {

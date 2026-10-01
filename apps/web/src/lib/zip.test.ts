@@ -34,6 +34,39 @@ describe('readZip', () => {
     ]);
   });
 
+  it('preserves binary bytes in stored, deflated and ZIP64 files', async () => {
+    const bytes = new Uint8Array([0, 255, 128, 13, 10, 0, 42]);
+    for (const zip64 of [false, true]) {
+      const entries = await readZip(
+        await makeZip(
+          [
+            { name: 'image.bin', bytes, stored: true },
+            { name: 'audio.bin', bytes },
+          ],
+          { zip64 },
+        ),
+      );
+      for (const entry of entries) {
+        expect(entry.size).toBe(bytes.length);
+        expect(new Uint8Array(await (await entry.blob(bytes.length)).arrayBuffer())).toEqual(bytes);
+        await expect(entry.blob(bytes.length - 1)).rejects.toThrow(/size limit/);
+      }
+    }
+  });
+
+  it('rejects decompressed output larger than its declared size', async () => {
+    const bytes = new Uint8Array(
+      await (await makeZip([{ name: 'bomb.bin', text: 'x'.repeat(1000) }])).arrayBuffer(),
+    );
+    const directory = bytes.findIndex(
+      (_value, at) =>
+        bytes[at] === 0x50 && bytes[at + 1] === 0x4b && bytes[at + 2] === 1 && bytes[at + 3] === 2,
+    );
+    new DataView(bytes.buffer).setUint32(directory + 24, 1, true);
+    const entry = (await readZip(new Blob([bytes])))[0];
+    await expect(entry?.blob(10)).rejects.toThrow(/declared size/);
+  });
+
   it('skips folders', async () => {
     const zip = await makeZip([
       { name: 'Takeout/', text: '', stored: true },

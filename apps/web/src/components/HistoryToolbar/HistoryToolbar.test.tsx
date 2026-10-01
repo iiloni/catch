@@ -7,6 +7,7 @@ import { HistoryToolbar } from './HistoryToolbar';
 describe('HistoryToolbar', () => {
   it('appears on the first edit and follows the undo and redo availability', () => {
     let state: FormattingState = {
+      attachmentIds: [],
       styles: { bold: false, italic: false, underline: false, strike: false },
       block: 'paragraph',
       canIndent: false,
@@ -16,6 +17,10 @@ describe('HistoryToolbar', () => {
     };
     const listeners = new Set<() => void>();
     const controls: EditorControls = {
+      getContent: () => [],
+      attachmentInserter: vi.fn(() => vi.fn()),
+      removeAttachment: vi.fn(),
+      showAttachment: vi.fn(),
       getState: () => state,
       subscribe(listener) {
         listeners.add(listener);

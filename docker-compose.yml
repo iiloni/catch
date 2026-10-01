@@ -19,6 +19,9 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-true}
       LINK_PREVIEWS: ${LINK_PREVIEWS:-true}
+      ATTACHMENTS_DIR: /data/attachments
+    volumes:
+      - ${CATCH_ATTACHMENTS_MOUNT:-attachment_data}:/data/attachments
     healthcheck:
       test:
         - CMD
@@ -65,5 +68,6 @@ services:
         condition: service_healthy
 
 volumes:
+  attachment_data:
   postgres_data:
   electric_data:

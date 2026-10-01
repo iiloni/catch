@@ -10,6 +10,7 @@ import {
   useTransform,
 } from 'motion/react';
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
@@ -20,7 +21,7 @@ import { useBackHandler } from '@/lib/backButton';
 import { quickNote, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
-import { createNote } from '@/lib/notes';
+import { createNote, discardIfEmpty, updateNote } from '@/lib/notes';
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
@@ -73,6 +74,9 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
   const [color, setColor] = useState<NoteColor>('default');
   const [controls, setControls] = useState<EditorControls | null>(null);
   // The footer's tool row shows either formatting or the color swatches.
+  const [attachmentPanel, setAttachmentPanel] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const draft = useRef<string | null>(null);
   const [tools, setTools] = useState<'format' | 'color'>('format');
   const [destination, setDestination] = useState<Destination>(
     tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
@@ -101,12 +105,28 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     // Remembered rather than fetched, so notes can be created offline.
     const user = getSignedInUser();
     if (!user) return null;
+    if (draft.current) {
+      updateNote(draft.current, {
+        content,
+        color,
+        status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+      });
+      return draft.current;
+    }
     return createNote({
       userId: user.id,
       content,
       color,
       status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
     }).id;
+  }
+
+  function ensureNote() {
+    if (!draft.current) {
+      draft.current = create();
+      setDraftId(draft.current);
+    }
+    return draft.current;
   }
 
   function expand() {
@@ -133,7 +153,8 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     }
 
     const hasContent = blocksHaveContent(latest.current.content);
-    const id = hasContent ? create() : null;
+    const candidate = hasContent || draft.current ? create() : null;
+    const id = candidate && !discardIfEmpty(candidate) ? candidate : null;
     if (!id) {
       void shrinkIntoButton().then(() => safeToRemove());
       return;
@@ -265,7 +286,8 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
       data-note-color={color}
       onKeyDown={(event) => {
         if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) {
-          quickNote.set('closed');
+          if (attachmentPanel) setAttachmentPanel(false);
+          else quickNote.set('closed');
         }
       }}
       className={cn(
@@ -301,8 +323,34 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...springs.smooth, delay: 0.06 }}
         >
-          <LazyNoteEditor onChange={setContent} onControls={setControls} autoFocus />
+          <LazyNoteEditor
+            noteId={draftId ?? undefined}
+            ensureNote={ensureNote}
+            onChange={(next) => {
+              setContent(next);
+              if (draft.current) updateNote(draft.current, { content: next });
+            }}
+            onControls={setControls}
+            autoFocus
+          />
         </motion.div>
+        <AnimatePresence initial={false}>
+          {attachmentPanel && draftId && (
+            <motion.div
+              className="overflow-hidden"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={springs.smooth}
+            >
+              <AttachmentPicker
+                noteId={draftId}
+                controls={controls}
+                onDone={() => setAttachmentPanel(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <motion.footer
           className="flex shrink-0 items-center gap-1.5 px-3 pt-1 pb-3"
           initial={{ opacity: 0, y: 8 }}
@@ -351,7 +399,15 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
                 transition={springs.snappy}
               >
                 {tools === 'format' ? (
-                  <FormattingBar controls={controls} className="flex-1" />
+                  <FormattingBar
+                    controls={controls}
+                    attachmentsOpen={attachmentPanel}
+                    onAttachments={() => {
+                      ensureNote();
+                      setAttachmentPanel(!attachmentPanel);
+                    }}
+                    className="flex-1"
+                  />
                 ) : (
                   <ColorSwatches
                     value={color}

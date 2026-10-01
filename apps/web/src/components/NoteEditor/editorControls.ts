@@ -1,3 +1,4 @@
+import type { Attachment, Note } from '@catch/shared';
 /** Inline styles the formatting bar can toggle. */
 export type TextStyle = 'bold' | 'italic' | 'underline' | 'strike';
 
@@ -10,6 +11,7 @@ export type BlockKind =
   | 'checkListItem';
 
 export type FormattingState = {
+  attachmentIds: readonly string[];
   styles: Record<TextStyle, boolean>;
   /** The type of the block holding the cursor. */
   block: string;
@@ -25,6 +27,11 @@ export type FormattingState = {
  */
 export type EditorControls = {
   getState(): FormattingState;
+  getContent(): Note['content'];
+  /** Captures the insertion point before a system picker takes focus. */
+  attachmentInserter(): (files: Attachment[]) => void;
+  removeAttachment(id: string): void;
+  showAttachment(id: string): boolean;
   /** Calls the listener whenever `getState()` may have changed. */
   subscribe(listener: () => void): () => void;
   toggleStyle(style: TextStyle): void;

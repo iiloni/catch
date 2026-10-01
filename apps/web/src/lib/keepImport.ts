@@ -1,6 +1,7 @@
-import { findBareUrls, type NoteColor, normalizeUrl } from '@catch/shared';
+import { findBareUrls, MAX_ATTACHMENT_BYTES, type NoteColor, normalizeUrl } from '@catch/shared';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { z } from 'zod';
+import type { ImportedAttachment } from './attachments';
 import type { ImportedNote } from './notes';
 import { readZip, ZipError } from './zip';
 
@@ -129,34 +130,47 @@ export function importedNoteId(userId: string, created: Date, key: string) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** What a Keep export holds, ready for `importNotes`. */
+const keepAttachmentSchema = z.object({
+  filePath: z.string().min(1),
+  mimetype: z.string().optional(),
+  mimeType: z.string().optional(),
+});
+
+/** What a Keep export holds, ready for `startImport`. */
 export type KeepExport = {
   /** Newest first, as Keep's own order is not in the export. */
   notes: ImportedNote[];
   /** Notes in Keep's trash, which are left out. */
   trashed: number;
-  /** Notes with nothing but images, drawings or recordings, which are left out. */
+  /** Media-only notes left out because none of their files could be matched. */
   mediaOnly: number;
-  /** Images, drawings and recordings in the notes that come in; Catch cannot keep them yet. */
+  /** Files matched to notes, read only after confirmation. */
   attachments: number;
+  files: ImportedAttachment[];
+  missing: number;
+  oversized: number;
   /** Notes with labels; Catch does not have labels yet. */
   labelled: number;
 };
 
-type JsonFile = { name: string; text: string };
+type JsonFile = Source & { text: string };
 
 /** A JSON file to read: one chosen directly, or one inside a chosen zip archive. */
-type Source = { name: string; archive: string | null; read: () => Promise<string> };
+type Source = {
+  name: string;
+  archive: string | null;
+  size: number;
+  read: (limit?: number) => Promise<Blob>;
+};
 
 const isZip = (file: File) => /\.zip$/i.test(file.name) || file.type.includes('zip');
 const isTarball = (file: File) => /\.(tgz|tar\.gz|tar)$/i.test(file.name);
-const isJson = (file: File) => /\.json$/i.test(file.name) || file.type === 'application/json';
 
 const unreadable = (archive: string, error: ZipError) =>
   new KeepImportError(`${archive} could not be read. ${error.message}`);
 
-/** The JSON files among those chosen, and inside the zip archives among them. */
-async function jsonSources(files: readonly File[]): Promise<Source[]> {
+/** Index chosen files and ZIP entries without loading media bytes. */
+async function fileSources(files: readonly File[]): Promise<Source[]> {
   const sources: Source[] = [];
   for (const file of files) {
     if (isTarball(file)) {
@@ -173,12 +187,15 @@ async function jsonSources(files: readonly File[]): Promise<Source[]> {
         throw error;
       }
       for (const entry of entries) {
-        if (/\.json$/i.test(entry.name)) {
-          sources.push({ name: entry.name, archive: file.name, read: entry.text });
-        }
+        sources.push({ name: entry.name, archive: file.name, size: entry.size, read: entry.blob });
       }
-    } else if (isJson(file)) {
-      sources.push({ name: file.name, archive: null, read: () => file.text() });
+    } else {
+      sources.push({
+        name: file.webkitRelativePath || file.name,
+        archive: null,
+        size: file.size,
+        read: async () => file,
+      });
     }
   }
   return sources;
@@ -197,7 +214,7 @@ async function readSources(sources: readonly Source[], options: ReadOptions): Pr
   for (const source of sources) {
     options.signal?.throwIfAborted();
     try {
-      read.push({ name: source.name, text: await source.read() });
+      read.push({ ...source, text: await (await source.read()).text() });
     } catch (error) {
       if (error instanceof ZipError && source.archive) throw unreadable(source.archive, error);
       throw error;
@@ -216,6 +233,67 @@ function parseKeepNote(json: string): KeepNote | null {
   }
 }
 
+const MIME_TYPES: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  heic: 'image/heic',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+  pdf: 'application/pdf',
+  txt: 'text/plain',
+};
+
+function path(value: string): string | null {
+  const parts: string[] = [];
+  for (const part of value.replaceAll('\\', '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+    } else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+function mediaMatcher(sources: Source[]) {
+  const names = new Map<string, Source[]>();
+  const basenames = new Map<string, Source[]>();
+  for (const source of sources) {
+    const name = path(source.name);
+    if (!name) continue;
+    names.set(name, [...(names.get(name) ?? []), source]);
+    const basename = name.split('/').at(-1) ?? name;
+    basenames.set(basename, [...(basenames.get(basename) ?? []), source]);
+  }
+  return (json: Source, reference: string): Source | undefined => {
+    const name = path(reference);
+    if (!name) return;
+    const folder = json.name.slice(0, json.name.lastIndexOf('/') + 1);
+    for (const candidate of [path(folder + reference), name]) {
+      if (!candidate) continue;
+      const matches = names.get(candidate) ?? [];
+      const local = matches.filter((source) => source.archive === json.archive);
+      if (local.length === 1) return local[0];
+      if (matches.length === 1) return matches[0];
+      if (matches.length > 1) return;
+    }
+    // Unpacked files can lose their directory in a file picker. Never guess between two
+    // files with the same basename.
+    const matches = basenames.get(name.split('/').at(-1) ?? name);
+    return matches?.length === 1 ? matches[0] : undefined;
+  };
+}
+
 /**
  * Reads the notes in a Google Takeout export of Keep: its .zip archives (every part of a
  * split export may be chosen at once), or the .json files from an unpacked one.
@@ -225,30 +303,40 @@ export async function readKeepExport(
   userId: string,
   options: ReadOptions = {},
 ): Promise<KeepExport> {
-  const found = await readSources(await jsonSources(files), options);
+  const sources = await fileSources(files);
+  const match = mediaMatcher(sources);
+  const found = await readSources(
+    sources.filter((source) => /\.json$/i.test(source.name)),
+    options,
+  );
   // The same file chosen twice, loose and inside its archive, is one note.
   const unique = [...new Map(found.map((file) => [file.text, file])).values()].sort((a, b) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
   );
-  const result: KeepExport = { notes: [], trashed: 0, mediaOnly: 0, attachments: 0, labelled: 0 };
-  let recognized = 0;
-  const keys = new Map<string, number>();
-  for (const file of unique) {
+  const result: KeepExport = {
+    notes: [],
+    files: [],
+    trashed: 0,
+    mediaOnly: 0,
+    attachments: 0,
+    missing: 0,
+    oversized: 0,
+    labelled: 0,
+  };
+  const parsedNotes = unique.flatMap((file) => {
     const note = parseKeepNote(file.text);
-    if (!note) continue;
-    recognized += 1;
+    return note ? [{ file, note, content: keepNoteContent(note) }] : [];
+  });
+  // Keep the ids of text notes from older imports, even if media-only notes share a timestamp.
+  parsedNotes.sort((a, b) => Number(a.content.length === 0) - Number(b.content.length === 0));
+  const keys = new Map<string, number>();
+  for (const { file, note, content } of parsedNotes) {
     if (note.isTrashed) {
       result.trashed += 1;
       continue;
     }
-    const content = keepNoteContent(note);
     const attachments = note.attachments?.length ?? 0;
-    if (content.length === 0) {
-      if (attachments > 0) result.mediaOnly += 1;
-      continue;
-    }
-    result.attachments += attachments;
-    if (note.labels?.length) result.labelled += 1;
+    if (content.length === 0 && attachments === 0) continue;
 
     const createdUsec = note.createdTimestampUsec ?? note.userEditedTimestampUsec;
     // A note is known by when it was made. Two made in the same microsecond are told apart
@@ -258,8 +346,48 @@ export async function readKeepExport(
     const key = seen === 0 ? `keep:${createdUsec}` : `keep:${createdUsec}#${seen}`;
     const createdAt = fromMicroseconds(createdUsec);
 
+    const id = importedNoteId(userId, createdAt, key);
+    const matched: ImportedAttachment[] = [];
+    const seenFiles = new Set<string>();
+    for (const value of note.attachments ?? []) {
+      const parsed = keepAttachmentSchema.safeParse(value);
+      const reference = parsed.success ? parsed.data : null;
+      const filename = reference ? path(reference.filePath) : null;
+      if (filename && seenFiles.has(filename)) continue;
+      if (filename) seenFiles.add(filename);
+      const source = reference ? match(file, reference.filePath) : undefined;
+      if (!source?.size || !filename) {
+        result.missing += 1;
+        continue;
+      }
+      if (source.size > MAX_ATTACHMENT_BYTES) {
+        result.oversized += 1;
+        continue;
+      }
+      const name = filename.split('/').at(-1) ?? filename;
+      const mimeType =
+        reference?.mimetype ||
+        reference?.mimeType ||
+        MIME_TYPES[name.split('.').at(-1)?.toLowerCase() ?? ''] ||
+        'application/octet-stream';
+      matched.push({
+        id: importedNoteId(userId, createdAt, `keep-attachment:${id}:${filename}`),
+        noteId: id,
+        createdAt,
+        read: async () =>
+          new File([await source.read(MAX_ATTACHMENT_BYTES)], name, { type: mimeType }),
+      });
+    }
+    if (content.length === 0 && matched.length === 0) {
+      result.mediaOnly += 1;
+      continue;
+    }
+    result.files.push(...matched);
+    result.attachments += matched.length;
+    if (note.labels?.length) result.labelled += 1;
+
     result.notes.push({
-      id: importedNoteId(userId, createdAt, key),
+      id,
       content,
       color: KEEP_COLORS[note.color ?? ''] ?? 'default',
       isPinned: note.isPinned ?? false,
@@ -268,7 +396,7 @@ export async function readKeepExport(
       updatedAt: fromMicroseconds(note.userEditedTimestampUsec),
     });
   }
-  if (recognized === 0) {
+  if (parsedNotes.length === 0) {
     throw new KeepImportError('There are no Google Keep notes in the files you chose.');
   }
   result.notes.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());

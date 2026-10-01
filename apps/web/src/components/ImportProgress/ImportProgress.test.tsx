@@ -17,7 +17,18 @@ afterEach(() => {
 
 function showing(state: Partial<ImportState> | null) {
   vi.mocked(useImport).mockReturnValue(
-    state && { source: 'Google Keep', total: 0, saved: 0, failed: 0, finished: false, ...state },
+    state && {
+      source: 'Google Keep',
+      total: 0,
+      saved: 0,
+      failed: 0,
+      finished: false,
+      attachmentTotal: 0,
+      attachmentSaved: 0,
+      attachmentFailed: 0,
+      preparing: 0,
+      ...state,
+    },
   );
   return render(<ImportProgress />);
 }
@@ -44,6 +55,18 @@ describe('ImportProgress', () => {
     updateSyncStatus({ offline: true });
     showing({ total: 100, saved: 50 });
     expect(screen.getByText(/Waiting for a connection/)).toBeInTheDocument();
+  });
+
+  it('distinguishes preparing files from durable queued uploads', () => {
+    showing({ total: 1, saved: 1, attachmentTotal: 2, attachmentSaved: 1, preparing: 1 });
+    expect(screen.getByText(/Preparing 1 attachment on this device/)).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 attachments saved on your server')).toBeInTheDocument();
+  });
+
+  it('summarizes an attachment-only import and explains retrying failures', () => {
+    showing({ attachmentTotal: 3, attachmentSaved: 2, attachmentFailed: 1, finished: true });
+    expect(screen.getByRole('status')).toHaveTextContent('2 attachments imported from Google Keep');
+    expect(screen.getByRole('status')).toHaveTextContent('1 attachment could not be saved');
   });
 
   it('sums up a finished import until dismissed', () => {

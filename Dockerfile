@@ -10,7 +10,7 @@ RUN npm install -g "pnpm@$(node -p "require('./package.json').packageManager.spl
 # the image directory's on every mount, undoing the chown to the host user in dev.sh.
 FROM base AS development
 ENV NODE_ENV=development
-RUN apt-get update && apt-get install -y --no-install-recommends git \
+RUN apt-get update && apt-get install -y --no-install-recommends git ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && chown node:node /workspace
 CMD ["sh", "scripts/dev-entrypoint.sh"]
@@ -27,6 +27,8 @@ RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
 
 FROM node:24-slim AS production
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     PORT=3000 \
     WEB_DIST_DIR=/app/web \
@@ -36,6 +38,7 @@ COPY --from=build /out/package.json ./package.json
 COPY --from=build /workspace/apps/server/dist ./dist
 COPY --from=build /workspace/apps/server/drizzle ./drizzle
 COPY --from=build /workspace/apps/web/dist ./web
+RUN mkdir -p /data/attachments && chown node:node /data/attachments
 USER node
 EXPOSE 3000
 CMD ["sh", "-c", "node dist/db/migrate.mjs && node dist/index.mjs"]

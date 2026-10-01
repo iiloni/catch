@@ -14,7 +14,9 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkPreviewCard } from '@/components/LinkPreviewCard/LinkPreviewCard';
+import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { Button } from '@/components/ui/button';
+import { useNoteAttachments } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
 import { notesCollection } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
@@ -70,7 +72,7 @@ function hiddenOffset(panel: HTMLElement, y: number) {
 function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean }) {
   const [isPresent, safeToRemove] = usePresence();
   const links = useNoteLinks(note);
-  const { open } = useOpenNote();
+  const files = useNoteAttachments(note.id);
   const pane = useNotePane();
   const inPane = fromEditor && pane.shown;
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -145,7 +147,9 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
       dragging = false;
       armed = false;
       velocity = 0;
-      startedInList = scrollArea?.contains(event.target as Node) ?? false;
+      startedInList =
+        (scrollArea?.contains(event.target as Node) ?? false) &&
+        !(event.target instanceof Element && event.target.closest('header'));
     }
 
     function onMove(event: TouchEvent) {
@@ -222,10 +226,10 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
     };
   }, [panel, isPresent, y]);
 
-  // Removing the last preview leaves nothing to list.
+  // Removing the last item leaves nothing to list.
   useEffect(() => {
-    if (links.length === 0) close();
-  }, [links.length]);
+    if (links.length === 0 && files.length === 0) close();
+  }, [links.length, files.length]);
 
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => !open && close()}>
@@ -260,54 +264,71 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
             <motion.div
               ref={attachPanel}
               data-link-overlay
-              className="glass-thick pointer-events-auto mb-[calc(var(--dock-height)/2+0.5rem)] flex max-h-[calc(100%-var(--dock-height)/2-0.5rem)] w-full max-w-md flex-col rounded-3xl outline-none"
+              className="pointer-events-auto mb-[calc(var(--dock-height)/2+0.5rem)] flex max-h-[calc(100%-var(--dock-height)/2-0.5rem)] w-full max-w-md flex-col outline-none"
               style={{ y, pointerEvents: isPresent ? 'auto' : 'none' }}
             >
-              <header className="flex shrink-0 items-center gap-2 py-2 pr-2 pl-5">
-                <DialogPrimitive.Title className="min-w-0 flex-1 font-display font-semibold text-lg tracking-[-0.01em]">
-                  {links.length === 1 ? 'Link' : `${links.length} links`}
-                </DialogPrimitive.Title>
-                <DialogPrimitive.Description className="sr-only">
-                  Previews of the links in this note.
-                </DialogPrimitive.Description>
-                {!fromEditor && (
-                  <Button
-                    variant="ghost"
-                    className="h-9 rounded-full px-3"
-                    onClick={() => {
-                      close();
-                      open(note.id, findCard(note.id) ?? undefined);
-                    }}
-                  >
-                    <SquareArrowOutUpRight /> Open note
-                  </Button>
-                )}
-                <IconButton label="Close" onClick={close} className="size-9">
-                  <X />
-                </IconButton>
-              </header>
-              <ul
+              <OverlayHeader
+                title={
+                  files.length
+                    ? `Media · ${files.length}`
+                    : links.length === 1
+                      ? 'Link'
+                      : `${links.length} links`
+                }
+                note={note}
+                fromEditor={fromEditor}
+                className="glass-thick shrink-0 rounded-t-3xl border-b-0! shadow-none"
+              />
+              <div
                 data-link-overlay-scroll
-                className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3"
+                className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-b-3xl"
               >
-                {links.map((link) => (
-                  <li key={link.url}>
-                    <LinkPreviewCard
-                      link={link}
+                {files.length > 0 && (
+                  <section className="glass-thick shrink-0 rounded-b-3xl border-t-0! shadow-none">
+                    <NoteMedia
                       noteId={note.id}
                       readOnly={Boolean(note.deletedAt)}
-                      onShowInNote={
-                        fromEditor
-                          ? () => {
-                              close();
-                              showLinkInNote(link.url);
-                            }
-                          : undefined
-                      }
+                      withHeading={false}
+                      onShowInNote={close}
+                      className="px-3 pb-3"
                     />
-                  </li>
-                ))}
-              </ul>
+                  </section>
+                )}
+                {links.length > 0 && (
+                  <section
+                    aria-label="Links"
+                    className={cn(
+                      'glass-thick shrink-0',
+                      files.length ? 'rounded-3xl' : 'rounded-b-3xl border-t-0! shadow-none',
+                    )}
+                  >
+                    {files.length > 0 && (
+                      <h2 className="px-5 py-3 font-display font-semibold text-lg tracking-[-0.01em]">
+                        {links.length === 1 ? 'Link' : `${links.length} links`}
+                      </h2>
+                    )}
+                    <ul className="flex flex-col gap-2 px-3 pb-3">
+                      {links.map((link) => (
+                        <li key={link.url}>
+                          <LinkPreviewCard
+                            link={link}
+                            noteId={note.id}
+                            readOnly={Boolean(note.deletedAt)}
+                            onShowInNote={
+                              fromEditor
+                                ? () => {
+                                    close();
+                                    showLinkInNote(link.url);
+                                  }
+                                : undefined
+                            }
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </div>
             </motion.div>
           </DialogPrimitive.Content>
         </div>
@@ -322,4 +343,43 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
  */
 function layer(fromEditor: boolean) {
   return fromEditor ? 'z-[55]' : 'z-[35]';
+}
+
+function OverlayHeader({
+  title,
+  note,
+  fromEditor,
+  className,
+}: {
+  title: string;
+  note: Note;
+  fromEditor: boolean;
+  className?: string;
+}) {
+  const { open } = useOpenNote();
+  return (
+    <header className={cn('flex shrink-0 items-center gap-2 py-2 pr-2 pl-5', className)}>
+      <DialogPrimitive.Title className="min-w-0 flex-1 font-display font-semibold text-lg tracking-[-0.01em]">
+        {title}
+      </DialogPrimitive.Title>
+      <DialogPrimitive.Description className="sr-only">
+        Attachments and previews of the links in this note.
+      </DialogPrimitive.Description>
+      {!fromEditor && (
+        <Button
+          variant="ghost"
+          className="h-9 rounded-full px-3"
+          onClick={() => {
+            close();
+            open(note.id, findCard(note.id) ?? undefined);
+          }}
+        >
+          <SquareArrowOutUpRight /> Open note
+        </Button>
+      )}
+      <IconButton label="Close" onClick={close} className="size-9">
+        <X />
+      </IconButton>
+    </header>
+  );
 }

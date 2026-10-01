@@ -1,16 +1,16 @@
 import { type ColumnColor, DEFAULT_BOARD_STATUS } from '@catch/shared';
 import {
-  Archive,
-  ArchiveRestore,
   Columns3,
   LayoutDashboard,
   type LucideIcon,
   Palette,
+  Paperclip,
   Pin,
   RotateCcw,
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type ComponentProps, type PointerEvent, useEffect, useRef, useState } from 'react';
+import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { NoteMovePicker, noteDestinationAt } from '@/components/NoteMovePicker/NoteMovePicker';
@@ -26,7 +26,6 @@ import {
   moveNoteToDeck,
   restoreNote,
   sendNoteToGallery,
-  setNoteArchived,
   setNoteColor,
   setNotePinned,
 } from '@/lib/notes';
@@ -43,6 +42,7 @@ type Action = {
   active?: boolean;
   expanded?: boolean;
   columnColor?: ColumnColor;
+  disabled?: boolean;
   /** Pointer handlers for a press-and-hold gesture on top of the tap. */
   gesture?: Pick<
     ComponentProps<'button'>,
@@ -73,7 +73,7 @@ export function NoteDock() {
   const { close } = useOpenNote();
   const columns = sortBoardColumns(useBoardColumns());
   const ref = useRef<HTMLDivElement>(null);
-  const [panel, setPanel] = useState<'palette' | 'columns' | null>(null);
+  const [panel, setPanel] = useState<'palette' | 'columns' | 'attachments' | null>(null);
   const [hoveredColumn, setHoveredColumn] = useState<string | null | undefined>(undefined);
   const hold = useRef<Hold | null>(null);
   useBackHandler(panel !== null, () => setPanel(null));
@@ -83,11 +83,17 @@ export function NoteDock() {
   const showPanel = editable && !formatting && isPresent;
   const showPalette = panel === 'palette' && showPanel;
   const showColumns = panel === 'columns' && showPanel;
+  const showAttachments = panel === 'attachments' && editable && isPresent;
 
   useEffect(() => () => window.clearTimeout(hold.current?.timer), []);
+  const noteId = note?.id;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: switching notes closes passing panels and cancels capture
+  useEffect(() => {
+    setPanel(null);
+  }, [noteId]);
 
   // The dock's link tray steps aside while the dock is grown (see NoteLinkTray).
-  const grown = showPalette || showColumns;
+  const grown = showPalette || showColumns || showAttachments;
   useEffect(() => {
     noteDockPanelOpen.set(grown);
     return () => noteDockPanelOpen.set(false);
@@ -95,15 +101,13 @@ export function NoteDock() {
 
   // The columns are a passing menu: a tap anywhere outside the dock folds them away.
   useEffect(() => {
-    if (!showColumns) return;
+    if (!showColumns && !showAttachments) return;
     const onPointerDown = (event: globalThis.PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) setPanel(null);
     };
     document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-    };
-  }, [showColumns]);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [showColumns, showAttachments]);
 
   useEffect(() => {
     if (!grown) return;
@@ -213,20 +217,18 @@ export function NoteDock() {
           setPanel(panel === 'palette' ? null : 'palette');
         },
       },
-      ...(note.isArchived
-        ? []
-        : [
-            {
-              id: 'pin',
-              label: note.isPinned ? 'Unpin' : 'Pin',
-              icon: Pin,
-              active: note.isPinned,
-              onPress: () => {
-                haptics.toggle();
-                setNotePinned(note.id, !note.isPinned);
-              },
-            },
-          ]),
+      {
+        id: 'attachments',
+        disabled: controls === null,
+        label: 'Attach files',
+        icon: Paperclip,
+        active: showAttachments,
+        expanded: showAttachments,
+        onPress: () => {
+          haptics.toggle();
+          setPanel(panel === 'attachments' ? null : 'attachments');
+        },
+      },
       {
         id: 'move',
         label: 'Move note',
@@ -246,21 +248,20 @@ export function NoteDock() {
           setPanel(showColumns ? null : 'columns');
         },
       },
-      note.isArchived
-        ? {
-            id: 'archive',
-            label: 'Unarchive',
-            icon: ArchiveRestore,
-            onPress: () => {
-              setNoteArchived(note.id, false);
+      ...(note.isArchived
+        ? []
+        : [
+            {
+              id: 'pin',
+              label: note.isPinned ? 'Unpin' : 'Pin',
+              icon: Pin,
+              active: note.isPinned,
+              onPress: () => {
+                haptics.toggle();
+                setNotePinned(note.id, !note.isPinned);
+              },
             },
-          }
-        : {
-            id: 'archive',
-            label: 'Archive',
-            icon: Archive,
-            onPress: then(() => setNoteArchived(note.id, true)),
-          },
+          ]),
     ];
   }
 
@@ -277,6 +278,18 @@ export function NoteDock() {
       transition={springs.smooth}
     >
       <AnimatePresence initial={false}>
+        {showAttachments && note && (
+          <motion.div
+            key="attachments"
+            className="overflow-hidden"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.smooth}
+          >
+            <AttachmentPicker key={note.id} noteId={note.id} onDone={() => setPanel(null)} />
+          </motion.div>
+        )}
         {showPalette && note && (
           <motion.div
             key="palette"
@@ -324,6 +337,11 @@ export function NoteDock() {
             >
               <FormattingBar
                 controls={controls}
+                attachmentsOpen={showAttachments}
+                onAttachments={() => {
+                  haptics.toggle();
+                  setPanel(panel === 'attachments' ? null : 'attachments');
+                }}
                 className="flex-1 [&_button]:size-11 [&_svg]:size-5"
               />
             </motion.div>
@@ -355,14 +373,16 @@ function DockAction({ action }: { action: Action }) {
     <motion.button
       type="button"
       aria-label={action.label}
+      disabled={action.disabled}
       aria-pressed={action.expanded === undefined ? action.active : undefined}
       aria-expanded={action.expanded}
+      onPointerDown={(event) => event.preventDefault()}
       onClick={action.onPress}
       {...action.gesture}
       whileTap={{ scale: 0.88 }}
       transition={springs.snappy}
       className={cn(
-        'relative flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+        'relative flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none disabled:opacity-40 transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
         action.gesture && 'touch-none select-none [-webkit-touch-callout:none]',
         action.active
           ? 'bg-foreground/[0.08] text-foreground shadow-[inset_0_1px_0_var(--glass-highlight)]'

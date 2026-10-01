@@ -58,7 +58,7 @@ install_dependencies() {
     docker volume create catch-pnpm-store >/dev/null
     "${compose[@]}" run --rm --no-deps -u root app sh -c '
         chown "$1:$2" /workspace/node_modules /workspace/apps/*/node_modules \
-            /workspace/packages/*/node_modules /pnpm-store /pnpm-cache
+            /workspace/packages/*/node_modules /pnpm-store /pnpm-cache /data/attachments
     ' sh "$CATCH_UID" "$CATCH_GID"
     "${compose[@]}" run --rm --no-deps app pnpm install --frozen-lockfile
 }

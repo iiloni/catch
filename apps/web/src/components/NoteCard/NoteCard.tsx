@@ -1,12 +1,14 @@
-import type { Note } from '@catch/shared';
+import { attachmentUrl, type Note } from '@catch/shared';
 import { Pin } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
 import { useLayoutEffect, useReducer, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
+import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
+import { useNoteAttachments } from '@/lib/attachments';
 import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
@@ -43,9 +45,29 @@ export function NoteCardFace({ note }: { note: Note }) {
   if (useIsLinkNote(note, links) && link) {
     return <LinkNoteFace link={link} tinted={note.color === 'default'} />;
   }
+  if (note.content.length === 0) return <MediaOnlyFace note={note} />;
   return (
     <div className="px-3.5 pt-3 pb-3.5">
       <NotePreview content={note.content} className={cn(note.isPinned && 'pr-5')} />
+    </div>
+  );
+}
+
+function MediaOnlyFace({ note }: { note: Note }) {
+  const files = useNoteAttachments(note.id);
+  const first = files[0];
+  if (!first) return <NotePreview content={note.content} />;
+  return (
+    <div className={cn('flex min-w-0 items-center gap-3 p-2', note.isPinned && 'pr-8')}>
+      <div className="size-16 shrink-0 overflow-hidden rounded-xl">
+        <MediaPreview url={attachmentUrl(first.id)} name={first.name} kind={first.kind} thumbnail />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{first.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {files.length === 1 ? 'Attachment' : `${files.length} attachments`}
+        </p>
+      </div>
     </div>
   );
 }

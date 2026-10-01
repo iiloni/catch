@@ -1,4 +1,5 @@
 import type { NoteColor } from '@catch/shared';
+import { motion } from 'motion/react';
 import { SiteIcon } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { linkTitle, type ResolvedLink } from '@/lib/linkPreviews';
 import { cn } from '@/lib/utils';
@@ -25,7 +26,7 @@ export function LinkUnderlay({ links, onOpen, variant, color, className }: Props
   const more = links.length - 1;
 
   return (
-    <button
+    <motion.button
       type="button"
       data-link-underlay
       data-note-color={variant === 'card' ? color : undefined}
@@ -35,6 +36,10 @@ export function LinkUnderlay({ links, onOpen, variant, color, className }: Props
           : `${links.length} links, first ${linkTitle(first)}`
       }
       onClick={onOpen}
+      initial={variant === 'dock' ? { opacity: 0 } : false}
+      animate={variant === 'dock' ? { opacity: 1 } : undefined}
+      exit={variant === 'dock' ? { opacity: 0 } : undefined}
+      transition={{ duration: 0.18 }}
       className={cn(
         'flex min-w-0 items-center gap-2 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         variant === 'card'
@@ -49,6 +54,6 @@ export function LinkUnderlay({ links, onOpen, variant, color, className }: Props
       {more > 0 && (
         <span className="shrink-0 font-medium text-muted-foreground tabular-nums">+{more}</span>
       )}
-    </button>
+    </motion.button>
   );
 }

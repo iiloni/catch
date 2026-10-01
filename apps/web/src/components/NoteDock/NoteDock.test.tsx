@@ -1,19 +1,22 @@
 import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { editorNote } from '@/lib/dockState';
+import type { EditorControls } from '@/components/NoteEditor/editorControls';
+import { editorControls, editorNote } from '@/lib/dockState';
 import { HOLD_MS } from '@/lib/longPress';
 import {
   moveNoteToDeck,
   restoreNote,
   sendNoteToGallery,
-  setNoteArchived,
   setNoteColor,
   setNotePinned,
 } from '@/lib/notes';
 import { NoteDock } from './NoteDock';
 
 vi.mock('@/lib/notes');
+vi.mock('@/components/AttachmentPicker/AttachmentPicker', () => ({
+  AttachmentPicker: () => <section aria-label="Add attachment">Attachment picker</section>,
+}));
 const columns: BoardColumn[] = [
   { id: 'in_progress', userId: 'user-1', name: 'In progress', color: 'blue', position: 'a1' },
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
@@ -43,7 +46,10 @@ function renderDock(overrides: Partial<Note> = {}) {
 }
 
 afterEach(() => {
-  act(() => editorNote.set(null));
+  act(() => {
+    editorNote.set(null);
+    editorControls.set(null);
+  });
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -126,18 +132,16 @@ describe('NoteDock', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('closes the editor after archiving', () => {
+  it('orders attachments second and pin last, with archive in the header', () => {
     renderDock();
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
-    expect(setNoteArchived).toHaveBeenCalledWith(note.id, true);
-    expect(close).toHaveBeenCalled();
-  });
-
-  it('keeps the editor open after unarchiving', () => {
-    renderDock({ isArchived: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }));
-    expect(setNoteArchived).toHaveBeenCalledWith(note.id, false);
-    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeDisabled();
+    act(() => editorControls.set({} as EditorControls));
+    expect(
+      screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Background color', 'Attach files', 'Move note', 'Pin']);
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    expect(screen.getByRole('region', { name: 'Add attachment' })).toBeInTheDocument();
   });
 
   it('only offers restoring a trashed note', () => {

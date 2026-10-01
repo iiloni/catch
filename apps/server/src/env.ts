@@ -33,6 +33,7 @@ const envSchema = z.object({
     .transform((value) => value === 'true'),
   /** Directory containing the built web app. Served when set. */
   WEB_DIST_DIR: z.string().optional(),
+  ATTACHMENTS_DIR: z.string().default('/data/attachments'),
 });
 
 export const env = envSchema.parse(process.env);

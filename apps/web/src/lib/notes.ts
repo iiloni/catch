@@ -2,6 +2,7 @@ import {
   blocksHaveContent,
   DEFAULT_BOARD_STATUS,
   MAX_NOTES_PER_REQUEST,
+  mapAttachmentBlocks,
   type Note,
   type NoteColor,
   positionBetween,
@@ -9,7 +10,8 @@ import {
 } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
-import { notesCollection, write } from './collections';
+import { copyAttachmentFiles } from './attachmentFiles';
+import { attachmentsCollection, notesCollection, write } from './collections';
 
 type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
@@ -330,7 +332,28 @@ export function duplicateNotes(notes: readonly Note[]) {
     updatedAt: now,
     deletedAt: note.deletedAt ? now : null,
   }));
+  const files = copies.flatMap((copy, index) => {
+    const original = notes[index];
+    if (!original) return [];
+    const attachments = [...attachmentsCollection.values()].filter(
+      (file) => file.noteId === original.id && !file.deletedAt,
+    );
+    const ids = new Map(attachments.map((file) => [file.id, uuidv7()]));
+    copy.content = mapAttachmentBlocks(copy.content, ids);
+    return attachments.map((file) => ({
+      ...file,
+      id: ids.get(file.id)!,
+      noteId: copy.id,
+      sourceId: file.id,
+      status: 'pending' as const,
+      createdAt: now,
+    }));
+  });
   const transaction = write(() => notesCollection.insert(copies));
+  // Queue copies after their notes exist; pending originals reach the server first.
+  if (files.length) write(() => attachmentsCollection.insert(files));
+  // Cached originals and thumbnails let copies preview before the server is reachable.
+  for (const file of files) void copyAttachmentFiles(file.sourceId, file.id).catch(() => {});
   toast(plural(notes.length, 'Note copied', 'notes copied'));
   return { ids: copies.map((copy) => copy.id), transaction };
 }
@@ -341,7 +364,13 @@ export function duplicateNotes(notes: readonly Note[]) {
  */
 export function discardIfEmpty(id: string) {
   const note = notesCollection.get(id);
-  if (!note || note.deletedAt || blocksHaveContent(note.content)) return false;
+  if (
+    !note ||
+    note.deletedAt ||
+    blocksHaveContent(note.content) ||
+    [...attachmentsCollection.values()].some((file) => file.noteId === id && !file.deletedAt)
+  )
+    return false;
   write(() => notesCollection.delete(id));
   toast('Empty note discarded');
   return true;

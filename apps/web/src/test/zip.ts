@@ -1,6 +1,9 @@
 /** Builds zip archives for tests: stored or deflated files, with or without ZIP64 records. */
 
-type ZipFile = { name: string; text: string; stored?: boolean };
+type ZipFile = { name: string; stored?: boolean } & (
+  | { text: string; bytes?: never }
+  | { bytes: Uint8Array<ArrayBuffer>; text?: never }
+);
 
 const encoder = new TextEncoder();
 
@@ -25,7 +28,7 @@ export async function makeZip(files: readonly ZipFile[], { zip64 = false } = {})
   let offset = 0;
   for (const file of files) {
     const name = encoder.encode(file.name);
-    const raw = encoder.encode(file.text);
+    const raw = file.bytes ?? encoder.encode(file.text);
     const data = file.stored ? raw : await deflate(raw);
     const method = file.stored ? 0 : 8;
 

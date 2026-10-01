@@ -141,6 +141,31 @@ export const boardColumns = pgTable(
   (table) => [primaryKey({ columns: [table.userId, table.id] })],
 );
 
+/** File bytes live in ATTACHMENTS_DIR; metadata follows notes through Electric. */
+export const attachments = pgTable(
+  'attachments',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid()
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    mimeType: text().notNull(),
+    size: integer().notNull(),
+    kind: text({ enum: ['image', 'video', 'audio', 'file'] }).notNull(),
+    status: text({ enum: ['pending', 'ready'] })
+      .notNull()
+      .default('pending'),
+    sourceId: uuid(),
+    createdAt: createdAt(),
+    deletedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [index().on(table.userId, table.noteId)],
+);
+
 /**
  * What the server found at each link in a user's notes, keyed by normalized URL (see
  * `extractLinks`). Rows are added as `pending` when a note gains a link and filled in by the

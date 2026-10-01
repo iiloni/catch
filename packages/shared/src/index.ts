@@ -1,3 +1,4 @@
+export * from './attachments';
 export * from './board';
 export * from './colors';
 export * from './content';

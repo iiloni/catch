@@ -20,9 +20,11 @@ import {
   useExtensionState,
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
-import type { Note } from '@catch/shared';
+import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
-import { type MouseEvent, useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useRef, useState } from 'react';
+import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
+import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -106,6 +108,8 @@ const sideMenuFloatingOptions: FloatingUIOptions = {
 };
 
 type Props = {
+  noteId?: string;
+  ensureNote?: () => string | null;
   initialContent?: Note['content'];
   onChange?: (content: Note['content']) => void;
   editable?: boolean;
@@ -125,6 +129,8 @@ const coarsePointer =
  * `key` to load a different note.
  */
 export function NoteEditor({
+  noteId,
+  ensureNote,
   initialContent,
   onChange,
   editable = true,
@@ -133,10 +139,18 @@ export function NoteEditor({
   className,
 }: Props) {
   const theme = useResolvedTheme();
+  const noteOwner = useRef({ noteId, ensureNote });
+  noteOwner.current = { noteId, ensureNote };
   const editor = useCreateBlockNote({
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
+    uploadFile: async (file) => {
+      const id = noteOwner.current.noteId ?? noteOwner.current.ensureNote?.();
+      if (!id) throw new Error('Open a note to attach a file');
+      return attachmentUrl((await addAttachment(id, file)).id);
+    },
+    resolveFileUrl: resolveAttachmentUrl,
     dictionary: {
       ...en,
       placeholders: { ...en.placeholders, heading: 'Title', default: 'Take a note…' },
@@ -148,6 +162,10 @@ export function NoteEditor({
   }, [autoFocus, editor]);
 
   const [controls] = useState(() => createControls(editor));
+  const removedAttachments = useRemovedAttachmentIds(noteId);
+  useEffect(() => {
+    for (const id of removedAttachments) controls.removeAttachment(id);
+  }, [removedAttachments, controls]);
   useEffect(() => {
     onControls?.(controls);
     return () => onControls?.(null);
@@ -287,6 +305,54 @@ function createControls(editor: AnyEditor): EditorControls {
 
   return {
     getState: () => state,
+    getContent: () => editor.document as unknown as Note['content'],
+    attachmentInserter() {
+      const anchor = editor.getTextCursorPosition().block.id;
+      return (files) => {
+        if (!editor.domElement?.isConnected) return;
+        let target = editor.getBlock(anchor) ?? editor.document.at(-1);
+        if (!target) return;
+        editor.transact(() => {
+          for (const file of files) {
+            if (!target) break;
+            const block = fileBlock(file);
+            const empty =
+              Array.isArray(target.content) &&
+              target.content.length === 0 &&
+              target.children.length === 0;
+            target = empty
+              ? editor.updateBlock(target, block)
+              : editor.insertBlocks([block], target, 'after')[0];
+          }
+        });
+        if (target) {
+          const next = editor.insertBlocks([{ type: 'paragraph' }], target, 'after')[0];
+          if (next) editor.setTextCursorPosition(next);
+        }
+      };
+    },
+    removeAttachment(id) {
+      const matching: string[] = [];
+      editor.forEachBlock((block) => {
+        if ('url' in block.props && block.props.url === attachmentUrl(id)) matching.push(block.id);
+        return true;
+      });
+      if (matching.length) editor.removeBlocks(matching);
+    },
+    showAttachment(id) {
+      let found = false;
+      editor.forEachBlock((block) => {
+        if ('url' in block.props && block.props.url === attachmentUrl(id)) {
+          editor.domElement
+            ?.querySelector(`[data-id="${block.id}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          found = true;
+          return false;
+        }
+        return true;
+      });
+      return found;
+    },
     subscribe(listener) {
       if (listeners.size === 0) refresh();
       listeners.add(listener);
@@ -350,7 +416,17 @@ function createControls(editor: AnyEditor): EditorControls {
 function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
   const history = editor.getExtension(HistoryExtension);
+  const attachmentIds: string[] = [];
+  editor.forEachBlock((block) => {
+    const id =
+      'url' in block.props && typeof block.props.url === 'string'
+        ? attachmentId(block.props.url)
+        : null;
+    if (id) attachmentIds.push(id);
+    return true;
+  });
   return {
+    attachmentIds,
     styles: {
       bold: Boolean(active.bold),
       italic: Boolean(active.italic),

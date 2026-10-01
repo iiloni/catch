@@ -16,6 +16,11 @@ app requires it. The first account you create becomes the instance admin.
 For published Docker images, signed Android APKs, stable/preview channels, and a production
 configuration kept outside this checkout, see [Releasing and deployment](docs/releases.md).
 
+Attachments live in the `attachment_data` Docker volume. Set `CATCH_ATTACHMENTS_MOUNT`
+to a host directory for a bind mount, writable by the container's `node` user (UID 1000).
+Back up this directory or volume together with Postgres. Files can be up to 100 MiB;
+uploads made offline stay on the device and resume when it reconnects.
+
 ## Development
 
 Requires Docker and, for end-to-end tests and editor support on the host, Node 24 and pnpm

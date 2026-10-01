@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { noteSchema } from '@catch/shared';
+import { MAX_ATTACHMENT_BYTES, noteSchema } from '@catch/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { makeZip } from '@/test/zip';
 import {
@@ -158,7 +158,13 @@ describe('readKeepExport', () => {
       ],
       USER,
     );
-    expect(found).toMatchObject({ trashed: 1, mediaOnly: 1, attachments: 2, labelled: 1 });
+    expect(found).toMatchObject({
+      trashed: 1,
+      mediaOnly: 1,
+      attachments: 0,
+      missing: 3,
+      labelled: 1,
+    });
     expect(found.notes).toHaveLength(1);
   });
 
@@ -181,6 +187,128 @@ describe('readKeepExport', () => {
       USER,
     );
     expect(found.notes).toHaveLength(1);
+  });
+
+  it('matches binary attachments across ZIP parts without inline blocks, including media-only notes', async () => {
+    const bytes = new Uint8Array([0, 255, 128, 42]);
+    const notes = await makeZip([
+      {
+        name: 'Takeout/Keep/Words.json',
+        text: JSON.stringify(
+          keepNote({
+            title: 'Words',
+            attachments: [{ filePath: 'photo.png', mimetype: 'image/png' }],
+          }),
+        ),
+      },
+      {
+        name: 'Takeout/Keep/Audio.json',
+        text: JSON.stringify(
+          keepNote({
+            createdTimestampUsec: 1234,
+            attachments: [{ filePath: 'recording.m4a', mimetype: 'audio/mp4' }],
+          }),
+        ),
+      },
+    ]);
+    const media = await makeZip(
+      [
+        { name: 'Takeout/Keep/photo.png', bytes },
+        { name: 'Takeout/Keep/recording.m4a', bytes, stored: true },
+      ],
+      { zip64: true },
+    );
+    const files = [new File([notes], 'part1.zip'), new File([media], 'part2.zip')];
+    const found = await readKeepExport(files, USER);
+    expect(found).toMatchObject({ attachments: 2, missing: 0, mediaOnly: 0 });
+    expect(found.notes).toHaveLength(2);
+    expect(found.notes.flatMap((note) => note.content.map((block) => block.type))).toEqual([
+      'heading',
+    ]);
+    for (const source of found.files) {
+      const file = await source.read();
+      expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
+      expect(file.type).toMatch(/^(image|audio)\//);
+      expect(found.notes.some((note) => note.id === source.noteId)).toBe(true);
+    }
+    const again = await readKeepExport([...files].reverse(), USER);
+    expect(again.files.map((file) => file.id)).toEqual(found.files.map((file) => file.id));
+  });
+
+  it('matches unpacked files and deduplicates repeated attachment references', async () => {
+    const note = json(
+      'Words.json',
+      keepNote({
+        title: 'Words',
+        attachments: [{ filePath: 'media/photo.png' }, { filePath: 'media/photo.png' }],
+      }),
+    );
+    const found = await readKeepExport([note, new File(['binary'], 'photo.png')], USER);
+    expect(found.attachments).toBe(1);
+    expect((await found.files[0]?.read())?.type).toBe('image/png');
+    expect(
+      (await readKeepExport([note, new File(['binary'], 'photo.png')], USER)).files[0]?.id,
+    ).toBe(found.files[0]?.id);
+  });
+
+  it('matches relative paths before basenames and never guesses between ambiguous files', async () => {
+    const zip = await makeZip([
+      {
+        name: 'Keep/A/a.json',
+        text: JSON.stringify(keepNote({ title: 'A', attachments: [{ filePath: 'photo.png' }] })),
+      },
+      {
+        name: 'Keep/B/b.json',
+        text: JSON.stringify(keepNote({ title: 'B', attachments: [{ filePath: 'photo.png' }] })),
+      },
+      {
+        name: 'Keep/c.json',
+        text: JSON.stringify(keepNote({ title: 'C', attachments: [{ filePath: 'photo.png' }] })),
+      },
+      { name: 'Keep/A/photo.png', text: 'A' },
+      { name: 'Keep/B/photo.png', text: 'B' },
+    ]);
+    const found = await readKeepExport([new File([zip], 'takeout.zip')], USER);
+    expect(found).toMatchObject({ attachments: 2, missing: 1 });
+    expect(await (await found.files[0]?.read())?.text()).toBe('A');
+    expect(await (await found.files[1]?.read())?.text()).toBe('B');
+  });
+
+  it('retains old text-note ids when media-only notes share their timestamp', async () => {
+    const words = json('b.json', keepNote({ title: 'Words' }));
+    const old = await readKeepExport([words], USER);
+    const next = await readKeepExport(
+      [
+        words,
+        json('a.json', keepNote({ attachments: [{ filePath: 'a.png' }] })),
+        new File(['binary'], 'a.png'),
+      ],
+      USER,
+    );
+    expect(next.notes.find((note) => note.content.length)?.id).toBe(old.notes[0]?.id);
+    expect(next.notes).toHaveLength(2);
+  });
+
+  it('reports empty and oversized files before reading their bytes', async () => {
+    const huge = new File([], 'huge.mp4');
+    Object.defineProperty(huge, 'size', { value: MAX_ATTACHMENT_BYTES + 1 });
+    const read = vi.spyOn(huge, 'arrayBuffer');
+    const found = await readKeepExport(
+      [
+        json(
+          'words.json',
+          keepNote({
+            title: 'Words',
+            attachments: [{ filePath: 'huge.mp4' }, { filePath: 'empty.png' }],
+          }),
+        ),
+        huge,
+        new File([], 'empty.png'),
+      ],
+      USER,
+    );
+    expect(found).toMatchObject({ oversized: 1, missing: 1, attachments: 0 });
+    expect(read).not.toHaveBeenCalled();
   });
 
   it('explains files it cannot use', async () => {

@@ -46,7 +46,9 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   link's preview as its face instead, keeping the note's color if the user chose one.
 - *Overlay.* Tapping an underlay opens every link as a list (`LinkPreviewOverlay`) that slides
   up from behind the dock it belongs to (the page's, or the open note's) and rests just above
-  it, in reach of the thumb, on every screen size. Closing normally slides it back down;
+  it, in reach of the thumb, on every screen size. Notes with attachments show their Media
+  card above the Links card in the same scroll area, with thumbnail viewing and attachment
+  management (ADR 0010). Closing normally slides it back down;
   swiping the card up or down dismisses it in that direction, once the link list reaches its
   scroll edge. It stacks under the editor, so "Open note" grows the note over it as it leaves.
   Growing it out of the underlay instead read as an empty box that filled in late. Back,
@@ -56,6 +58,9 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   they follow the note's text. While those cards are off screen, a tray tucked behind the dock
   names the first link and opens the overlay (`NoteLinkTray`). It steps aside while typing,
   while the dock has grown into its palette or columns, and while the overlay is open.
+- The dock tray fades its own glass button as it slides away, so its removal cannot flash
+  through the dock or an expanding picker. Its wrapper keeps full opacity to preserve the
+  button's backdrop blur.
 - Each card opens its link on tap. Its menu copies, shares, refreshes, shows the link in the
   note, or removes the preview. Before the server has a preview (offline, or while it fetches),
   a card shows the link's address. Settings → General can turn previews off on a device.

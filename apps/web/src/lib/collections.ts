@@ -1,5 +1,8 @@
 import {
+  type Attachment,
+  attachmentSchema,
   boardColumnSchema,
+  createAttachmentSchema,
   createBoardColumnSchema,
   createNoteSchema,
   type LinkPreview,
@@ -7,6 +10,7 @@ import {
   MAX_NOTES_PER_REQUEST,
   noteSchema,
   type TxidResponse,
+  updateAttachmentSchema,
   updateBoardColumnSchema,
   updateNoteSchema,
 } from '@catch/shared';
@@ -34,6 +38,12 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { ApiError, api } from './api';
+import {
+  clearAttachmentFiles,
+  getAttachmentBlob,
+  markAttachmentUploaded,
+  refreshAttachmentUrls,
+} from './attachmentFiles';
 import { getAuthToken, resolveSignedInUser } from './auth';
 import {
   createOnlineDetector,
@@ -136,9 +146,27 @@ export const linkPreviewsCollection = createCollection(
   ),
 );
 
+export const attachmentsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'attachments',
+      schema: attachmentSchema,
+      getKey: (attachment) => attachment.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/attachments`,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
   notes: notesCollection,
   boardColumns: boardColumnsCollection,
+  attachments: attachmentsCollection,
 };
 
 /** How long to wait for Electric to stream a write back before letting it settle anyway. */
@@ -169,7 +197,11 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
     sent.flatMap(({ collectionId, txid }) => {
       if (txid === null) return [];
       const collection =
-        collectionId === notesCollection.id ? notesCollection : boardColumnsCollection;
+        collectionId === notesCollection.id
+          ? notesCollection
+          : collectionId === attachmentsCollection.id
+            ? attachmentsCollection
+            : boardColumnsCollection;
       // The server has the write; a slow stream only delays the hand-over.
       return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
     }),
@@ -229,7 +261,27 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
         return api.deleteBoardColumn(key);
     }
   }
+  if (mutation.collection.id === attachmentsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return sendAttachment(createAttachmentSchema.parse(mutation.modified));
+      case 'update':
+        return api.updateAttachment(key, updateAttachmentSchema.parse(mutation.changes));
+      case 'delete':
+        return api.updateAttachment(key, { deletedAt: new Date() });
+    }
+  }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
+}
+
+async function sendAttachment(body: ReturnType<typeof createAttachmentSchema.parse>) {
+  const created = await api.createAttachment(body);
+  if (body.sourceId) return created;
+  const blob = await getAttachmentBlob(body.id);
+  if (!blob) throw new NonRetriableError('The attachment file is missing on this device');
+  const result = await api.uploadAttachment(body.id, blob);
+  await markAttachmentUploaded(body.id);
+  return result;
 }
 
 /**
@@ -331,6 +383,7 @@ export function write(mutate: () => void): Transaction {
 export async function clearLocalData() {
   await executor.clearOutbox();
   executor.dispose();
+  await clearAttachmentFiles();
   await database?.destroy();
   if (user) deleteOutbox(user.id);
 }
@@ -346,6 +399,19 @@ export function useSyncedNotes() {
     // A subscriber also keeps the collection from being cleaned up while the page is open.
     const subscription = notesCollection.subscribeChanges(() => {});
     const stopWaiting = notesCollection.onFirstReady(() => setSynced(true));
+    return () => {
+      stopWaiting();
+      subscription.unsubscribe();
+    };
+  }, []);
+  return synced;
+}
+
+export function useSyncedAttachments() {
+  const [synced, setSynced] = useState(() => attachmentsCollection.isReady());
+  useEffect(() => {
+    const subscription = attachmentsCollection.subscribeChanges(() => {});
+    const stopWaiting = attachmentsCollection.onFirstReady(() => setSynced(true));
     return () => {
       stopWaiting();
       subscription.unsubscribe();
@@ -386,4 +452,28 @@ function subscribeToPreviews(listener: () => void) {
 /** The user's link previews by URL. */
 export function useLinkPreviews(): ReadonlyMap<string, LinkPreview> {
   return useSyncExternalStore(subscribeToPreviews, () => previewsByUrl);
+}
+
+let attachmentRows: readonly Attachment[] = [];
+const attachmentListeners = new Set<() => void>();
+let attachmentsSubscribed = false;
+function subscribeAttachments(listener: () => void) {
+  attachmentListeners.add(listener);
+  if (!attachmentsSubscribed) {
+    attachmentsSubscribed = true;
+    attachmentsCollection.subscribeChanges(
+      () => {
+        attachmentRows = [...attachmentsCollection.values()];
+        for (const notify of attachmentListeners) notify();
+        refreshAttachmentUrls();
+      },
+      { includeInitialState: true },
+    );
+  }
+  return () => {
+    attachmentListeners.delete(listener);
+  };
+}
+export function useAttachments(): readonly Attachment[] {
+  return useSyncExternalStore(subscribeAttachments, () => attachmentRows);
 }
