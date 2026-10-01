@@ -56,7 +56,7 @@ const numbers = new Intl.NumberFormat();
  */
 export function ImportProgress() {
   const current = useImport();
-  const { offline } = useSyncStatus();
+  const { offline, incompatibility } = useSyncStatus();
   if (!current) return null;
 
   const failedLine =
@@ -126,7 +126,12 @@ export function ImportProgress() {
           preparation finishes.
         </p>
       )}
-      {offline ? (
+      {incompatibility ? (
+        <p>
+          Waiting for {incompatibility === 'client-too-old' ? 'an app' : 'a server'} update.
+          Prepared files and notes stay on this device.
+        </p>
+      ) : offline ? (
         <p>Waiting for a connection. Prepared files and notes sync once it is back.</p>
       ) : (
         <p>You can leave this page; the import keeps going.</p>

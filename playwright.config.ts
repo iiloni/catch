@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
+import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from './packages/shared/src/protocol';
 
 /**
  * Targets this worktree's running stack (`./scripts/dev.sh up`). Set
@@ -26,6 +27,7 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    extraHTTPHeaders: { [API_PROTOCOL_HEADER]: String(API_PROTOCOL_VERSION) },
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },

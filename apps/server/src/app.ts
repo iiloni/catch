@@ -1,3 +1,4 @@
+import { API_PROTOCOL_HEADER, SUPPORTED_API_PROTOCOLS } from '@catch/shared';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -5,6 +6,7 @@ import { auth } from './auth';
 import { isRestoring } from './backups/service';
 import type { AppEnv } from './context';
 import { env, NATIVE_APP_ORIGINS } from './env';
+import { requireCompatibleProtocol } from './lib/protocol';
 import { adminRoutes } from './routes/admin';
 import { attachmentRoutes } from './routes/attachments';
 import { backupDownloadRoutes } from './routes/backups';
@@ -31,7 +33,7 @@ export function createApp() {
     cors({
       origin: [...NATIVE_APP_ORIGINS, ...env.TRUSTED_ORIGINS],
       credentials: true,
-      allowHeaders: ['Content-Type', 'Authorization', 'Range'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Range', API_PROTOCOL_HEADER],
       exposeHeaders: [
         'set-auth-token',
         'electric-offset',
@@ -53,6 +55,13 @@ export function createApp() {
       return c.json({ error: 'Catch is restoring a backup. Try again in a moment.' }, 503);
     }
     await next();
+  });
+
+  app.use('/api/*', requireCompatibleProtocol);
+
+  app.get('/api/compatibility', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json(SUPPORTED_API_PROTOCOLS);
   });
 
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));

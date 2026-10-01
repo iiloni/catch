@@ -45,6 +45,7 @@ import {
   refreshAttachmentUrls,
 } from './attachmentFiles';
 import { getAuthToken, resolveSignedInUser } from './auth';
+import { CompatibilityError, compatibleShapeFetch } from './compatibility';
 import {
   createOnlineDetector,
   createOutboxStorage,
@@ -99,6 +100,7 @@ export const notesCollection = createCollection(
       getKey: (note) => note.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/notes`,
+        fetchClient: compatibleShapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         // Synced rows skip the collection schema, so parse timestamps here.
@@ -117,6 +119,7 @@ export const boardColumnsCollection = createCollection(
       getKey: (column) => column.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/board-columns`,
+        fetchClient: compatibleShapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
       },
@@ -137,6 +140,7 @@ export const linkPreviewsCollection = createCollection(
       getKey: (preview) => preview.url,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/link-previews`,
+        fetchClient: compatibleShapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         parser: { timestamptz: (value: string) => new Date(value) },
@@ -154,6 +158,7 @@ export const attachmentsCollection = createCollection(
       getKey: (attachment) => attachment.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/attachments`,
+        fetchClient: compatibleShapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         parser: { timestamptz: (value: string) => new Date(value) },
@@ -290,6 +295,8 @@ async function sendAttachment(body: ReturnType<typeof createAttachmentSchema.par
  * messages: the outbox gives up on any whose message mentions some 4xx status codes.
  */
 function classifyWriteError(error: unknown): Error {
+  // A protocol mismatch must never become a permanent rejection that discards local edits.
+  if (error instanceof CompatibilityError) return new Error(error.message);
   if (error instanceof NonRetriableError) return reject(error.message);
   if (error instanceof z.ZodError) return reject('Invalid change');
   if (error instanceof ApiError) {
@@ -340,7 +347,7 @@ const executor = startOfflineExecutor({
   onLeadershipChange: (isLeader) => updateSyncStatus({ sharedTab: !isLeader }),
 });
 
-const updateConnection = () => updateSyncStatus({ offline: !onlineDetector.isOnline() });
+const updateConnection = () => updateSyncStatus({ offline: !onlineDetector.isConnected() });
 updateConnection();
 window.addEventListener('offline', updateConnection);
 onlineDetector.subscribe(updateConnection);

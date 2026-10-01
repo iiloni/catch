@@ -1,6 +1,7 @@
 import { attachmentAccessSchema, attachmentId } from '@catch/shared';
 import { useEffect, useState } from 'react';
 import { getAuthToken, getSignedInUser } from './auth';
+import { compatibleFetch } from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 type StoredFile = { id: string; blob: Blob; pending: boolean; preview: boolean; savedAt: number };
@@ -120,7 +121,7 @@ export async function clearAttachmentFiles() {
 }
 
 async function authorizedFetch(path: string) {
-  const response = await fetch(`${getServerUrl()}/api/attachments/${path}`, {
+  const response = await compatibleFetch(`${getServerUrl()}/api/attachments/${path}`, {
     headers: { Authorization: `Bearer ${getAuthToken() ?? ''}` },
   });
   if (!response.ok)

@@ -10,6 +10,15 @@ preview and development apps remain separate; development builds have no release
 Catch builds Docker images and signed Android APKs from version tags. Personal production
 Compose files, domains, credentials, and signing keys stay outside the repository.
 
+Client/server API compatibility uses a separate protocol number and server-supported range
+([ADR 0013](decisions/0013-api-compatibility.md)), independent of release versions. When the
+protocol is incompatible, sync pauses while local notes and queued writes remain on the
+device. Settings > Update says whether the app or server needs updating; compatible version
+differences do not block sync. Protocol 1 introduces this gate with no legacy-client fallback:
+sync or export changes before updating a pre-protocol client, and manually install the new
+Android app for this release. Future breaking release notes must state the supported protocol
+range and upgrade order. Ordinary releases and pushes do not require a protocol bump.
+
 ## Channels and versions
 
 | Channel | Git tag | Exact image tag | Moving image aliases | Android application |

@@ -18,6 +18,7 @@ import { SettingsRow, SettingsSection } from '@/components/SettingsSection/Setti
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
+import { useSyncStatus } from '@/lib/syncStatus';
 import {
   checkForUpdates,
   installServerVersion,
@@ -28,6 +29,7 @@ import {
 const channelLabels = { stable: 'Stable', preview: 'Preview', dev: 'Development' };
 
 export function AppUpdate() {
+  const { incompatibility } = useSyncStatus();
   const { android, app, server, checking, error, installing, installError } = useUpdates();
   const available = useAndroidUpdateAvailable();
   return (
@@ -61,6 +63,16 @@ export function AppUpdate() {
           </SettingsRow>
         )}
         <div className="flex flex-col gap-3 px-4 py-3">
+          {incompatibility && (
+            <p role="alert" className="text-destructive text-sm">
+              {incompatibility === 'client-too-old'
+                ? android
+                  ? 'This app needs an update to sync with your server. Install the matching app version below or from GitHub releases.'
+                  : 'This app needs an update to sync with your server. Reload to load the latest app; if this continues, close and reopen Catch to apply its update.'
+                : 'Your server needs an update to sync with this app. Ask your server administrator to update Catch.'}{' '}
+              Local notes and queued changes stay on this device until sync resumes.
+            </p>
+          )}
           {android && server && app && (
             <p className="text-muted-foreground text-sm">
               {available

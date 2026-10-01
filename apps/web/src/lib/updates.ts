@@ -2,6 +2,7 @@ import { App } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { androidUpdateAvailable, type VersionInfo, versionInfoSchema } from '@catch/shared';
 import { api } from './api';
+import { checkCompatibility } from './compatibility';
 import { createStore } from './store';
 
 const NativeUpdates = registerPlugin<{
@@ -43,6 +44,7 @@ export function checkForUpdates() {
       updates.get().android
         ? NativeUpdates.getVersion().then((result) => versionInfoSchema.parse(result))
         : Promise.resolve(null),
+      checkCompatibility(true),
     ]);
     updates.set({
       ...updates.get(),

@@ -6,12 +6,19 @@ import type { SyncStatus } from '@/lib/syncStatus';
 
 /** Whether the header needs the indicator: only when changes cannot reach the server. */
 export function showsSyncIndicator(status: SyncStatus) {
-  return status.offline || status.signedOut;
+  return status.offline || status.signedOut || Boolean(status.incompatibility);
 }
 
 const changes = (count: number) => (count === 1 ? '1 change' : `${count} changes`);
 
-function describe({ pending, offline, signedOut, sharedTab }: SyncStatus) {
+function describe({ pending, offline, signedOut, sharedTab, incompatibility }: SyncStatus) {
+  if (incompatibility) {
+    return {
+      title:
+        incompatibility === 'client-too-old' ? 'App update required' : 'Server update required',
+      body: `${incompatibility === 'client-too-old' ? 'Update this app' : 'Update your Catch server'} to resume sync. Your local notes and queued changes are kept on this device.`,
+    };
+  }
   if (signedOut) {
     return {
       title: 'Signed out',
@@ -45,7 +52,7 @@ function signInAgain() {
 /** A header control that says why changes are not syncing, and how many are waiting. */
 export function SyncIndicator({ status }: { status: SyncStatus }) {
   const { title, body } = describe(status);
-  const Icon = status.signedOut ? CloudAlert : CloudOff;
+  const Icon = status.signedOut || status.incompatibility ? CloudAlert : CloudOff;
   return (
     <Popover>
       <PopoverTrigger
@@ -65,10 +72,19 @@ export function SyncIndicator({ status }: { status: SyncStatus }) {
       <PopoverContent align="end" sideOffset={12} className="flex w-64 flex-col gap-2">
         <p className="font-semibold">{title}</p>
         <p className="text-muted-foreground text-sm">{body}</p>
-        {status.signedOut && (
-          <Button className="self-end rounded-full" onClick={signInAgain}>
-            Sign in
-          </Button>
+        {status.incompatibility ? (
+          <a
+            href="/settings/update"
+            className="self-end rounded-full px-3 py-2 font-medium text-sm underline"
+          >
+            View updates
+          </a>
+        ) : (
+          status.signedOut && (
+            <Button className="self-end rounded-full" onClick={signInAgain}>
+              Sign in
+            </Button>
+          )
         )}
       </PopoverContent>
     </Popover>

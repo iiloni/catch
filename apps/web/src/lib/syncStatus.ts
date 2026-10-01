@@ -1,3 +1,4 @@
+import type { CompatibilityIssue } from '@catch/shared';
 import { useSyncExternalStore } from 'react';
 
 export type SyncStatus = {
@@ -7,6 +8,8 @@ export type SyncStatus = {
   offline: boolean;
   /** The server turned the saved token down, so writes wait for the user to sign in again. */
   signedOut: boolean;
+  /** Sync waits for an app or server update; local notes and queued writes stay intact. */
+  incompatibility: CompatibilityIssue | null;
   /**
    * Another tab keeps this user's outbox, so writes from this one are not queued and need a
    * connection.
@@ -14,7 +17,13 @@ export type SyncStatus = {
   sharedTab: boolean;
 };
 
-let status: SyncStatus = { pending: 0, offline: false, signedOut: false, sharedTab: false };
+let status: SyncStatus = {
+  pending: 0,
+  offline: false,
+  signedOut: false,
+  sharedTab: false,
+  incompatibility: null,
+};
 const listeners = new Set<() => void>();
 
 export function getSyncStatus(): SyncStatus {
@@ -68,6 +77,6 @@ export function useSyncStatus(): SyncStatus {
  * as soon as the device's copy has something to show, or when there is no connection.
  */
 export function useAwaitingSync(isLoading: boolean, shown: number) {
-  const { offline } = useSyncStatus();
-  return isLoading && shown === 0 && !offline;
+  const { offline, incompatibility } = useSyncStatus();
+  return isLoading && shown === 0 && !offline && !incompatibility;
 }

@@ -23,7 +23,10 @@ describe('server backups api', () => {
       ['DELETE', `/${backup}`],
       ['POST', `/${backup}/restore`],
     ] as const) {
-      const res = await app.request(`/api/admin/backups${path}`, { method });
+      const res = await app.request(`/api/admin/backups${path}`, {
+        method,
+        headers: { [API_PROTOCOL_HEADER]: String(API_PROTOCOL_VERSION) },
+      });
       expect(res.status, `${method} ${path}`).toBe(401);
     }
   });
@@ -46,3 +49,5 @@ describe('server backups api', () => {
     expect((await app.request('/api/health')).status).toBe(200);
   });
 });
+
+import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '@catch/shared';

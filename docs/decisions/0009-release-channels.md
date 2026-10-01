@@ -63,12 +63,12 @@ and preview must advance independently, including preview versions ahead of stab
   the installed signing certificate, then opens Android's installer. Android may first ask
   the user to allow Catch to install updates. Development apps are never updated this way.
   Changing channels requires installing the separate app; it does not replace device data.
-- Release versions describe builds, not API compatibility. There is currently no enforced
-  client/server protocol range. Breaking-change commit markers document changes but do not
-  require an app update at runtime. A future compatibility gate should use an explicit
-  protocol version and supported range rather than treating every version difference as
-  incompatible. PWAs receive new code through their service worker, but offline or already
-  open clients can still run older code.
+- Release versions describe builds, not API compatibility. An explicit client protocol and
+  server-supported range gate REST and shape sync (ADR 0013). Incompatible clients keep local
+  notes and queued writes while sync waits for an app or server update; compatible release
+  differences do not require an update. Breaking-change commit markers document changes,
+  but runtime enforcement comes from the protocol constants. PWAs receive new code through
+  their service worker, but offline or already open clients can still run older code.
 
 ## Consequences
 

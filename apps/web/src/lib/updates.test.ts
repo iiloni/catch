@@ -13,6 +13,7 @@ vi.mock('@capacitor/core', () => ({
 }));
 vi.mock('@capacitor/app', () => ({ App: { addListener: mocks.addListener } }));
 vi.mock('./api', () => ({ api: { versionInfo: mocks.versionInfo } }));
+vi.mock('./compatibility', () => ({ checkCompatibility: vi.fn().mockResolvedValue(undefined) }));
 
 beforeEach(() => {
   vi.resetModules();

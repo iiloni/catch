@@ -19,6 +19,7 @@ import type {
   VersionInfo,
 } from '@catch/shared';
 import { getAuthToken } from './auth';
+import { compatibleFetch } from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 export class ApiError extends Error {
@@ -32,7 +33,8 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const token = getAuthToken();
-  const response = await fetch(`${getServerUrl()}/api${path}`, {
+  const fetcher = path === '/updates' || path === '/updates/releases' ? fetch : compatibleFetch;
+  const response = await fetcher(`${getServerUrl()}/api${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',

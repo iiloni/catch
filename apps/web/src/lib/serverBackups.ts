@@ -10,6 +10,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { getAuthToken } from './auth';
+import {
+  compatibleFetch,
+  ensureCompatible,
+  observeProtocolResponse,
+  protocolHeaders,
+} from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 /**
@@ -44,7 +50,7 @@ function failure(status: number, body: string) {
 }
 
 async function send(path: string, method = 'GET', body?: unknown): Promise<unknown> {
-  const response = await fetch(url(path), {
+  const response = await compatibleFetch(url(path), {
     method,
     headers: {
       ...authorization(),
@@ -82,16 +88,27 @@ export const serverBackups = {
     link.click();
   },
   /** Sends an archive to the server, which checks it and adds it to the list. */
-  upload: (file: Blob, onProgress: (sent: number, total: number) => void) =>
-    new Promise<BackupItem>((resolve, reject) => {
+  upload: async (file: Blob, onProgress: (sent: number, total: number) => void) => {
+    await ensureCompatible();
+    return new Promise<BackupItem>((resolve, reject) => {
       // XMLHttpRequest rather than fetch, which cannot report how much has been sent.
       const request = new XMLHttpRequest();
       request.open('POST', url('/upload'));
       request.setRequestHeader('Authorization', authorization().Authorization);
       request.setRequestHeader('Content-Type', 'application/octet-stream');
+      for (const [key, value] of Object.entries(protocolHeaders))
+        request.setRequestHeader(key, value);
       request.upload.onprogress = (event) => onProgress(event.loaded, event.total);
       request.onerror = () => reject(new BackupRequestError(0, 'The upload was interrupted.'));
-      request.onload = () => {
+      request.onload = async () => {
+        if (request.status === 426) {
+          try {
+            await observeProtocolResponse(new Response(request.responseText, { status: 426 }));
+          } catch (error) {
+            reject(error);
+          }
+          return;
+        }
         if (request.status < 200 || request.status >= 300) {
           reject(failure(request.status, request.responseText));
           return;
@@ -103,7 +120,8 @@ export const serverBackups = {
         }
       };
       request.send(file);
-    }),
+    });
+  },
 };
 
 export type ServerBackupsState =

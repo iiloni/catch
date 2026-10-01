@@ -80,6 +80,30 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 
 ## Conventions
 
+### API compatibility
+
+- Read [ADR 0013](docs/decisions/0013-api-compatibility.md) when changing API requests,
+  responses, synced shapes, note encoding or write/replay behavior. Review old client → new
+  server **and** new client → old server; shared TypeScript types only check one build.
+- Keep `API_PROTOCOL_VERSION` and `SUPPORTED_API_PROTOCOLS` in
+  `packages/shared/src/protocol.ts` unchanged for UI changes, compatible fixes and additions
+  with working fallbacks. No bump is required per push or release. A new client depending on
+  an added endpoint/field without a fallback also changes compatibility.
+- For an incompatible contract, increment the client protocol and server maximum. Raise the
+  minimum when old clients cannot work; keep it lower only with implemented, tested support
+  for every protocol in the range. Add boundary/mixed-version tests, document the decision
+  and upgrade order, and use a breaking Conventional Commit. Do not infer compatibility
+  from SemVer, a Git hash or the database migration number.
+- Shape column changes also require the collection's `schemaVersion` bump. Changes to queued
+  write formats or persisted note content need a lossless device migration/adapter; the
+  protocol gate and schemaVersion do not migrate the outbox. Never clear local data or
+  classify protocol rejection as a permanent write failure to resolve incompatibility.
+- New data routes are gated by default. Use `compatibleFetch` for client REST/attachment
+  requests and `compatibleShapeFetch` for Electric. Keep bootstrap/auth/update metadata and
+  GET/HEAD byte-download contracts backward compatible; do not add mutation exemptions.
+
+### General
+
 - Use Conventional Commits: `<type>(<optional scope>): <description>`, for example
   `feat(android): add preview releases` or `fix(sync): retry interrupted writes`.
   Use `!` or a `BREAKING CHANGE:` footer for breaking changes.

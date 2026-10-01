@@ -7,6 +7,7 @@ import {
   type StorageAdapter,
   WebOnlineDetector,
 } from '@tanstack/offline-transactions';
+import { getSyncStatus, subscribeToSyncStatus } from './syncStatus';
 
 /**
  * The device's copy of one user's synced data, a SQLite database that collections persist
@@ -111,9 +112,27 @@ async function openNativeDatabase(name: string): Promise<LocalDatabase> {
  * Whether the device has a network connection. The Android app asks the OS through the
  * Network plugin rather than trusting the WebView's `navigator.onLine`.
  */
-export function createOnlineDetector(): OnlineDetector {
-  if (!Capacitor.isNativePlatform()) return new WebOnlineDetector();
-  return new NativeOnlineDetector();
+export function createOnlineDetector(): OnlineDetector & { isConnected: () => boolean } {
+  const network = Capacitor.isNativePlatform()
+    ? new NativeOnlineDetector()
+    : new WebOnlineDetector();
+  let blocked = Boolean(getSyncStatus().incompatibility);
+  const unsubscribe = subscribeToSyncStatus(() => {
+    const next = Boolean(getSyncStatus().incompatibility);
+    if (next === blocked) return;
+    blocked = next;
+    network.notifyOnline();
+  });
+  return {
+    isOnline: () => network.isOnline() && !blocked,
+    isConnected: () => network.isOnline(),
+    subscribe: (listener) => network.subscribe(listener),
+    notifyOnline: () => network.notifyOnline(),
+    dispose: () => {
+      unsubscribe();
+      network.dispose();
+    },
+  };
 }
 
 class NativeOnlineDetector extends WebOnlineDetector {

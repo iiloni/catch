@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 export function SaveStatus({ state, compact = false }: { state: SaveState; compact?: boolean }) {
   // Offline, a save waits in the outbox until the connection comes back.
-  const { offline, pending } = useSyncStatus();
+  const { offline, pending, incompatibility } = useSyncStatus();
   const syncing = state === 'saving' || pending > 0;
   const wasSyncing = useRef(syncing);
   const [recentlySynced, setRecentlySynced] = useState(false);
@@ -22,7 +22,7 @@ export function SaveStatus({ state, compact = false }: { state: SaveState; compa
     return () => window.clearTimeout(timer);
   }, [syncing, state]);
 
-  const local = syncing && offline;
+  const local = syncing && (offline || Boolean(incompatibility));
   const visible = syncing || recentlySynced || state === 'error';
   const mode = state === 'error' ? 'error' : local ? 'local' : syncing ? 'syncing' : 'synced';
   return (

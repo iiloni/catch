@@ -11,11 +11,17 @@ vi.mock('motion/react', async (importOriginal) => ({
 }));
 
 afterEach(() => {
-  act(() => updateSyncStatus({ offline: false, pending: 0 }));
+  act(() => updateSyncStatus({ offline: false, pending: 0, incompatibility: null }));
   vi.useRealTimers();
 });
 
 describe('SaveStatus', () => {
+  it('says changes are kept locally while an update is required', () => {
+    act(() => updateSyncStatus({ incompatibility: 'client-too-old', pending: 1 }));
+    render(<SaveStatus state="saving" />);
+    expect(screen.getByText('Saved on this device')).toBeInTheDocument();
+    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
+  });
   it('shows a save in progress', () => {
     render(<SaveStatus state="saving" />);
     expect(screen.getByText('Syncing…')).toBeInTheDocument();

@@ -149,7 +149,8 @@ export async function downloadAttachment(attachment: Attachment) {
   if (!blob) {
     const { getAuthToken } = await import('./auth');
     const { getServerUrl } = await import('./serverUrl');
-    const response = await fetch(
+    const { compatibleFetch } = await import('./compatibility');
+    const response = await compatibleFetch(
       `${getServerUrl()}/api/attachments/${attachment.id}/content?download=true`,
       { headers: { Authorization: `Bearer ${getAuthToken() ?? ''}` } },
     );

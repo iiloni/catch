@@ -8,6 +8,7 @@ const status = (changes: Partial<SyncStatus>): SyncStatus => ({
   offline: false,
   signedOut: false,
   sharedTab: false,
+  incompatibility: null,
   ...changes,
 });
 
@@ -16,10 +17,23 @@ describe('showsSyncIndicator', () => {
     expect(showsSyncIndicator(status({ pending: 3 }))).toBe(false);
     expect(showsSyncIndicator(status({ offline: true }))).toBe(true);
     expect(showsSyncIndicator(status({ signedOut: true }))).toBe(true);
+    expect(showsSyncIndicator(status({ incompatibility: 'client-too-old' }))).toBe(true);
   });
 });
 
 describe('SyncIndicator', () => {
+  it.each(['client-too-old', 'server-too-old'] as const)(
+    'explains %s and links to recovery',
+    (incompatibility) => {
+      render(<SyncIndicator status={status({ incompatibility, pending: 2 })} />);
+      fireEvent.click(screen.getByRole('button', { name: /update required, 2 changes waiting/ }));
+      expect(screen.getByText(/local notes and queued changes are kept/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'View updates' })).toHaveAttribute(
+        'href',
+        '/settings/update',
+      );
+    },
+  );
   it('counts the changes waiting offline', () => {
     render(<SyncIndicator status={status({ offline: true, pending: 2 })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Offline, 2 changes waiting' }));
