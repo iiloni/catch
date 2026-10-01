@@ -49,11 +49,12 @@ Splash images and all application styling remain unchanged.
 The release workflow's existing tag parser selects stable from `vMAJOR.MINOR.PATCH` and
 preview from `vMAJOR.MINOR.PATCH-preview`. Its `channel` output becomes the build-only
 `CATCH_CHANNEL` for Android web sync and the Docker build argument. Vite selects icon paths
-from this explicit value; it defaults to stable and rejects unsupported values. PWA
+from this explicit value; it defaults to dev, which uses the stable icons, and rejects
+unsupported values. PWA
 names, URLs, theme/background colors and release behavior are unchanged. Preview browser
 links and manifest icons use `/preview/` paths to avoid mixing cached stable icons.
 
-Android launcher resources are selected by Gradle's existing stable/preview flavors,
+Android launcher resources are selected by Gradle's flavors (dev inherits stable's),
 independently of debug/release build type. Capacitor uses `CATCH_CHANNEL` for its default
 flavor too. Sync the matching web channel before building an APK:
 
@@ -69,9 +70,9 @@ CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync
 ```
 
 Release signing still requires the values in [Releasing and deployment](releases.md).
-Development and ordinary debug builds remain stable unless preview is explicitly selected.
-A local production image can select preview with `docker build --build-arg
-CATCH_CHANNEL=preview --target production .`; the build argument defaults to stable.
+Development and ordinary debug builds are the dev channel unless stable or preview is
+explicitly selected. A local production image can select preview with `docker build
+--build-arg CATCH_CHANNEL=preview --target production .`; the build argument defaults to dev.
 
 ## Stable fingerprint review
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Catch Dev</string>
+    <string name="title_activity_main">Catch Dev</string>
+    <string name="package_name">org.iloni.catchnotes.dev</string>
+    <string name="custom_url_scheme">org.iloni.catchnotes.dev</string>
+</resources>

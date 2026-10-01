@@ -43,8 +43,10 @@ To test inside the native app, connect the phone with USB or wireless debugging 
 ./scripts/dev.sh android --usb   # or through adb, without Tailscale on the phone
 ```
 
-The command starts this worktree's stack and installs a debug app whose WebView loads its
-Vite server, so web changes hot-reload on the phone. Rerun it only after native changes
+The command starts this worktree's stack and installs the Catch Dev app, whose WebView
+loads its Vite server, so web changes hot-reload on the phone. It is a separate app from
+the released Catch and Catch Preview, and the command builds it whatever `CATCH_CHANNEL`
+is set to. Rerun it only after native changes
 (Capacitor plugins or config, anything under `apps/web/android`) or to point the app at
 another worktree. The app needs the stack running (and, with `--usb`, the device connected)
 while you use it. `chrome://inspect` works here too.
@@ -56,11 +58,12 @@ A standalone build bundles the web app and asks for your server URL on first lau
 
 ```bash
 pnpm --filter @catch/web android:sync
-pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleStableDebug
+pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDevDebug
 ```
 
-Stable is the default Android flavor. `assemblePreviewDebug` builds the separate Catch
-Preview app; release builds read their version and signing credentials from the environment
+Dev is the default Android flavor. It installs as Catch Dev (`org.iloni.catchnotes.dev`)
+beside the released Catch and Catch Preview apps and is never distributed. Stable and
+preview release builds read their version and signing credentials from the environment
 (see [Releasing and deployment](docs/releases.md)).
 
 The approved Gentle Drop masters and exact values live in `branding/`, with the icon-only

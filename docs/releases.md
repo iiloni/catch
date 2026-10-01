@@ -9,6 +9,7 @@ Compose files, domains, credentials, and signing keys stay outside the repositor
 | --- | --- | --- | --- | --- |
 | Stable | `v0.4.1` | `0.4.1` | `stable`, `latest` | Catch (`org.iloni.catchnotes`) |
 | Preview | `v1.0.2-preview` | `1.0.2-preview` | `preview` | Catch Preview (`org.iloni.catchnotes.preview`) |
+| Dev | none | none | none | Catch Dev (`org.iloni.catchnotes.dev`) |
 
 The image name is `ghcr.io/<repository owner>/<repository name>`, lowercased. Stable and
 preview advance independently. Preview never changes the stable aliases or GitHub's latest
@@ -115,21 +116,23 @@ workflow identity intact: resetting the run sequence requires planning a higher 
 baseline. A rerun keeps its original code; retry an interrupted older release before making
 newer releases. Published releases cannot be rebuilt and overwritten.
 
-Stable and preview install together and keep separate local notes, accounts, and server
-URLs. The first signed stable installation replaces the development app only after a
-one-time uninstall because development uses a different debug key. Sync or export local
-notes first. Subsequent signed releases update normally. Download updates from GitHub
+Stable, preview and dev install together and keep separate local notes, accounts, and
+server URLs. A device that still has a debug build from before the dev channel holds it
+under the stable id with a debug key, so the first signed stable installation needs a
+one-time uninstall. Sync or export local notes first. Signed releases update normally. Download updates from GitHub
 Releases; an automatic Android updater is not included.
 
 Local release builds use `CATCH_VERSION`, `CATCH_VERSION_CODE`, `ANDROID_KEYSTORE_PATH`,
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Missing values
-fail the release build. Debug builds do not require them. `assembleStableDebug` is the usual
-development APK; `assemblePreviewDebug` is available for testing the second app.
+fail the release build. Debug builds do not require them. `assembleDevDebug` is the usual
+development APK; `assembleStableDebug` and `assemblePreviewDebug` build debug-signed copies
+under the released ids, which cannot be installed over a signed release. The dev flavor
+has no release build.
 
 The workflow forwards the tag parser's channel as build-only `CATCH_CHANNEL` to Android
 web sync and the Docker build. Local preview sync uses
 `CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync` before building the preview
-flavor; an unset channel stays stable. See [Brand assets](branding.md) for regeneration
+flavor; an unset channel is dev. See [Brand assets](branding.md) for regeneration
 and the channel-specific icon paths. Application UI and theme colors are shared unchanged.
 
 ## Creating a release

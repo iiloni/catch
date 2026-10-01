@@ -134,7 +134,7 @@ case "$command" in
         "${compose[@]}" exec -T app pnpm test "$@"
         ;;
     build)
-        "${compose[@]}" exec -T -e "CATCH_CHANNEL=${1:-stable}" app pnpm build
+        "${compose[@]}" exec -T -e "CATCH_CHANNEL=${1:-dev}" app pnpm build
         ;;
     e2e)
         # Playwright runs on the host (it needs a browser) against this stack.
@@ -151,7 +151,7 @@ case "$command" in
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
     android)
-        # Installs a debug build whose WebView loads this stack's Vite server, so
+        # Installs the Catch Dev app, whose WebView loads this stack's Vite server, so
         # web changes hot-reload on the phone. Runs on the host (adb, JDK, SDK).
         command -v adb >/dev/null || { echo "adb not found; install Android platform-tools." >&2; exit 1; }
         if ! adb devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then
@@ -169,11 +169,14 @@ case "$command" in
             forward=(--forwardPorts "$port:$port")
         fi
         [[ -d "$repo_root/node_modules" ]] || pnpm --dir "$repo_root" install
+        # Always the dev app, whatever the caller's environment says: a debug-signed build under
+        # a released id makes the installer uninstall that app, along with its unsynced notes.
+        export CATCH_CHANNEL=dev
         # cap sync copies the web build into the APK. Live reload ignores it, so any build will do.
         [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
         echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
         pnpm --dir "$repo_root/apps/web" exec cap run android \
-            --live-reload --host "$host" --port "$port" "${forward[@]}" "$@"
+            --live-reload --host "$host" --port "$port" "${forward[@]}" "$@" --flavor dev
         ;;
     shell)
         "${compose[@]}" exec app bash
@@ -213,9 +216,9 @@ Usage: ./scripts/dev.sh <command>
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
   test [args]         Unit tests (in the container)
-  build [channel]     Build all packages (in the container; stable by default, or preview)
+  build [channel]     Build all packages (in the container; dev by default, or stable, preview)
   e2e [args]          Playwright tests from the host (one suite across worktrees)
-  android [--usb]     Start the stack and install a live-reload debug app on Android
+  android [--usb]     Start the stack and install the live-reload Catch Dev app on Android
                       (--usb reaches the dev server via adb instead of Tailscale)
   shell               Open a shell in the app container
   psql [args]         Open psql against this worktree's database
