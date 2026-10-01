@@ -135,6 +135,8 @@ test('column handles reorder independently of the sheet grip on touch', async ({
   await page.getByRole('button', { name: 'Edit columns' }).click();
   const sheet = page.getByRole('dialog').first();
   await expect(sheet).toHaveCSS('transform', 'none');
+  // A new account's columns sync in after the sheet opens, and the sheet grows to fit them.
+  await expect(sheet.locator('[data-column-card]')).toHaveCount(3);
   const before = await sheet.boundingBox();
   if (!before) throw new Error('Missing column editor');
 

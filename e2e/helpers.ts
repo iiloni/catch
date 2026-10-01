@@ -1,5 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 
+// Signing in reloads the page to open that user's local database. The dev server sends the
+// app unbundled, so on a busy machine that load outlasts the default five seconds.
+const APP_LOAD_TIMEOUT = 15_000;
+
 /** Signs up a fresh user, so each test starts with no notes. */
 export async function signUp(page: Page) {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -9,7 +13,9 @@ export async function signUp(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   return email;
 }
 
@@ -20,7 +26,9 @@ export async function signIn(page: Page, email: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 }
 
 /** Creates a note through the quick-note window above the dock. */
