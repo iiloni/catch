@@ -12,6 +12,7 @@ import { boardColumnRoutes } from './routes/boardColumns';
 import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
 import { shapeRoutes } from './routes/shapes';
+import { updateRoutes } from './routes/updates';
 
 export function createApp() {
   const app = new Hono<AppEnv>();
@@ -74,6 +75,7 @@ export function createApp() {
     .route('/attachments', attachmentRoutes)
     .route('/board-columns', boardColumnRoutes)
     .route('/link-previews', linkPreviewRoutes)
+    .route('/updates', updateRoutes)
     .route('/shapes', shapeRoutes);
 
   return api;

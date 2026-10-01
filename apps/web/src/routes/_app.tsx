@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
+import { useEffect } from 'react';
 import { z } from 'zod';
+import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { Dock } from '@/components/Dock/Dock';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
@@ -11,6 +13,7 @@ import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { getAuthToken } from '@/lib/auth';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
+import { watchUpdates } from '@/lib/updates';
 
 /**
  * Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`.
@@ -29,6 +32,7 @@ export const Route = createFileRoute('/_app')({
 });
 
 function AppLayout() {
+  useEffect(watchUpdates, []);
   const { note } = Route.useSearch();
   const pane = useNotePaneLayout();
 
@@ -48,6 +52,7 @@ function AppLayout() {
       <Dock />
       <NoteEditorOverlay noteId={note} />
       <LinkPreviewOverlay />
+      <AppUpdatePrompt />
       <AnimatePresence>
         {pane.shown && note && (
           <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />

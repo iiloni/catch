@@ -1,6 +1,7 @@
 import { ChevronUp } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type PointerEvent, useEffect, useRef } from 'react';
+import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { haptics } from '@/lib/haptics';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
@@ -104,6 +105,7 @@ export function SettingsTabPicker({
                     )}
                     <Icon className="size-5" aria-hidden />
                     {tab.label}
+                    {tab.path === '/settings/update' && <UpdateDot className="ml-auto" />}
                   </motion.button>
                 );
               })}
@@ -241,6 +243,7 @@ export function SettingsTabSelector({
       >
         {Icon && <Icon className="size-5 text-muted-foreground" aria-hidden />}
         <span className="min-w-0 flex-1 truncate text-left">{current?.label ?? 'Settings'}</span>
+        <UpdateDot />
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={springs.snappy}>
           <ChevronUp className="size-5 text-muted-foreground" aria-hidden />
         </motion.span>

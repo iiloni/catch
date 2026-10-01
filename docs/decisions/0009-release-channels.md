@@ -53,12 +53,28 @@ and preview must advance independently, including preview versions ahead of stab
 - Preview deployments use their own database and Electric storage. Startup migrations make
   sharing production storage with preview, or treating image rollback as database rollback,
   unsafe.
+- Settings > Update shows the server's build version and channel, plus Android's installed
+  package version. Recent GitHub releases are filtered to the server channel. Android
+  checks on launch, resume and periodically; an available update marks Settings and Update,
+  and a dismissible prompt links to the page once per installed app/server/target version.
+- Android updates target the server's exact published version, only within the installed
+  app's channel and only forwards. The native plugin downloads the APK and checksum from
+  GitHub, checks SHA-256, package identity, release version, increasing version code and
+  the installed signing certificate, then opens Android's installer. Android may first ask
+  the user to allow Catch to install updates. Development apps are never updated this way.
+  Changing channels requires installing the separate app; it does not replace device data.
+- Release versions describe builds, not API compatibility. There is currently no enforced
+  client/server protocol range. Breaking-change commit markers document changes but do not
+  require an app update at runtime. A future compatibility gate should use an explicit
+  protocol version and supported range rather than treating every version difference as
+  incompatible. PWAs receive new code through their service worker, but offline or already
+  open clients can still run older code.
 
 ## Consequences
 
 - A public GHCR package requires a one-time visibility change after its first publication.
 - Conventional Commits describe changes, but do not automatically choose or push version
   tags. Releasing remains an explicit action by a maintainer.
-- APK distribution uses GitHub Releases. Selecting a channel does not provide an automatic
-  Android updater, and channel image aliases require an explicit pull and recreate.
+- APK distribution and the Android updater use GitHub Releases. Android installation needs
+  user confirmation; channel image aliases still require an explicit pull and recreate.
 - See [the release guide](../releases.md) for signing setup and deployment instructions.

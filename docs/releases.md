@@ -1,5 +1,12 @@
 # Releasing and deployment
 
+Settings > Update shows the current server version and its release channel. On Android it
+also shows the installed app version and offers an update to the server's exact published
+release when the app is behind and uses the same channel. The first launch or resume after
+an update is detected shows a dismissible prompt; Settings and Update keep an indicator
+until the app catches up. The download is verified before Android asks to install it. Stable,
+preview and development apps remain separate; development builds have no release updater.
+
 Catch builds Docker images and signed Android APKs from version tags. Personal production
 Compose files, domains, credentials, and signing keys stay outside the repository.
 

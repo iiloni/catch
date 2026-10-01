@@ -1,3 +1,4 @@
+import { releaseChannelSchema } from '@catch/shared';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -38,6 +39,7 @@ const envSchema = z.object({
   BACKUPS_DIR: z.string().default('/data/backups'),
   /** The release this image was built from, recorded in backups. Unset in development. */
   CATCH_VERSION: z.string().optional(),
+  CATCH_CHANNEL: releaseChannelSchema.default('dev'),
   /** Back up the database at startup before a new version migrates it. */
   UPDATE_BACKUPS: z
     .enum(['true', 'false'])

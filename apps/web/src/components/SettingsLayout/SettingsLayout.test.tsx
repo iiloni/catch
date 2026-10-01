@@ -40,7 +40,12 @@ describe('SettingsLayout', () => {
 
   it('groups server settings separately for admins', () => {
     render(
-      <SettingsLayout current={SETTINGS_TABS[3]} wide isAdmin onBack={vi.fn()}>
+      <SettingsLayout
+        current={SETTINGS_TABS.find((tab) => tab.path === '/settings/admin/users')!}
+        wide
+        isAdmin
+        onBack={vi.fn()}
+      >
         <p>Users page</p>
       </SettingsLayout>,
     );

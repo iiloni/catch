@@ -7,6 +7,7 @@ import type {
   CreateNotes,
   ListUsers,
   RefreshLinkPreview,
+  ReleasesResponse,
   ResetUserPasswordResponse,
   TxidResponse,
   UpdateAttachment,
@@ -15,6 +16,7 @@ import type {
   UpdateUserRole,
   UserActionResponse,
   UsersResponse,
+  VersionInfo,
 } from '@catch/shared';
 import { getAuthToken } from './auth';
 import { getServerUrl } from './serverUrl';
@@ -43,6 +45,17 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const api = {
+  versionInfo: () =>
+    request<VersionInfo>('/updates', {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
+    }),
+  releases: () =>
+    request<ReleasesResponse>('/updates/releases', {
+      method: 'GET',
+      signal: AbortSignal.timeout(15_000),
+    }),
   resetUserPassword: (id: string) =>
     request<ResetUserPasswordResponse>(`/admin/users/${encodeURIComponent(id)}/reset-password`, {
       method: 'POST',
