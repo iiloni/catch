@@ -383,7 +383,9 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   await expect(toolbar.getByRole('button', { name: 'Unpin' })).toBeVisible();
   await restored.getByRole('button', { name: 'Close' }).click();
 
-  await noteAction(page, 'Old receipts', 'Archive');
+  // Reopened while it is still closing, the editor has to close again.
+  const reopened = await noteAction(page, 'Old receipts', 'Archive');
+  await expect(reopened).toBeHidden();
   await expect(card(page, 'Old receipts')).toBeHidden();
   await openGalleryPage(page, 'Archive');
   const dialog = await openNote(page, 'Old receipts');
