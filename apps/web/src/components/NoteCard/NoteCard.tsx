@@ -72,6 +72,10 @@ function MediaOnlyFace({ note }: { note: Note }) {
   );
 }
 
+/** Touch screens hide a card's actions (`pointer-coarse:hidden`), so they are never built there. */
+const hidesActions = () =>
+  typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
 export function NoteCard({
   note,
   onOpen,
@@ -125,7 +129,10 @@ export function NoteCard({
       onPointerEnter={(event) => {
         if (event.pointerType !== 'touch') arm();
       }}
-      onFocus={arm}
+      // A tap focuses the card as it opens the note, which is no time to build hidden actions.
+      onFocus={() => {
+        if (!hidesActions()) arm();
+      }}
       className={cn(
         'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
         forceHover && 'shadow-md',

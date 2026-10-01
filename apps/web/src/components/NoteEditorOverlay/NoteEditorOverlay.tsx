@@ -27,7 +27,7 @@ import { notesCollection } from '@/lib/collections';
 import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useNoteLinks } from '@/lib/linkPreviews';
-import { curves, springs } from '@/lib/motion';
+import { afterPaint, animateSteady, curves, springs } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
 import {
   editorProgress,
@@ -285,9 +285,13 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       return;
     }
     if (origin) hideCard(note.id);
-    const animations = [animate(progress, 1, curves.expand)];
-    if (!origin) animations.push(animate(fade, 1, curves.expand));
-    void Promise.all(animations).then(() => setSettled(true));
+    // Mounting the note (and turning the dock into its toolbar) keeps the page busy for a
+    // moment. The surface waits it out looking like the card it covers, then grows.
+    return afterPaint(() => {
+      const animations = [animateSteady(progress, 1, curves.expand)];
+      if (!origin) animations.push(animateSteady(fade, 1, curves.expand));
+      void Promise.all(animations).then(() => setSettled(true));
+    });
   }, []);
 
   // Unfolding a foldable with a note open turns it into a pane, which slides into place. Its
@@ -330,31 +334,36 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     // Measure a frame later: an action that closed the editor (trash, archive) may be about
     // to take the card off the page, and shrinking into a card that vanishes looks broken.
     let landing = 0;
+    let start = 0;
     const frame = requestAnimationFrame(() => {
       cardRect.current = discarded ? null : measureCard(note.id);
-      if (cardRect.current) {
-        hideCard(note.id);
-        landing = window.setTimeout(
-          () => landCard(note.id),
-          (curves.collapse.duration - LAND_EARLY) * 1000,
-        );
-      }
+      if (cardRect.current) hideCard(note.id);
       rerender((n) => n + 1);
 
-      const animations = [
-        animate(progress, 0, curves.collapse),
-        animate(dragY, 0, curves.collapse),
-      ];
-      if (!cardRect.current) animations.push(animate(fade, 0, curves.collapse));
-      void Promise.all(animations).then(() => {
-        showCard(note.id);
-        // A pane folded away into full screen leaves no pane behind.
-        if (leadSurface === self) paneReveal.jump(0);
-        safeToRemove();
+      // A frame later again, once the card's face is drawn on the surface shrinking into it.
+      start = requestAnimationFrame(() => {
+        if (cardRect.current) {
+          landing = window.setTimeout(
+            () => landCard(note.id),
+            (curves.collapse.duration - LAND_EARLY) * 1000,
+          );
+        }
+        const animations = [
+          animateSteady(progress, 0, curves.collapse),
+          animateSteady(dragY, 0, curves.collapse),
+        ];
+        if (!cardRect.current) animations.push(animateSteady(fade, 0, curves.collapse));
+        void Promise.all(animations).then(() => {
+          showCard(note.id);
+          // A pane folded away into full screen leaves no pane behind.
+          if (leadSurface === self) paneReveal.jump(0);
+          safeToRemove();
+        });
       });
     });
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(start);
       window.clearTimeout(landing);
     };
   }, [isPresent, flush, note.id, progress, dragY, fade, textFade, self, safeToRemove]);
