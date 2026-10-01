@@ -41,17 +41,16 @@ export function findCard(noteId: string): HTMLElement | null {
 }
 
 /**
- * Where the editor should shrink back to: the note's card, scrolled into view if it
- * moved off screen (e.g. editing re-sorted it to the top). Null when there is no card,
- * such as after archiving from the editor.
+ * Where the editor should shrink back to: the note's card. Null when there is no card on
+ * screen, such as after archiving from the editor, or when editing re-sorted the note out
+ * of view (the grid may not even render it). The editor then fades out where it is, which
+ * keeps the reader's place instead of jumping the page to the card.
  */
 export function measureCard(noteId: string): Rect | null {
   const card = findCard(noteId);
   if (!card) return null;
   const box = card.getBoundingClientRect();
-  if (box.bottom < 0 || box.top > window.innerHeight) {
-    card.scrollIntoView({ block: 'center', behavior: 'instant' });
-  }
+  if (box.bottom < 0 || box.top > window.innerHeight) return null;
   return rectOf(card);
 }
 

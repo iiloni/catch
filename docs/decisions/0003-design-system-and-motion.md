@@ -106,7 +106,9 @@ native; CSS `linear()` springs can mimic the curve but not the interruption.
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor is translated onto the card and
 clipped to its size, then both animate to full screen. Content is never scaled, so text stays
-crisp. A capped vertical drag dismisses the editor when the note is scrolled to the matching
+crisp. A note whose card is off screen when it closes (editing re-sorted it, or the grid no
+longer renders it) fades out in place, as after archiving, rather than jumping the page to
+the card. A capped vertical drag dismisses the editor when the note is scrolled to the matching
 edge, with a haptic tick at the release threshold. We chose this over the View
 Transitions API, which cannot be interrupted or driven by a finger, and over Motion's
 `layoutId`, whose scale-based projection distorts text between a card and a full screen.
