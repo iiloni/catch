@@ -1,13 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { card, createNote, moveNote, noteToolbar, openNote, signUp } from './helpers';
+import { card, moveNote, noteToolbar, openNote, seedNotes, signUp } from './helpers';
 
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
 
 test('an open note sits beside the page, which stays usable', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Alpha', 'First');
-  await createNote(page, 'Beta', 'Second');
+  await seedNotes(page, [
+    { title: 'Alpha', body: 'First' },
+    { title: 'Beta', body: 'Second' },
+  ]);
 
   const dialog = await openNote(page, 'Alpha');
   const pane = await dialog.boundingBox();
@@ -42,7 +44,7 @@ test('a quick note and its dock center over the split view with one formatting b
   page,
 }) => {
   await signUp(page);
-  await createNote(page, 'Alpha', 'First');
+  await seedNotes(page, [{ title: 'Alpha', body: 'First' }]);
   await openNote(page, 'Alpha');
   const dock = page.locator('[data-dock] > div');
   const initialDock = await dock.boundingBox();
@@ -122,7 +124,7 @@ test('a quick note and its dock center over the split view with one formatting b
 
 test('on the deck a note pops up over the board instead', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Ship it');
+  await seedNotes(page, ['Ship it']);
   await moveNote(page, 'Ship it');
 
   // The page beside the pane stays usable, and leaving for the deck closes the note.
@@ -143,7 +145,7 @@ test('on the deck a note pops up over the board instead', async ({ page }) => {
 
 test('the split is resized by dragging the handle, within limits', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Alpha');
+  await seedNotes(page, ['Alpha']);
   const dialog = await openNote(page, 'Alpha');
   const handle = page.getByRole('separator', { name: 'Resize note' });
   await expect(handle).toBeVisible();

@@ -86,8 +86,10 @@ init_worktree() {
 
     branch=$(git branch --show-current)
     slug=$(slugify "${branch:-detached}")
+    # Cutting the slug can leave a dash at its end, and Docker refuses `-_` in an image name.
+    slug=${slug:0:28}
     path_hash=$(printf '%s' "$repo_root" | cksum | awk '{print $1}')
-    project="catch_${slug:0:28}_${path_hash:0:7}"
+    project="catch_${slug%-}_${path_hash:0:7}"
     port=$(choose_port)
     public_host=${CATCH_PUBLIC_HOST:-$(detect_public_host)}
 

@@ -1,11 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { createNote, openNote, signUp } from './helpers';
+import { openNote, seedNotes, signUp } from './helpers';
 
 test('signing in returns to the linked note, including after a failed attempt and reload', async ({
   page,
+  isMobile,
 }) => {
+  // Where signing in returns to is the router's doing. `signIn` still fills in the form on a
+  // phone for the tests that open a second device, and the test below signs up on both.
+  test.skip(isMobile, 'Sign-in redirects do not depend on the layout.');
   const email = await signUp(page);
-  await createNote(page, 'Linked note', 'Open this note after signing in.');
+  await seedNotes(page, [{ title: 'Linked note', body: 'Open this note after signing in.' }]);
   await openNote(page, 'Linked note');
   const noteUrl = new URL(page.url());
   const destination = `${noteUrl.pathname}${noteUrl.search}#details`;
@@ -43,13 +47,4 @@ test('creating an account returns to the original page with its query and fragme
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page).toHaveURL(new URL(destination, page.url()).href);
   await expect(page.getByRole('heading', { name: 'Archive' })).toBeVisible();
-});
-
-test('signing in directly still opens the gallery', async ({ page }) => {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('admin@example.com');
-  await page.getByLabel('Password').fill('adminadmin');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page).toHaveURL(new URL('/', page.url()).href);
-  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
 });

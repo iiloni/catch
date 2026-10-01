@@ -146,6 +146,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     closing.current = true;
     onClose();
   };
+  // AnimatePresence brings the same instance back if its note is reopened before it finishes
+  // closing, and that note has to be able to close again.
+  useEffect(() => {
+    if (isPresent) closing.current = false;
+  }, [isPresent]);
   const { state, save, flush } = useNoteAutosave(note.id);
   const pane = useNotePane();
   // Leaving for the Deck closes the note on a page that does not split, so a closing note

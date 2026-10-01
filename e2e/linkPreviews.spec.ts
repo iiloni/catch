@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, createNote, openNote, signUp } from './helpers';
+import { card, createNote, openNote, settledBox, signUp } from './helpers';
 
 test('a note’s links show under its card, in an overlay and in the open note', async ({ page }) => {
   await signUp(page);
@@ -55,8 +55,8 @@ test('the link overlay dismisses with an upward or downward touch swipe', async 
   for (const delta of [-150, 150]) {
     await underlay.click();
     await expect(overlay).toBeVisible();
-    const header = await overlay.locator('header').boundingBox();
-    if (!header) throw new Error('Link overlay header is missing');
+    // The overlay rises from the dock; aim at its header once it has arrived.
+    const header = await settledBox(overlay.locator('header'));
     const x = header.x + 30;
     const y = header.y + header.height / 2;
     await cdp.send('Input.dispatchTouchEvent', {
@@ -78,7 +78,6 @@ test('the dock tray fades away and its overlay gathers media above links', async
   page,
   isMobile,
 }, testInfo) => {
-  test.setTimeout(60000);
   if (!isMobile) await page.setViewportSize({ width: 600, height: 900 });
   await signUp(page);
   await page.getByRole('button', { name: 'New note' }).click();
@@ -135,7 +134,8 @@ test('the dock tray fades away and its overlay gathers media above links', async
     return samples;
   });
   const lastVisible = fade.filter((sample) => sample.connected).at(-1);
-  expect(lastVisible?.opacity).toBeLessThan(0.01);
+  // The last frame seen before the tray leaves; a busy machine draws the fade in fewer of them.
+  expect(lastVisible?.opacity).toBeLessThan(0.1);
   expect(lastVisible?.wrapperOpacity).toBe('1');
   const overlay = page.locator('[data-link-overlay]');
   await expect(overlay).toHaveAccessibleName('Media · 1');

@@ -54,6 +54,9 @@ async function expectCaretVisible(page: Page) {
     .toBe(true);
 }
 
+// The app only hears of a keyboard from a touch device, whatever the width of its screen.
+test.skip(({ isMobile }) => !isMobile, 'An overlay keyboard needs a touch device.');
+
 for (const [layout, viewport] of [
   ['phone', { width: 412, height: 839 }],
   ['panel', { width: 900, height: 450 }],

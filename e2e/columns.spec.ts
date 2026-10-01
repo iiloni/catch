@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
 import {
   card,
-  createNote,
   moveNote,
   noteToolbar,
+  openDeck,
   openNote,
+  seedNotes,
+  settledBox,
   signUp,
-  waitForPageTransition,
 } from './helpers';
 
 test('columns can be added, reordered and deleted without losing notes', async ({
@@ -15,11 +16,8 @@ test('columns can be added, reordered and deleted without losing notes', async (
 }) => {
   test.skip(isMobile, 'This test moves a card with the mouse.');
   await signUp(page);
-  await createNote(page, 'Ship it');
-  await moveNote(page, 'Ship it');
-  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await seedNotes(page, ['Ship it'], 'new');
+  await openDeck(page);
 
   await page.getByRole('button', { name: 'Edit columns' }).click();
   await expect(page.getByRole('dialog').getByText('Default', { exact: true })).toBeVisible();
@@ -197,8 +195,7 @@ test('holding the move button drops the open note into a chosen column', async (
   isMobile,
 }) => {
   await signUp(page);
-  await createNote(page, 'Hold me');
-  await createNote(page, 'Tap me');
+  await seedNotes(page, ['Hold me', 'Tap me']);
 
   // A tap opens the picker; choosing New uses the default column.
   await moveNote(page, 'Tap me');
@@ -230,17 +227,7 @@ test('holding the move button drops the open note into a chosen column', async (
   await expect(columns).toBeVisible();
   await expect(columns.getByRole('button')).toHaveText(['NewDefault', 'In progress', 'On hold']);
   // The dock grows upward, carrying the rows with it; aim once it has settled.
-  const row = columns.getByRole('button', { name: 'In progress' });
-  let settled = await row.boundingBox();
-  await expect
-    .poll(async () => {
-      const previous = settled;
-      settled = await row.boundingBox();
-      return previous !== null && settled !== null && previous.y === settled.y;
-    })
-    .toBe(true);
-  const target = settled;
-  if (!target) throw new Error('Missing column');
+  const target = await settledBox(columns.getByRole('button', { name: 'In progress' }));
   const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
   for (let step = 1; step <= 10; step++) {
     await press('move', {
@@ -256,8 +243,7 @@ test('holding the move button drops the open note into a chosen column', async (
   await expect(columns).toHaveCount(0);
   await expect(noteToolbar(page).getByRole('button', { name: 'Move note' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('link', { name: 'Deck' }).click();
-  await waitForPageTransition(page);
+  await openDeck(page);
   if (isMobile) await page.getByRole('tab', { name: /In progress/ }).click();
   await expect(
     page.getByRole('region', { name: 'In progress column' }).getByText('Hold me'),
@@ -268,7 +254,7 @@ test('holding the move button drops the open note into a chosen column', async (
 
 test('the move picker shows every destination and the current location', async ({ page }) => {
   await signUp(page);
-  await createNote(page, 'Move me');
+  await seedNotes(page, ['Move me']);
   await openNote(page, 'Move me');
   const move = noteToolbar(page).getByRole('button', { name: 'Move note' });
   const picker = page.getByRole('group', { name: 'Move note', exact: true });

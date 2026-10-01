@@ -19,9 +19,9 @@ async function directoryUser(request: APIRequestContext, token: string, email: s
   return usersResponseSchema.parse(await response.json()).users.find((row) => row.email === email);
 }
 
-test('password reset revokes sessions, preserves login history and protects self', async ({
-  request,
-}) => {
+test('password reset revokes sessions, preserves login history and protects self', {
+  tag: '@api',
+}, async ({ request }) => {
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
   const target = await newAccount(request);
@@ -78,7 +78,6 @@ test('admins confirm password reset and deletion, and users can replace the temp
   browser,
   request,
 }) => {
-  test.setTimeout(60000);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   const admin = await adminSession(request);
   const target = await newAccount(request, 'Password reset user');
@@ -182,9 +181,9 @@ test('admins confirm password reset and deletion, and users can replace the temp
   );
 });
 
-test('deleting a user revokes attachment access and keeps other accounts intact', async ({
-  request,
-}) => {
+test('deleting a user revokes attachment access and keeps other accounts intact', {
+  tag: '@api',
+}, async ({ request }) => {
   const ticketHeaders = { Cookie: '' };
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
@@ -272,9 +271,9 @@ test('deleting a user revokes attachment access and keeps other accounts intact'
   await request.delete(`/api/admin/users/${other.user.id}`, { headers });
 });
 
-test('concurrent mutual deletions leave an administrator with current permissions', async ({
-  request,
-}) => {
+test('concurrent mutual deletions leave an administrator with current permissions', {
+  tag: '@api',
+}, async ({ request }) => {
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
   const first = await newAccount(request);
@@ -338,6 +337,8 @@ test('admins can open Users from either settings navigation and edit roles', asy
   await page.getByLabel('Email').fill('admin@example.com');
   await page.getByLabel('Password').fill('adminadmin');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  // With nowhere to return to, signing in opens the gallery.
+  await expect(page).toHaveURL(new URL('/', page.url()).href);
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/general$/);
@@ -382,8 +383,21 @@ test('regular users cannot see Admin or access its pages and APIs', async ({
   await page.goto('/settings/admin/users');
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(page.getByRole('table', { name: 'Users' })).toHaveCount(0);
+  await page.goto('/settings/admin/backups');
+  await expect(page).toHaveURL(/\/settings\/general$/);
+  await expect(page.getByText('Server backups')).toBeHidden();
   const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
   const headers = { Authorization: `Bearer ${token}` };
+  const backup = 'catch-backup-2026-10-01_03-04-05-manual.zip';
+  expect((await request.get('/api/admin/backups', { headers })).status()).toBe(403);
+  expect((await request.post('/api/admin/backups', { headers, data: {} })).status()).toBe(403);
+  expect((await request.post(`/api/admin/backups/${backup}/restore`, { headers })).status()).toBe(
+    403,
+  );
+  // Downloads take a ticket rather than a session, and this request has none.
+  expect((await request.get(`/api/admin/backups/${backup}/download`, { headers })).status()).toBe(
+    401,
+  );
   expect((await request.get('/api/admin/users', { headers })).status()).toBe(403);
   expect(
     (await request.post('/api/admin/users/anything/reset-password', { headers })).status(),
@@ -396,9 +410,9 @@ test('regular users cannot see Admin or access its pages and APIs', async ({
   ).toBe(403);
 });
 
-test('administrative APIs validate roles, protect self, paginate and revoke stale privileges', async ({
-  request,
-}) => {
+test('administrative APIs validate roles, protect self, paginate and revoke stale privileges', {
+  tag: '@api',
+}, async ({ request }) => {
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
   const target = await newAccount(request, 'Literal %_ search');
@@ -465,7 +479,7 @@ test('administrative APIs validate roles, protect self, paginate and revoke stal
   ).toBe(403);
 });
 
-test('concurrent mutual demotions leave an administrator', async ({ request }) => {
+test('concurrent mutual demotions leave an administrator', { tag: '@api' }, async ({ request }) => {
   const seed = await adminSession(request);
   const headers = { Authorization: `Bearer ${seed.token}` };
   const first = await newAccount(request);
@@ -529,9 +543,9 @@ test('a demoted admin loses the open Users page and its navigation', async ({
   await expect(page).toHaveURL(/\/settings\/general$/);
 });
 
-test('last login advances on successful sign-in but not on failure or session reads', async ({
-  request,
-}) => {
+test('last login advances on successful sign-in but not on failure or session reads', {
+  tag: '@api',
+}, async ({ request }) => {
   const admin = await adminSession(request);
   const target = await newAccount(request);
   const headers = { Authorization: `Bearer ${admin.token}` };

@@ -17,15 +17,6 @@ async function expectOnServer(browser: Browser, email: string, titles: string[])
   await device.close();
 }
 
-test('notes stay on the device when the server cannot be reached', async ({ page }) => {
-  await signUp(page);
-  await createNote(page, 'Kept locally', 'Readable without the server');
-
-  await page.route('**/api/**', (route) => route.abort());
-  await page.reload();
-  await expect(card(page, 'Kept locally')).toContainText('Readable without the server');
-});
-
 test('changes made offline are queued and sync when back online', async ({
   page,
   context,
@@ -51,16 +42,20 @@ test('changes made offline are queued and sync when back online', async ({
   await expectOnServer(browser, email, ['Written offline', 'Written online and edited offline']);
 });
 
-test('queued changes survive a reload and sync once the server is back', async ({
+test('notes and queued changes survive a reload without the server, then sync', async ({
   page,
   browser,
+  isMobile,
 }) => {
+  test.skip(isMobile, 'The outbox does not depend on the layout; the test above runs on both.');
   const email = await signUp(page);
-  await createNote(page, 'First');
+  await createNote(page, 'First', 'Readable without the server');
 
   await page.route('**/api/**', (route) => route.abort());
   await createNote(page, 'Queued');
   await page.reload();
+  // Synced notes are kept on the device, and so is the write still waiting to go.
+  await expect(card(page, 'First')).toContainText('Readable without the server');
   await expect(card(page, 'Queued')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Offline, 1 change waiting' })).toBeVisible();
 

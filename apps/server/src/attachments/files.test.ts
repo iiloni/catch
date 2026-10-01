@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,10 @@ import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { env } from '../env';
 import { createThumbnail, deleteFiles, filePath, fileResponse, parseRange } from './files';
+
+// The server image has FFmpeg (see the Dockerfile). A machine without it leaves the poster
+// to the run inside the stack: `./scripts/dev.sh test`, which CI does too.
+const ffmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
 describe('media thumbnails', () => {
   const originalDirectory = env.ATTACHMENTS_DIR;
@@ -18,27 +23,31 @@ describe('media thumbnails', () => {
   });
 
   // Generation and repair each allow FFmpeg up to ten seconds.
-  it('generates a video poster and repairs a missing poster without changing the original', async () => {
-    const id = randomUUID();
-    const video = await readFile(new URL('../../../../e2e/fixtures/video.mp4', import.meta.url));
-    await writeFile(filePath(id), video);
-    await Promise.all([createThumbnail(id, 'video'), createThumbnail(id, 'video')]);
-    expect(await sharp(filePath(id, true)).metadata()).toMatchObject({
-      format: 'webp',
-      width: 320,
-      height: 180,
-    });
-    await rm(filePath(id, true));
-    await createThumbnail(id, 'video');
-    const response = await fileResponse(id, true, 'video/mp4', 'clip.mp4');
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toBe('image/webp');
-    await response.arrayBuffer();
-    expect(await readFile(filePath(id))).toEqual(video);
-    expect((await readdir(env.ATTACHMENTS_DIR)).sort()).toEqual([id, `${id}.webp`].sort());
-    await deleteFiles([id]);
-    expect(await readdir(env.ATTACHMENTS_DIR)).toEqual([]);
-  }, 30_000);
+  it.skipIf(!ffmpeg)(
+    'generates a video poster and repairs a missing poster without changing the original',
+    async () => {
+      const id = randomUUID();
+      const video = await readFile(new URL('../../../../e2e/fixtures/video.mp4', import.meta.url));
+      await writeFile(filePath(id), video);
+      await Promise.all([createThumbnail(id, 'video'), createThumbnail(id, 'video')]);
+      expect(await sharp(filePath(id, true)).metadata()).toMatchObject({
+        format: 'webp',
+        width: 320,
+        height: 180,
+      });
+      await rm(filePath(id, true));
+      await createThumbnail(id, 'video');
+      const response = await fileResponse(id, true, 'video/mp4', 'clip.mp4');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/webp');
+      await response.arrayBuffer();
+      expect(await readFile(filePath(id))).toEqual(video);
+      expect((await readdir(env.ATTACHMENTS_DIR)).sort()).toEqual([id, `${id}.webp`].sort());
+      await deleteFiles([id]);
+      expect(await readdir(env.ATTACHMENTS_DIR)).toEqual([]);
+    },
+    30_000,
+  );
 
   it('leaves unsupported videos downloadable without a partial poster', async () => {
     const id = randomUUID();

@@ -1,24 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { signUp, waitForPageTransition } from './helpers';
 
-test('Update is a user setting with project links and the server version', async ({
-  page,
-  isMobile,
-}) => {
-  await signUp(page);
-  await page.getByRole('button', { name: 'Settings' }).click();
-  if (isMobile) {
-    await page.getByRole('button', { name: 'Settings page: General' }).click();
-    await page
-      .getByRole('navigation', { name: 'Settings pages' })
-      .getByRole('button', { name: 'Update', exact: true })
-      .click();
-  } else {
-    await page
-      .getByRole('navigation', { name: 'Settings pages' })
-      .getByRole('link', { name: 'Update', exact: true })
-      .click();
-  }
+/** Update is a user setting, with the project's links and the server's version. */
+async function expectUpdatePage(page: Page) {
   await expect(page).toHaveURL(/\/settings\/update$/);
   await expect(page.getByRole('region', { name: 'Version', exact: true })).toContainText(
     'Server version',
@@ -33,7 +17,7 @@ test('Update is a user setting with project links and the server version', async
   );
   await expect(page.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
   await expect(page.getByText('App version', { exact: true })).toBeHidden();
-});
+}
 
 test('settings list their pages beside the open one on wide screens', async ({
   page,
@@ -55,6 +39,8 @@ test('settings list their pages beside the open one on wide screens', async ({
   await pages.getByRole('link', { name: 'Account' }).click();
   await expect(page).toHaveURL(/\/settings\/account$/);
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await pages.getByRole('link', { name: 'Update', exact: true }).click();
+  await expectUpdatePage(page);
 
   // Switching pages replaced history, so one step back leaves Settings.
   await page.getByRole('button', { name: 'Back' }).click();
@@ -70,17 +56,17 @@ test('on phones the dock picks settings pages, also by holding and sliding', asy
   test.skip(!isMobile, 'Wide screens list the pages beside the open one.');
   await signUp(page);
   await page.getByRole('button', { name: 'Settings' }).tap();
-  await waitForPageTransition(page);
   await expect(page.getByRole('heading', { name: 'General' })).toBeVisible();
+  await waitForPageTransition(page);
 
   const selector = page.getByRole('button', { name: 'Settings page: General' });
   await selector.tap();
   const picker = page.getByRole('navigation', { name: 'Settings pages' });
   await picker.getByRole('button', { name: 'Account' }).tap();
   await expect(page).toHaveURL(/\/settings\/account$/);
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await waitForPageTransition(page);
   await expect(picker).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
 
   // Hold the selector, slide onto General and let go.
   const box = await page.getByRole('button', { name: 'Settings page: Account' }).boundingBox();
@@ -98,8 +84,22 @@ test('on phones the dock picks settings pages, also by holding and sliding', asy
       touchPoints: [{ x: start.x, y: start.y + ((end - start.y) * step) / 6 }],
     });
   }
+  // A finger lifted while still moving is a fling to Chrome, which then drops the click of
+  // the next tap. Rest on the page first, as a person does.
+  await page.waitForTimeout(200);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: start.x, y: end }],
+  });
   await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(page).toHaveURL(/\/settings\/general$/);
+  await expect(page.getByRole('heading', { name: 'General' })).toBeVisible();
+  await waitForPageTransition(page);
+
+  await page.getByRole('button', { name: 'Settings page: General' }).tap();
+  await picker.getByRole('button', { name: 'Update', exact: true }).tap();
+  await expectUpdatePage(page);
+  await waitForPageTransition(page);
 
   await page.getByRole('button', { name: 'Back' }).tap();
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
