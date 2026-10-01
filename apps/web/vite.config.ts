@@ -7,7 +7,8 @@ import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
 import { buildChannel } from '../../scripts/build-channel.ts';
 
-const iconBase = buildChannel(process.env.CATCH_CHANNEL) === 'preview' ? '/preview' : '';
+const channel = buildChannel(process.env.CATCH_CHANNEL);
+const iconBase = channel === 'stable' ? '' : `/${channel}`;
 
 export default defineConfig({
   plugins: [
