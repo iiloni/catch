@@ -37,7 +37,7 @@ export function AppUpdate() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 px-4 py-2 text-center">
-        <BrandLockup orientation="stacked" iconSize={80} channel={channel} iconDetail="primary" />
+        <BrandLockup orientation="stacked" iconSize={80} channel={channel} />
         <p className="text-muted-foreground text-sm">Your notes, wherever you are.</p>
       </div>
       <SettingsSection title="Version">

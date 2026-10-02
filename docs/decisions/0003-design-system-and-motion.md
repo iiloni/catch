@@ -15,6 +15,10 @@ layout.
 (`#FFE174`, `#FFC247`, `#FFA32B`), a cream card with two charcoal lines, and two motion marks.
 The supplied small and favicon variants simplify it at their defined raster sizes, while
 the supplied foreground and background SVGs form the Android adaptive icon. The approved
+icon/wordmark lockups use complete primary artwork at every displayed size, preserving
+both motion marks and the landing shadow; size-based simplification applies to icon-only
+fallbacks. The 28 px header icon has a roughly 97 px tight horizontal lockup, above the
+revised 96 px minimum recorded in the wordmark tokens. The approved
 middle amber (`--brand`) colors controls and focus, and the gradient marks the icon and
 compose button. Warm graphite neutrals give both light and dark
 themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work

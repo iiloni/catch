@@ -8,19 +8,11 @@ type Props = {
   /** CSS pixels, also density-independent pixels in the Android WebView. */
   iconSize: number;
   channel?: VersionInfo['channel'];
-  /** Preserve motion marks and shadow on approved branding surfaces at smaller sizes. */
-  iconDetail?: 'auto' | 'primary';
   /** Override only when the surrounding surface differs from the app theme. */
   surface?: 'light' | 'dark';
 };
 
-export function BrandLockup({
-  orientation,
-  iconSize,
-  channel = 'stable',
-  iconDetail = 'auto',
-  surface,
-}: Props) {
+export function BrandLockup({ orientation, iconSize, channel = 'stable', surface }: Props) {
   const theme = useResolvedTheme();
   const container = useRef<HTMLDivElement>(null);
   const layout = tokens.layouts[orientation];
@@ -41,7 +33,7 @@ export function BrandLockup({
   }, []);
 
   // Measure the entire available box, including reserved clear space. A responsive
-  // shrink can cross a detail threshold even though the requested size did not.
+  // shrink can cross an icon-only detail threshold or the lockup minimum.
   // Chromium quantizes layout to 1/64 px; avoid selecting micro for a 48 px icon
   // just because the composed width rounded down by a fraction of a pixel.
   const displayedIcon = Math.round(Math.min(iconSize, width / (ratio + 2 * clearSpace)) * 64) / 64;
@@ -58,7 +50,7 @@ export function BrandLockup({
   const iconOnly = displayedIcon * ratio < minimum;
   const ink = (surface ?? theme) === 'dark' ? 'light' : 'dark';
   const iconBase = channel === 'stable' ? '' : `/${channel}`;
-  const lockupTier = iconDetail === 'primary' ? '' : tier;
+  const lockupTier = tokens.lockupIconTier === 'primary' ? '' : `-${tokens.lockupIconTier}`;
   const source = iconOnly
     ? `${iconBase}/${tier === '' ? 'icon.svg' : tier === '-small' ? 'icon-small.svg' : 'favicon-mark.svg'}`
     : `/wordmark/catch-lockup-${orientation}-${channel}-${ink}${lockupTier}.svg`;

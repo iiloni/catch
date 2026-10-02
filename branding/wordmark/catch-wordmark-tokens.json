@@ -46,10 +46,11 @@
     "outsideTightArtworkBounds": true
   },
   "minimumDisplay": {
-    "horizontalWidthCssPx": 112,
+    "horizontalWidthCssPx": 96,
     "stackedWidthCssPx": 96,
     "standaloneInkHeightCssPx": 18
   },
+  "lockupIconTier": "primary",
   "iconTierRules": {
     "primary": {
       "minDisplayedIconPx": 128

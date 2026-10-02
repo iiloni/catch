@@ -62,12 +62,16 @@ Full-precision machine values are in the token file; printed measurements are ro
 
 Reserve at least **192/I = 18.75% of the displayed icon width** outside all four tight artwork bounds. This is surrounding layout space, not blank padding already included in the SVG. Preserve aspect ratio and never crop or stretch the lettering or icon independently.
 
-- Horizontal minimum: **112 CSS px** wide for the tight lockup. A 40–48 px icon is a useful header size, producing a lockup about 139–166 px wide.
+- Horizontal minimum: **96 CSS px** wide for the tight lockup. The app header uses a 28 px icon, producing a lockup about 97 px wide; sign-in uses a 48 px icon, about 166 px wide. The previous 112 px minimum was revised with the smaller header branding.
 - Stacked minimum: **96 CSS px** wide for the tight lockup. Use a larger stacked version on roomy branding surfaces.
 - Standalone lettering minimum: **18 CSS px** visible ink height.
 - Below these minima, use an existing icon-only asset rather than compressing the lockup.
 
-Select icon detail by the **displayed icon size**, not the total lockup width or the resolution of a retina export:
+## Icon detail policy
+
+All icon/wordmark lockups use the **primary icon artwork**, including both motion marks and the landing shadow, regardless of displayed icon size. This replaces automatic detail reduction for lockups after reviewing the complete artwork at small header sizes. `lockupIconTier` records this policy in the tokens; it applies to horizontal and stacked layouts in every channel and theme.
+
+The existing icon masters, icon-only tokens and raster export rules remain unchanged. When a lockup cannot meet its minimum width, use an icon-only asset selected by its **displayed icon size**, not the unavailable lockup width or the resolution of a retina export:
 
 | Displayed icon size | Icon tier / SVG filename suffix |
 |---|---|
@@ -75,7 +79,7 @@ Select icon detail by the **displayed icon size**, not the total lockup width or
 | 48–127 px | small / `-small` |
 | 16–47 px | micro / `-micro` |
 
-Only the icon detail varies with tier. The lettering, proportions, gap and alignment remain identical. For a 2× raster used at a 40 px displayed icon size, compose the micro tier first, then rasterize that composition at twice the display dimensions. Do not choose tier from the larger backing bitmap size.
+The generated small and micro composites remain available, but application lockups use primary. The lettering, proportions, gap and alignment remain identical. For a 2× raster of a lockup with a 28 px displayed icon, compose the primary tier first, then rasterize that composition at twice the display dimensions. Icon-only fallbacks continue to use their displayed-size tier before rasterization.
 
 ## Assets and build selection
 

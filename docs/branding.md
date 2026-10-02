@@ -68,7 +68,8 @@ Splash images and other application styling remain unchanged.
 `branding/wordmark/` adds the shared outlined Catch lettering, its layout tokens,
 generator, resolved icon mapping, and original Manrope font/license/provenance. The font
 is a design source only; application typography and runtime fonts are unchanged.
-The JSON sources use repository formatting, with their values unchanged. The lettering
+The wordmark tokens include the approved full-detail lockup policy and revised horizontal
+minimum. Icon-only tokens remain unchanged. The lettering
 SVGs and original font/license are retained byte for byte. Saved reference composites
 are omitted: all 36 SVGs and their input-hash manifest in `apps/web/public/wordmark/`
 are generated from the current stable, corrected preview, and dev icon masters.
@@ -85,20 +86,19 @@ change; the icon-only raster pipeline remains separate.
 
 `BrandLockup` reads the wordmark tokens for proportions, clear space, minimum widths,
 and detail thresholds. Its icon size is in CSS pixels (density-independent pixels in
-Android's WebView), measured again when the available width changes. It selects primary
-at 128 px, small at 48–127 px, and micro below 48 px, irrespective of device pixel ratio.
-Below the 112 px horizontal or 96 px stacked minimum, it shows the current channel's
-icon-only asset. Each image has one accessible “Catch” label; lettering is never live text.
+Android's WebView), measured again when the available width changes. Every lockup uses
+primary artwork with both motion marks and the landing shadow. Below the 96 px tight
+width minimum in either orientation, it shows the current channel's icon-only asset,
+selecting primary at 128 px, small at 48–127 px, and micro below 48 px by displayed icon
+size, irrespective of device pixel ratio. Each image has one accessible “Catch” label;
+lettering is never live text.
 
-Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 36 px
+Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 28 px
 horizontal lockup at the top left, in scrolling content; the existing title pill takes its
 place as the page scrolls. Toolbar space is reserved, and selection hides this branding.
-Sign-in, the tab headers and Update explicitly use the primary artwork, preserving the
-two motion marks and landing shadow at their displayed sizes. Narrow surfaces still
-fall back to the size-appropriate icon-only asset below the lockup minimum.
 Android's existing first-run server setup uses a stacked lockup with a 96 px icon;
 Settings > Update's existing product area uses a stacked lockup with an 80 px icon.
-Server setup keeps automatic detail selection. Inside the app, branding always uses stable
+Inside the app, branding always uses stable
 artwork, except Update, which keeps its existing installed-app/server channel selection.
 App icons and favicons also keep their existing build-specific selection. `BrandLockup`
 defaults to stable; Update passes its channel explicitly. Ink follows the resolved app theme (including stored preferences),
