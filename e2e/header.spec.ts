@@ -50,7 +50,9 @@ test('the title and brand stay clear of the controls and status bar while the pa
         frames.push({
           title: box(title as Element),
           brand: box(brand as Element),
-          controls: [...(header as Element).querySelectorAll('button')].map(box),
+          controls: [
+            ...(header as Element).querySelectorAll('button:not([aria-label="Scroll to top"])'),
+          ].map(box),
         });
         const next = path[step++];
         if (next === undefined) return resolve(frames);
@@ -81,6 +83,7 @@ test('the title and brand stay clear of the controls and status bar while the pa
   // Scrolled, the title has the brand's corner to itself.
   await page.evaluate(() => window.scrollTo(0, 180));
   await expect(brand).toBeHidden();
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Scroll to top' }).click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(brand).toBeVisible();
 });

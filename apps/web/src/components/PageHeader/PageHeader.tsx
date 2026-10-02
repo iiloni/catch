@@ -5,10 +5,11 @@ import {
   motion,
   useMotionValue,
   useMotionValueEvent,
+  useReducedMotion,
   useScroll,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback, useLayoutEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useGalleryPages } from '@/lib/galleryPages';
@@ -95,6 +96,8 @@ const TITLE_COLLAPSE_AT = 16;
  */
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
   const { scrollY } = useScroll();
+  const reducedMotion = useReducedMotion();
+  const scrollAnimation = useRef<ReturnType<typeof animate> | null>(null);
   const [trailingWidth, setTrailingWidth] = useState(0);
   // Not `window.scrollY`: on mount it still holds the previous page's scroll until the router
   // resets it, and `scrollY` would never report a change to correct it.
@@ -108,6 +111,30 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
   const branded = !collapsed && !selection;
+
+  useEffect(() => {
+    const stop = () => scrollAnimation.current?.stop();
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    for (const event of events) window.addEventListener(event, stop, { passive: true });
+    return () => {
+      stop();
+      for (const event of events) window.removeEventListener(event, stop);
+    };
+  }, []);
+
+  function scrollToTop() {
+    scrollAnimation.current?.stop();
+    if (reducedMotion) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      return;
+    }
+    // Native smooth scrolling takes longer for notes further down the page.
+    scrollAnimation.current = animate(window.scrollY, 0, {
+      duration: 0.18,
+      ease: 'easeOut',
+      onUpdate: (top) => window.scrollTo({ top, behavior: 'instant' }),
+    });
+  }
 
   return (
     <>
@@ -162,6 +189,13 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
               <h1 className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
                 {title}
               </h1>
+              <button
+                type="button"
+                aria-label="Scroll to top"
+                disabled={!collapsed || Boolean(selection)}
+                className="pointer-events-auto absolute inset-0 rounded-[var(--dock-radius)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
+                onClick={scrollToTop}
+              />
             </motion.div>
           </motion.div>
           <HeaderToolbars
