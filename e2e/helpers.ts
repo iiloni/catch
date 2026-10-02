@@ -162,8 +162,17 @@ export async function settledBox(locator: Locator) {
   await expect
     .poll(async () => {
       const previous = box;
+      // Two reads in one animation frame can look settled while the element is still arriving.
+      await locator.page().waitForTimeout(100);
       box = await locator.boundingBox();
-      return previous !== null && box !== null && previous.x === box.x && previous.y === box.y;
+      return (
+        previous !== null &&
+        box !== null &&
+        previous.x === box.x &&
+        previous.y === box.y &&
+        previous.width === box.width &&
+        previous.height === box.height
+      );
     })
     .toBe(true);
   if (!box) throw new Error('Missing layout');

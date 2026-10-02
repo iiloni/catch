@@ -51,6 +51,7 @@ test('the link overlay dismisses with an upward or downward touch swipe', async 
   const underlay = page.getByRole('button', { name: /^2 links, first / });
   const overlay = page.getByRole('dialog', { name: '2 links' });
   const cdp = await page.context().newCDPSession(page);
+  const galleryUrl = page.url();
 
   for (const delta of [-150, 150]) {
     await underlay.click();
@@ -59,6 +60,17 @@ test('the link overlay dismisses with an upward or downward touch swipe', async 
     const header = await settledBox(overlay.locator('header'));
     const x = header.x + 30;
     const y = header.y + header.height / 2;
+    expect(
+      await overlay
+        .locator('header')
+        .evaluate(
+          (element, point) => element.contains(document.elementFromPoint(point.x, point.y)),
+          {
+            x,
+            y,
+          },
+        ),
+    ).toBe(true);
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [{ x, y }],
@@ -71,6 +83,7 @@ test('the link overlay dismisses with an upward or downward touch swipe', async 
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await expect(overlay).toBeHidden();
+    await expect(page).toHaveURL(galleryUrl);
   }
 });
 
