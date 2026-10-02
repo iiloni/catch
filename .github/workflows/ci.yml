@@ -54,6 +54,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: python3 branding/preview/derive-preview-icons.py --check
       - run: python3 branding/dev/derive-dev-icons.py --check
+      - run: python3 branding/wordmark/compose-catch-lockups.py --icons-json branding/wordmark/wordmark-icon-inputs.json --output-dir apps/web/public/wordmark --check
       - run: pnpm check
 
   # Each project's tests are split over two runners, each with a stack of its own, so the

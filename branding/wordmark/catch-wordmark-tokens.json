@@ -1,0 +1,88 @@
+{
+  "tokenFormatVersion": 1,
+  "brand": "Catch",
+  "text": "Catch",
+  "scope": "wordmark and icon/wordmark lockups only",
+  "canonicalWordmark": "catch-wordmark-dark.svg",
+  "lightWordmark": "catch-wordmark-light.svg",
+  "canonicalWordmarkSha256": "0f81642fa870dff935129e03099e6b4c6b91a062087104c66f45c0ac9b789e1a",
+  "typography": {
+    "family": "Manrope",
+    "style": "ExtraBold",
+    "weight": 800,
+    "runtime": "outlined paths; no font load required",
+    "provenance": "source/catch-wordmark-provenance.json"
+  },
+  "wordmarkInkBox": {
+    "width": 3872.0853,
+    "height": 1024
+  },
+  "inkColors": {
+    "dark": "#292B2D",
+    "light": "#FFF9F0",
+    "inheritedFrom": "../catch-brand-tokens.json#/colors"
+  },
+  "iconSize": 1024,
+  "layouts": {
+    "horizontal": {
+      "canvas": [3548.79998046875, 1024],
+      "iconBox": [0, 0, 1024, 1024],
+      "wordmarkInkBox": [1280, 204, 2268.79998046875, 600],
+      "wordmarkScale": 0.5859375,
+      "gap": 256,
+      "opticalVerticalShift": -8
+    },
+    "stacked": {
+      "canvas": [1536, 1622.205927333264],
+      "iconBox": [256, 0, 1024, 1024],
+      "wordmarkInkBox": [0, 1216, 1536, 406.20592733326407],
+      "wordmarkScale": 0.3966854759113907,
+      "gap": 192
+    }
+  },
+  "clearSpace": {
+    "unitsRelativeTo1024Icon": 192,
+    "iconFraction": 0.1875,
+    "outsideTightArtworkBounds": true
+  },
+  "minimumDisplay": {
+    "horizontalWidthCssPx": 112,
+    "stackedWidthCssPx": 96,
+    "standaloneInkHeightCssPx": 18
+  },
+  "iconTierRules": {
+    "primary": {
+      "minDisplayedIconPx": 128
+    },
+    "small": {
+      "minDisplayedIconPx": 48,
+      "maxDisplayedIconPx": 127
+    },
+    "micro": {
+      "minDisplayedIconPx": 16,
+      "maxDisplayedIconPx": 47
+    }
+  },
+  "defaultIconInputs": {
+    "stable": {
+      "primary": "../catch-icon-master.svg",
+      "small": "../catch-icon-small.svg",
+      "micro": "../catch-favicon-mark.svg"
+    },
+    "preview": {
+      "primary": "../preview/catch-icon-preview.svg",
+      "small": "../preview/catch-icon-preview-small.svg",
+      "micro": "../preview/catch-favicon-preview.svg"
+    },
+    "dev": {
+      "primary": "../dev/catch-icon-dev.svg",
+      "small": "../dev/catch-icon-dev-small.svg",
+      "micro": "../dev/catch-favicon-dev.svg"
+    }
+  },
+  "channelPaletteAuthority": "Use current repository icon SVGs. This wordmark extension defines no icon palette overrides.",
+  "referenceAssets": "reference/ composites were generated from the saved source packages; regenerate from current repository icons before integration, particularly the subsequently corrected preview artwork.",
+  "devIsOfficialReleaseChannel": false,
+  "applicationUiTypographyOverrides": {},
+  "iconOnlyAssets": "Existing launcher, adaptive, PWA and favicon icon sources remain authoritative and are not replaced with wordmark lockups."
+}

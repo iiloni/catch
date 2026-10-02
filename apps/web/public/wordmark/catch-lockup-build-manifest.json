@@ -1,0 +1,86 @@
+{
+  "wordmarkSha256": "0f81642fa870dff935129e03099e6b4c6b91a062087104c66f45c0ac9b789e1a",
+  "tokensSha256": "bc78314eaaa83f0903ef5b3c673f1b1e1f9063bc52790223b7ef41fba311b493",
+  "iconSources": {
+    "stable": {
+      "primary": {
+        "path": "../catch-icon-master.svg",
+        "sha256": "0915b80979f5de88f7df217573c12ebb402fddda6e0bda7effa69737e053974c"
+      },
+      "small": {
+        "path": "../catch-icon-small.svg",
+        "sha256": "1681122fdf99e86bbaf95a0814a573925751ce1fa7bc6c561ffa0c6157a5d50a"
+      },
+      "micro": {
+        "path": "../catch-favicon-mark.svg",
+        "sha256": "903a88604db11b1c31125e415cf62c0bb6ba56c27712462fa7bd718230b3d336"
+      }
+    },
+    "preview": {
+      "primary": {
+        "path": "../preview/catch-icon-preview.svg",
+        "sha256": "67b845929ff8e2ba63b5f3b8ca4f8851628d2dae6d177a0abc6af791ace98af7"
+      },
+      "small": {
+        "path": "../preview/catch-icon-preview-small.svg",
+        "sha256": "ad0056442dd87a7033096ff32032c1de18b339880f1bbe0dd38b0574f730bf54"
+      },
+      "micro": {
+        "path": "../preview/catch-favicon-preview.svg",
+        "sha256": "94376515d24ac944c40aceff661523a733bef73c66d9d542739d475da874ab6a"
+      }
+    },
+    "dev": {
+      "primary": {
+        "path": "../dev/catch-icon-dev.svg",
+        "sha256": "def1b869d939c822387ce39579853f5597297fc2e114bd97631e5feaa2a28cd5"
+      },
+      "small": {
+        "path": "../dev/catch-icon-dev-small.svg",
+        "sha256": "d77ee930537a43115bc5d771624b7bf69204e96414e84ebb3ff20758f56aeb9d"
+      },
+      "micro": {
+        "path": "../dev/catch-favicon-dev.svg",
+        "sha256": "a78cf49650181dbee1f56c81e2e2d719cd08ba4c1425328c9d2f0b02b02bae54"
+      }
+    }
+  },
+  "outputs": [
+    "catch-lockup-horizontal-stable-dark.svg",
+    "catch-lockup-horizontal-stable-light.svg",
+    "catch-lockup-stacked-stable-dark.svg",
+    "catch-lockup-stacked-stable-light.svg",
+    "catch-lockup-horizontal-stable-dark-small.svg",
+    "catch-lockup-horizontal-stable-light-small.svg",
+    "catch-lockup-stacked-stable-dark-small.svg",
+    "catch-lockup-stacked-stable-light-small.svg",
+    "catch-lockup-horizontal-stable-dark-micro.svg",
+    "catch-lockup-horizontal-stable-light-micro.svg",
+    "catch-lockup-stacked-stable-dark-micro.svg",
+    "catch-lockup-stacked-stable-light-micro.svg",
+    "catch-lockup-horizontal-preview-dark.svg",
+    "catch-lockup-horizontal-preview-light.svg",
+    "catch-lockup-stacked-preview-dark.svg",
+    "catch-lockup-stacked-preview-light.svg",
+    "catch-lockup-horizontal-preview-dark-small.svg",
+    "catch-lockup-horizontal-preview-light-small.svg",
+    "catch-lockup-stacked-preview-dark-small.svg",
+    "catch-lockup-stacked-preview-light-small.svg",
+    "catch-lockup-horizontal-preview-dark-micro.svg",
+    "catch-lockup-horizontal-preview-light-micro.svg",
+    "catch-lockup-stacked-preview-dark-micro.svg",
+    "catch-lockup-stacked-preview-light-micro.svg",
+    "catch-lockup-horizontal-dev-dark.svg",
+    "catch-lockup-horizontal-dev-light.svg",
+    "catch-lockup-stacked-dev-dark.svg",
+    "catch-lockup-stacked-dev-light.svg",
+    "catch-lockup-horizontal-dev-dark-small.svg",
+    "catch-lockup-horizontal-dev-light-small.svg",
+    "catch-lockup-stacked-dev-dark-small.svg",
+    "catch-lockup-stacked-dev-light-small.svg",
+    "catch-lockup-horizontal-dev-dark-micro.svg",
+    "catch-lockup-horizontal-dev-light-micro.svg",
+    "catch-lockup-stacked-dev-dark-micro.svg",
+    "catch-lockup-stacked-dev-light-micro.svg"
+  ]
+}

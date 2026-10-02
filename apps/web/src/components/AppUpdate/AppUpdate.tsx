@@ -14,6 +14,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -33,15 +34,11 @@ export function AppUpdate() {
   const { android, app, server, checking, error, installing, installError } = useUpdates();
   const available = useAndroidUpdateAvailable();
   const channel = (android ? app?.channel : undefined) ?? server?.channel ?? 'dev';
-  const iconBase = channel === 'stable' ? '' : `/${channel}`;
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4 px-4 py-2">
-        <img src={`${iconBase}/icon-small.svg`} alt="" className="size-20" />
-        <div>
-          <p className="font-display font-bold text-3xl tracking-[-0.02em]">Catch</p>
-          <p className="text-muted-foreground text-sm">Your notes, wherever you are.</p>
-        </div>
+      <div className="flex flex-col items-center gap-2 px-4 py-2 text-center">
+        <BrandLockup orientation="stacked" iconSize={80} channel={channel} />
+        <p className="text-muted-foreground text-sm">Your notes, wherever you are.</p>
       </div>
       <SettingsSection title="Version">
         <SettingsRow
