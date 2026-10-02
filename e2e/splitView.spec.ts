@@ -21,6 +21,9 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   ]);
 
   const dialog = await openNote(page, 'Alpha');
+  const header = page.locator('[data-page-header]');
+  await expect(header).toBeVisible();
+  await expect(header).toHaveCSS('opacity', '1');
   const pane = await dialog.boundingBox();
   const alpha = await card(page, 'Alpha').boundingBox();
   expect(pane && alpha && alpha.x + alpha.width <= pane.x).toBe(true);
@@ -63,6 +66,7 @@ test('an open note sits beside the page, which stays usable', async ({ page }) =
   // Switching notes replaced the history entry, so one step back closes the pane.
   await page.goBack();
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(header).toHaveCSS('opacity', '1');
   await expect(page.getByRole('separator', { name: 'Resize note' })).toBeHidden();
   await expect(page).toHaveURL(/\/$/);
 });

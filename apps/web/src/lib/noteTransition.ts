@@ -12,6 +12,9 @@ export type Rect = { x: number; y: number; width: number; height: number; radius
 /** 0 while the editor is closed, 1 while it covers the screen. The dock and page follow it. */
 export const editorProgress = motionValue(0);
 
+/** The card face fades out by this progress; the page header yields over the same interval. */
+export const CARD_FACE_FADE_END = 0.35;
+
 const origins = new Map<string, Rect>();
 
 function rectOf(element: Element): Rect {

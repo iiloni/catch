@@ -120,8 +120,10 @@ native; CSS `linear()` springs can mimic the curve but not the interruption.
 
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor is translated onto the card and
-clipped to its size, then both animate to full screen. Content is never scaled, so text stays
-crisp. It runs on the main thread, where mounting the editor competes with it, so it waits for
+clipped to its size, then both animate to full screen. The backing surface contains both the
+editor and the card, which can be taller than the viewport; the editor keeps its own viewport
+while the clip animates. Content is never scaled, so text stays crisp. It runs on the main
+thread, where mounting the editor competes with it, so it waits for
 the mounted surface to be painted (still looking like the card) and then advances by frames
 rather than by the clock (`animateSteady`): a late frame delays it instead of skipping part of
 it. Opening and closing a note are navigations that leave the page's scroll alone
@@ -132,6 +134,12 @@ the card. A capped vertical drag dismisses the editor when the note is scrolled 
 edge, with a haptic tick at the release threshold. We chose this over the View
 Transitions API, which cannot be interrupted or driven by a finger, and over Motion's
 `layoutId`, whose scale-based projection distorts text between a card and a full screen.
+The page header fades above the moving card over the card face's part of the morph, so a
+returning card settles behind the title pill without changing their order in one frame.
+It is hidden while the editor covers the page; beside a split pane it stays visible in its
+usual layer. The container keeps opacity 1 throughout: `--header-opacity` fades the glass
+layers and their foreground separately (`header-fade`). Fading a blur's ancestor makes a
+backdrop root, cutting off the page until opacity reaches 1 and causing the blur to pop on.
 
 **Haptics.** A small local Capacitor plugin (`HapticFeedbackPlugin.java`) calls
 `View.performHapticFeedback`, which uses the device's tuned effects and respects the user's
