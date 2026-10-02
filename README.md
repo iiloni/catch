@@ -13,6 +13,10 @@ docker compose up -d --build
 The app listens on port 3000 (`CATCH_PORT` to change it). Put it behind HTTPS; the Android
 app requires it. The first account you create becomes the instance admin.
 
+Electric uses its pinned prebuilt image when available. If Docker Hub cannot supply it,
+Compose builds the same release from a pinned upstream Git commit; the first build takes
+longer and needs access to GitHub and the upstream build dependencies.
+
 For published Docker images, signed Android APKs, stable/preview channels, and a production
 configuration kept outside this checkout, see [Releasing and deployment](docs/releases.md).
 

@@ -64,6 +64,13 @@ services:
   # Streams Postgres changes to clients. Only reachable through the app's auth proxy.
   electric:
     image: electricsql/electric:1.8.1
+    # Build the same upstream release if its prebuilt image is unavailable.
+    build:
+      context: https://github.com/electric-sql/electric.git#0f404200402f918a4b1596bc5c8a53479a435349:packages/sync-service
+      additional_contexts:
+        electric-telemetry: https://github.com/electric-sql/electric.git#0f404200402f918a4b1596bc5c8a53479a435349:packages/electric-telemetry
+      args:
+        ELECTRIC_VERSION: 1.8.1
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://catch:${POSTGRES_PASSWORD:-catch}@postgres:5432/catch?sslmode=disable

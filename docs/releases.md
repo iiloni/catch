@@ -263,7 +263,7 @@ Once the GHCR package is public, the production server needs no registry credent
 
 ```bash
 cd ~/services/catch
-docker compose pull
+docker compose pull --ignore-buildable
 docker compose up -d --wait
 curl --fail https://notes.example.com/api/health
 ```
