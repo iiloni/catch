@@ -249,7 +249,11 @@ test('an offline attachment survives reload and uploads on reconnect', async ({ 
   const media = page.getByRole('region', { name: 'Media' });
   await expect(media.getByRole('img')).toBeVisible();
   await expect(media.getByText('Waiting to upload')).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  // The catalog appears before the asynchronous callback inserts the inline block.
+  await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.reload();
   await openNote(page, 'Offline media');
   await expect(media.getByRole('img')).toBeVisible();

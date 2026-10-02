@@ -86,6 +86,8 @@ in their own volumes and never mix with the host's.
 Playwright uses two workers per suite by default. Each worker also runs Chromium processes,
 so the worker count is not a CPU core limit. Pass `--workers=N` to `e2e` if a run needs a
 different limit. `pnpm e2e` goes through the same shared lock as `./scripts/dev.sh e2e`.
+Each run recreates the app container and waits for it to be healthy, clearing Vite's HMR
+module timestamps so test imports share the app's state. The database and Electric stay running.
 
 CI splits each Playwright project over two runners (`--shard=1/2` and `--shard=2/2`), each
 with its own stack and one worker; the `api` project (tests that only call the server) runs

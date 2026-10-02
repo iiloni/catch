@@ -148,6 +148,9 @@ case "$command" in
             echo "Another Catch e2e run is active; waiting for it to finish..."
             flock 9
         fi
+        # HMR timestamps give direct imports in tests a second copy of module state.
+        # Start with a fresh Vite process and wait for the API before signing up users.
+        "${compose[@]}" up -d --no-deps --wait --force-recreate app
         E2E_BASE_URL="http://localhost:$(env_value CATCH_PORT)" \
             pnpm --dir "$repo_root" exec playwright test "$@"
         ;;
