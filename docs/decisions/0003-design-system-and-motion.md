@@ -165,6 +165,18 @@ up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
 focus, so the keyboard stays up.
 
+**Quick-note gestures.** A vertical touch swipe can start anywhere on the quick-note window:
+down saves, up expands. Its editor scrolls first when there is content left in that direction;
+reaching an edge during that scroll does not turn the same gesture into a swipe. Horizontal
+gestures, native form fields, selected text and long presses stay with editing and tools.
+Short pulls retain focus, and a recognized swipe suppresses the tool click beneath it.
+Mouse dragging remains on the top handle.
+Eligible touch pulls are claimed on the first small vertical movement, before Android takes
+over native scrolling and makes later moves non-cancelable. The longer release distance still
+decides whether a pull saves or expands.
+Touch listeners follow the original touched element for the whole gesture: Android caret
+changes can replace an editor node, and subsequent events no longer bubble through the window.
+
 **Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
 redo history. From 640 px it sits beside the back button, including in narrow split panes.

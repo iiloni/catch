@@ -9,7 +9,7 @@ import {
   usePresence,
   useTransform,
 } from 'motion/react';
-import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
@@ -25,6 +25,7 @@ import { createNote, discardIfEmpty, updateNote } from '@/lib/notes';
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
+import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 
 type Destination = 'gallery' | 'deck';
 
@@ -69,6 +70,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: openNote } = useOpenNote();
   const ref = useRef<HTMLElement>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
 
   const [content, setContent] = useState<Note['content']>([]);
   const [color, setColor] = useState<NoteColor>('default');
@@ -224,60 +226,14 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
 
   useBackHandler(isPresent, () => quickNote.set('closed'));
 
-  // The handle can save downward or expand upward. A short, resistant pull
-  // signals the action without moving the window far from the dock.
-  const RELEASE_DISTANCE = 90;
-  const MAX_UP_DRAG = 56;
-  const MAX_DOWN_DRAG = 100;
-  const swipe = useRef<{
-    startY: number;
-    lastY: number;
-    lastTime: number;
-    velocity: number;
-    armed: -1 | 0 | 1;
-  }>(null);
-  function onHandleDown(event: PointerEvent<HTMLDivElement>) {
-    y.stop();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    swipe.current = {
-      startY: event.clientY,
-      lastY: event.clientY,
-      lastTime: event.timeStamp,
-      velocity: 0,
-      armed: 0,
-    };
-  }
-  function onHandleMove(event: PointerEvent<HTMLDivElement>) {
-    const state = swipe.current;
-    if (!state) return;
-    state.velocity = (event.clientY - state.lastY) / Math.max(1, event.timeStamp - state.lastTime);
-    state.lastY = event.clientY;
-    state.lastTime = event.timeStamp;
-    const delta = event.clientY - state.startY;
-    y.set(delta < 0 ? Math.max(delta * 0.3, -MAX_UP_DRAG) : Math.min(delta * 0.5, MAX_DOWN_DRAG));
-    const armed = delta > RELEASE_DISTANCE ? 1 : delta < -RELEASE_DISTANCE ? -1 : 0;
-    if (armed !== state.armed) {
-      state.armed = armed;
-      if (armed) haptics.threshold();
-    }
-  }
-  function onHandleUp(event: PointerEvent<HTMLDivElement>) {
-    const state = swipe.current;
-    swipe.current = null;
-    if (!state) return;
-    if (event.type === 'pointercancel') {
-      animate(y, 0, springs.snappy);
-    } else if (event.clientY - state.startY < -RELEASE_DISTANCE) {
-      expand();
-    } else if (
-      event.clientY - state.startY > RELEASE_DISTANCE ||
-      (event.clientY > state.startY && state.velocity > 0.6)
-    ) {
-      quickNote.set('closed');
-    } else {
-      animate(y, 0, springs.snappy);
-    }
-  }
+  useQuickNoteSwipe({
+    surface: ref,
+    handle: handleRef,
+    y,
+    enabled: isPresent,
+    onSave: () => quickNote.set('closed'),
+    onExpand: expand,
+  });
 
   return (
     <motion.section
@@ -306,18 +262,16 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
       }}
     >
       <div
+        ref={handleRef}
         aria-hidden
         data-testid="quick-note-handle"
         className="flex shrink-0 cursor-grab touch-none justify-center pt-2.5 pb-1"
-        onPointerDown={onHandleDown}
-        onPointerMove={onHandleMove}
-        onPointerUp={onHandleUp}
-        onPointerCancel={onHandleUp}
       >
         <span className="h-1 w-9 rounded-full bg-foreground/20" />
       </div>
       <motion.div className="flex min-h-0 flex-1 flex-col" style={{ opacity: contentOpacity }}>
         <motion.div
+          data-quick-note-scroll
           className="min-h-28 flex-1 overflow-y-auto overscroll-contain"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
