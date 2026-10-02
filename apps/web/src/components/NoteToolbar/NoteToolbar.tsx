@@ -8,15 +8,14 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
 import {
   deleteNoteForever,
   moveNoteToDeck,
@@ -38,22 +37,6 @@ type Props = {
 /** Actions for one note. Trashed notes can only be restored or deleted. */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!moving) return;
-    const dismiss = (event: globalThis.PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setMoving(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoving(false);
-    };
-    document.addEventListener('pointerdown', dismiss, true);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', dismiss, true);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [moving]);
   const then = (action: () => unknown) => () => {
     action();
     onDone?.();
@@ -73,15 +56,19 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   }
 
   return (
-    <div ref={ref} className={cn('flex flex-col', className, moving && 'opacity-100')}>
-      <AnimatePresence initial={false}>
-        {moving && (
-          <motion.div
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={springs.smooth}
+    <div className={cn('flex flex-col', className, moving && 'opacity-100')}>
+      <div className="flex items-center gap-0.5">
+        <ColorPicker value={note.color} onChange={(color) => setNoteColor(note.id, color)} />
+        <Popover open={moving} onOpenChange={setMoving}>
+          <PopoverTrigger asChild>
+            <IconButton label="Move note" onClick={() => haptics.toggle()}>
+              {note.status === null ? <LayoutDashboard /> : <CardMoveIcon status={note.status} />}
+            </IconButton>
+          </PopoverTrigger>
+          <PopoverContent
+            aria-label="Move note"
+            className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+            onClick={(event) => event.stopPropagation()}
           >
             <CardMovePicker
               current={note.status}
@@ -93,21 +80,8 @@ export function NoteToolbar({ note, onDone, className }: Props) {
                 else moveNoteToDeck(note.id, status);
               }}
             />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <div className="flex items-center gap-0.5">
-        <ColorPicker value={note.color} onChange={(color) => setNoteColor(note.id, color)} />
-        <IconButton
-          label="Move note"
-          aria-expanded={moving}
-          onClick={() => {
-            haptics.toggle();
-            setMoving(!moving);
-          }}
-        >
-          {note.status === null ? <LayoutDashboard /> : <CardMoveIcon status={note.status} />}
-        </IconButton>
+          </PopoverContent>
+        </Popover>
         {note.isArchived ? (
           <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
             <ArchiveRestore />
