@@ -6,6 +6,8 @@ import { SettingsLayout } from './SettingsLayout';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+  useRouterState: ({ select }: { select: (state: { matches: [] }) => unknown }) =>
+    select({ matches: [] }),
   Link: ({
     to,
     replace: _replace,

@@ -1,7 +1,10 @@
+import { useRouterState } from '@tanstack/react-router';
 import { ChevronLeft, X } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
+  type MotionStyle,
+  type MotionValue,
   motion,
   useMotionValue,
   useMotionValueEvent,
@@ -14,6 +17,8 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
+import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
+import { useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
@@ -32,36 +37,68 @@ type Props = {
   selection?: HeaderSelection | null;
 };
 
+type HeaderLayerStyle = MotionStyle & { '--header-layer-opacity': MotionValue<number> };
+
+/** Bring the page's glass above the returning card as its face replaces the editor. */
+function useHeaderTransition() {
+  const { split } = useNotePane();
+  const noteOpen = useRouterState({
+    select: (state) =>
+      Boolean((state.matches.at(-1)?.search as { note?: string } | undefined)?.note),
+  });
+  const opacity = useTransform(() => {
+    const progress = editorProgress.get();
+    return split ? 1 : Math.max(0, 1 - progress / CARD_FACE_FADE_END);
+  });
+  const zIndex = useTransform(() => {
+    const progress = editorProgress.get();
+    return !split && (noteOpen || progress > 0) ? 60 : 30;
+  });
+  const visibility = useTransform(() => (opacity.get() === 0 ? 'hidden' : 'visible'));
+  // Opacity on the header would isolate every descendant blur until the fade reaches 1.
+  return { '--header-opacity': opacity, zIndex, visibility };
+}
+
 /**
  * iOS-style large title. The bar above it starts transparent and turns to frosted glass,
  * with a small centered title, once the large title scrolls under it.
  */
 export function PageHeader({ title, leading, trailing, selection }: Props) {
+  const transition = useHeaderTransition();
   const { scrollY } = useScroll();
   const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
   const smallTitleOpacity = useTransform(scrollY, [36, 56], [0, 1]);
   const smallTitleY = useTransform(scrollY, [36, 56], [6, 0]);
   const largeTitleOpacity = useTransform(scrollY, [0, 40], [1, 0]);
+  const barStyle: HeaderLayerStyle = { '--header-layer-opacity': barOpacity };
+  const smallTitleStyle: HeaderLayerStyle = {
+    '--header-layer-opacity': smallTitleOpacity,
+    y: smallTitleY,
+  };
 
   return (
     <>
-      <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
+      <motion.header
+        data-page-header
+        className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
+        style={transition}
+      >
         <motion.div
           aria-hidden
-          className="glass-bar absolute inset-0"
-          style={{ opacity: barOpacity }}
+          className="glass-bar header-fade absolute inset-0"
+          style={barStyle}
         />
         <div className="relative mx-auto flex h-[var(--header-height)] max-w-7xl items-center px-2 sm:px-4">
           <motion.span
             aria-hidden
-            className="flex-1 truncate px-32 text-center font-semibold text-[1.0625rem]"
-            style={{ opacity: smallTitleOpacity, y: smallTitleY }}
+            className="header-fade flex-1 truncate px-32 text-center font-semibold text-[1.0625rem]"
+            style={smallTitleStyle}
           >
             {title}
           </motion.span>
           <HeaderToolbars leading={leading} trailing={trailing} selection={selection} />
         </div>
-      </header>
+      </motion.header>
       <motion.div
         className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
         style={{ opacity: largeTitleOpacity }}
@@ -95,6 +132,7 @@ const TITLE_COLLAPSE_AT = 16;
  * glass pill once the page starts to scroll, taking the place of the brand there.
  */
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
+  const transition = useHeaderTransition();
   const { scrollY } = useScroll();
   const reducedMotion = useReducedMotion();
   const scrollAnimation = useRef<ReturnType<typeof animate> | null>(null);
@@ -138,18 +176,22 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
 
   return (
     <>
-      <header className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]">
+      <motion.header
+        data-page-header
+        className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
+        style={transition}
+      >
         {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
         <motion.div
           aria-hidden
-          className="page-top-blur pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
+          className="page-top-blur header-fade pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
           initial={false}
-          animate={{ opacity: collapsed ? 1 : 0 }}
+          animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
           transition={{ duration: 0.2 }}
         />
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
           {/* Fixed, not in the page: scrolling would carry it under the system status bar. */}
-          <div className="pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4">
+          <div className="header-fade pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4">
             <motion.div
               className="origin-left"
               initial={false}
@@ -181,12 +223,12 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
             >
               <motion.span
                 aria-hidden
-                className="glass absolute inset-0 rounded-[var(--dock-radius)]"
+                className="glass header-fade absolute inset-0 rounded-[var(--dock-radius)]"
                 initial={false}
-                animate={{ opacity: collapsed ? 1 : 0 }}
+                animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
                 transition={slide}
               />
-              <h1 className="relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
+              <h1 className="header-fade relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
                 {title}
               </h1>
               <button
@@ -205,7 +247,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
             onTrailingWidthChange={setTrailingWidth}
           />
         </div>
-      </header>
+      </motion.header>
       <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
     </>
   );
@@ -378,9 +420,9 @@ function MorphingPill({
     >
       <motion.span
         aria-hidden
-        className="glass absolute inset-0 rounded-[var(--dock-radius)]"
+        className="glass header-fade absolute inset-0 rounded-[var(--dock-radius)]"
         initial={false}
-        animate={{ opacity: glass ? 1 : 0 }}
+        animate={{ '--header-layer-opacity': glass ? 1 : 0 }}
         transition={{ ...springs.smooth, visualDuration: 0.3 }}
       />
       <AnimatePresence initial={false}>
@@ -388,12 +430,17 @@ function MorphingPill({
           key={mode}
           ref={measure}
           className={cn(
-            'absolute inset-y-0 flex items-center p-1',
+            'header-fade absolute inset-y-0 flex items-center p-1',
             side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',
           )}
-          initial={{ opacity: 0, scale: 0.85, filter: 'blur(4px)' }}
-          animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, scale: 0.85, filter: 'blur(4px)', transition: { duration: 0.14 } }}
+          initial={{ '--header-layer-opacity': 0, scale: 0.85, filter: 'blur(4px)' }}
+          animate={{ '--header-layer-opacity': 1, scale: 1, filter: 'blur(0px)' }}
+          exit={{
+            '--header-layer-opacity': 0,
+            scale: 0.85,
+            filter: 'blur(4px)',
+            transition: { duration: 0.14 },
+          }}
           transition={springs.smooth}
         >
           {children}

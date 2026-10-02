@@ -31,6 +31,7 @@ import { useNoteLinks } from '@/lib/linkPreviews';
 import { afterPaint, animateSteady, curves, springs } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
 import {
+  CARD_FACE_FADE_END,
   editorProgress,
   hideCard,
   landCard,
@@ -196,6 +197,12 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   });
   const cardRect = useRef<Rect | null>(origin);
   const [settled, setSettled] = useState(false);
+  // A card can be taller than the screen. The backing surface must contain both ends of
+  // the morph, or translating it to an off-screen card top cuts its visible bottom short.
+  const surfaceWidth = split ? target.width : Math.max(target.width, cardRect.current?.width ?? 0);
+  const surfaceHeight = split
+    ? target.height
+    : Math.max(target.height, cardRect.current?.height ?? 0);
 
   const progress = useMotionValue(0);
   const [self] = useState(() => ({}));
@@ -252,17 +259,26 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     // The pane's toolbars and card sit on its left edge, so clipping would cut their shadows.
     if (splitRef.current) return 'none';
     if (!card) return `inset(0px round ${t.radius}px)`;
-    const right = Math.max(0, (1 - p) * (t.width - card.width));
-    const bottom = Math.max(0, (1 - p) * (t.height - card.height));
+    const right = Math.max(t.width, card.width) - lerp(card.width, t.width, p);
+    const bottom = Math.max(t.height, card.height) - lerp(card.height, t.height, p);
     const radius = lerp(card.radius, t.radius || 28 * Math.min(1, Math.abs(dragY.get()) / 80), p);
     return `inset(0px ${right}px ${bottom}px 0px round ${radius}px)`;
   });
-  const ghostOpacity = useTransform(() => (cardRect.current ? 1 - progress.get() / 0.35 : 0));
+  const ghostOpacity = useTransform(() =>
+    cardRect.current ? 1 - progress.get() / CARD_FACE_FADE_END : 0,
+  );
   const contentOpacity = useTransform(
     () => (cardRect.current ? (progress.get() - 0.25) / 0.45 : fade.get()) * textFade.get(),
   );
   const contentY = useTransform(() => (1 - swap.get()) * 12);
   const backdropOpacity = useTransform(() => progress.get() * 0.35);
+
+  // Recompute the clip before painting a newly measured backing size, including when the
+  // destination card grew while the note was being edited.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: invalidate transforms when their referenced geometry changes
+  useLayoutEffect(() => {
+    layoutTick.set(layoutTick.get() + 1);
+  }, [layoutTick, surfaceWidth, surfaceHeight, target.x, target.y, target.width, target.height]);
 
   // Open: grow out of the card (or slide in as a pane, or fade in over the pane's last note),
   // then swap the preview for the real editor.
@@ -293,11 +309,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   // card stays in view beside it, marked as open.
   // biome-ignore lint/correctness/useExhaustiveDependencies: recompute when the layout changes
   useEffect(() => {
-    layoutTick.set(layoutTick.get() + 1);
     if (!settled || !split || !isPresent) return;
     showCard(note.id);
     if (leadSurface === self && paneReveal.get() < 1) animate(paneReveal, 1, springs.pane);
-  }, [settled, split, isPresent, note.id, self, layoutTick, target.x, target.width, target.height]);
+  }, [settled, split, isPresent, note.id, self, target.x, target.width, target.height]);
 
   // Close (from any cause, including the back gesture): save, drop an empty note, then
   // shrink into the note's card, or fade out when it has none.
@@ -510,14 +525,14 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             style={{
               left: target.x,
               top: target.y,
-              width: target.width,
-              height: target.height,
+              width: surfaceWidth,
+              height: surfaceHeight,
               x,
               y,
               clipPath,
               scale,
               opacity: surfaceOpacity,
-              transformOrigin: '50% 20%',
+              transformOrigin: `${target.width / 2}px ${target.height * 0.2}px`,
               pointerEvents: isPresent ? 'auto' : 'none',
             }}
           >
@@ -538,8 +553,14 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             )}
 
             <motion.div
-              className="relative flex min-h-0 flex-1 flex-col"
-              style={{ opacity: contentOpacity, y: contentY }}
+              className="relative flex min-h-0 shrink-0 flex-col"
+              // The backing can exceed the screen; the editor keeps its viewport and scroll.
+              style={{
+                width: target.width,
+                height: target.height,
+                opacity: contentOpacity,
+                y: contentY,
+              }}
             >
               {fullscreen && (
                 <>
