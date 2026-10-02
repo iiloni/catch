@@ -1,6 +1,8 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { ArrowDownUp, Lightbulb } from 'lucide-react';
+import { ArrowDownUp, LayoutGrid, Lightbulb, Rows3 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { useCallback, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
@@ -17,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { notesCollection } from '@/lib/collections';
+import { haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
@@ -34,10 +38,27 @@ const sortSchema = z.object({
 });
 
 type Sort = z.infer<typeof sortSchema>;
+const layoutSchema = z.enum(['masonry', 'single-column']);
+const SINGLE_COLUMN_BREAKPOINT = 640;
 
 /** Every note that is not in the deck, archived or trashed. */
 function GalleryPage() {
   const { open } = useOpenNote();
+  const [layout, setLayout] = usePersistentState('catch-gallery-layout', layoutSchema, 'masonry');
+  const [narrow, setNarrow] = useState(false);
+  const measureGallery = useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    // The page can be phone-sized even on desktop when a note pane is open.
+    const update = () => setNarrow(element.clientWidth < SINGLE_COLUMN_BREAKPOINT);
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const activeLayout = narrow ? layout : 'masonry';
+  const layoutAction =
+    layout === 'masonry' ? 'Switch to single column view' : 'Switch to masonry view';
   // A new key, so galleries saved with the old "last edited" default start arranged by hand.
   const [sort, setSort] = usePersistentState('catch-gallery-order', sortSchema, {
     field: 'position',
@@ -68,12 +89,33 @@ function GalleryPage() {
         selection={selectionHeader(selection, 'gallery')}
         trailing={
           <>
+            {narrow && (
+              <motion.button
+                type="button"
+                aria-label={layoutAction}
+                title={layoutAction}
+                onClick={() => {
+                  haptics.toggle();
+                  setLayout(layout === 'masonry' ? 'single-column' : 'masonry');
+                }}
+                whileTap={{ scale: 0.9 }}
+                transition={springs.snappy}
+                className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {layout === 'masonry' ? (
+                  <Rows3 className="size-5" aria-hidden />
+                ) : (
+                  <LayoutGrid className="size-5" aria-hidden />
+                )}
+              </motion.button>
+            )}
             <ViewOptions sort={sort} onChange={setSort} />
             <SettingsButton />
           </>
         }
       />
       <section
+        ref={measureGallery}
         aria-label="Gallery"
         className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
@@ -87,6 +129,7 @@ function GalleryPage() {
               <NoteSection label="Pinned">
                 <NoteGrid
                   notes={pinned}
+                  layout={activeLayout}
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
                   onMove={onMove}
@@ -99,6 +142,7 @@ function GalleryPage() {
               <NoteSection label={pinned.length > 0 ? 'Others' : undefined}>
                 <NoteGrid
                   notes={others}
+                  layout={activeLayout}
                   onOpen={(note, card) => open(note.id, card)}
                   onArchive={(note) => setNoteArchived(note.id, true)}
                   onMove={onMove}

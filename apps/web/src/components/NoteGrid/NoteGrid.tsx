@@ -33,6 +33,7 @@ const LIFTED_Z = 45;
 
 type Props = {
   notes: Note[];
+  layout?: 'masonry' | 'single-column';
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive?: (note: Note) => void;
   /**
@@ -148,7 +149,15 @@ type Place = {
  * cheap. The rest are laid out from their last measured height, or a guess from their
  * content, and measured as they come near.
  */
-export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect }: Props) {
+export function NoteGrid({
+  notes,
+  layout: viewLayout = 'masonry',
+  onOpen,
+  onArchive,
+  onMove,
+  selected,
+  onSelect,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View | null>(null);
@@ -170,7 +179,7 @@ export function NoteGrid({ notes, onOpen, onArchive, onMove, selected, onSelect 
 
   const selecting = Boolean(onSelect && selected && selected.size > 0);
 
-  const columns = columnsFor(width);
+  const columns = viewLayout === 'single-column' ? 1 : columnsFor(width);
   const columnWidth = Math.max(0, (width - GAP * (columns - 1)) / columns);
   const grid = { columns, columnWidth, gap: GAP };
   const measuredWidth = useRef(columnWidth);
