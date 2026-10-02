@@ -94,8 +94,8 @@ size, irrespective of device pixel ratio. Each image has one accessible “Catch
 lettering is never live text.
 
 Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 28 px
-horizontal lockup at the top left, in scrolling content; the existing title pill takes its
-place as the page scrolls. Toolbar space is reserved, and selection hides this branding.
+horizontal lockup fixed at the top left; it fades out as the title pill takes its place
+once the page scrolls. Toolbar space is reserved, and selection hides this branding.
 Android's existing first-run server setup uses a stacked lockup with a 96 px icon;
 Settings > Update's existing product area uses a stacked lockup with an 80 px icon.
 Inside the app, branding always uses stable

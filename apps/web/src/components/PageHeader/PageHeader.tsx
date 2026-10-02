@@ -80,21 +80,34 @@ type TabPageHeaderProps = {
   selection?: HeaderSelection | null;
 };
 
+/** How far below the header's row the large title rests. */
+const TITLE_REST_Y = 66;
+/**
+ * The scroll at which the title leaves for its corner: while it is still below the row. A
+ * centered title on a phone is wider than the gap between the corners, so riding the page
+ * any further would run it into the controls on the right.
+ */
+const TITLE_COLLAPSE_AT = 16;
+
 /**
  * The header of the pages in the dock. The large title moves into the top left corner as a
- * glass pill when it reaches the top of the page.
+ * glass pill once the page starts to scroll, taking the place of the brand there.
  */
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
   const { scrollY } = useScroll();
   const [trailingWidth, setTrailingWidth] = useState(0);
-  const collapseAt = 64;
   // Not `window.scrollY`: on mount it still holds the previous page's scroll until the router
   // resets it, and `scrollY` would never report a change to correct it.
-  const [collapsed, setCollapsed] = useState(() => scrollY.get() >= collapseAt);
-  useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= collapseAt));
+  const [collapsed, setCollapsed] = useState(() => scrollY.get() >= TITLE_COLLAPSE_AT);
+  useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= TITLE_COLLAPSE_AT));
   // The expanded title follows the page; only the move into the corner is animated.
-  const titleScrollY = useTransform(scrollY, [0, collapseAt], [66, 2]);
+  const titleScrollY = useTransform(
+    scrollY,
+    [0, TITLE_COLLAPSE_AT],
+    [TITLE_REST_Y, TITLE_REST_Y - TITLE_COLLAPSE_AT],
+  );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
+  const branded = !collapsed && !selection;
 
   return (
     <>
@@ -108,6 +121,19 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
           transition={{ duration: 0.2 }}
         />
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
+          {/* Fixed, not in the page: scrolling would carry it under the system status bar. */}
+          <div className="pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4">
+            <motion.div
+              className="origin-left"
+              initial={false}
+              animate={{ opacity: branded ? 1 : 0, scale: branded ? 1 : 0.85 }}
+              transition={branded ? slide : { duration: 0.16 }}
+              aria-hidden={!branded}
+              style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
+            >
+              <BrandLockup orientation="horizontal" iconSize={28} />
+            </motion.div>
+          </div>
           <motion.div
             className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
             style={{ y: titleScrollY }}
@@ -119,7 +145,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
                 left: collapsed ? '0%' : '50%',
                 x: collapsed ? '0%' : '-50%',
                 marginLeft: collapsed ? 12 : 0,
-                y: collapsed ? -2 : 0,
+                y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
                 fontSize: collapsed ? 17 : 42,
                 paddingInline: collapsed ? 14 : 0,
                 opacity: selection ? 0 : 1,
@@ -146,19 +172,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
           />
         </div>
       </header>
-      <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)] pt-[calc(var(--safe-top)+0.25rem)]">
-        <div className="mx-auto max-w-7xl px-3 sm:px-4">
-          <motion.div
-            initial={false}
-            animate={{ opacity: selection ? 0 : 1 }}
-            transition={slide}
-            aria-hidden={Boolean(selection)}
-            style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
-          >
-            <BrandLockup orientation="horizontal" iconSize={28} />
-          </motion.div>
-        </div>
-      </div>
+      <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
     </>
   );
 }
