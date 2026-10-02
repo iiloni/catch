@@ -58,11 +58,8 @@ function LoginPage() {
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
-      <BrandLockup orientation="horizontal" iconSize={48} />
+      <BrandLockup orientation="stacked" iconSize={96} />
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
-        <h1 className="font-display font-bold text-2xl">
-          {mode === 'sign-in' ? 'Sign in' : 'Create account'}
-        </h1>
         {mode === 'sign-up' && <Input name="name" placeholder="Name" aria-label="Name" />}
         <Input
           name="email"
