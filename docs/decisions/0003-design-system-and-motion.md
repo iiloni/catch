@@ -46,7 +46,8 @@ stack in a wider left column, with one full-height Gallery target on the right. 
 border and check mark show the current location. The move button also shows its location:
 a dashboard for Gallery, or columns with the current column's accent line underneath. Holding the button (or sliding off it)
 also opens the picker, and letting go on a destination moves the note there. Desktop
-card toolbars expand the same picker vertically. The editor therefore is a non-modal dialog, with the page
+card toolbars open the same picker in a floating glass popover, like the color selector,
+so choosing a destination does not resize the card. The editor therefore is a non-modal dialog, with the page
 behind it made `inert`.
 
 On phones the note scrolls behind its floating back and trash controls, with the Gallery's

@@ -87,7 +87,7 @@ describe('NoteCard', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it('expands destinations and moves the card without opening the editor', () => {
+  it('opens destinations in a popover and moves the card without opening the editor', () => {
     const onOpen = vi.fn();
     renderCard({ onOpen });
     act(() => screen.getByRole('button', { name: 'Open note' }).focus());
