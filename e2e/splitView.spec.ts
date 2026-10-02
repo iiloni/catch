@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { card, moveNote, noteToolbar, openNote, seedNotes, signUp } from './helpers';
+import {
+  card,
+  moveNote,
+  noteToolbar,
+  openDeck,
+  openNote,
+  seedNotes,
+  settledBox,
+  signUp,
+} from './helpers';
 
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
@@ -199,3 +208,101 @@ test('the split is resized by dragging the handle, within limits', async ({ page
   await openNote(page, 'Alpha');
   await expect(handle).toHaveAttribute('aria-valuenow', String(min));
 });
+
+for (const layout of ['split view', 'popup'] as const) {
+  test(`the ${layout} scrollbar stays inside the card and scrolls without losing the caret`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'Mouse scrollbar interactions are covered on desktop');
+    await signUp(page);
+    await seedNotes(
+      page,
+      [
+        'Short note',
+        {
+          title: 'Long note',
+          body: 'A long note should scroll inside its rounded card. '.repeat(200),
+        },
+      ],
+      layout === 'popup' ? 'new' : undefined,
+    );
+    if (layout === 'popup') await openDeck(page);
+
+    const dialog = await openNote(page, 'Short note');
+    const track = dialog.locator('[data-slot="scroll-area-scrollbar"]');
+    await expect(track).toBeHidden();
+    const shortNoteBox = await settledBox(dialog.locator('[data-note-scroll]'));
+    await page.mouse.click(
+      shortNoteBox.x + shortNoteBox.width / 2,
+      shortNoteBox.y + shortNoteBox.height - 48,
+    );
+    await expect(dialog.getByRole('textbox')).toBeFocused();
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await openNote(page, 'Long note');
+    const viewport = dialog.locator('[data-note-scroll]');
+    const thumb = track.locator('[data-slot="scroll-area-thumb"]');
+    await expect(thumb).toBeVisible();
+    const areaBox = await settledBox(viewport);
+    const trackBox = await settledBox(track);
+    expect(trackBox.y - areaBox.y).toBeGreaterThanOrEqual(15);
+    expect(areaBox.y + areaBox.height - (trackBox.y + trackBox.height)).toBeGreaterThanOrEqual(15);
+    expect(areaBox.x + areaBox.width - (trackBox.x + trackBox.width)).toBeGreaterThanOrEqual(3);
+
+    const scrollTop = () => viewport.evaluate((element) => element.scrollTop);
+    const pageScrollTop = await page.evaluate(() => window.scrollY);
+    await page.mouse.move(areaBox.x + areaBox.width / 2, areaBox.y + areaBox.height / 2);
+    await page.mouse.wheel(0, 240);
+    await expect.poll(scrollTop).toBeGreaterThan(100);
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollTop);
+
+    const editor = dialog.getByRole('textbox');
+    await editor.click();
+    await expect(editor).toBeFocused();
+    const caret = await editor.evaluate(() => {
+      const selection = window.getSelection();
+      return { anchor: selection?.anchorOffset, focus: selection?.focusOffset };
+    });
+    const beforeDrag = await scrollTop();
+    const thumbBox = await settledBox(thumb);
+    await page.mouse.move(thumbBox.x + thumbBox.width / 2, thumbBox.y + thumbBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(thumbBox.x + thumbBox.width / 2, trackBox.y + trackBox.height - 1, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await expect.poll(scrollTop).toBeGreaterThan(beforeDrag + 100);
+    await expect(editor).toBeFocused();
+    expect(
+      await editor.evaluate(() => {
+        const selection = window.getSelection();
+        return { anchor: selection?.anchorOffset, focus: selection?.focusOffset };
+      }),
+    ).toEqual(caret);
+    await expect
+      .poll(() =>
+        viewport.evaluate(
+          (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+        ),
+      )
+      .toBeLessThan(2);
+    const endThumbBox = await thumb.boundingBox();
+    expect(
+      endThumbBox && areaBox.y + areaBox.height - (endThumbBox.y + endThumbBox.height),
+    ).toBeGreaterThanOrEqual(15);
+
+    // Folding into the phone layout must keep the same editor and its undo history.
+    await page.keyboard.type('Resize keeps this edit');
+    await expect(editor).toContainText('Resize keeps this edit');
+    await page.setViewportSize({ width: 560, height: 820 });
+    await expect(editor).toBeFocused();
+    const undo = page
+      .getByRole('toolbar', { name: 'Undo and redo' })
+      .getByRole('button', { name: 'Undo', exact: true });
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect(editor).not.toContainText('Resize keeps this edit');
+  });
+}

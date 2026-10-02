@@ -22,6 +22,7 @@ import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
+import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection } from '@/lib/collections';
 import { editorControls, noteDockPanelOpen } from '@/lib/dockState';
@@ -400,58 +401,63 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   }, [fullscreen, scrollElement]);
 
   const scrollArea = (
-    <div
-      ref={attachScroll}
-      data-note-scroll
+    <ScrollArea
       data-note-color={note.color}
       className={cn(
-        'relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain',
-        fullscreen
-          ? 'scroll-pt-[calc(var(--safe-top)+4rem)] pt-[calc(var(--safe-top)+4rem)]'
-          : 'pt-2',
-        split
-          ? cn(
-              'rounded-3xl border border-transparent bg-note pb-6 shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
-              // The card stops above the pane's dock, which follows the keyboard up.
-              !sideLinks && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
-            )
-          : target.radius
-            ? // The panel ends above the dock, until the keyboard lifts the dock.
-              'pb-[calc(var(--keyboard)+1.5rem)]'
-            : // Room to scroll the last lines clear of the dock (and keyboard) above.
-              'pb-[calc(var(--dock-space)+4rem)]',
+        'flex-1',
+        !fullscreen && 'rounded-3xl [--scrollbar-edge:0.25rem] [--scrollbar-inset:1rem]',
+        split &&
+          cn(
+            'border border-transparent bg-note shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
+            // The card stops above the pane's dock, which follows the keyboard up.
+            !sideLinks && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
+          ),
       )}
     >
-      {/* The editor keeps its own height so the links follow its last line. */}
-      <div className="flex min-h-full flex-col">
-        {settled ? (
-          <LazyNoteEditor
-            noteId={note.id}
-            initialContent={note.content}
-            onChange={save}
-            onControls={setControls}
-            editable={editable}
-            className="min-h-0"
-            fallback={<NotePreview content={note.content} maxBlocks={200} variant="editor" />}
+      <ScrollAreaViewport
+        ref={attachScroll}
+        data-note-scroll
+        data-note-color={note.color}
+        className={cn(
+          fullscreen
+            ? 'scroll-pt-[calc(var(--safe-top)+4rem)] pt-[calc(var(--safe-top)+4rem)] pb-[calc(var(--dock-space)+4rem)]'
+            : cn('pt-2', split ? 'pb-6' : 'pb-[calc(var(--keyboard)+1.5rem)]'),
+        )}
+      >
+        {/* The editor keeps its own height so the links follow its last line. */}
+        <div className="flex min-h-full flex-1 flex-col">
+          {settled ? (
+            <LazyNoteEditor
+              noteId={note.id}
+              initialContent={note.content}
+              onChange={save}
+              onControls={setControls}
+              editable={editable}
+              className="min-h-0"
+              fallback={<NotePreview content={note.content} maxBlocks={200} variant="editor" />}
+            />
+          ) : (
+            <NotePreview content={note.content} maxBlocks={200} variant="editor" />
+          )}
+          {!sideLinks && (
+            <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
+          )}
+          {!sideLinks && (
+            <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />
+          )}
+          <NoteTimestamp updatedAt={note.updatedAt} />
+          {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
+          <div
+            aria-hidden
+            className={cn('min-h-16 flex-1', editable && 'cursor-text')}
+            onClick={() => {
+              if (editable) editorControls.get()?.focusEnd();
+            }}
           />
-        ) : (
-          <NotePreview content={note.content} maxBlocks={200} variant="editor" />
-        )}
-        {!sideLinks && (
-          <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
-        )}
-        {!sideLinks && <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />}
-        <NoteTimestamp updatedAt={note.updatedAt} />
-        {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
-        <div
-          aria-hidden
-          className={cn('min-h-16 flex-1', editable && 'cursor-text')}
-          onClick={() => {
-            if (editable) editorControls.get()?.focusEnd();
-          }}
-        />
-      </div>
-    </div>
+        </div>
+      </ScrollAreaViewport>
+      <ScrollBar className={fullscreen ? 'hidden' : undefined} />
+    </ScrollArea>
   );
 
   return (
@@ -626,13 +632,18 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 {scrollArea}
                 {sideLinks && (
                   <motion.aside
-                    className="w-64 shrink-0 overflow-y-auto overscroll-contain pb-6"
+                    className="min-h-0 w-64 shrink-0"
                     initial={{ opacity: 0, x: 16 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={springs.smooth}
                   >
-                    <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
-                    <NoteLinks note={note} variant="side" />
+                    <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
+                      <ScrollAreaViewport className="pb-6">
+                        <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
+                        <NoteLinks note={note} variant="side" />
+                      </ScrollAreaViewport>
+                      <ScrollBar />
+                    </ScrollArea>
                   </motion.aside>
                 )}
               </div>

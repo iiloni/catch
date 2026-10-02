@@ -101,6 +101,9 @@
 :root[data-platform="android"] *::-webkit-scrollbar {
   display: none;
 }
+:root[data-platform="android"] [data-slot="scroll-area-scrollbar"] {
+  display: none;
+}
 
 /* The page's scrollbar would sit at the screen's right edge, beside the note. */
 :root[data-note-pane] {
