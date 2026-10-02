@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
+import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authRedirectSearchSchema } from '@/lib/authRedirect';
@@ -32,10 +33,7 @@ function SetupPage() {
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
-      <div className="flex items-center gap-3">
-        <img src="/icon-small.svg" alt="" className="size-16" />
-        <span className="font-display font-extrabold text-3xl tracking-[-0.03em]">Catch</span>
-      </div>
+      <BrandLockup orientation="stacked" iconSize={96} />
       <form
         onSubmit={submit}
         className="flex w-full max-w-sm flex-col gap-3 rounded-lg border bg-card p-6"

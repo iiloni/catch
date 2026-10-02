@@ -63,6 +63,53 @@ Settings > Update shows the installed app's channel icon on Android and the serv
 icon on the web, falling back to development while channel metadata is unavailable.
 Splash images and other application styling remain unchanged.
 
+## Wordmark lockups
+
+`branding/wordmark/` adds the shared outlined Catch lettering, its layout tokens,
+generator, resolved icon mapping, and original Manrope font/license/provenance. The font
+is a design source only; application typography and runtime fonts are unchanged.
+The wordmark tokens include the approved full-detail lockup policy and revised horizontal
+minimum. Icon-only tokens remain unchanged. The lettering
+SVGs and original font/license are retained byte for byte. Saved reference composites
+are omitted: all 36 SVGs and their input-hash manifest in `apps/web/public/wordmark/`
+are generated from the current stable, corrected preview, and dev icon masters.
+
+Regenerate and verify from the repository root with Python 3 (no extra dependencies):
+
+```bash
+python3 branding/wordmark/compose-catch-lockups.py --icons-json branding/wordmark/wordmark-icon-inputs.json --output-dir apps/web/public/wordmark
+python3 branding/wordmark/compose-catch-lockups.py --icons-json branding/wordmark/wordmark-icon-inputs.json --output-dir apps/web/public/wordmark --check
+```
+
+CI runs the verification command. Regenerate lockups after any approved icon source
+change; the icon-only raster pipeline remains separate.
+
+`BrandLockup` reads the wordmark tokens for proportions, clear space, minimum widths,
+and detail thresholds. Its icon size is in CSS pixels (density-independent pixels in
+Android's WebView), measured again when the available width changes. Every lockup uses
+primary artwork with both motion marks and the landing shadow. Below the 96 px tight
+width minimum in either orientation, it shows the current channel's icon-only asset,
+selecting primary at 128 px, small at 48–127 px, and micro below 48 px by displayed icon
+size, irrespective of device pixel ratio. Each image has one accessible “Catch” label;
+lettering is never live text.
+
+Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 28 px
+horizontal lockup at the top left, in scrolling content; the existing title pill takes its
+place as the page scrolls. Toolbar space is reserved, and selection hides this branding.
+Android's existing first-run server setup uses a stacked lockup with a 96 px icon;
+Settings > Update's existing product area uses a stacked lockup with an 80 px icon.
+Inside the app, branding always uses stable
+artwork, except Update, which keeps its existing installed-app/server channel selection.
+App icons and favicons also keep their existing build-specific selection. `BrandLockup`
+defaults to stable; Update passes its channel explicitly. Ink follows the resolved app theme (including stored preferences),
+with a surface override for a differently themed surrounding surface.
+
+All these surfaces use SVG directly on web and Android, preserving gradients and filters
+without density-specific bitmap exports or VectorDrawable conversion. Launcher/adaptive,
+PWA, favicon and Android system splash resources remain icon-only and unchanged. Dev
+remains a development build, with release builds still forbidden. No API, synced shape,
+queued write, protocol version, route, application palette, or typography changes.
+
 ## Channel selection
 
 The release workflow's existing tag parser selects stable from `vMAJOR.MINOR.PATCH` and

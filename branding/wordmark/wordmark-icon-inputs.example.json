@@ -1,0 +1,17 @@
+{
+  "stable": {
+    "primary": "../catch-icon-master.svg",
+    "small": "../catch-icon-small.svg",
+    "micro": "../catch-favicon-mark.svg"
+  },
+  "preview": {
+    "primary": "../preview/catch-icon-preview.svg",
+    "small": "../preview/catch-icon-preview-small.svg",
+    "micro": "../preview/catch-favicon-preview.svg"
+  },
+  "dev": {
+    "primary": "../dev/catch-icon-dev.svg",
+    "small": "../dev/catch-icon-dev-small.svg",
+    "micro": "../dev/catch-favicon-dev.svg"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "family": "Manrope",
+  "style": "ExtraBold",
+  "weight": 800,
+  "fontVersion": "4.505",
+  "sourceFile": "Manrope-wght.ttf",
+  "sourceUrl": "https://github.com/google/fonts/tree/main/ofl/manrope",
+  "fontSha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+  "license": "SIL Open Font License 1.1",
+  "licenseFile": "OFL-Manrope.txt",
+  "case": "Catch",
+  "unitsPerEm": 2000,
+  "inkBoundsFontUnits": [60, -30, 5732, 1470],
+  "trackingPerPairFontUnits": -18,
+  "additionalCustomGlyphEdits": "none",
+  "positionedGlyphs": [
+    {
+      "character": "C",
+      "name": "C",
+      "x": 0,
+      "advance": 1492,
+      "kerningToNext": 0,
+      "trackingToNext": -18,
+      "bounds": [60, -30, 1412, 1470]
+    },
+    {
+      "character": "a",
+      "name": "a",
+      "x": 1474,
+      "advance": 1166,
+      "kerningToNext": 0,
+      "trackingToNext": -18,
+      "bounds": [80, -30, 1046, 1110]
+    },
+    {
+      "character": "t",
+      "name": "t",
+      "x": 2622,
+      "advance": 888,
+      "kerningToNext": -60,
+      "trackingToNext": -18,
+      "bounds": [20, -18.76595744680851, 788, 1380]
+    },
+    {
+      "character": "c",
+      "name": "c",
+      "x": 3432,
+      "advance": 1166,
+      "kerningToNext": 0,
+      "trackingToNext": -18,
+      "bounds": [80, -30, 1106, 1110]
+    },
+    {
+      "character": "h",
+      "name": "h",
+      "x": 4580,
+      "advance": 1272,
+      "kerningToNext": 0,
+      "trackingToNext": 0,
+      "bounds": [138, 0, 1152, 1440]
+    }
+  ],
+  "outlineTransform": [0.6826666666666666, 0, 0, -0.6826666666666666, -40.96, 1003.52],
+  "normalization": "visible ink height 1024; strip side bearings from viewport",
+  "authority": "Outlined SVG paths are frozen master lettering; font is provenance, not a runtime dependency."
+}

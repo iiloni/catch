@@ -15,6 +15,10 @@ layout.
 (`#FFE174`, `#FFC247`, `#FFA32B`), a cream card with two charcoal lines, and two motion marks.
 The supplied small and favicon variants simplify it at their defined raster sizes, while
 the supplied foreground and background SVGs form the Android adaptive icon. The approved
+icon/wordmark lockups use complete primary artwork at every displayed size, preserving
+both motion marks and the landing shadow; size-based simplification applies to icon-only
+fallbacks. The 28 px header icon has a roughly 97 px tight horizontal lockup, above the
+revised 96 px minimum recorded in the wordmark tokens. The approved
 middle amber (`--brand`) colors controls and focus, and the gradient marks the icon and
 compose button. Warm graphite neutrals give both light and dark
 themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
@@ -67,6 +71,11 @@ The dock's pages (Gallery, Deck, Search) share `TabPageHeader`: a large centered
 moves into the top left corner as a glass pill once the page scrolls under it. Until then
 their top right controls are flat buttons on the page, and they gain the same glass as the
 title does. Selecting notes always shows the glass.
+The stable horizontal Catch lockup sits in the scrolling content at the top left on these
+three pages. It leaves the screen naturally before the title becomes a pill in that corner.
+It reserves room for the right toolbar (including sync status), using icon-only branding
+when a narrow page pane cannot fit the minimum lockup width. Selection hides the branding
+so the count and selection actions have the corners to themselves.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash
 selects it (in the Gallery and Deck, the same press picks it up to rearrange it), and while

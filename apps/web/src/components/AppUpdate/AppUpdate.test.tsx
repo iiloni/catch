@@ -22,6 +22,7 @@ vi.mock('@/lib/updates', () => ({
   installServerVersion: vi.fn(),
 }));
 vi.mock('@/lib/api', () => ({ api: { releases: vi.fn() } }));
+vi.mock('@/lib/theme', () => ({ useResolvedTheme: () => 'light' }));
 vi.mock('@/lib/settings', async (original) => ({
   ...(await original<typeof import('@/lib/settings')>()),
   useSettingsNavigation: vi.fn(),
@@ -39,6 +40,13 @@ vi.mock('@tanstack/react-router', async (original) => ({
 const open = vi.fn();
 let state: ReturnType<typeof useUpdates>;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
   vi.clearAllMocks();
   localStorage.clear();
   state = {
@@ -62,6 +70,26 @@ beforeEach(() => {
 });
 
 describe('Update settings', () => {
+  it.each(['stable', 'preview', 'dev'] as const)(
+    'keeps %s branding on Update, using app identity on Android and server identity on web',
+    async (channel) => {
+      state.app = { version: '1.2.0', channel };
+      state.server = { version: '1.3.0', channel: channel === 'stable' ? 'preview' : 'stable' };
+      const { rerender } = render(<AppUpdate />);
+      expect(screen.getByRole('img', { name: 'Catch' })).toHaveAttribute(
+        'src',
+        `/wordmark/catch-lockup-stacked-${channel}-dark.svg`,
+      );
+      state.android = false;
+      rerender(<AppUpdate />);
+      expect(screen.getByRole('img', { name: 'Catch' })).toHaveAttribute(
+        'src',
+        `/wordmark/catch-lockup-stacked-${state.server.channel}-dark.svg`,
+      );
+      await waitFor(() => expect(api.releases).toHaveBeenCalled());
+    },
+  );
+
   it('shows project links and both versions on Android with an exact-version update button', async () => {
     render(<AppUpdate />);
     expect(screen.getByText('App version')).toBeInTheDocument();
