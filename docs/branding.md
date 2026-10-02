@@ -90,8 +90,11 @@ at 128 px, small at 48–127 px, and micro below 48 px, irrespective of device p
 Below the 112 px horizontal or 96 px stacked minimum, it shows the current channel's
 icon-only asset. Each image has one accessible “Catch” label; lettering is never live text.
 
-Sign-in uses a horizontal lockup with a 48 px icon. Android's existing first-run server
-setup uses a stacked lockup with a 96 px icon; Settings > Update's existing product area
+Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 36 px
+horizontal lockup at the top left, in scrolling content; the existing title pill takes its
+place as the page scrolls. Toolbar space is reserved, and selection hides this branding.
+Android's existing first-run server setup uses a stacked lockup with a 96 px icon;
+Settings > Update's existing product area
 uses a stacked lockup with an 80 px icon. Inside the app, branding always uses stable
 artwork, except Update, which keeps its existing installed-app/server channel selection.
 App icons and favicons also keep their existing build-specific selection. `BrandLockup`

@@ -8,7 +8,8 @@ import {
   useScroll,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useLayoutEffect, useState } from 'react';
+import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
@@ -85,6 +86,7 @@ type TabPageHeaderProps = {
  */
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
   const { scrollY } = useScroll();
+  const [trailingWidth, setTrailingWidth] = useState(0);
   const collapseAt = 64;
   // Not `window.scrollY`: on mount it still holds the previous page's scroll until the router
   // resets it, and `scrollY` would never report a change to correct it.
@@ -136,10 +138,27 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
               </h1>
             </motion.div>
           </motion.div>
-          <HeaderToolbars trailing={trailing} selection={selection} flat={!collapsed} />
+          <HeaderToolbars
+            trailing={trailing}
+            selection={selection}
+            flat={!collapsed}
+            onTrailingWidthChange={setTrailingWidth}
+          />
         </div>
       </header>
-      <div aria-hidden className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
+      <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)] pt-[calc(var(--safe-top)+0.25rem)]">
+        <div className="mx-auto max-w-7xl px-3 sm:px-4">
+          <motion.div
+            initial={false}
+            animate={{ opacity: selection ? 0 : 1 }}
+            transition={slide}
+            aria-hidden={Boolean(selection)}
+            style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
+          >
+            <BrandLockup orientation="horizontal" iconSize={36} />
+          </motion.div>
+        </div>
+      </div>
     </>
   );
 }
@@ -153,11 +172,13 @@ function HeaderToolbars({
   trailing,
   selection,
   flat = false,
+  onTrailingWidthChange,
 }: {
   leading?: ReactNode;
   trailing?: ReactNode;
   selection?: HeaderSelection | null;
   flat?: boolean;
+  onTrailingWidthChange?: (width: number) => void;
 }) {
   const mode = selection ? 'selection' : 'page';
   const glass = !flat || Boolean(selection);
@@ -179,7 +200,7 @@ function HeaderToolbars({
           leading
         )}
       </HeaderToolbar>
-      <HeaderToolbar side="right" mode={mode} glass={glass}>
+      <HeaderToolbar side="right" mode={mode} glass={glass} onWidthChange={onTrailingWidthChange}>
         {selection ? selection.actions : pageTrailing}
       </HeaderToolbar>
     </>
@@ -232,17 +253,28 @@ function HeaderToolbar({
   mode,
   glass,
   children,
+  onWidthChange,
 }: {
   side: Side;
   mode: string;
   glass: boolean;
   children: ReactNode;
+  onWidthChange?: (width: number) => void;
 }) {
   const present = children !== null && children !== undefined && children !== false;
+  useLayoutEffect(() => {
+    if (!present) onWidthChange?.(0);
+  }, [present, onWidthChange]);
   return (
     <AnimatePresence initial={false}>
       {present && (
-        <MorphingPill key="pill" side={side} mode={mode} glass={glass}>
+        <MorphingPill
+          key="pill"
+          side={side}
+          mode={mode}
+          glass={glass}
+          onWidthChange={onWidthChange}
+        >
           {children}
         </MorphingPill>
       )}
@@ -255,11 +287,13 @@ function MorphingPill({
   mode,
   glass,
   children,
+  onWidthChange,
 }: {
   side: Side;
   mode: string;
   glass: boolean;
   children: ReactNode;
+  onWidthChange?: (width: number) => void;
 }) {
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
@@ -268,6 +302,7 @@ function MorphingPill({
       if (!element) return;
       const update = () => {
         const next = element.offsetWidth;
+        onWidthChange?.(next);
         if (width.get() === 'auto') width.jump(next);
         else animate(width, next, springs.smooth);
       };
@@ -277,7 +312,7 @@ function MorphingPill({
       observer.observe(element);
       return () => observer.disconnect();
     },
-    [width],
+    [width, onWidthChange],
   );
 
   return (

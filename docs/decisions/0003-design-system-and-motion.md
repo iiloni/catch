@@ -67,6 +67,11 @@ The dock's pages (Gallery, Deck, Search) share `TabPageHeader`: a large centered
 moves into the top left corner as a glass pill once the page scrolls under it. Until then
 their top right controls are flat buttons on the page, and they gain the same glass as the
 title does. Selecting notes always shows the glass.
+The stable horizontal Catch lockup sits in the scrolling content at the top left on these
+three pages. It leaves the screen naturally before the title becomes a pill in that corner.
+It reserves room for the right toolbar (including sync status), using icon-only branding
+when a narrow page pane cannot fit the minimum lockup width. Selection hides the branding
+so the count and selection actions have the corners to themselves.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash
 selects it (in the Gallery and Deck, the same press picks it up to rearrange it), and while
