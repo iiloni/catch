@@ -26,6 +26,8 @@ export const EASE_EMPHASIZED = [0.2, 0, 0, 1] as const;
  * surface past the screen edge. CSS uses the same curve as `--ease-emphasized`.
  */
 export const curves = {
+  /** Content arriving during startup, with a gentle fade and no overshoot. */
+  enter: { duration: 0.42, ease: [0.25, 0.1, 0.25, 1] as const },
   /** A card opening into the editor. */
   expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
@@ -33,6 +35,10 @@ export const curves = {
 } satisfies Record<string, Transition>;
 
 const steady = new WeakMap<MotionValue<number>, () => void>();
+
+export function stopSteady(value: MotionValue<number>) {
+  steady.get(value)?.();
+}
 
 /**
  * Runs one of the `curves` on a motion value by frames rather than by the clock: each frame
@@ -47,12 +53,13 @@ export function animateSteady(
   value: MotionValue<number>,
   to: number,
   { duration, ease }: (typeof curves)[keyof typeof curves],
+  delayMs = 0,
 ) {
   steady.get(value)?.();
   value.stop();
   const from = value.get();
-  const eased = cubicBezier(...ease);
-  let elapsed = 0;
+  const eased = cubicBezier(ease[0], ease[1], ease[2], ease[3]);
+  let elapsed = -delayMs;
   return new Promise<void>((resolve) => {
     const stop = () => {
       cancelFrame(step);
@@ -61,6 +68,7 @@ export function animateSteady(
     // Motion's frame loop is what limits `delta` (to 40 ms).
     const step = ({ delta }: { delta: number }) => {
       elapsed += delta;
+      if (elapsed <= 0) return;
       const time = Math.min(1, elapsed / (duration * 1000));
       value.set(from + (to - from) * eased(time));
       if (time < 1) return;

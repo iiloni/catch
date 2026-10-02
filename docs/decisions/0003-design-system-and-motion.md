@@ -146,6 +146,21 @@ backdrop root, cutting off the page until opacity reaches 1 and causing the blur
 touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instead (its
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
+**Cold starts.** The document starts on the saved theme's canvas, without an additional
+in-app splash or a wait for fonts or sync. Header content and notes fade in with a 10 px
+settle as they arrive; grid cards start after their existing measurement step. The dock
+only translates, keeping opacity 1 so its glass continues to blur the page. These 420 ms
+entries use a gentler ease than the page transitions, keeping more of the fade visible
+instead of reaching near-full opacity early. They use `animateSteady`, so startup work
+cannot skip ahead through the animation.
+Starts are staggered from top to bottom in 20 ms steps, capped at 120 ms: the brand and
+header controls start first, followed by the title and content, then the dock. Grid cards
+use their existing layout positions, so the stagger adds no per-card DOM measurement.
+The short delays advance in the same frame loop, preserving the stagger during busy frames.
+Entries run once per element identity in a document, rather than replaying when virtualized
+cards or routes remount. They never block input or wait for other content, and reduced motion
+shows elements immediately. Fixed headers and the dock have no animated page ancestor.
+
 **Page transitions.** Moving between pages slides them a short way in the direction of
 travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).

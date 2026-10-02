@@ -15,6 +15,7 @@ import { memo, useCallback, useLayoutEffect, useMemo, useReducer, useRef, useSta
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { SwipeArchiveCard } from '@/components/SwipeArchiveCard/SwipeArchiveCard';
+import { entryDelayForTop, useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import {
   LONG_PRESS_MS,
@@ -119,7 +120,7 @@ function heightOf(note: Note, width: number) {
  * The page's viewport in the grid's coordinates, rounded to half a screen so scrolling
  * only re-renders the grid now and then.
  */
-type View = { top: number; screen: number };
+type View = { top: number; screen: number; origin: number };
 
 type Drag = {
   id: string;
@@ -202,12 +203,16 @@ export function NoteGrid({
   const layout = width > 0 ? masonry(heights, grid) : null;
 
   const rendered = new Set<string>();
+  const entryDelays = new Map<string, number>();
   if (layout && view) {
     const from = view.top - view.screen;
     const to = view.top + view.screen / 2 + 2 * view.screen;
     shown.forEach((note, index) => {
       const slot = layout.slots[index];
-      if (slot && slot.y <= to && slot.y + (heights[index] ?? 0) >= from) rendered.add(note.id);
+      if (slot && slot.y <= to && slot.y + (heights[index] ?? 0) >= from) {
+        rendered.add(note.id);
+        entryDelays.set(note.id, entryDelayForTop(view.origin + slot.y));
+      }
     });
   }
   if (drag) rendered.add(drag.id);
@@ -244,8 +249,11 @@ export function NoteGrid({
     if (!element) return;
     const screen = window.innerHeight;
     const step = screen / 2;
-    const top = Math.floor(-element.getBoundingClientRect().top / step) * step;
-    setView((view) => (view?.top === top && view.screen === screen ? view : { top, screen }));
+    const origin = element.getBoundingClientRect().top;
+    const top = Math.floor(-origin / step) * step;
+    setView((view) =>
+      view?.top === top && view.screen === screen ? view : { top, screen, origin },
+    );
   }, []);
 
   const register = useCallback((id: string, element: HTMLElement | null) => {
@@ -397,6 +405,8 @@ export function NoteGrid({
                 place={placeOf(note.id)}
                 width={columnWidth}
                 placed={isMeasured(note, columnWidth)}
+                layoutReady={!pending}
+                entryDelay={entryDelays.get(note.id) ?? 0}
                 lifted={note.id === drag?.id}
                 movable={Boolean(onMove)}
                 selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
@@ -418,6 +428,8 @@ const GridCard = memo(function GridCard({
   place,
   width,
   placed,
+  layoutReady,
+  entryDelay,
   lifted,
   movable,
   selected,
@@ -430,6 +442,8 @@ const GridCard = memo(function GridCard({
   place: Place;
   width: number;
   placed: boolean;
+  layoutReady: boolean;
+  entryDelay: number;
   lifted: boolean;
   movable: boolean;
   /** Undefined unless notes are being selected. */
@@ -439,6 +453,7 @@ const GridCard = memo(function GridCard({
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive?: (note: Note) => void;
 }) {
+  const entry = useEntryMotion(`note:${note.id}`, placed && layoutReady, entryDelay);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners } = useDraggable({
     id: note.id,
     disabled: !movable,
@@ -510,7 +525,7 @@ const GridCard = memo(function GridCard({
         lifted && 'shadow-xl',
       )}
     >
-      {card}
+      <motion.div style={entry}>{card}</motion.div>
       {onSelect && <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />}
     </motion.div>
   );

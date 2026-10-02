@@ -257,7 +257,11 @@
 /* Fade glass itself and its foreground separately: a fading ancestor isolates its backdrop. */
 @utility header-fade {
   --header-layer-opacity: 1;
-  opacity: calc(var(--header-opacity, 1) * var(--header-layer-opacity));
+  opacity: calc(
+    var(--header-opacity, 1) *
+    var(--header-layer-opacity) *
+    var(--header-entry-opacity, 1)
+  );
 }
 
 @utility glass {

@@ -30,6 +30,7 @@ import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sortBoardColumns } from '@/lib/boardColumns';
+import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS, LONG_PRESS_TOLERANCE, useLongPress } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
@@ -632,6 +633,7 @@ function BoardColumn({
         key={note.id}
         note={note}
         hidden={isHidden}
+        entryDelay={Math.min(120, 40 + Math.max(0, visible - 1) * 20)}
         entering={Boolean(entering?.has(note.id))}
         settling={settlingId === note.id}
         selected={selected ? selected.has(note.id) : undefined}
@@ -757,6 +759,7 @@ const CARD_ENTERING: TargetAndTransition = { opacity: 0, scale: 0.92, y: -8 };
 function DraggableNote({
   note,
   hidden,
+  entryDelay,
   entering,
   settling,
   selected,
@@ -765,6 +768,7 @@ function DraggableNote({
 }: {
   note: Note;
   hidden: boolean;
+  entryDelay: number;
   entering: boolean;
   settling: boolean;
   /** Undefined unless notes are being selected. */
@@ -772,6 +776,7 @@ function DraggableNote({
   onSelect?: (note: Note, selected: boolean) => void;
   onOpen: (note: Note, card: HTMLElement) => void;
 }) {
+  const entry = useEntryMotion(`note:${note.id}`, !hidden, entryDelay);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: note.id,
   });
@@ -811,13 +816,15 @@ function DraggableNote({
           isDragging && 'opacity-30',
         )}
       >
-        <NoteCard
-          note={note}
-          onOpen={onOpen}
-          forceHover={isDragging || settling}
-          selected={selected}
-          onSelect={toggle}
-        />
+        <motion.div style={entry}>
+          <NoteCard
+            note={note}
+            onOpen={onOpen}
+            forceHover={isDragging || settling}
+            selected={selected}
+            onSelect={toggle}
+          />
+        </motion.div>
         {onSelect && <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />}
       </div>
     </motion.div>
