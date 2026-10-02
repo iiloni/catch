@@ -155,7 +155,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
             aria-hidden={Boolean(selection)}
             style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
           >
-            <BrandLockup orientation="horizontal" iconSize={36} />
+            <BrandLockup orientation="horizontal" iconSize={36} iconDetail="primary" />
           </motion.div>
         </div>
       </div>

@@ -8,11 +8,19 @@ type Props = {
   /** CSS pixels, also density-independent pixels in the Android WebView. */
   iconSize: number;
   channel?: VersionInfo['channel'];
+  /** Use the complete artwork for an explicitly requested small-size trial. */
+  iconDetail?: 'auto' | 'primary';
   /** Override only when the surrounding surface differs from the app theme. */
   surface?: 'light' | 'dark';
 };
 
-export function BrandLockup({ orientation, iconSize, channel = 'stable', surface }: Props) {
+export function BrandLockup({
+  orientation,
+  iconSize,
+  channel = 'stable',
+  iconDetail = 'auto',
+  surface,
+}: Props) {
   const theme = useResolvedTheme();
   const container = useRef<HTMLDivElement>(null);
   const layout = tokens.layouts[orientation];
@@ -50,9 +58,10 @@ export function BrandLockup({ orientation, iconSize, channel = 'stable', surface
   const iconOnly = displayedIcon * ratio < minimum;
   const ink = (surface ?? theme) === 'dark' ? 'light' : 'dark';
   const iconBase = channel === 'stable' ? '' : `/${channel}`;
+  const lockupTier = iconDetail === 'primary' ? '' : tier;
   const source = iconOnly
     ? `${iconBase}/${tier === '' ? 'icon.svg' : tier === '-small' ? 'icon-small.svg' : 'favicon-mark.svg'}`
-    : `/wordmark/catch-lockup-${orientation}-${channel}-${ink}${tier}.svg`;
+    : `/wordmark/catch-lockup-${orientation}-${channel}-${ink}${lockupTier}.svg`;
 
   return (
     <div ref={container} style={{ width: preferredWidth, maxWidth: '100%', flexShrink: 0 }}>

@@ -93,6 +93,9 @@ icon-only asset. Each image has one accessible “Catch” label; lettering is n
 Sign-in uses a horizontal lockup with a 48 px icon. Gallery, Deck and Search use a 36 px
 horizontal lockup at the top left, in scrolling content; the existing title pill takes its
 place as the page scrolls. Toolbar space is reserved, and selection hides this branding.
+These 36 px header lockups explicitly use the primary artwork to trial the two motion
+marks at that size. Other surfaces keep the automatic detail thresholds, and narrow
+header panes still fall back to the size-appropriate icon-only asset below the minimum.
 Android's existing first-run server setup uses a stacked lockup with a 96 px icon;
 Settings > Update's existing product area
 uses a stacked lockup with an 80 px icon. Inside the app, branding always uses stable
