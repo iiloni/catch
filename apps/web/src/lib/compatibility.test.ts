@@ -17,6 +17,35 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('pauses a refused shape, preserves pending writes, and resumes after sign-in', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
+    const { compatibleShapeFetch } = await import('./compatibility');
+    const { addPendingWrite, getSyncStatus, updateSyncStatus } = await import('./syncStatus');
+    addPendingWrite('queued');
+    const pending = compatibleShapeFetch('https://catch.example/api/shapes/notes');
+    await vi.waitFor(() => expect(getSyncStatus().signedOut).toBe(true));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(getSyncStatus().pending).toBe(1);
+    fetcher.mockResolvedValueOnce(json([]));
+    updateSyncStatus({ signedOut: false });
+    expect((await pending).status).toBe(200);
+    expect(getSyncStatus().pending).toBe(1);
+  });
+
+  it('aborts a refused shape while waiting for sign-in', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
+    const { compatibleShapeFetch } = await import('./compatibility');
+    const { getSyncStatus } = await import('./syncStatus');
+    const controller = new AbortController();
+    const pending = compatibleShapeFetch('https://catch.example/api/shapes/notes', {
+      signal: controller.signal,
+    });
+    const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(getSyncStatus().signedOut).toBe(true));
+    controller.abort();
+    await assertion;
+  });
+
   it('coalesces bootstrap checks and declares its protocol without losing auth headers', async () => {
     fetcher.mockImplementation(async (url: string) =>
       json(url.endsWith('/compatibility') ? compatible : {}),

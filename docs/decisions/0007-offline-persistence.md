@@ -48,6 +48,8 @@ queue, so signing in as the same user sends them). Any other 4xx, or a change th
 the shared schema, can never succeed: it is dropped, rolled back and reported with a toast.
 The outbox itself gives up on errors whose message mentions some 4xx codes, so retried
 errors get fixed messages.
+Shape requests also pause on a 401 instead of putting the collection in a terminal error
+state, so cached notes stay readable and editable while the sign-in indicator is shown.
 
 **Replays are safe.** A write can reach the server twice, when a response is lost or the
 stream is slow to confirm it. Creating a note or column whose id the user already has, and

@@ -73,11 +73,12 @@ export const compatibleFetch: typeof fetch = async (input, init) => {
   });
   headers.set(API_PROTOCOL_HEADER, String(API_PROTOCOL_VERSION));
   const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) updateSyncStatus({ signedOut: true });
   await observeProtocolResponse(response);
   return response;
 };
 
-function waitForCompatibility(signal?: AbortSignal | null) {
+function waitForSync(ready: () => boolean, signal?: AbortSignal | null) {
   return new Promise<void>((resolve, reject) => {
     const finish = () => {
       unsubscribe();
@@ -87,10 +88,10 @@ function waitForCompatibility(signal?: AbortSignal | null) {
     };
     const abort = () => finish();
     const unsubscribe = subscribeToSyncStatus(() => {
-      if (!getSyncStatus().incompatibility) finish();
+      if (ready()) finish();
     });
     signal?.addEventListener('abort', abort, { once: true });
-    if (!getSyncStatus().incompatibility || signal?.aborted) finish();
+    if (ready() || signal?.aborted) finish();
   });
 }
 
@@ -99,11 +100,15 @@ export const compatibleShapeFetch: typeof fetch = async (input, init) => {
   const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
   for (;;) {
     signal?.throwIfAborted();
+    await waitForSync(() => !getSyncStatus().signedOut, signal);
     try {
-      return await compatibleFetch(input, init);
+      const response = await compatibleFetch(input, init);
+      // Electric makes a 401 terminal. Keep its local collection alive until reauthentication.
+      if (response.status === 401) continue;
+      return response;
     } catch (error) {
       if (!(error instanceof CompatibilityError)) throw error;
-      await waitForCompatibility(signal);
+      await waitForSync(() => !getSyncStatus().incompatibility, signal);
     }
   }
 };
