@@ -55,6 +55,10 @@ and preview must advance independently, including preview versions ahead of stab
   to the worktree's HTTP server (Tailscale, or adb with `--usb`). The build-only
   `CATCH_DEV_SERVER_URL` enables cleartext and mixed content for that dev APK. Stable and
   preview builds ignore it and keep their normal HTTPS server setup.
+  Bundled dev sessions are keyed by that server URL: Android's local page origin is shared
+  across worktrees, unlike live reload's separate Vite origins. An existing unscoped session
+  is kept but not reused by a pinned dev build; sign in once for each worktree URL. Native
+  SQLite databases and outboxes remain per user and are not cleared when switching builds.
 - Preview deployments use their own database and Electric storage. Startup migrations make
   sharing production storage with preview, or treating image rollback as database rollback,
   unsafe.

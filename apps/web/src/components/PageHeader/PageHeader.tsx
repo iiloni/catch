@@ -15,6 +15,7 @@ import {
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
+import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
@@ -38,6 +39,15 @@ type Props = {
 };
 
 type HeaderLayerStyle = MotionStyle & { '--header-layer-opacity': MotionValue<number> };
+
+function useHeaderEntry(
+  key: string,
+  delayMs = 0,
+): MotionStyle & { '--header-entry-opacity': MotionValue<number> } {
+  const entry = useEntryMotion(key, true, delayMs);
+  // Keep startup's fade multiplied by the editor and toolbar transitions.
+  return { '--header-entry-opacity': entry.opacity, y: entry.y };
+}
 
 /** Bring the page's glass above the returning card as its face replaces the editor. */
 function useHeaderTransition() {
@@ -64,6 +74,7 @@ function useHeaderTransition() {
  * with a small centered title, once the large title scrolls under it.
  */
 export function PageHeader({ title, leading, trailing, selection }: Props) {
+  const entry = useEntryMotion('header:title', true, 20);
   const transition = useHeaderTransition();
   const { scrollY } = useScroll();
   const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
@@ -103,9 +114,12 @@ export function PageHeader({ title, leading, trailing, selection }: Props) {
         className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
         style={{ opacity: largeTitleOpacity }}
       >
-        <h1 className="truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]">
+        <motion.h1
+          style={entry}
+          className="truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]"
+        >
           {title}
-        </h1>
+        </motion.h1>
       </motion.div>
     </>
   );
@@ -132,6 +146,8 @@ const TITLE_COLLAPSE_AT = 16;
  * glass pill once the page starts to scroll, taking the place of the brand there.
  */
 export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
+  const entry = useHeaderEntry('header:title', 20);
+  const brandEntry = useEntryMotion('header:brand');
   const transition = useHeaderTransition();
   const { scrollY } = useScroll();
   const reducedMotion = useReducedMotion();
@@ -200,7 +216,9 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
               aria-hidden={!branded}
               style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
             >
-              <BrandLockup orientation="horizontal" iconSize={28} />
+              <motion.div style={brandEntry}>
+                <BrandLockup orientation="horizontal" iconSize={28} />
+              </motion.div>
             </motion.div>
           </div>
           <motion.div
@@ -228,9 +246,12 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
                 animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
                 transition={slide}
               />
-              <h1 className="header-fade relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
+              <motion.h1
+                style={entry}
+                className="header-fade relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
+              >
                 {title}
-              </h1>
+              </motion.h1>
               <button
                 type="button"
                 aria-label="Scroll to top"
@@ -385,6 +406,7 @@ function MorphingPill({
   children: ReactNode;
   onWidthChange?: (width: number) => void;
 }) {
+  const entry = useHeaderEntry(`header:controls:${side}`);
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
   const measure = useCallback(
@@ -429,6 +451,7 @@ function MorphingPill({
         <motion.div
           key={mode}
           ref={measure}
+          style={entry}
           className={cn(
             'header-fade absolute inset-y-0 flex items-center p-1',
             side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',

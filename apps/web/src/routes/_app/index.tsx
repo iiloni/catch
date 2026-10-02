@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { notesCollection } from '@/lib/collections';
+import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
@@ -159,9 +160,14 @@ function GalleryPage() {
 }
 
 function NoteSection({ label, children }: { label?: string; children: React.ReactNode }) {
+  const entry = useEntryMotion(`gallery:section:${label}`, Boolean(label), 40);
   return (
     <div className="flex flex-col gap-2">
-      {label && <h2 className="px-1 font-medium text-muted-foreground text-sm">{label}</h2>}
+      {label && (
+        <motion.h2 style={entry} className="px-1 font-medium text-muted-foreground text-sm">
+          {label}
+        </motion.h2>
+      )}
       {children}
     </div>
   );

@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { createAuthClient } from 'better-auth/react';
 import { z } from 'zod';
 import { getServerUrl } from './serverUrl';
@@ -5,8 +6,15 @@ import { getServerUrl } from './serverUrl';
 const TOKEN_KEY = 'catch-auth-token';
 const USER_KEY = 'catch-user';
 
+function sessionKey(key: string) {
+  // Bundled dev apps share https://localhost across worktrees; their servers do not.
+  return Capacitor.isNativePlatform() && import.meta.env.CATCH_DEV_SERVER_URL
+    ? `${key}:${getServerUrl()}`
+    : key;
+}
+
 export function getAuthToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(sessionKey(TOKEN_KEY));
 }
 
 const signedInUserSchema = z.object({ id: z.string().min(1), name: z.string(), email: z.string() });
@@ -19,7 +27,9 @@ export type SignedInUser = z.infer<typeof signedInUserSchema>;
  */
 export function getSignedInUser(): SignedInUser | null {
   try {
-    const parsed = signedInUserSchema.safeParse(JSON.parse(localStorage.getItem(USER_KEY) ?? ''));
+    const parsed = signedInUserSchema.safeParse(
+      JSON.parse(localStorage.getItem(sessionKey(USER_KEY)) ?? ''),
+    );
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -30,12 +40,12 @@ function rememberUser(value: unknown) {
   const parsed = signedInUserSchema.safeParse(value);
   if (!parsed.success) return;
   const { id, name, email } = parsed.data;
-  localStorage.setItem(USER_KEY, JSON.stringify({ id, name, email }));
+  localStorage.setItem(sessionKey(USER_KEY), JSON.stringify({ id, name, email }));
 }
 
 export function clearAuthToken() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(sessionKey(TOKEN_KEY));
+  localStorage.removeItem(sessionKey(USER_KEY));
 }
 
 /**
@@ -49,7 +59,7 @@ export const authClient = createAuthClient({
     auth: { type: 'Bearer', token: () => getAuthToken() ?? '' },
     onSuccess: (context) => {
       const token = context.response.headers.get('set-auth-token');
-      if (token) localStorage.setItem(TOKEN_KEY, token);
+      if (token) localStorage.setItem(sessionKey(TOKEN_KEY), token);
       // Sign-in, sign-up and session responses carry the signed-in user.
       const data: unknown = context.data;
       if (

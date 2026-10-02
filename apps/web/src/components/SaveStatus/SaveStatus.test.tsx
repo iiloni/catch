@@ -11,11 +11,19 @@ vi.mock('motion/react', async (importOriginal) => ({
 }));
 
 afterEach(() => {
-  act(() => updateSyncStatus({ offline: false, pending: 0, incompatibility: null }));
+  act(() =>
+    updateSyncStatus({ offline: false, signedOut: false, pending: 0, incompatibility: null }),
+  );
   vi.useRealTimers();
 });
 
 describe('SaveStatus', () => {
+  it('says changes are kept locally while waiting for sign-in', () => {
+    act(() => updateSyncStatus({ signedOut: true, pending: 1 }));
+    render(<SaveStatus state="saving" />);
+    expect(screen.getByText('Saved on this device')).toBeInTheDocument();
+    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
+  });
   it('says changes are kept locally while an update is required', () => {
     act(() => updateSyncStatus({ incompatibility: 'client-too-old', pending: 1 }));
     render(<SaveStatus state="saving" />);

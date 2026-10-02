@@ -21,6 +21,7 @@ import {
   type TabPath,
   tabFor,
 } from '@/lib/dockState';
+import { useEntryMotion } from '@/lib/entryMotion';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
@@ -66,6 +67,7 @@ export function Dock() {
   const tab = tabFor(pathname);
   const inSettings = isSettingsPath(pathname);
   const hidden = useWideSettings() && inSettings;
+  const entry = useEntryMotion('dock', !hidden, 120);
   const mode =
     noteOpen && !pane.shown
       ? 'note'
@@ -132,7 +134,8 @@ export function Dock() {
       <motion.div
         ref={dockRef}
         data-dock
-        style={{ zIndex }}
+        // Translate the dock without fading its glass's ancestor.
+        style={{ zIndex, y: entry.y }}
         // Spans the whole width and pads the pane away rather than ending at it: a page
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.

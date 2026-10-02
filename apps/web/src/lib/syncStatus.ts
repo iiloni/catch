@@ -77,6 +77,6 @@ export function useSyncStatus(): SyncStatus {
  * as soon as the device's copy has something to show, or when there is no connection.
  */
 export function useAwaitingSync(isLoading: boolean, shown: number) {
-  const { offline, incompatibility } = useSyncStatus();
-  return isLoading && shown === 0 && !offline && !incompatibility;
+  const { offline, signedOut, incompatibility } = useSyncStatus();
+  return isLoading && shown === 0 && !offline && !signedOut && !incompatibility;
 }
