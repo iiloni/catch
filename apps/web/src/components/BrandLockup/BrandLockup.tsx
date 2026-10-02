@@ -8,7 +8,7 @@ type Props = {
   /** CSS pixels, also density-independent pixels in the Android WebView. */
   iconSize: number;
   channel?: VersionInfo['channel'];
-  /** Use the complete artwork for an explicitly requested small-size trial. */
+  /** Preserve motion marks and shadow on approved branding surfaces at smaller sizes. */
   iconDetail?: 'auto' | 'primary';
   /** Override only when the surrounding surface differs from the app theme. */
   surface?: 'light' | 'dark';

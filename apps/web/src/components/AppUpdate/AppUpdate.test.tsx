@@ -78,13 +78,13 @@ describe('Update settings', () => {
       const { rerender } = render(<AppUpdate />);
       expect(screen.getByRole('img', { name: 'Catch' })).toHaveAttribute(
         'src',
-        `/wordmark/catch-lockup-stacked-${channel}-dark-small.svg`,
+        `/wordmark/catch-lockup-stacked-${channel}-dark.svg`,
       );
       state.android = false;
       rerender(<AppUpdate />);
       expect(screen.getByRole('img', { name: 'Catch' })).toHaveAttribute(
         'src',
-        `/wordmark/catch-lockup-stacked-${state.server.channel}-dark-small.svg`,
+        `/wordmark/catch-lockup-stacked-${state.server.channel}-dark.svg`,
       );
       await waitFor(() => expect(api.releases).toHaveBeenCalled());
     },
