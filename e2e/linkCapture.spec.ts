@@ -146,6 +146,9 @@ test('the Settings bookmarklet opens a compact capture from another site', async
     anchor.click();
   }, bookmarklet);
   const popup = await opened;
+  await expect(popup.getByRole('heading', { name: 'Add Rich Link', exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(popup.getByLabel('URL', { exact: true })).toHaveValue(
     'https://capture-source.example/article?one=1&two=2#reading',
   );
@@ -155,7 +158,8 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   await popup.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(popup.getByRole('heading', { name: 'Link saved', exact: true })).toBeVisible();
   const closed = popup.waitForEvent('close');
-  await popup.getByRole('button', { name: 'Close window' }).click();
+  // The button closes its own page, so Playwright's post-click wait can race with closure.
+  await popup.getByRole('button', { name: 'Close window' }).click({ noWaitAfter: true });
   await closed;
 });
 
