@@ -568,7 +568,10 @@ function TagMatchControl({
         <legend className="sr-only">Match tags</legend>
         <LayoutGroup id={layoutId}>
           <div className="relative flex px-1">
-            <span aria-hidden className="absolute inset-x-0 inset-y-2 rounded-lg bg-foreground/5" />
+            <span
+              aria-hidden
+              className="absolute inset-x-0 inset-y-0.5 rounded-xl bg-foreground/5"
+            />
             {(['any', 'all'] as const).map((value) => (
               <button
                 key={value}
@@ -586,7 +589,7 @@ function TagMatchControl({
                   <motion.span
                     layoutId="tag-match"
                     aria-hidden
-                    className="absolute inset-x-0 inset-y-2.5 rounded-md bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                    className="absolute inset-x-0 inset-y-1 rounded-lg bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
                     transition={reducedMotion ? { duration: 0 } : springs.snappy}
                   />
                 )}
