@@ -7,14 +7,27 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
-function stepBody(file: string, name: string, key: 'run' | 'script') {
+function stepLines(file: string, name: string) {
   const lines = readFileSync(
     new URL(`../.github/workflows/${file}`, import.meta.url),
     'utf8',
   ).split('\n');
   const step = lines.findIndex((line) => line.trim() === `- name: ${name}`);
   assert.notEqual(step, -1, `Missing step: ${name}`);
-  const body = lines.findIndex((line, index) => index > step && line.trim() === `${key}: |`);
+  const indent = lines[step].length - lines[step].trimStart().length;
+  const end = lines.findIndex(
+    (line, index) =>
+      index > step &&
+      line.trim() !== '' &&
+      !line.trimStart().startsWith('#') &&
+      !line.startsWith(' '.repeat(indent + 1)),
+  );
+  return lines.slice(step, end === -1 ? undefined : end);
+}
+
+function stepBody(file: string, name: string, key: 'run' | 'script') {
+  const lines = stepLines(file, name);
+  const body = lines.findIndex((line) => line.trim() === `${key}: |`);
   assert.notEqual(body, -1, `Missing ${key} body: ${name}`);
   const indent = lines[body].length - lines[body].trimStart().length + 2;
   const end = lines.findIndex(
@@ -26,11 +39,42 @@ function stepBody(file: string, name: string, key: 'run' | 'script') {
     .join('\n');
 }
 
+function stepValues(
+  file: string,
+  name: string,
+  key: 'env' | 'with',
+  bindings: Record<string, string>,
+) {
+  const lines = stepLines(file, name);
+  const section = lines.findIndex((line) => line.trim() === `${key}:`);
+  if (section === -1) return {};
+  const indent = lines[section].length - lines[section].trimStart().length + 2;
+  const values: Record<string, string> = {};
+  for (const line of lines.slice(section + 1)) {
+    if (!line.trim()) continue;
+    if (!line.startsWith(' '.repeat(indent))) break;
+    const field = /^([\w-]+): (.*)$/.exec(line.slice(indent));
+    assert.ok(field, `Unsupported ${key} field: ${line}`);
+    const expression = /^\$\{\{ (.+) \}\}$/.exec(field[2]);
+    if (expression) {
+      assert.ok(Object.hasOwn(bindings, expression[1]), `Missing binding: ${expression[1]}`);
+    }
+    values[field[1]] = expression ? bindings[expression[1]] : field[2];
+  }
+  return values;
+}
+
 test('Release rejects branch refs even when their name looks like a release tag', () => {
   const script = stepBody('release.yml', 'Require a release tag', 'run');
   for (const REF_TYPE of ['branch', '', 'tag']) {
     const result = spawnSync('bash', ['-e', '-c', script], {
-      env: { PATH: process.env.PATH, REF_TYPE, GITHUB_REF_NAME: 'v1.2.3' },
+      env: {
+        PATH: process.env.PATH,
+        ...stepValues('release.yml', 'Require a release tag', 'env', {
+          'github.ref_type': REF_TYPE,
+          'github.ref_name': 'v1.2.3',
+        }),
+      },
       encoding: 'utf8',
     });
     assert.equal(result.status, REF_TYPE === 'tag' ? 0 : 1, result.stderr);
@@ -38,6 +82,11 @@ test('Release rejects branch refs even when their name looks like a release tag'
 });
 
 test('preparation executes the trusted helper even when the target replaces release code', (t) => {
+  const checkout = stepValues('tag-release.yml', 'Checkout trusted release helper', 'with', {
+    'steps.trusted.outputs.sha': 'c'.repeat(40),
+    'github.sha': 'd'.repeat(40),
+  });
+  assert.equal(checkout.ref, 'c'.repeat(40), 'Helper must come from the trusted commit');
   const cwd = mkdtempSync(join(tmpdir(), 'catch-release-target-'));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const env = {
@@ -46,8 +95,10 @@ test('preparation executes the trusted helper even when the target replaces rele
     GIT_CONFIG_SYSTEM: '/dev/null',
     GITHUB_OUTPUT: undefined,
     GITHUB_WORKSPACE: fileURLToPath(new URL('../', import.meta.url)),
-    CHANNEL: 'preview',
-    VERSION_TYPE: 'minor',
+    ...stepValues('tag-release.yml', 'Create annotated release tag', 'env', {
+      'inputs.channel': 'preview',
+      'inputs.version_type': 'minor',
+    }),
   };
   const git = (...args: string[]) =>
     execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
@@ -104,7 +155,17 @@ function publish(tag: string, collision = false) {
     calls,
     result: runInNewContext(
       `(async () => { ${stepBody('tag-release.yml', 'Publish annotated release tag', 'script')} })()`,
-      { github, core: { summary }, context, process: { env: { RELEASE_TAG: tag } } },
+      {
+        github,
+        core: { summary },
+        context,
+        process: {
+          env: stepValues('tag-release.yml', 'Publish annotated release tag', 'env', {
+            'needs.prepare.outputs.tag': tag,
+            'github.ref_name': 'main',
+          }),
+        },
+      },
     ) as Promise<void>,
   };
 }
@@ -164,7 +225,12 @@ test('Release is dispatched on the published tag rather than the selected branch
     `(async () => { ${stepBody('tag-release.yml', 'Start release builds on the new tag', 'script')} })()`,
     {
       context,
-      process: { env: { RELEASE_TAG: 'v1.2.3' } },
+      process: {
+        env: stepValues('tag-release.yml', 'Start release builds on the new tag', 'env', {
+          'needs.prepare.outputs.tag': 'v1.2.3',
+          'github.ref_name': 'main',
+        }),
+      },
       github: {
         rest: {
           actions: {

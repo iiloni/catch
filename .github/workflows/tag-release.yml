@@ -53,7 +53,8 @@ jobs:
             });
             core.setOutput('sha', commit.sha);
       # Only the default branch's helper, dependencies and tool configuration execute.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout trusted release helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.trusted.outputs.sha }}
           persist-credentials: false
