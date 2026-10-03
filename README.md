@@ -55,6 +55,9 @@ Each Git worktree gets its own stack, so several branches can run side by side; 
 [WORKTREES.md](WORKTREES.md). See [AGENTS.md](AGENTS.md) for architecture and conventions,
 and [docs/decisions](docs/decisions) for why the stack looks the way it does.
 
+For PR iteration, label-triggered E2E, required merge checks and GitHub auto-merge setup,
+see [Pull requests and CI](docs/ci.md).
+
 ## Android
 
 For day-to-day work, open the dev stack's URL in Chrome on the phone (over Tailscale). It is

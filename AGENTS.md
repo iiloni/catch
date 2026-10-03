@@ -43,6 +43,51 @@ checkout's stack. Never hard-code container or project names.
 
 Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.
 
+### Pull requests and CI
+
+- For new features and code fixes, use a draft PR targeting `main` by default unless the
+  user explicitly requests a different workflow. Work in the assigned checkout; if it is
+  on `main`, create a feature branch there. Commit and push reviewable changes, open the
+  draft PR and include its link in progress updates. Reuse an existing PR for the branch
+  rather than creating a duplicate. Read-only questions do not require a PR.
+- Assign the PR to its creator by default. With `gh pr create`, use `--assignee @me`;
+  when reusing an existing PR, check its author and add that author as an assignee.
+- Add a small set of existing descriptive labels when opening the draft: `enhancement`
+  for features or improvements, `bug` for defect fixes, `documentation` for substantive
+  documentation changes, `accessibility` for accessibility work and `maintenance` for CI,
+  build tooling, dependencies, refactoring or test infrastructure. Choose labels that
+  reflect the actual scope; do not create new labels or apply unrelated issue-status
+  labels during routine PR work. Set descriptive labels before `merge on pass`, because
+  label edits also trigger CI. Descriptive labels do not authorize merging.
+- Iterate on the draft without `merge on pass`. Regular checks
+  run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
+  pushes while it remains. See `docs/ci.md` for repository setup and commands.
+- An unlabeled PR deliberately fails `validation`; require that check in branch protection
+  so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
+  approved and authorizes merging once required checks pass.
+- After the user approves functionality and design for merging, update the PR branch with
+  current `main`, mark it ready and add `merge on pass`. Fix failures with the label left in
+  place, then merge or enable auto-merge. If a fix changes the approved functionality or
+  design, disable pending auto-merge, return the PR to draft, remove the label and obtain
+  renewed approval. Keep the branch up to date as required checks rerun.
+  The local `./scripts/dev.sh check` requirement still applies.
+- After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
+  investigate failures, fix them and push updates until required validation passes.
+  Continue through the authorized merge and verify the PR is actually merged, then update
+  local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
+  not complete the task. If `main` advances, update the branch and monitor the new checks.
+- Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
+  feature, improvement or fix and what it enables or changes. Include motivation or a
+  before/after example when useful; a linked issue is optional.
+  Summarize the final scope, relevant validation (passed, failed or still pending) and
+  material limitations. Scale detail to the change: simple PRs need only a short paragraph
+  plus validation. Use a Conventional Commit title, update the title/description when scope
+  changes and use `.github/pull_request_template.md` for the body, including when creating
+  PRs through a CLI or API. Fill its sections, remove instructional comments and omit empty
+  optional review notes. Omit conversation history or abandoned approaches unless they
+  explain a review-relevant tradeoff. Report screenshots or recordings for visual changes
+  when available; link relevant issues and docs.
+
 ### Working in parallel
 
 - Work in the checkout or worktree you are started in. Agents must not create or switch
@@ -50,9 +95,10 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   from the assigned checkout when needed.
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
-- When asked to merge a worktree into `main`, merge its branch into `main` from the primary
-  checkout, then push the updated `main` to its configured upstream. Check the merge result
-  and working tree before pushing; never force-push `main`.
+- When asked to merge a worktree into `main`, merge through its GitHub PR after required
+  checks pass and the branch is up to date. Then fast-forward the primary checkout's
+  `main` from its configured upstream, after checking its working tree. Never force-push
+  `main` or bypass its required PR/check rules.
 - When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
   from inside the worktree. It refuses to delete uncommitted work.
 

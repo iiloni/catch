@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, seedNotes, signUp } from './helpers';
+import { card, seedNotes, settledBox, signUp } from './helpers';
 
 for (const withLinks of [false, true]) {
   test(`a tall note lands without clipping its card${withLinks ? ' with link previews' : ''}`, async ({
@@ -21,12 +21,13 @@ for (const withLinks of [false, true]) {
         scrolled,
       );
       const button = note.getByRole('button', { name: 'Open note' });
-      const bounds = await button.boundingBox();
-      if (!bounds) throw new Error('Missing note card');
+      const bounds = await settledBox(button);
       expect(bounds.height).toBeGreaterThan(600);
       expect(bounds.y < 0).toBe(scrolled);
       if (scrolled) expect(bounds.y + bounds.height).toBeLessThan(600);
-      await button.click({ position: { x: 30, y: Math.max(30, 150 - bounds.y) } });
+      // Locator clicks can scroll a viewport-tall card and put the chosen point under
+      // the fixed header. Click its settled, visible surface without changing the scroll.
+      await page.mouse.click(bounds.x + 30, Math.max(bounds.y + 30, 150));
       const dialog = page.getByRole('dialog', { name: 'Edit note' });
       await expect(dialog.getByRole('textbox')).toBeVisible();
       const scroll = dialog.locator('[data-note-scroll]');

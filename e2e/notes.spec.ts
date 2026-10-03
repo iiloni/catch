@@ -10,6 +10,7 @@ import {
   openGalleryPage,
   openNote,
   seedNotes,
+  settledBox,
   signUp,
 } from './helpers';
 
@@ -489,6 +490,8 @@ test('opening and closing a note leaves the page where it was scrolled', async (
   );
   await expect(card(page, 'First')).toBeVisible();
 
+  // Entry motion changes the card's bounds; establish the scroll baseline after it lands.
+  await settledBox(card(page, 'Last'));
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await card(page, 'Last').scrollIntoViewIfNeeded();
   const scrolled = await page.evaluate(() => window.scrollY);
