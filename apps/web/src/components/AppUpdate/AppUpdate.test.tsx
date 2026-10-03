@@ -13,6 +13,7 @@ import {
   useAndroidUpdateAvailable,
   useUpdates,
 } from '@/lib/updates';
+import { reloadForWebUpdate, useWebUpdates } from '@/lib/webUpdates';
 import { AppUpdate } from './AppUpdate';
 
 vi.mock('@/lib/updates', () => ({
@@ -22,6 +23,7 @@ vi.mock('@/lib/updates', () => ({
   installServerVersion: vi.fn(),
 }));
 vi.mock('@/lib/api', () => ({ api: { releases: vi.fn() } }));
+vi.mock('@/lib/webUpdates', () => ({ useWebUpdates: vi.fn(), reloadForWebUpdate: vi.fn() }));
 vi.mock('@/lib/theme', () => ({ useResolvedTheme: () => 'light' }));
 vi.mock('@/lib/settings', async (original) => ({
   ...(await original<typeof import('@/lib/settings')>()),
@@ -39,6 +41,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
 
 const open = vi.fn();
 let state: ReturnType<typeof useUpdates>;
+let web: ReturnType<typeof useWebUpdates>;
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -58,6 +61,8 @@ beforeEach(() => {
     installing: false,
     installError: null,
   };
+  web = { target: null, reloading: false, error: null };
+  vi.mocked(useWebUpdates).mockImplementation(() => web);
   vi.mocked(useUpdates).mockImplementation(() => state);
   vi.mocked(useAndroidUpdateAvailable).mockImplementation(
     () => state.android && androidUpdateAvailable(state.app, state.server),
@@ -119,6 +124,21 @@ describe('Update settings', () => {
     render(<AppUpdate />);
     expect(screen.queryByText('App version')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Update to 1.3.0' })).not.toBeInTheDocument();
+    await screen.findByRole('link', { name: /Catch 1.3.0/ });
+  });
+
+  it('keeps a detected browser update accessible in Settings after dismissing the prompt', async () => {
+    state.android = false;
+    web.target = 'new-build';
+    render(
+      <>
+        <SettingsButton />
+        <AppUpdate />
+      </>,
+    );
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveTextContent('Update available');
+    fireEvent.click(screen.getByRole('button', { name: 'Reload to update' }));
+    expect(reloadForWebUpdate).toHaveBeenCalledOnce();
     await screen.findByRole('link', { name: /Catch 1.3.0/ });
   });
 

@@ -43,6 +43,10 @@ const pendingIds = new Set<string>();
 // Remembered so a write that settles before it is counted is never counted.
 const settledIds = new Set<string>();
 
+export function getPendingWriteIds() {
+  return [...pendingIds];
+}
+
 /** Counts the write with this transaction id as pending until `settlePendingWrite`. */
 export function addPendingWrite(id: string) {
   if (settledIds.has(id) || pendingIds.has(id)) return;

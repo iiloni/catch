@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
@@ -6,19 +7,29 @@ import { defaultAllowedOrigins } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
+import { type WebBuild, webBuildSchema } from '../../packages/shared/src/releases.ts';
 import { buildChannel } from '../../scripts/build-channel.ts';
 import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.CATCH_CHANNEL);
 const iconBase = channel === 'stable' ? '' : `/${channel}`;
+const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   define: {
+    'import.meta.env.CATCH_WEB_BUILD': JSON.stringify(String(command === 'build')),
+    'import.meta.env.CATCH_BUILD_ID': JSON.stringify(webBuild.id),
     'import.meta.env.CATCH_DEV_SERVER_URL': JSON.stringify(
       developmentServerUrl(channel, process.env.CATCH_DEV_SERVER_URL),
     ),
   },
   plugins: [
+    {
+      name: 'web-build-metadata',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
+      },
+    },
     {
       name: 'channel-icons',
       transformIndexHtml(html) {
@@ -32,7 +43,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false,
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
@@ -97,4 +109,4 @@ export default defineConfig({
     // Worktree stacks often run together; keep test workers within host memory.
     maxWorkers: 2,
   },
-});
+}));

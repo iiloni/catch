@@ -11,6 +11,7 @@ import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOver
 import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
+import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getAuthToken } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -64,6 +65,7 @@ function AppLayout() {
       <NoteEditorOverlay noteId={note} />
       <LinkPreviewOverlay />
       <AppUpdatePrompt />
+      <WebUpdatePrompt />
       <AnimatePresence>
         {pane.shown && note && (
           <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />
