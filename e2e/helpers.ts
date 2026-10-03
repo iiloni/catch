@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { type APIResponse, expect, type Locator, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 
 // Signing in reloads the page to open that user's local database. The dev server sends the
@@ -6,9 +6,18 @@ import { z } from 'zod';
 const APP_LOAD_TIMEOUT = 30_000;
 
 const signUpResponse = z.object({
-  token: z.string(),
   user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
 });
+
+/**
+ * The bearer token of the session a sign-in or sign-up response opened. The `token` in its
+ * body is the bare session token, which the API does not take: only this signed one.
+ */
+export function bearerToken(response: APIResponse) {
+  const token = response.headers()['set-auth-token'];
+  expect(token).toBeTruthy();
+  return token as string;
+}
 
 /**
  * Signs up a fresh user, so each test starts with no notes. The account is made through the
@@ -23,7 +32,7 @@ export async function signUp(page: Page) {
     data: { email, name: '', password: 'password123' },
   });
   expect(response.ok()).toBeTruthy();
-  const { token, user } = signUpResponse.parse(await response.json());
+  const { user } = signUpResponse.parse(await response.json());
   const context = page.context();
   await context.setStorageState({
     // The form's request leaves the session cookie in the browser too.
@@ -32,7 +41,7 @@ export async function signUp(page: Page) {
       {
         origin,
         localStorage: [
-          { name: 'catch-auth-token', value: response.headers()['set-auth-token'] ?? token },
+          { name: 'catch-auth-token', value: bearerToken(response) },
           { name: 'catch-user', value: JSON.stringify(user) },
         ],
       },

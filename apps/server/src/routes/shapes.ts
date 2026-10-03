@@ -1,4 +1,3 @@
-import { ELECTRIC_PROTOCOL_QUERY_PARAMS } from '@electric-sql/client';
 import { Hono } from 'hono';
 import type { AppEnv } from '../context';
 import { env } from '../env';
@@ -63,6 +62,22 @@ const SHAPES: Record<string, { table: string; columns: string[] }> = {
 };
 
 /**
+ * What a client may ask of its shape: where to resume it and how to wait for changes.
+ * Electric's other parameters choose rows (`where`, `subset__*`), which is the server's call.
+ */
+const CLIENT_PARAMS = [
+  'offset',
+  'handle',
+  'cursor',
+  'live',
+  'live_sse',
+  'experimental_live_sse',
+  'expired_handle',
+  'log',
+  'cache-buster',
+];
+
+/**
  * Auth proxy in front of Electric. Clients never talk to Electric directly;
  * the server decides which table and rows each user can sync.
  */
@@ -74,7 +89,7 @@ export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/:shape', as
   const upstream = new URL('/v1/shape', env.ELECTRIC_URL);
 
   for (const [key, value] of incoming.searchParams) {
-    if (ELECTRIC_PROTOCOL_QUERY_PARAMS.includes(key)) upstream.searchParams.set(key, value);
+    if (CLIENT_PARAMS.includes(key)) upstream.searchParams.set(key, value);
   }
   upstream.searchParams.set('table', shape.table);
   upstream.searchParams.set('columns', shape.columns.join(','));
@@ -88,5 +103,19 @@ export const shapeRoutes = new Hono<AppEnv>().use(requireUser).get('/:shape', as
   headers.delete('content-encoding');
   headers.delete('content-length');
   headers.set('vary', 'cookie, authorization');
+  // Electric answers as if for a CDN in front of it. These are one user's rows, and a shared
+  // cache that overlooks `vary` would hand them to the next user to ask.
+  const caching = headers.get('cache-control');
+  if (caching) {
+    headers.set(
+      'cache-control',
+      caching
+        .split(',')
+        .map((directive) => directive.trim())
+        .filter((directive) => directive !== 'public' && !directive.startsWith('s-maxage'))
+        .concat('private')
+        .join(', '),
+    );
+  }
   return new Response(response.body, { status: response.status, headers });
 });

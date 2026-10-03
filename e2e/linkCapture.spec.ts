@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { z } from 'zod';
-import { card, openNote, signUp } from './helpers';
+import { bearerToken, card, openNote, signUp } from './helpers';
 
 const metadata = {
   title: 'Atuin — shell history',
@@ -173,7 +172,7 @@ test(
       data: { email: `capture-api-${Date.now()}@example.com`, name: '', password: 'password123' },
     });
     expect(account.ok()).toBeTruthy();
-    const { token } = z.object({ token: z.string() }).parse(await account.json());
+    const token = bearerToken(account);
     for (const url of [
       'http://127.0.0.1/',
       'http://10.0.0.1/',

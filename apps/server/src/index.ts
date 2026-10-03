@@ -6,13 +6,22 @@ import { Hono } from 'hono';
 import { createApp } from './app';
 import { startBackupSchedule } from './backups/service';
 import { env } from './env';
+import { appContentSecurityPolicy, securityHeaders } from './lib/securityHeaders';
 import { resumePendingPreviews } from './linkPreviews';
 
-const app = new Hono().route('/', createApp());
+const webDist = env.WEB_DIST_DIR;
+const indexHtml = webDist ? await readFile(join(webDist, 'index.html'), 'utf8') : null;
 
-if (env.WEB_DIST_DIR) {
-  const webDist = env.WEB_DIST_DIR;
-  const indexHtml = await readFile(join(webDist, 'index.html'), 'utf8');
+const app = new Hono()
+  .use(
+    securityHeaders({
+      app: indexHtml ? appContentSecurityPolicy(indexHtml) : null,
+      https: env.BETTER_AUTH_URL.startsWith('https:'),
+    }),
+  )
+  .route('/', createApp());
+
+if (webDist && indexHtml !== null) {
   app.use('/*', async (c, next) => {
     if (c.req.path === '/sw.js' || c.req.path === '/build.json') {
       c.header('Cache-Control', 'no-store');

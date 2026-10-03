@@ -1,9 +1,13 @@
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, type APIResponse, expect, test } from '@playwright/test';
 import { z } from 'zod';
 import { resetUserPasswordResponseSchema, usersResponseSchema } from '../packages/shared/src/users';
-import { signIn, signUp } from './helpers';
+import { bearerToken, signIn, signUp } from './helpers';
 
-const authResponse = z.object({ token: z.string(), user: z.object({ id: z.string() }) });
+const authResponse = z.object({ user: z.object({ id: z.string() }) });
+
+async function sessionOf(response: APIResponse) {
+  return { ...authResponse.parse(await response.json()), token: bearerToken(response) };
+}
 
 async function passwordSignIn(request: APIRequestContext, email: string, password: string) {
   return request.post('/api/auth/sign-in/email', {
@@ -25,9 +29,7 @@ test('password reset revokes sessions, preserves login history and protects self
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
   const target = await newAccount(request);
-  const extra = authResponse.parse(
-    await (await passwordSignIn(request, target.email, 'password123')).json(),
-  );
+  const extra = await sessionOf(await passwordSignIn(request, target.email, 'password123'));
   const other = await newAccount(request);
   const before = await directoryUser(request, admin.token, target.email);
   expect(
@@ -123,9 +125,7 @@ test('admins confirm password reset and deletion, and users can replace the temp
     await userPage.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(userPage.getByRole('heading', { name: 'Gallery' })).toBeVisible();
     const oldToken = await userPage.evaluate(() => localStorage.getItem('catch-auth-token'));
-    const extra = authResponse.parse(
-      await (await passwordSignIn(request, target.email, password)).json(),
-    );
+    const extra = await sessionOf(await passwordSignIn(request, target.email, password));
     const before = await directoryUser(request, admin.token, target.email);
     await userPage.goto('/settings/account');
     await userPage.getByRole('button', { name: 'Change password' }).click();
@@ -314,7 +314,7 @@ async function adminSession(request: APIRequestContext) {
     data: { email: 'admin@example.com', password: 'adminadmin' },
   });
   expect(response.ok()).toBeTruthy();
-  return authResponse.parse(await response.json());
+  return sessionOf(response);
 }
 
 async function newAccount(request: APIRequestContext, name = 'Role test user') {
@@ -324,7 +324,7 @@ async function newAccount(request: APIRequestContext, name = 'Role test user') {
     data: { email, name, password: 'password123' },
   });
   expect(response.ok()).toBeTruthy();
-  return { ...authResponse.parse(await response.json()), email };
+  return { ...(await sessionOf(response)), email };
 }
 
 test('admins can open Users from either settings navigation and edit roles', async ({
@@ -582,4 +582,68 @@ test('last login advances on successful sign-in but not on failure or session re
   expect(signedIn.ok()).toBeTruthy();
   const latest = await lastLogin();
   expect(Date.parse(latest!)).toBeGreaterThan(Date.parse(first!));
+});
+
+test('an admin invites someone, and the link makes one account', async ({
+  page,
+  browser,
+  request,
+}) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Password').fill('adminadmin');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({ timeout: 30_000 });
+  await page.goto('/settings/admin/users');
+  const who = `Invitee ${Date.now()}`;
+  await page.getByLabel('Who the invite is for').fill(who);
+  await page.getByRole('button', { name: 'Create invite' }).click();
+  const link = await page.getByRole('textbox', { name: 'Invite link' }).inputValue();
+  expect(link).toMatch(/\/login#invite=[\w-]{43}$/);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveCount(0);
+
+  const email = `invited-${Date.now()}@example.com`;
+  async function join(address: string) {
+    const context = await browser.newContext();
+    const guest = await context.newPage();
+    await guest.goto(link);
+    await expect(guest.getByText('You have been invited to this Catch server.')).toBeVisible();
+    await guest.getByLabel('Name').fill('Invited');
+    await guest.getByLabel('Email').fill(address);
+    await guest.getByLabel('Password').fill('password123');
+    await guest.getByRole('button', { name: 'Create account' }).click();
+    return { context, guest };
+  }
+
+  const first = await join(email);
+  try {
+    await expect(first.guest.getByRole('heading', { name: 'Gallery' })).toBeVisible({
+      timeout: 30_000,
+    });
+    // The spent token does not linger in the address bar.
+    expect(first.guest.url()).not.toContain('invite=');
+  } finally {
+    await first.context.close();
+  }
+
+  const second = await join(`again-${email}`);
+  try {
+    await expect(second.guest.getByText('This invite has been used or has expired.')).toBeVisible();
+  } finally {
+    await second.context.close();
+  }
+
+  await page.reload();
+  await expect(page.getByText(`by ${email}`)).toBeVisible();
+  await page.getByRole('button', { name: `Remove invite for ${who}` }).click();
+  await expect(page.getByText(who)).toHaveCount(0);
+
+  const admin = await adminSession(request);
+  const invited = await directoryUser(request, admin.token, email);
+  expect(invited).toBeDefined();
+  expect(await directoryUser(request, admin.token, `again-${email}`)).toBeUndefined();
+  await request.delete(`/api/admin/users/${invited!.id}`, {
+    headers: { Authorization: `Bearer ${admin.token}` },
+  });
 });

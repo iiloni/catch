@@ -16,6 +16,8 @@ services:
       BETTER_AUTH_URL: http://${CATCH_PUBLIC_HOST:-localhost}:${CATCH_PORT:-5173}
       TRUSTED_ORIGINS: http://${CATCH_PUBLIC_HOST:-localhost}:${CATCH_PORT:-5173},http://localhost:${CATCH_PORT:-5173},http://127.0.0.1:${CATCH_PORT:-5173}
       CATCH_SEED_PROFILE: ${CATCH_SEED_PROFILE:-demo}
+      # Seeding and the E2E tests make accounts of their own.
+      REGISTRATION: open
       CATCH_DEV_HOST: 0.0.0.0
       CATCH_DEV_ALLOWED_HOSTS: ${CATCH_PUBLIC_HOST:-localhost},.ts.net
       PNPM_CONFIG_STORE_DIR: /pnpm-store
