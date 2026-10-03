@@ -31,9 +31,14 @@ color swatch selects its root tag, including secondary assignments and descendan
 color. The glass filter panel has sliding Colors/Tags tabs and remembers the last tab on
 the device. The dock filter button toggles the panel; outside taps, Escape and back also
 close it. Switching between browsing, results and no matches fades and settles the content
-with the shared spring, while subsequent result changes retain their list animation.
+with the shared spring, while subsequent result changes retain their list animation. Active
+filters stay mounted above these views; only changed badges enter or exit, and the remaining
+badges spring into position after removal. Each removal button shares its badge’s glass
+surface. Any/All matching uses a compact segmented control that expands and collapses
+when the second tag is added or removed.
 Reduced motion switches views immediately. Untagged is separate from No color. Archived
-notes are included, trashed notes excluded, and result badges show the assigned tags. Recent text searches remain available. See ADR 0015 for tag semantics.
+notes are included, trashed notes excluded, and result badges show the assigned tags.
+Recent text searches remain available. See ADR 0015 for tag semantics.
 
 ## Why not a separate vector store
 

@@ -137,16 +137,16 @@ function SearchPage() {
       </AnimatePresence>
       <TabPageHeader title="Search" />
       <div className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+        <ActiveSearchFilters
+          tags={tags}
+          filter={filter}
+          color={color}
+          onFilterChange={setFilter}
+          onColorChange={setColor}
+        />
         <div className="relative">
           <AnimatePresence initial={false}>
             <SearchView key={view} view={view}>
-              <ActiveSearchFilters
-                tags={tags}
-                filter={filter}
-                color={color}
-                onFilterChange={setFilter}
-                onColorChange={setColor}
-              />
               {!searching && (
                 <BrowseTags
                   tags={tags}
