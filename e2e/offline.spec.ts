@@ -1,5 +1,5 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
-import { card, createNote, openNote, signIn, signUp } from './helpers';
+import { card, createNote, openNote, seedNotes, signIn, signUp } from './helpers';
 
 // The dev server has no service worker, so these tests keep the page's own code reachable
 // and cut off the API instead of the whole network. A full offline reload of a production
@@ -49,7 +49,10 @@ test('notes and queued changes survive a reload without the server, then sync', 
 }) => {
   test.skip(isMobile, 'The outbox does not depend on the layout; the test above runs on both.');
   const email = await signUp(page);
-  await createNote(page, 'First', 'Readable without the server');
+  // Seeded, which waits for the server: a typed note's card shows before its write is sent,
+  // and that write would be cut off below and counted with the queued one.
+  await seedNotes(page, [{ title: 'First', body: 'Readable without the server' }]);
+  await expect(card(page, 'First')).toBeVisible();
 
   await page.route('**/api/**', (route) => route.abort());
   await createNote(page, 'Queued');
