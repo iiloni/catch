@@ -17,6 +17,7 @@ import { boardColumnRoutes } from './routes/boardColumns';
 import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
 import { shapeRoutes } from './routes/shapes';
+import { noteTagRoutes, tagRoutes } from './routes/tags';
 import { updateRoutes } from './routes/updates';
 
 /** JSON bodies are read into memory whole. The largest real one is a batch of imported notes. */
@@ -121,6 +122,8 @@ export function createApp() {
     .route('/admin/backups', backupDownloadRoutes)
     .route('/admin', adminRoutes)
     .route('/notes', notesRoutes)
+    .route('/tags', tagRoutes)
+    .route('/note-tags', noteTagRoutes)
     .route('/attachments', attachmentRoutes)
     .route('/board-columns', boardColumnRoutes)
     .route('/link-previews', linkPreviewRoutes)

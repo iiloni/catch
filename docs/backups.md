@@ -188,3 +188,7 @@ before the update.
 `./scripts/dev.sh backup <command>` runs the same tool against the worktree's stack
 (`./scripts/dev.sh backup help`). Restore tests create and drop databases of their own, so
 they need `pg_dump` and a Postgres server and are skipped without them.
+
+Tags, nested branches, icons, color links, and primary/secondary note assignments are
+included in the database dump and restored together with notes. Backups made before tags
+were introduced restore with empty tag tables after migration.

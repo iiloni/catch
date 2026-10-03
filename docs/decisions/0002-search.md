@@ -20,6 +20,16 @@ changing the model triggers a re-index. If keyword ranking proves weak, ParadeDB
 Offline, keyword search runs on the client over the synced collection; semantic search
 needs the server.
 
+## Current search page
+
+The page currently uses the client keyword path over synced notes, including while online.
+It combines text with tag and color filters without a network request. Roots are browse
+shortcuts; the searchable tree selects any depth. A parent includes descendants assigned
+as either primary or secondary tags. Multiple selections support Any/All matching and
+intersect with text and effective primary-derived color. Untagged is separate from No
+color. Archived notes are included, trashed notes excluded, and result badges show the
+assigned tags. Recent text searches remain available. See ADR 0016 for tag semantics.
+
 ## Why not a separate vector store
 
 A separate store (e.g. LanceDB) has to be kept in sync with the primary database, and

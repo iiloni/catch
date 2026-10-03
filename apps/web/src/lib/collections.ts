@@ -5,14 +5,21 @@ import {
   createAttachmentSchema,
   createBoardColumnSchema,
   createNoteSchema,
+  createTagSchema,
   type LinkPreview,
   linkPreviewSchema,
   MAX_NOTES_PER_REQUEST,
+  type NoteTags,
   noteSchema,
+  noteTagsSchema,
+  type Tag,
   type TxidResponse,
+  tagSchema,
   updateAttachmentSchema,
   updateBoardColumnSchema,
   updateNoteSchema,
+  updateNoteTagsSchema,
+  updateTagSchema,
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
 import {
@@ -45,7 +52,7 @@ import {
   refreshAttachmentUrls,
 } from './attachmentFiles';
 import { getAuthToken, resolveSignedInUser } from './auth';
-import { CompatibilityError, compatibleShapeFetch } from './compatibility';
+import { CompatibilityError } from './compatibility';
 import {
   createOnlineDetector,
   createOutboxStorage,
@@ -54,6 +61,7 @@ import {
 } from './localStore';
 import { mergeQueuedWrites } from './mergeQueuedWrites';
 import { getServerUrl } from './serverUrl';
+import { shapeFetch } from './shapeFetch';
 import { clearIncomingShares } from './shareInbox';
 import {
   addPendingWrite,
@@ -107,7 +115,7 @@ export const notesCollection = createCollection(
       getKey: (note) => note.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/notes`,
-        fetchClient: compatibleShapeFetch,
+        fetchClient: shapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         // Synced rows skip the collection schema, so parse timestamps here.
@@ -126,7 +134,7 @@ export const boardColumnsCollection = createCollection(
       getKey: (column) => column.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/board-columns`,
-        fetchClient: compatibleShapeFetch,
+        fetchClient: shapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
       },
@@ -147,7 +155,7 @@ export const linkPreviewsCollection = createCollection(
       getKey: (preview) => preview.url,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/link-previews`,
-        fetchClient: compatibleShapeFetch,
+        fetchClient: shapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         parser: { timestamptz: (value: string) => new Date(value) },
@@ -165,7 +173,7 @@ export const attachmentsCollection = createCollection(
       getKey: (attachment) => attachment.id,
       shapeOptions: {
         url: `${getServerUrl()}/api/shapes/attachments`,
-        fetchClient: compatibleShapeFetch,
+        fetchClient: shapeFetch,
         headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
         columnMapper: snakeCamelMapper(),
         parser: { timestamptz: (value: string) => new Date(value) },
@@ -175,8 +183,44 @@ export const attachmentsCollection = createCollection(
   ),
 );
 
+export const tagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'tags',
+      schema: tagSchema,
+      getKey: (row) => row.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/tags`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+      },
+    }),
+    1,
+  ),
+);
+
+export const noteTagsCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'note-tags',
+      schema: noteTagsSchema,
+      getKey: (row) => row.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/note-tags`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+      },
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
   notes: notesCollection,
+  tags: tagsCollection,
+  noteTags: noteTagsCollection,
   boardColumns: boardColumnsCollection,
   attachments: attachmentsCollection,
 };
@@ -192,12 +236,12 @@ const SYNC_WAIT_MS = 30_000;
 async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
   let sent: { collectionId: string; txid: TxidResponse['txid'] }[];
   try {
-    sent = await Promise.all(
-      requestsFor(transaction.mutations).map(async ({ collectionId, request }) => ({
-        collectionId,
-        txid: (await request())?.txid ?? null,
-      })),
-    );
+    sent = [];
+    // Notes and parents must exist before dependent rows. Preserve mutation order,
+    // also during a retry after only the first requests reached the server.
+    for (const { collectionId, request } of requestsFor(transaction.mutations)) {
+      sent.push({ collectionId, txid: (await request())?.txid ?? null });
+    }
   } catch (error) {
     const classified = classifyWriteError(error);
     if (classified instanceof NonRetriableError) settlePendingWrite(transaction.id);
@@ -211,9 +255,13 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
       const collection =
         collectionId === notesCollection.id
           ? notesCollection
-          : collectionId === attachmentsCollection.id
-            ? attachmentsCollection
-            : boardColumnsCollection;
+          : collectionId === tagsCollection.id
+            ? tagsCollection
+            : collectionId === noteTagsCollection.id
+              ? noteTagsCollection
+              : collectionId === attachmentsCollection.id
+                ? attachmentsCollection
+                : boardColumnsCollection;
       // The server has the write; a slow stream only delays the hand-over.
       return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
     }),
@@ -234,7 +282,7 @@ function requestsFor(mutations: readonly PendingMutation[]) {
     .map((mutation) => ({ collectionId: mutation.collection.id, request: () => send(mutation) }));
   for (let start = 0; start < batched.size; start += MAX_NOTES_PER_REQUEST) {
     const chunk = newNotes.slice(start, start + MAX_NOTES_PER_REQUEST);
-    requests.push({
+    requests.splice(start / MAX_NOTES_PER_REQUEST, 0, {
       collectionId: notesCollection.id,
       request: () =>
         api.createNotes({
@@ -282,6 +330,23 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
       case 'delete':
         return api.updateAttachment(key, { deletedAt: new Date() });
     }
+  }
+  if (mutation.collection.id === tagsCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return api.createTag(createTagSchema.parse(mutation.modified));
+      case 'update':
+        return api.updateTag(key, updateTagSchema.parse(mutation.changes));
+      case 'delete':
+        return api.deleteTag(key);
+    }
+  }
+  if (mutation.collection.id === noteTagsCollection.id) {
+    if (mutation.type === 'delete') return null; // Server cascades note deletion.
+    return api.updateNoteTags(
+      key,
+      updateNoteTagsSchema.parse(mutation.type === 'insert' ? mutation.modified : mutation.changes),
+    );
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -557,4 +622,50 @@ function subscribeAttachments(listener: () => void) {
 }
 export function useAttachments(): readonly Attachment[] {
   return useSyncExternalStore(subscribeAttachments, () => attachmentRows);
+}
+
+let tagRows: readonly Tag[] = [];
+const tagListeners = new Set<() => void>();
+let tagSubscribed = false;
+function subscribeTags(listener: () => void) {
+  tagListeners.add(listener);
+  if (!tagSubscribed) {
+    tagSubscribed = true;
+    tagsCollection.subscribeChanges(
+      () => {
+        tagRows = [...tagsCollection.values()];
+        for (const notify of tagListeners) notify();
+      },
+      { includeInitialState: true },
+    );
+  }
+  return () => {
+    tagListeners.delete(listener);
+  };
+}
+export function useTags(): readonly Tag[] {
+  return useSyncExternalStore(subscribeTags, () => tagRows);
+}
+
+let assignmentRows: ReadonlyMap<string, NoteTags> = new Map();
+const assignmentListeners = new Set<() => void>();
+let assignmentsSubscribed = false;
+function subscribeNoteTags(listener: () => void) {
+  assignmentListeners.add(listener);
+  if (!assignmentsSubscribed) {
+    assignmentsSubscribed = true;
+    noteTagsCollection.subscribeChanges(
+      () => {
+        assignmentRows = new Map([...noteTagsCollection.values()].map((row) => [row.id, row]));
+        for (const notify of assignmentListeners) notify();
+      },
+      { includeInitialState: true },
+    );
+  }
+  return () => {
+    assignmentListeners.delete(listener);
+  };
+}
+export function useNoteTagAssignments(): ReadonlyMap<string, NoteTags> {
+  return useSyncExternalStore(subscribeNoteTags, () => assignmentRows);
 }

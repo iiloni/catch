@@ -91,8 +91,8 @@ Document the compatibility decision in the change even when no counter bump is n
 ## Consequences
 
 - Compatibility maintenance is tied to contract changes, not pushes or release bumps.
-- Supporting many past protocols needs adapters and tests. Initially only protocol 1 is
-  supported; narrowing a range deliberately requires affected clients to update.
+- Supporting many past protocols needs adapters and tests. The tag feature uses protocol 2 with range 2–2 (ADR 0016); narrowing a range
+  deliberately requires affected clients to update.
 - Gating cannot cancel requests already accepted by a running older server. Server upgrades
   should still preserve replay safety and use the normal migration/backup process.
 - Authentication/bootstrap and download bytes remain stable recovery contracts; changes to

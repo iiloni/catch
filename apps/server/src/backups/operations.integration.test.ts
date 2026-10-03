@@ -21,6 +21,8 @@ const serverUrl = process.env.BACKUP_TEST_DATABASE_URL ?? '';
 const available = serverUrl !== '' && spawnSync('pg_dump', ['--version']).status === 0;
 
 const NOTE = '0199a0a0-0000-7000-8000-00000000000a';
+const ROOT = '0199a0a0-0000-7000-8000-00000000000c';
+const CHILD = '0199a0a0-0000-7000-8000-00000000000d';
 const FILE = '0199a0a0-0000-7000-8000-00000000000b';
 const connect = (url: string) => postgres(url, { max: 1, onnotice: () => {} });
 
@@ -68,6 +70,9 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     await sql`
       INSERT INTO session (id, expires_at, token, user_id)
       VALUES ('session', now() + interval '1 day', 'a-way-in', 'ada')`;
+    await sql`INSERT INTO tags (id, user_id, name, color, icon) VALUES (${ROOT}, 'ada', 'Work', 'blue', 'briefcase')`;
+    await sql`INSERT INTO tags (id, user_id, name, parent_id) VALUES (${CHILD}, 'ada', 'Catch', ${ROOT})`;
+    await sql`INSERT INTO note_tags (id, user_id, primary_tag_id, secondary_tag_ids) VALUES (${NOTE}, 'ada', ${CHILD}, ${JSON.stringify([ROOT])}::jsonb)`;
     await writeFile(join(config.attachmentsDir, FILE), 'photo');
   }, 60_000);
 
@@ -83,6 +88,7 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
   /** What changes after a backup: a note goes, a user arrives, a file is lost. */
   async function change() {
     await sql`DELETE FROM notes`;
+    await sql`DELETE FROM tags`;
     await sql`INSERT INTO "user" (id, name, email) VALUES ('eve', 'Eve', 'eve@example.com')`;
     await rm(join(config.attachmentsDir, FILE), { force: true });
   }
@@ -105,6 +111,13 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     const outcome = await restoreBackup(config, join(config.backupsDir, name));
     expect(await notes()).toEqual(['kept']);
     expect(await users()).toEqual(['ada']);
+    expect(await sql`SELECT id, parent_id, color, icon FROM tags ORDER BY id`).toEqual([
+      { id: ROOT, parent_id: null, color: 'blue', icon: 'briefcase' },
+      { id: CHILD, parent_id: ROOT, color: null, icon: null },
+    ]);
+    expect(await sql`SELECT id, primary_tag_id, secondary_tag_ids FROM note_tags`).toEqual([
+      { id: NOTE, primary_tag_id: CHILD, secondary_tag_ids: [ROOT] },
+    ]);
     expect(await readFile(join(config.attachmentsDir, FILE), 'utf8')).toBe('photo');
     expect(outcome.missingAttachments).toBe(0);
     // Sessions are not in the backup, so the ones from before the restore are gone too.

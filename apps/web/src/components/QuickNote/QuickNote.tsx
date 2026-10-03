@@ -19,6 +19,7 @@ import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
+import { useTags } from '@/lib/collections';
 import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
@@ -88,6 +89,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   const handleRef = useRef<HTMLDivElement>(null);
 
   const [content, setContent] = useState<Note['content']>([]);
+  const tags = useTags();
   const [color, setColor] = useState<NoteColor>('default');
   const [controls, setControls] = useState<EditorControls | null>(null);
   // The footer's tool row shows either formatting or the color swatches.
@@ -414,6 +416,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
                   />
                 ) : (
                   <ColorSwatches
+                    tags={tags}
                     value={color}
                     onChange={setColor}
                     layout="row"

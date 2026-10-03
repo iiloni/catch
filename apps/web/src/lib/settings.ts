@@ -6,6 +6,7 @@ import {
   Download,
   type LucideIcon,
   SlidersHorizontal,
+  Tags,
   Users,
 } from 'lucide-react';
 import { useCallback } from 'react';
@@ -17,6 +18,7 @@ import { useViewport } from './splitView';
  */
 export const SETTINGS_TABS = [
   { path: '/settings/general', label: 'General', icon: SlidersHorizontal, section: 'User' },
+  { path: '/settings/tags', label: 'Tags', icon: Tags, section: 'User' },
   { path: '/settings/account', label: 'Account', icon: CircleUser, section: 'User' },
   { path: '/settings/data', label: 'Data Management', icon: Database, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },

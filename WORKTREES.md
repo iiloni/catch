@@ -29,6 +29,11 @@ URLs use the machine's Tailscale MagicDNS name when Tailscale is running (for ex
 interfaces; set `CATCH_DEV_BIND_ADDRESS=127.0.0.1` in `.env.worktree` and recreate the stack
 to keep one local-only.
 
+HTTP development sync polls once a second after catching up, leaving connections free for
+lazy pages, hot reload and writes. Six long-running shape requests would otherwise fill the
+browser's HTTP/1.1 connection limit and make these operations wait up to 20 seconds. HTTPS
+and production builds use normal long polling; serve production through an HTTP/2 proxy.
+
 Seeded accounts (the `demo` profile, the default):
 
 ```text

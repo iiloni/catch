@@ -20,11 +20,12 @@ import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
+import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
-import { notesCollection } from '@/lib/collections';
+import { notesCollection, useNoteTagAssignments } from '@/lib/collections';
 import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -43,6 +44,7 @@ import {
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
+import { useNoteColor } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
 import { useEditorDock } from './useEditorDock';
@@ -143,6 +145,9 @@ const SWAP_MS = 250;
 function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const popupState = quickNote.use();
   const capture = linkCaptureControls.use();
+  const color = useNoteColor(note);
+  const assignment = useNoteTagAssignments().get(note.id);
+  const hasTags = !!assignment?.primaryTagId || !!assignment?.secondaryTagIds.length;
   const [isPresent, safeToRemove] = usePresence();
   const [, rerender] = useState(0);
   // The back button, Escape and an outside click can all fire for one close.
@@ -182,7 +187,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   useEditorDock(note, controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
-  const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia);
+  const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia || hasTags);
 
   useEffect(() => {
     if (!split || !isPresent) return;
@@ -420,7 +425,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
 
   const scrollArea = (
     <ScrollArea
-      data-note-color={note.color}
+      data-note-color={color}
       className={cn(
         'flex-1',
         !fullscreen && 'rounded-3xl [--scrollbar-edge:0.25rem] [--scrollbar-inset:1rem]',
@@ -435,7 +440,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       <ScrollAreaViewport
         ref={attachScroll}
         data-note-scroll
-        data-note-color={note.color}
+        data-note-color={color}
         className={cn(
           fullscreen
             ? 'scroll-pt-[calc(var(--safe-top)+4rem)] pt-[calc(var(--safe-top)+4rem)] pb-[calc(var(--dock-space)+4rem)]'
@@ -457,6 +462,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           ) : (
             <NotePreview content={note.content} maxBlocks={200} variant="editor" />
           )}
+          {!sideLinks && <NoteTags noteId={note.id} className="note-links-inset pt-5" />}
           {!sideLinks && (
             <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
           )}
@@ -521,7 +527,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           }}
         >
           <motion.div
-            data-note-color={note.color}
+            data-note-color={color}
             className={cn(
               'fixed z-50 flex flex-col text-card-foreground outline-none',
               !split && 'overflow-hidden bg-note',
@@ -664,6 +670,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   >
                     <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
                       <ScrollAreaViewport className="pb-6">
+                        {hasTags && (
+                          <div className="mb-4 rounded-2xl border border-border bg-card p-4">
+                            <NoteTags noteId={note.id} />
+                          </div>
+                        )}
                         <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
                         <NoteLinks note={note} variant="side" />
                       </ScrollAreaViewport>
