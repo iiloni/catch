@@ -83,8 +83,12 @@ commit messages, but choose release versions explicitly.
   checksum to a draft release, updates the appropriate image aliases, and publishes the
   release. Preview GitHub Releases are marked as prereleases.
 
-The release notes record the exact image, its digest, the source commit, and the Android
-version code. There is no deployment job. Actions artifacts expire after seven days; APKs
+The release notes list what changed (see [Release notes and changelog](#release-notes-and-changelog)),
+then record the exact image, its digest, the source commit, and the Android version code.
+The version job generates the notes into the run summary before any build starts, so a
+release whose notes cannot be generated stops there; the publishing job generates them
+again for the release body, including when a rerun edits an existing draft. Both jobs
+fetch full history and tags for this. There is no deployment job. Actions artifacts expire after seven days; APKs
 attached to a published GitHub Release remain available there.
 
 ## One-time GitHub configuration
@@ -245,6 +249,105 @@ using Re-run jobs; the draft and assets can be resumed. An Android build failure
 an exact image, and a failed publication may leave an exact image or draft release, but
 stable/preview aliases only advance after both build jobs succeed. Once published, choose
 a new version for any changes.
+
+## Release notes and changelog
+
+There is no committed `CHANGELOG.md`. The changelog is derived from release tags and commit
+history whenever it is needed ([ADR 0017](decisions/0017-derived-changelog.md)), by
+`scripts/changelog.ts`:
+
+```bash
+git fetch origin --tags
+./scripts/release.sh changelog v0.4.1            # notes for one release
+./scripts/release.sh changelog                   # unreleased commits on HEAD
+./scripts/release.sh changelog --channel stable  # what a stable release of HEAD would list
+./scripts/release.sh changelog --all             # every release, newest first
+./scripts/release.sh changelog --all --json      # the same as data
+```
+
+It only reads local tags and history: it never fetches, tags or writes, and it refuses a
+shallow clone. Outside Actions the repository for links comes from the `origin` remote, or
+`--repo owner/name`.
+
+- **Range.** A preview covers the commits since the highest lower tag, stable or preview,
+  reachable from it. A stable release covers the commits since the highest lower stable
+  tag, so it lists everything in the previews it supersedes; promoting an earlier preview
+  gives that full list for the promoted commit and none of the newer work. The first
+  release covers its whole history. Tags on unrelated branches are ignored, as they are
+  for version bumps.
+- **Entries** come from commits, not pull requests, so direct commits to main appear too.
+  Merge commits are skipped in favour of the commits they bring in. An entry links to its
+  pull request when the subject ends in `(#N)`, as squash merges do, and to the commit
+  otherwise.
+- **Grouping.** Commits with `!` or a `BREAKING CHANGE:` footer come first, with the
+  footer's text; then `feat`, `fix` and `perf`. Everything else, including subjects that
+  are not Conventional Commits, is collapsed under "Other changes". A commit subject is
+  therefore release-note text: write it for someone reading the notes.
+- **Compatibility.** `API_PROTOCOL_VERSION` and `SUPPORTED_API_PROTOCOLS` are read from
+  `packages/shared/src/protocol.ts` at both ends of the range. When they differ, the notes
+  state the old and new protocol and supported range and the upgrade order they imply.
+  Keep those two declarations as plain literals; the generator reads the source text, and a
+  unit test fails if it no longer can. Add anything else an upgrade needs to the
+  `BREAKING CHANGE:` footer.
+- **Changelog link.** Each body ends with a link for the release's range. It is GitHub's
+  compare view until `CHANGELOG_BASE_URL` in `scripts/changelog.ts` is set; after that it
+  is `<base>/<version>`, for example `https://catchnotes.site/changelog/0.4.1`.
+
+`--json` prints one release, or with `--all` this document:
+
+```jsonc
+{
+  "schemaVersion": 1,            // bumped for incompatible changes to this output
+  "repository": "iiloni/catch",
+  "releases": [                  // every release tag, newest version first
+    {
+      "tag": "v0.4.1",
+      "version": "0.4.1",
+      "channel": "stable",       // or "preview"
+      "date": "2026-10-03T13:43:48-04:00",       // when the tag was created
+      "commit": "<sha>",
+      "previous": "v0.3.3",      // start of the range; null for a first release
+      "promotedFrom": "v0.4.1-preview",          // preview on the same commit, or null
+      "previews": ["v0.4.0-preview", "v0.4.1-preview"],  // folded into a stable release
+      "urls": { "release": "...", "compare": "...", "changelog": "..." },
+      "protocol": {
+        "from": { "version": 1, "min": 1, "max": 1 },    // null when the file is absent
+        "to": { "version": 2, "min": 2, "max": 2 },
+        "changed": true,
+        "summary": "API protocol: app 1 → 2; ..."         // null unless changed
+      },
+      "breaking": true,
+      "sections": [              // non-empty groups in reading order
+        {
+          "id": "breaking",      // breaking | features | fixes | performance | other
+          "title": "Breaking changes",
+          "entries": [
+            {
+              "commit": "<sha>",
+              "date": "2026-10-03T12:00:00-04:00",
+              "subject": "feat(tags)!: add nested tags (#3)",
+              "type": "feat",    // null when the subject is not a Conventional Commit
+              "scope": "tags",
+              "description": "add nested tags",
+              "breaking": true,
+              "breakingNote": "clients and servers now require API protocol 2.",
+              "pr": 3,
+              "url": "https://github.com/iiloni/catch/pull/3"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "unreleased": null             // same shape with null tag, version and date, when HEAD has commits after its latest tag
+}
+```
+
+Each entry is in exactly one section. Text fields are commit text as written: a consumer
+that renders them escapes them itself, as the Markdown output does.
+
+Releases published before the generator keep their original bodies. To rewrite one, see
+the output with `./scripts/release.sh changelog <tag>` and edit the release on GitHub.
 
 ## Production configuration outside the repository
 

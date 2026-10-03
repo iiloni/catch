@@ -244,3 +244,99 @@ test('Release is dispatched on the published tag rather than the selected branch
   );
   assert.deepEqual(dispatched, { ...context.repo, workflow_id: 'release.yml', ref: 'v1.2.3' });
 });
+
+test('published notes list the changes ahead of the artifact details', (t) => {
+  for (const name of ['Checkout version history', 'Checkout release history']) {
+    const checkout = stepValues('release.yml', name, 'with', { 'github.sha': 'd'.repeat(40) });
+    assert.equal(checkout['fetch-depth'], '0', `${name} must fetch tags and full history`);
+    assert.equal(checkout['persist-credentials'], 'false');
+  }
+  const cwd = mkdtempSync(join(tmpdir(), 'catch-release-notes-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_SYSTEM: '/dev/null',
+    GITHUB_WORKSPACE: fileURLToPath(new URL('../', import.meta.url)),
+    GITHUB_REPOSITORY: 'iiloni/catch',
+    GITHUB_STEP_SUMMARY: join(cwd, 'summary.md'),
+    RUNNER_TEMP: cwd,
+    RELEASE_TAG: 'v0.2.0-preview',
+    CHANNEL: 'preview',
+    VERSION: '0.2.0-preview',
+    VERSION_CODE: '12',
+    IMAGE: 'ghcr.io/iiloni/catch',
+    DIGEST: `sha256:${'e'.repeat(64)}`,
+    GITHUB_SHA: 'd'.repeat(40),
+  };
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
+  git('init', '--quiet');
+  git('config', 'user.name', 'Release test');
+  git('config', 'user.email', 'release@example.com');
+  for (const [subject, tag] of [
+    ['feat: earlier work', 'v0.1.0-preview'],
+    ['fix(notes): `$(touch executed)` stays text (#4)', 'v0.2.0-preview'],
+  ]) {
+    git('-c', 'commit.gpgSign=false', 'commit', '--quiet', '--allow-empty', '-m', subject);
+    git('tag', tag);
+  }
+  const run = (name: string) =>
+    spawnSync('bash', ['-e', '-c', stepBody('release.yml', name, 'run')], {
+      cwd,
+      env,
+      encoding: 'utf8',
+    });
+  // A retried publish job writes the same notes again for the existing draft.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = run('Prepare release notes');
+    assert.equal(result.status, 0, result.stderr);
+  }
+  assert.equal(existsSync(join(cwd, 'executed')), false);
+  assert.equal(
+    readFileSync(join(cwd, 'release-notes.md'), 'utf8'),
+    `Changes since [0.1.0-preview](https://github.com/iiloni/catch/releases/tag/v0.1.0-preview).
+
+### Fixes
+
+- **notes:** \`$(touch executed)\` stays text ([#4](https://github.com/iiloni/catch/pull/4))
+
+**Full changelog:** https://github.com/iiloni/catch/compare/v0.1.0-preview...v0.2.0-preview
+
+## Release details
+
+Channel: preview
+
+Docker image: \`ghcr.io/iiloni/catch:0.2.0-preview\`
+
+Pinned Docker image: \`ghcr.io/iiloni/catch@sha256:${'e'.repeat(64)}\`
+
+Source commit: \`${'d'.repeat(40)}\`
+
+Android version code: 12
+
+Download the signed APK and its SHA-256 checksum below. Stable and preview Android apps can be installed together.
+`,
+  );
+
+  const preview = spawnSync(
+    'bash',
+    [
+      '-e',
+      '-c',
+      stepLines('release.yml', 'Preview release notes')
+        .at(-1)!
+        .replace(/^\s*run: /, ''),
+    ],
+    { cwd, env, encoding: 'utf8' },
+  );
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(readFileSync(env.GITHUB_STEP_SUMMARY, 'utf8'), /^Changes since \[0\.1\.0-preview\]/);
+  // A tag the checkout does not have stops the release before its builds.
+  const missing = spawnSync(
+    'bash',
+    ['-e', '-c', stepBody('release.yml', 'Prepare release notes', 'run')],
+    { cwd, env: { ...env, RELEASE_TAG: 'v0.3.0-preview' }, encoding: 'utf8' },
+  );
+  assert.equal(missing.status, 1);
+});
