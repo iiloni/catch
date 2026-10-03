@@ -71,6 +71,11 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   design, disable pending auto-merge, return the PR to draft, remove the label and obtain
   renewed approval. Keep the branch up to date as required checks rerun.
   The local `./scripts/dev.sh check` requirement still applies.
+- After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
+  investigate failures, fix them and push updates until required validation passes.
+  Continue through the authorized merge and verify the PR is actually merged, then update
+  local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
+  not complete the task. If `main` advances, update the branch and monitor the new checks.
 - Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
   feature, improvement or fix and what it enables or changes. Include motivation or a
   before/after example when useful; a linked issue is optional.

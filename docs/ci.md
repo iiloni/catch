@@ -61,7 +61,10 @@ Agents follow this process by default for new features and code fixes, as specif
 reviewable changes and opens a draft PR assigned to its creator (`--assignee @me` when
 using `gh pr create`). After reviewing functionality and design, apply
 `merge on pass` yourself or tell the agent the feature is approved for merging after tests
-pass. The agent then handles validation and merging under the branch rules.
+pass. The agent then monitors checks for the latest commit, investigates and fixes
+failures, pushes updates and continues until it verifies the authorized PR is merged.
+Opening a PR or enabling auto-merge alone does not finish the task. If `main` advances,
+the agent updates the branch and monitors the new checks before merging under the rules.
 
 Agents add existing descriptive labels while opening a draft, using a small set that
 matches the change:
