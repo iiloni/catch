@@ -562,17 +562,14 @@ function TagMatchControl({
       exit={{ height: 0, opacity: 0 }}
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
     >
-      <fieldset className="flex items-center gap-2">
+      <fieldset className="flex items-center justify-end gap-2">
         <legend className="sr-only">Match tags</legend>
         <span className="text-xs text-muted-foreground" aria-hidden>
           Match
         </span>
         <LayoutGroup id={layoutId}>
           <div className="relative flex px-1">
-            <span
-              aria-hidden
-              className="absolute inset-x-0 inset-y-1.5 rounded-lg bg-foreground/5"
-            />
+            <span aria-hidden className="absolute inset-x-0 inset-y-2 rounded-lg bg-foreground/5" />
             {(['any', 'all'] as const).map((value) => (
               <button
                 key={value}
@@ -584,13 +581,13 @@ function TagMatchControl({
                   haptics.selection();
                   onChange(value);
                 }}
-                className="relative flex h-11 min-w-14 items-center justify-center rounded-lg px-3 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="relative flex h-11 min-w-12 items-center justify-center rounded-lg px-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 {match === value && (
                   <motion.span
                     layoutId="tag-match"
                     aria-hidden
-                    className="absolute inset-x-0 inset-y-2 rounded-md bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                    className="absolute inset-x-0 inset-y-2.5 rounded-md bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
                     transition={reducedMotion ? { duration: 0 } : springs.snappy}
                   />
                 )}
