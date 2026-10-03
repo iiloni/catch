@@ -19,8 +19,13 @@ and preview must advance independently, including preview versions ahead of stab
   version and commit, including an earlier preview. The helper never fetches or pushes.
 - The manually dispatched `tag-release.yml` workflow selects a channel and a major, minor
   or patch bump, fetches full history and tags, and calls the same helper at the selected
-  ref's dispatch commit. It pushes only the created tag and dispatches `release.yml` on
-  that tag using `GITHUB_TOKEN`; token-authenticated pushes do not trigger another workflow.
+  ref's dispatch commit. A read-only preparation job resolves the default branch to an
+  immutable commit and runs its helper and dependencies against a separate checkout of
+  the target; it never executes the selected ref's code. A separate privileged job checks
+  the tag name, creates an annotated tag for the dispatch commit through the GitHub API,
+  and dispatches `release.yml` on that tag. This job uses only a pinned action's inline
+  code, with no checkout, package installation or runner state from preparation.
+  `GITHUB_TOKEN` ref creation does not trigger another workflow itself.
   Tag creation requests queue to avoid competing manual bumps. Preview promotion remains
   available through the local helper.
 - Ordinary CI runs checks on every pull request update; the `merge on pass` label records
@@ -47,8 +52,8 @@ and preview must advance independently, including preview versions ahead of stab
   may remain without a published release or updated channel aliases.
 - Publishing is opt-in through the repository variable `RELEASES_ENABLED=true`. The release
   workflow accepts manual dispatch on a release tag for automated tagging and recovery,
-  and never deploys to a production server. Manual tag creation also requires releases to
-  be enabled.
+  rejects branch refs before checkout or builds, and never deploys to a production server.
+  Manual tag creation also requires releases to be enabled.
 - Exact image tags remain fixed once their GitHub Release is published. `stable` and
   `latest` point to the highest published stable version; `preview` points to the highest
   published preview version. Publishing an older backport does not move a channel backwards.

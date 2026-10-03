@@ -29,6 +29,14 @@ jobs:
       image: ${{ steps.version.outputs.image }}
       apk: ${{ steps.version.outputs.apk }}
     steps:
+      - name: Require a release tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [[ "$REF_TYPE" != tag ]]; then
+            echo '::error::Run Release on an existing release tag, not a branch.'
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}

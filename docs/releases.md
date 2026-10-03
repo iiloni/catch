@@ -63,10 +63,15 @@ commit messages, but choose release versions explicitly.
   failed or canceled CI blocks release until CI is rerun successfully. No release runs
   its own copy of E2E.
 - `tag-release.yml`: manual channel and version-bump inputs call `scripts/release.sh`,
-  push its annotated tag, then dispatch `release.yml` on that tag. Requests queue without
-  cancellation and fetch full history and tags before choosing the next version.
+  create its annotated tag on GitHub, then dispatch `release.yml` on that tag. Requests
+  queue without cancellation and fetch full history and tags before choosing the next version.
+  Preparation runs the default branch's helper and dependencies at an immutable commit
+  with read-only permissions, using a separate checkout of the selected release target.
+  A separate job with write permissions creates the tag and dispatches Release through
+  the GitHub API, without checking out or executing repository code.
   Requires `RELEASES_ENABLED=true` before creating any tag.
 - `release.yml`: a pushed `v*` tag or manual dispatch on a release tag validates the version.
+  Branch refs, including branches named like version tags, are rejected before checkout.
   Builds and publishing proceed only when the Actions repository variable `RELEASES_ENABLED`
   is exactly `true`.
   Release runs are queued, with no cancellation. The version job checks
@@ -174,9 +179,10 @@ After merging the workflows and configuring signing and `RELEASES_ENABLED`, open
 **Actions > Tag release > Run workflow**. Select the branch to release (normally `main`),
 choose `channel` (`preview` or `stable`) and `version_type` (`patch`, `minor` or `major`),
 then run it. It tags the selected ref's commit at dispatch time using the same version
-rules as the local helper below, pushes the tag and starts the **Release** workflow.
+rules as the local helper below, creates the tag on GitHub and starts the **Release**
+workflow.
 The Release workflow keeps its existing CI gate, signing checks and Android version-code
-sequence. The GitHub token's tag push does not start workflows itself, so Tag release
+sequence. The GitHub token's tag creation does not start workflows itself, so Tag release
 explicitly dispatches Release on the new tag.
 
 For example, run it from the CLI with:
@@ -186,8 +192,8 @@ gh workflow run tag-release.yml --ref main -f channel=preview -f version_type=mi
 ```
 
 Wait for the Release workflow to finish before creating another release. If a tag was
-pushed but dispatch failed, use **Actions > Release > Run workflow** on that existing tag
-or `gh workflow run release.yml --ref <tag>`. If Release already started and failed, rerun
+created on GitHub but dispatch failed, use **Actions > Release > Run workflow** on that
+existing tag or `gh workflow run release.yml --ref <tag>`. If Release already started and failed, rerun
 that Release run to preserve its Android version code. Rerunning Tag release creates
 another version. Use the local helper for preview promotion.
 
