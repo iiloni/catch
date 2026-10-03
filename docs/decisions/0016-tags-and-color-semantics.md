@@ -69,14 +69,19 @@ page scrolling instead of a dock-height limit.
 
 **Search treats tags and colors as separate filters.** The landing page browses roots with
 note counts and an Untagged option. A detached filter button replaces the compose button
-on Search and opens an anchored glass panel with Tags and Colors sections. The panel
-expands upward with the dock's surface spring, and color swatches show linked root icons.
+on Search and opens an anchored glass panel with Colors and Tags tabs. A bottom segmented
+control switches between them with horizontal slides and a bottom-anchored height spring; its last used tab
+is validated and stored locally. Only tab changes add a resize spring, so tree branches
+continue to animate in flow. The panel expands upward with the dock's surface spring.
+Linked swatches show root icons and toggle that root's tag filter, matching both assignment
+roles and descendants regardless of note color. Selecting a linked swatch clears any raw
+color filter. Unlinked swatches still filter effective note color.
 Tags reuses the dock's searchable tree, ancestry guides and animated branches, with its
 search field at the bottom. The panel fits above the keyboard and closes on outside
 interaction, Escape or Android back before leaving Search. Active badges stay above results
 while the panel is closed. The tree selects tags at any depth; primary and secondary
 assignments both match, and parents include every descendant. Multiple tags offer Any/All
-matching, then intersect with text and effective note color. No color means
+matching, then intersect with text and any selected unlinked note color. No color means
 the derived default color, independently of Untagged. Active filters can be removed
 individually or together; results show their primary and secondary badges. Archived notes
 are included and trashed notes excluded. Counts deduplicate each note within a branch.

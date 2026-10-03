@@ -26,8 +26,11 @@ The page currently uses the client keyword path over synced notes, including whi
 It combines text with tag and color filters without a network request. Roots are browse
 shortcuts; the searchable tree selects any depth. A parent includes descendants assigned
 as either primary or secondary tags. Multiple selections support Any/All matching and
-intersect with text and effective primary-derived color. Untagged is separate from No
-color. Archived notes are included, trashed notes excluded, and result badges show the
+intersect with text and effective primary-derived color for unlinked swatches. A linked
+color swatch selects its root tag, including secondary assignments and descendants of any
+color. The glass filter panel has sliding Colors/Tags tabs and remembers the last tab on
+the device. Untagged is separate from No color. Archived notes are included, trashed notes
+excluded, and result badges show the
 assigned tags. Recent text searches remain available. See ADR 0016 for tag semantics.
 
 ## Why not a separate vector store

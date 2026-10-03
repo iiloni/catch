@@ -17,8 +17,8 @@ import {
 import {
   boardColumnsCollection,
   notesCollection,
+  tagsCollection,
   useNoteTagAssignments,
-  useTags,
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
 import { springs } from '@/lib/motion';
@@ -26,6 +26,7 @@ import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
 import { usePersistentState } from '@/lib/storage';
+import { useAwaitingSync } from '@/lib/syncStatus';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
 
@@ -51,7 +52,11 @@ function SearchPage() {
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
 
-  const tags = useTags();
+  const { data: tags = [], isLoading: tagsLoading } = useLiveQuery({
+    query: (q) => q.from({ tag: tagsCollection }),
+  });
+  // An apparently unlinked swatch is meaningful only after the initial tag snapshot.
+  const awaitingTags = useAwaitingSync(tagsLoading, 0);
   const assignments = useNoteTagAssignments();
   const indexed = useMemo(() => indexNoteTags(tags, assignments), [tags, assignments]);
   const { counts, untaggedCount } = useMemo(() => {
@@ -118,6 +123,7 @@ function SearchPage() {
           >
             <SearchFilters
               tags={tags}
+              awaitingTags={awaitingTags}
               filter={filter}
               color={color}
               counts={counts}

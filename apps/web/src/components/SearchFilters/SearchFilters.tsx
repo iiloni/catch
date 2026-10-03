@@ -1,14 +1,23 @@
 import { NOTE_COLORS, type NoteColor, type Tag } from '@catch/shared';
 import { Palette, Slash, Tags, X } from 'lucide-react';
-import { motion, useIsPresent } from 'motion/react';
-import { type ReactNode, useEffect, useRef } from 'react';
+import {
+  AnimatePresence,
+  animate,
+  LayoutGroup,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { usePersistentState } from '@/lib/storage';
 import type { TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
 
@@ -63,7 +72,7 @@ export function SearchFilterPanel({
               document.querySelector<HTMLButtonElement>('[data-search-filter-trigger]')?.focus();
             }
           }}
-          className="glass pointer-events-auto relative flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.5rem)] w-full max-w-md flex-col gap-2 overflow-auto overscroll-contain rounded-[var(--dock-radius)] p-3"
+          className="glass pointer-events-auto relative flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.5rem)] w-full max-w-md flex-col gap-2 overflow-hidden rounded-[var(--dock-radius)] p-3"
         >
           <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
             {filtered && (
@@ -92,8 +101,101 @@ export function SearchFilterPanel({
   );
 }
 
+const filterTabSchema = z.enum(['colors', 'tags']);
+type FilterTab = z.infer<typeof filterTabSchema>;
+
+// Only tab switches resize with a second spring. Branches keep following their own height animation.
+function FilterTabContents({ children, tab }: { children: ReactNode; tab: FilterTab }) {
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const previousHeight = useRef(0);
+  const reducedMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => {
+      previousHeight.current = content.offsetHeight;
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a tab change is the resize trigger; branch and keyboard resizing stay natural
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    const content = contentRef.current;
+    if (!surface || !content) return;
+    const from = surface.style.height
+      ? surface.getBoundingClientRect().height
+      : previousHeight.current;
+    const to = content.offsetHeight;
+    previousHeight.current = to;
+    if (!from || from === to || reducedMotion) {
+      surface.style.removeProperty('height');
+      return;
+    }
+    let cancelled = false;
+    const animation = animate(surface, { height: [from, to] }, springs.smooth);
+    void animation.then(() => {
+      if (!cancelled) surface.style.removeProperty('height');
+    });
+    return () => {
+      cancelled = true;
+      animation.stop();
+    };
+  }, [tab, reducedMotion]);
+  return (
+    <div ref={surfaceRef} className="flex min-h-0 flex-col justify-end overflow-hidden">
+      <div ref={contentRef} className="relative shrink-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FilterTabView({
+  children,
+  tab,
+  direction,
+}: {
+  children: ReactNode;
+  tab: FilterTab;
+  direction: number;
+}) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.section
+      id={`search-filter-view-${tab}`}
+      role="tabpanel"
+      aria-labelledby={`search-filter-tab-${tab}`}
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      custom={direction}
+      variants={{
+        enter: (travel: number) => ({ x: reducedMotion ? 0 : travel * 40, opacity: 0 }),
+        shown: { x: 0, opacity: 1 },
+        leave: (travel: number) => ({ x: reducedMotion ? 0 : -travel * 40, opacity: 0 }),
+      }}
+      initial="enter"
+      animate="shown"
+      exit="leave"
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+      className={cn(
+        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-6.25rem))] overflow-auto overscroll-contain',
+        !isPresent && 'absolute inset-x-0 top-0',
+      )}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
 export function SearchFilters({
   tags,
+  awaitingTags = false,
   filter,
   color,
   counts,
@@ -102,6 +204,7 @@ export function SearchFilters({
   onColorChange,
 }: {
   tags: readonly Tag[];
+  awaitingTags?: boolean;
   filter: TagSearchFilter;
   color: NoteColor | null;
   counts: ReadonlyMap<string, number>;
@@ -109,7 +212,16 @@ export function SearchFilters({
   onFilterChange: (filter: TagSearchFilter) => void;
   onColorChange: (color: NoteColor | null) => void;
 }) {
+  const [tab, setTab] = usePersistentState('catch-search-filter-tab', filterTabSchema, 'colors');
+  const [direction, setDirection] = useState(1);
+  const layoutId = useId();
   const selected = new Set(filter.ids);
+  function selectTab(next: FilterTab) {
+    if (next === tab) return;
+    haptics.selection();
+    setDirection(next === 'tags' ? 1 : -1);
+    setTab(next);
+  }
   function toggleTag(id: string) {
     haptics.selection();
     onFilterChange({
@@ -119,123 +231,212 @@ export function SearchFilters({
     });
   }
   return (
-    <div className="flex shrink-0 flex-col gap-3">
-      <section aria-labelledby="search-tags-heading" className="flex flex-col">
-        <h3
-          id="search-tags-heading"
-          className="mb-1 flex min-h-11 shrink-0 items-center gap-2 text-sm font-medium"
-        >
-          <Tags className="size-4 text-muted-foreground" aria-hidden />
-          Tags
-        </h3>
-        {filter.ids.length > 1 && (
-          <fieldset className="flex items-center gap-1 text-sm">
-            <legend className="sr-only">Match tags</legend>
-            <span className="mr-1 text-xs text-muted-foreground" aria-hidden>
-              Match
-            </span>
-            {(['any', 'all'] as const).map((match) => (
-              <button
-                key={match}
-                type="button"
-                aria-pressed={filter.match === match}
-                className={cn(control, filter.match === match && 'bg-foreground/8')}
-                onClick={() => onFilterChange({ ...filter, match })}
-              >
-                {match === 'any' ? 'Any tag' : 'All tags'}
-              </button>
-            ))}
-          </fieldset>
-        )}
-        {tags.length ? (
-          <TagTree
-            tags={tags}
-            searchPosition="bottom"
-            className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-26rem),16rem)]"
-            renderTag={(tag, path) => (
-              <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
-                <span
-                  data-note-color={path[0]?.color ?? 'default'}
-                  className={path[0]?.color ? 'text-note-icon' : 'text-muted-foreground'}
+    <div className="flex min-h-0 flex-col gap-2">
+      <FilterTabContents tab={tab}>
+        <AnimatePresence initial={false} custom={direction}>
+          <FilterTabView key={tab} tab={tab} direction={direction}>
+            {tab === 'tags' ? (
+              <div className="flex flex-col">
+                <h3
+                  id="search-tags-heading"
+                  className="mb-1 flex min-h-11 shrink-0 items-center gap-2 text-sm font-medium"
                 >
-                  <TagIcon name={path[0]?.icon} className="size-4" />
-                </span>
-                <span
-                  className="min-w-0 flex-1 truncate text-sm"
-                  title={path.map((item) => item.name).join(' / ')}
+                  <Tags className="size-4 text-muted-foreground" aria-hidden />
+                  Tags
+                </h3>
+                {filter.ids.length > 1 && (
+                  <fieldset className="flex items-center gap-1 text-sm">
+                    <legend className="sr-only">Match tags</legend>
+                    <span className="mr-1 text-xs text-muted-foreground" aria-hidden>
+                      Match
+                    </span>
+                    {(['any', 'all'] as const).map((match) => (
+                      <button
+                        key={match}
+                        type="button"
+                        aria-pressed={filter.match === match}
+                        className={cn(control, filter.match === match && 'bg-foreground/8')}
+                        onClick={() => onFilterChange({ ...filter, match })}
+                      >
+                        {match === 'any' ? 'Any tag' : 'All tags'}
+                      </button>
+                    ))}
+                  </fieldset>
+                )}
+                {awaitingTags && !tags.length ? (
+                  <p role="status" className="py-2 text-sm text-muted-foreground">
+                    Loading tags…
+                  </p>
+                ) : tags.length ? (
+                  <TagTree
+                    tags={tags}
+                    searchPosition="bottom"
+                    className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-16rem),16rem)]"
+                    renderTag={(tag, path) => (
+                      <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
+                        <span
+                          data-note-color={path[0]?.color ?? 'default'}
+                          className={path[0]?.color ? 'text-note-icon' : 'text-muted-foreground'}
+                        >
+                          <TagIcon name={path[0]?.icon} className="size-4" />
+                        </span>
+                        <span
+                          className="min-w-0 flex-1 truncate text-sm"
+                          title={path.map((item) => item.name).join(' / ')}
+                        >
+                          {tag.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {counts.get(tag.id) ?? 0}
+                        </span>
+                        <input
+                          type="checkbox"
+                          aria-label={path.map((item) => item.name).join(' / ')}
+                          checked={selected.has(tag.id)}
+                          onChange={() => toggleTag(tag.id)}
+                          className="size-4 shrink-0 accent-brand"
+                        />
+                      </label>
+                    )}
+                  />
+                ) : (
+                  <p className="py-2 text-sm text-muted-foreground">
+                    Create tags in Settings → Tags.
+                  </p>
+                )}
+                <label className="mt-2 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5">
+                  <Tags className="size-4 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">Untagged</span>
+                  <span className="text-xs text-muted-foreground">{untaggedCount}</span>
+                  <input
+                    type="checkbox"
+                    checked={filter.untagged}
+                    onChange={() =>
+                      onFilterChange({ ...filter, ids: [], untagged: !filter.untagged })
+                    }
+                    className="size-4 accent-brand"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div>
+                <h3
+                  id="search-colors-heading"
+                  className="mb-1 flex min-h-11 items-center gap-2 text-sm font-medium"
                 >
-                  {tag.name}
-                </span>
-                <span className="text-xs text-muted-foreground">{counts.get(tag.id) ?? 0}</span>
-                <input
-                  type="checkbox"
-                  aria-label={path.map((item) => item.name).join(' / ')}
-                  checked={selected.has(tag.id)}
-                  onChange={() => toggleTag(tag.id)}
-                  className="size-4 shrink-0 accent-brand"
-                />
-              </label>
+                  <Palette className="size-4 text-muted-foreground" aria-hidden />
+                  Colors
+                </h3>
+                {awaitingTags && (
+                  <p role="status" className="pb-2 text-sm text-muted-foreground">
+                    Loading tags…
+                  </p>
+                )}
+                <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
+                  {NOTE_COLORS.map((value) => {
+                    const linkedTag = tags.find(
+                      (tag) => tag.parentId === null && tag.color === value,
+                    );
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={awaitingTags}
+                        aria-label={COLOR_NAMES[value]}
+                        aria-pressed={linkedTag ? selected.has(linkedTag.id) : color === value}
+                        title={
+                          linkedTag
+                            ? `${COLOR_NAMES[value]}: ${linkedTag.name}`
+                            : COLOR_NAMES[value]
+                        }
+                        onClick={() => {
+                          if (linkedTag) {
+                            toggleTag(linkedTag.id);
+                            onColorChange(null);
+                          } else {
+                            haptics.selection();
+                            onColorChange(color === value ? null : value);
+                          }
+                        }}
+                        className="flex h-11 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                      >
+                        <span
+                          data-note-color={value}
+                          className={cn(
+                            'flex size-8 items-center justify-center rounded-full border bg-note',
+                            (linkedTag ? selected.has(linkedTag.id) : color === value)
+                              ? 'border-foreground/70 ring-2 ring-foreground/20 ring-offset-2 ring-offset-card'
+                              : 'border-foreground/15',
+                          )}
+                        >
+                          {value === 'default' ? (
+                            <Slash className="size-4 text-muted-foreground" aria-hidden />
+                          ) : linkedTag ? (
+                            <TagIcon name={linkedTag.icon} className="size-4 text-note-icon" />
+                          ) : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-          />
-        ) : (
-          <p className="py-2 text-sm text-muted-foreground">Create tags in Settings → Tags.</p>
-        )}
-        <label className="mt-2 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5">
-          <Tags className="size-4 text-muted-foreground" aria-hidden />
-          <span className="flex-1">Untagged</span>
-          <span className="text-xs text-muted-foreground">{untaggedCount}</span>
-          <input
-            type="checkbox"
-            checked={filter.untagged}
-            onChange={() => onFilterChange({ ...filter, ids: [], untagged: !filter.untagged })}
-            className="size-4 accent-brand"
-          />
-        </label>
-      </section>
-      <section
-        aria-labelledby="search-colors-heading"
-        className="shrink-0 border-t border-foreground/10 pt-3"
-      >
-        <h3 id="search-colors-heading" className="mb-1 flex items-center gap-2 text-sm font-medium">
-          <Palette className="size-4 text-muted-foreground" aria-hidden />
-          Colors
-        </h3>
-        <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
-          {NOTE_COLORS.map((value) => {
-            const linkedTag = tags.find((tag) => tag.parentId === null && tag.color === value);
-            return (
-              <button
-                key={value}
-                type="button"
-                aria-label={COLOR_NAMES[value]}
-                aria-pressed={color === value}
-                title={linkedTag ? `${COLOR_NAMES[value]}: ${linkedTag.name}` : COLOR_NAMES[value]}
-                onClick={() => {
-                  haptics.selection();
-                  onColorChange(color === value ? null : value);
-                }}
-                className="flex h-11 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span
-                  data-note-color={value}
-                  className={cn(
-                    'flex size-8 items-center justify-center rounded-full border bg-note',
-                    color === value
-                      ? 'border-foreground/70 ring-2 ring-foreground/20 ring-offset-2 ring-offset-card'
-                      : 'border-foreground/15',
-                  )}
-                >
-                  {value === 'default' ? (
-                    <Slash className="size-4 text-muted-foreground" aria-hidden />
-                  ) : linkedTag ? (
-                    <TagIcon name={linkedTag.icon} className="size-4 text-note-icon" />
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
+          </FilterTabView>
+        </AnimatePresence>
+      </FilterTabContents>
+      <LayoutGroup id={layoutId}>
+        <div
+          role="tablist"
+          aria-label="Filter type"
+          className="grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-foreground/5 p-1"
+          onKeyDown={(event) => {
+            const next =
+              event.key === 'Home'
+                ? 'colors'
+                : event.key === 'End'
+                  ? 'tags'
+                  : event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+                    ? tab === 'colors'
+                      ? 'tags'
+                      : 'colors'
+                    : null;
+            if (!next) return;
+            event.preventDefault();
+            selectTab(next);
+            document.getElementById(`search-filter-tab-${next}`)?.focus();
+          }}
+        >
+          {(['colors', 'tags'] as const).map((value) => (
+            <button
+              key={value}
+              id={`search-filter-tab-${value}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              aria-controls={`search-filter-view-${value}`}
+              tabIndex={tab === value ? 0 : -1}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => selectTab(value)}
+              className="relative flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {tab === value && (
+                <motion.span
+                  layoutId="filter-tab"
+                  aria-hidden
+                  className="absolute inset-0 rounded-lg bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                  transition={springs.snappy}
+                />
+              )}
+              {value === 'colors' ? (
+                <Palette className="relative size-4" aria-hidden />
+              ) : (
+                <Tags className="relative size-4" aria-hidden />
+              )}
+              <span className="relative">{value === 'colors' ? 'Colors' : 'Tags'}</span>
+            </button>
+          ))}
         </div>
-      </section>
+      </LayoutGroup>
     </div>
   );
 }
