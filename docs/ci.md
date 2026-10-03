@@ -13,6 +13,11 @@ in the same run. An unlabeled PR deliberately has a failing `validation` check; 
 the gate. Main pushes and manual CI requests always request the full suite. Release CI
 continues to reuse only a verified full pass for the exact main/tag commit.
 
+Optional [AI code review](ai-reviews.md) is requested separately with the `ai review`
+label. It can run while a PR is a draft, is advisory, and does not authorize merging.
+Wait for requested feedback and address useful findings before merge approval.
+The AI request job and cubic's review are not part of the required `validation` check.
+
 ## One-time GitHub setup
 
 1. Land this workflow change in `main`. Run it on a PR with `merge on pass` first so GitHub has a

@@ -1,0 +1,70 @@
+name: AI review
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: github.event.label.name == 'ai review'
+    name: Request cubic review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Use the base branch's workflow without checking out or executing PR code.
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const repo = context.repo;
+            const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...repo,
+              username: context.payload.sender.login,
+            });
+            if (!['admin', 'maintain', 'write'].includes(access.permission)) {
+              core.notice('Only maintainers with write access can request an AI review.');
+              return;
+            }
+
+            const pull_number = context.payload.pull_request.number;
+            const { data: pr } = await github.rest.pulls.get({ ...repo, pull_number });
+            if (pr.state !== 'open' || pr.base.ref !== 'main' ||
+                !pr.labels.some(label => label.name === 'ai review') ||
+                pr.head.sha !== context.payload.pull_request.head.sha) {
+              core.notice('The PR or label changed. Remove and reapply ai review when ready.');
+              return;
+            }
+
+            // A workflow retry should not spend another review on the same request.
+            const marker = `<!-- catch-ai-review-request:${context.runId} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...repo,
+              issue_number: pull_number,
+              per_page: 100,
+            });
+            if (comments.some(comment => comment.user?.login === 'github-actions[bot]' &&
+                comment.body?.includes(marker))) {
+              core.notice('This workflow run already requested a review.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              ...repo,
+              issue_number: pull_number,
+              body: [
+                '@cubic-dev-ai review this PR',
+                '',
+                `Requested via the ai review label for commit ${pr.head.sha}.`,
+                'Review feedback is advisory; merge on pass remains the approval to merge.',
+                marker,
+              ].join('\n'),
+            });
+            core.info(`Requested cubic review for PR #${pull_number} at ${pr.head.sha}.`);
