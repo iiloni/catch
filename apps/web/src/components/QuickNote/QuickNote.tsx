@@ -16,10 +16,12 @@ import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
+import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
-import { quickNote, tabFor } from '@/lib/dockState';
+import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { springs } from '@/lib/motion';
 import { createNote, discardIfEmpty, updateNote } from '@/lib/notes';
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
@@ -30,7 +32,11 @@ import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 type Destination = 'gallery' | 'deck';
 
 /** How the window leaves: back into the button, into the saved note's card, or at once. */
-type Exit = { kind: 'button' } | { kind: 'card'; noteId: string } | { kind: 'instant' };
+type Exit =
+  | { kind: 'button' }
+  | { kind: 'card'; noteId: string }
+  | { kind: 'instant' }
+  | { kind: 'capture' };
 
 /**
  * The quick-note window that opens above the dock from the compose button. Closing it
@@ -39,11 +45,12 @@ type Exit = { kind: 'button' } | { kind: 'card'; noteId: string } | { kind: 'ins
 export function QuickNote() {
   const state = quickNote.use();
   const open = state === 'open';
+  const retained = open || state === 'capture';
   const exit = useRef<Exit>({ kind: 'button' });
 
   return (
     <>
-      <AnimatePresence>
+      <AnimatePresence custom={exit.current.kind}>
         {open && (
           <motion.div
             key="scrim"
@@ -51,21 +58,29 @@ export function QuickNote() {
             // touch-none: swipes starting on the scrim never become a scroll or
             // overscroll, so the page behind can't stretch while the window is up.
             className="fixed inset-0 z-[65] touch-none bg-black/25"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: linkCaptureOrigin.get() ? 1 : 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit="leave"
+            variants={{
+              leave: (kind: Exit['kind']) => ({
+                opacity: 0,
+                transition: { duration: kind === 'capture' ? 0 : 0.25 },
+              }),
+            }}
             transition={{ duration: 0.25 }}
             // Tapping away saves, like the close button.
             onClick={() => quickNote.set('closed')}
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>{open && <QuickNoteWindow key="window" exit={exit} />}</AnimatePresence>
+      <AnimatePresence>
+        {retained && <QuickNoteWindow key="window" exit={exit} suspended={!open} />}
+      </AnimatePresence>
     </>
   );
 }
 
-function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
+function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspended: boolean }) {
   const [isPresent, safeToRemove] = usePresence();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: openNote } = useOpenNote();
@@ -78,6 +93,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
   // The footer's tool row shows either formatting or the color swatches.
   const [attachmentPanel, setAttachmentPanel] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const attachments = useNoteAttachments(draftId ?? '');
   const draft = useRef<string | null>(null);
   const [tools, setTools] = useState<'format' | 'color'>('format');
   const [destination, setDestination] = useState<Destination>(
@@ -101,6 +117,17 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     return `inset(0px ${target.right * p}px ${target.bottom * p}px 0px round ${28 - 12 * p}px)`;
   });
   const contentOpacity = useTransform(flight, [0, 0.5], [1, 0]);
+
+  useEffect(() => {
+    quickNoteCanSave.set(blocksHaveContent(content) || attachments.length > 0);
+  }, [content, attachments.length]);
+  useEffect(() => () => quickNoteCanSave.set(false), []);
+
+  useEffect(() => {
+    if (!suspended) {
+      exit.current = { kind: 'button' };
+    }
+  }, [suspended, exit]);
 
   function create() {
     const { content, color, destination } = latest.current;
@@ -142,13 +169,28 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     quickNote.set('closed');
   }
 
+  function captureLink() {
+    haptics.toggle();
+    linkCaptureReturnFocus.set(controls ? () => controls.focus() : null);
+    const box = ref.current?.getBoundingClientRect();
+    linkCaptureOrigin.set(
+      box ? { x: box.x, y: box.y, width: box.width, height: box.height, radius: 28 } : null,
+    );
+    const candidate = blocksHaveContent(latest.current.content) || draft.current ? create() : null;
+    draft.current = candidate && !discardIfEmpty(candidate) ? candidate : null;
+    setDraftId(draft.current);
+    exit.current = { kind: 'capture' };
+    quickNote.set('capture');
+    linkCaptureOpen.set(true);
+  }
+
   // Closing (from the button, a tap outside, a swipe or the back gesture) saves.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, when removed
   useEffect(() => {
     if (isPresent) return;
     const kind = exit.current.kind;
     exit.current = { kind: 'button' };
-    if (kind === 'instant') {
+    if (kind === 'instant' || suspended) {
       // Let the editor paint over this window first.
       requestAnimationFrame(() => requestAnimationFrame(() => safeToRemove()));
       return;
@@ -224,13 +266,13 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     ]);
   }
 
-  useBackHandler(isPresent, () => quickNote.set('closed'));
+  useBackHandler(isPresent && !suspended, () => quickNote.set('closed'));
 
   useQuickNoteSwipe({
     surface: ref,
     handle: handleRef,
     y,
-    enabled: isPresent,
+    enabled: isPresent && !suspended,
     onSave: () => quickNote.set('closed'),
     onExpand: expand,
   });
@@ -239,6 +281,8 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
     <motion.section
       ref={ref}
       aria-label="New note"
+      aria-hidden={suspended || undefined}
+      inert={suspended}
       data-note-color={color}
       onKeyDown={(event) => {
         if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) {
@@ -249,7 +293,8 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
       className={cn(
         'fixed inset-x-3 z-[70] mx-auto flex max-w-md flex-col rounded-[28px] bg-note text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]',
         'bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] max-h-[calc(100dvh-var(--safe-top)-var(--dock-bottom)-var(--dock-height)-2rem)]',
-        !isPresent && 'pointer-events-none',
+        (!isPresent || suspended) && 'pointer-events-none',
+        suspended && 'invisible',
       )}
       style={{
         x: flightX,
@@ -269,7 +314,11 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
       >
         <span className="h-1 w-9 rounded-full bg-foreground/20" />
       </div>
-      <motion.div className="flex min-h-0 flex-1 flex-col" style={{ opacity: contentOpacity }}>
+      <motion.div
+        data-quick-note-body
+        className="flex min-h-0 flex-1 flex-col"
+        style={{ opacity: contentOpacity }}
+      >
         <motion.div
           data-quick-note-scroll
           className="min-h-28 flex-1 overflow-y-auto overscroll-contain"
@@ -355,6 +404,7 @@ function QuickNoteWindow({ exit }: { exit: { current: Exit } }) {
                 {tools === 'format' ? (
                   <FormattingBar
                     controls={controls}
+                    onLink={captureLink}
                     attachmentsOpen={attachmentPanel}
                     onAttachments={() => {
                       ensureNote();

@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authRedirectSearchSchema } from '@/lib/authRedirect';
+import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { setServerUrl } from '@/lib/serverUrl';
 
 /** First-run screen for the Android app: which Catch server to connect to. */
@@ -28,7 +28,12 @@ function SetupPage() {
     }
     setServerUrl(url);
     // Reload so the auth client and sync pick up the new server.
-    window.location.assign(redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login');
+    window.location.assign(
+      authReturnTo(
+        redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login',
+        window.location.hash,
+      ),
+    );
   }
 
   return (

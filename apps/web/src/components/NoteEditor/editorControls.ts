@@ -43,6 +43,8 @@ export type EditorControls = {
   outdent(): void;
   undo(): void;
   redo(): void;
+  /** Restores focus with the editor's retained selection. */
+  focus(): void;
   /** Puts the caret at the end of the note, for taps on the blank space below it. */
   focusEnd(): void;
 };

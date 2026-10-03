@@ -81,27 +81,31 @@ describe('native share handoff', () => {
     stop();
   });
 
-  it('acknowledges a repeated native receipt without reopening or overwriting a consumed note', async () => {
-    const id = uuidv7();
-    await saveIncomingShare({
-      id,
-      title: '',
-      text: '',
-      url: '',
-      files: [],
-      userId: 'user-1',
-      complete: true,
-    });
-    native.getPending.mockResolvedValue({
-      shares: [{ id, title: 'Original', text: 'Old text', files: [] }],
-    });
-    const open = vi.fn(async () => {});
-    const stop = watchNativeShares(open, vi.fn());
-    await vi.waitFor(() => expect(native.acknowledge).toHaveBeenCalled());
-    expect(open).not.toHaveBeenCalled();
-    expect((await getIncomingShare(id))?.text).toBe('');
-    stop();
-  });
+  it.each([false, true])(
+    'acknowledges a repeated native receipt without reopening a completed share (dismissed: %s)',
+    async (dismissed) => {
+      const id = uuidv7();
+      await saveIncomingShare({
+        id,
+        title: '',
+        text: '',
+        url: '',
+        files: [],
+        userId: 'user-1',
+        complete: true,
+        dismissed,
+      });
+      native.getPending.mockResolvedValue({
+        shares: [{ id, title: 'Original', text: 'Old text', files: [] }],
+      });
+      const open = vi.fn(async () => {});
+      const stop = watchNativeShares(open, vi.fn());
+      await vi.waitFor(() => expect(native.acknowledge).toHaveBeenCalled());
+      expect(open).not.toHaveBeenCalled();
+      expect((await getIncomingShare(id))?.text).toBe('');
+      stop();
+    },
+  );
 
   it('does not load the native plugin in a browser or on iOS', () => {
     native.platform.mockReturnValue('web');

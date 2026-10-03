@@ -29,11 +29,25 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     outdent: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
+    focus: vi.fn(),
     focusEnd: vi.fn(),
   };
 }
 
 describe('FormattingBar', () => {
+  it('places link capture immediately after attachments in the quick-note toolbar', () => {
+    const onLink = vi.fn();
+    render(
+      <TooltipProvider>
+        <FormattingBar controls={fakeControls()} onLink={onLink} />
+      </TooltipProvider>,
+    );
+    const buttons = screen.getAllByRole('button');
+    const attach = buttons.indexOf(screen.getByRole('button', { name: 'Attach files' }));
+    expect(buttons[attach + 1]).toHaveAttribute('aria-label', 'Save link');
+    fireEvent.click(buttons[attach + 1]!);
+    expect(onLink).toHaveBeenCalledOnce();
+  });
   it('opens the attachment panel without opening the slash menu', () => {
     const controls = fakeControls();
     const onAttachments = vi.fn();

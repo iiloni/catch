@@ -9,7 +9,7 @@ async function stageShare(page: Page, files = false) {
     );
     const form = new FormData();
     form.set('title', 'Shared trip');
-    form.set('text', 'Pack light\nhttps://example.com/trip');
+    form.set('text', files ? 'Pack light\nhttps://example.com/trip' : 'Pack light');
     if (files) {
       form.append('files', new File(['tickets'], 'tickets.txt', { type: 'text/plain' }));
       form.append('files', new File(['map'], 'map.txt', { type: 'text/plain' }));

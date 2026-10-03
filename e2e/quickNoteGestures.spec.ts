@@ -13,6 +13,7 @@ async function swipe(touch: CDPSession, x: number, y: number, delta: number) {
   const distances = [2, 4, 7, 10, 14, 20, 30, 45, 60, 80, 100, 120]
     .filter((distance) => distance < Math.abs(delta))
     .concat(Math.abs(delta));
+  // CDP already waits for a frame; another delay turns the small initial steps into a hold.
   for (const distance of distances) {
     timestamp += 0.016;
     await touch.send('Input.dispatchTouchEvent', {
@@ -20,7 +21,6 @@ async function swipe(touch: CDPSession, x: number, y: number, delta: number) {
       touchPoints: [{ x, y: y + Math.sign(delta) * distance, id: 1 }],
       timestamp,
     });
-    await new Promise((resolve) => setTimeout(resolve, 16));
   }
   // Rest before release so Chrome does not consume the next tap after a fling.
   await new Promise((resolve) => setTimeout(resolve, 100));

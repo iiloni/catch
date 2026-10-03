@@ -25,8 +25,9 @@ import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection } from '@/lib/collections';
-import { editorControls, noteDockPanelOpen } from '@/lib/dockState';
+import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { linkCaptureControls } from '@/lib/linkCapture';
 import { useNoteLinks } from '@/lib/linkPreviews';
 import { afterPaint, animateSteady, curves, springs } from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
@@ -140,6 +141,8 @@ const leavingPanes = new Set<() => void>();
 const SWAP_MS = 250;
 
 function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
+  const popupState = quickNote.use();
+  const capture = linkCaptureControls.use();
   const [isPresent, safeToRemove] = usePresence();
   const [, rerender] = useState(0);
   // The back button, Escape and an outside click can all fire for one close.
@@ -489,6 +492,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         )}
         <DialogPrimitive.Content
           asChild
+          inert={popupState === 'open' || popupState === 'capture' || Boolean(capture)}
           // Focusing the editor would raise the keyboard before the user asks for it.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
@@ -509,7 +513,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             if (
               !target.isConnected ||
               target.closest(
-                '[data-dock], [data-sonner-toaster], [data-link-overlay], [data-attachment-menu], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
+                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
               )
             ) {
               event.preventDefault();

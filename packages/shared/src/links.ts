@@ -183,5 +183,19 @@ export const refreshLinkPreviewSchema = z.object({
 
 export type RefreshLinkPreview = z.infer<typeof refreshLinkPreviewSchema>;
 
+/** Optional metadata for a link being captured, before a note exists. */
+export const linkIntakeSchema = linkPreviewSchema.pick({
+  title: true,
+  description: true,
+  siteName: true,
+  imageHash: true,
+  imageWidth: true,
+  imageHeight: true,
+  iconHash: true,
+  hue: true,
+});
+
+export type LinkIntake = z.infer<typeof linkIntakeSchema>;
+
 /** Links whose previews a note does not show, by normalized URL. */
 export const hiddenLinksSchema = z.array(z.string().max(MAX_URL_LENGTH)).max(200);

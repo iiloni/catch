@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authRedirectSearchSchema } from './authRedirect';
+import { authRedirectSearchSchema, authReturnTo } from './authRedirect';
 
 describe('authRedirectSearchSchema', () => {
   it.each([
@@ -28,4 +28,12 @@ describe('authRedirectSearchSchema', () => {
   ])('ignores invalid or external destinations: %j', (redirect) => {
     expect(authRedirectSearchSchema.parse({ redirect }).redirect).toBeUndefined();
   });
+});
+
+it('retains capture fragments without replacing a destination’s own fragment', () => {
+  expect(authReturnTo('/capture', '#url=https%3A%2F%2Fexample.com&text=Selected')).toBe(
+    '/capture#url=https%3A%2F%2Fexample.com&text=Selected',
+  );
+  expect(authReturnTo('/?note=one#details', '#other')).toBe('/?note=one#details');
+  expect(authReturnTo(undefined, '#unrelated')).toBe('/');
 });

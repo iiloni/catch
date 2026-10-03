@@ -5,7 +5,11 @@ Status: accepted (2026-10-01)
 ## Decisions
 
 Catch receives text, links, images, video, audio and files from other apps. One share creates
-one Gallery note and opens it for editing; multiple files and captions stay together.
+one Gallery note; multiple files and captions stay together. Text and file shares open the
+note immediately. A single web link without files opens the link capture form (ADR 0006),
+fetches page details automatically and waits for an explicit Save. Shared titles and any
+surrounding text prefill the title and notes; the original URL, including its fragment, is
+preserved. Shares containing several distinct addresses retain the ordinary note flow.
 Outgoing sharing and adding a share to an existing note are separate features.
 
 **Two entry points, one note flow.** The native Android app declares SEND and SEND_MULTIPLE
@@ -38,6 +42,14 @@ cannot acknowledge an offline save and instead asks the user to close the other 
 retry. HTML is treated as literal text; ordinary web URLs become BlockNote links.
 Native shares are prepared in the background while the signed-in layout stays mounted,
 so replacing an open note flushes its autosave and closing a composer saves its draft.
+Link captures use the original share id on Save, including retries after storage errors.
+They stay in the inbox until saving succeeds or the user cancels. Cancellation records an
+account-bound dismissed receipt without creating a note; duplicate native delivery and
+reload do not resurrect the capture. Receipts already exist when an edited note is reopened,
+so repeating a completed share never reapplies metadata over later edits. Pending captures
+queue in delivery order; repeated delivery cannot replace an open form's edits.
+When closing a manual capture returns to its quick-note editor, queued shares wait until that
+editor closes so they do not interrupt the restored draft.
 Account-bound staging and receipts are cleared with that account's local data on sign-out.
 
 ## Compatibility
@@ -45,6 +57,8 @@ Account-bound staging and receipts are cleared with that account's local data on
 No REST, shape, persisted note encoding, or outbox format changes. Existing servers receive
 ordinary protocol-1 notes and attachments; existing clients read those notes normally.
 API protocol and collection schema versions stay unchanged.
+The device inbox gains an optional dismissed flag; existing staged records need no migration.
+Page metadata remains optional, so an older server or an offline device can still save links.
 
 ## Verification
 

@@ -33,6 +33,7 @@ describe('HistoryToolbar', () => {
       outdent: vi.fn(),
       undo: vi.fn(),
       redo: vi.fn(),
+      focus: vi.fn(),
       focusEnd: vi.fn(),
     };
     function history(canUndo: boolean, canRedo: boolean) {

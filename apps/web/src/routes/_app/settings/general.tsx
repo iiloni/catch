@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Link2 } from 'lucide-react';
+import { BookmarkletSetup } from '@/components/BookmarkletSetup/BookmarkletSetup';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { ThemePicker } from '@/components/ThemePicker/ThemePicker';
 import { Switch } from '@/components/ui/switch';
@@ -39,6 +40,7 @@ function GeneralSettings() {
           />
         </SettingsRow>
       </SettingsSection>
+      <BookmarkletSetup />
     </div>
   );
 }

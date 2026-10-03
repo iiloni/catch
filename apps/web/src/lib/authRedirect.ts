@@ -8,3 +8,9 @@ export const authRedirectSearchSchema = z.object({
     .optional()
     .catch(undefined),
 });
+
+/** Carry fragment-only capture data through full auth/setup reloads without logging it. */
+export function authReturnTo(destination: string | undefined, fragment: string): string {
+  const path = destination ?? '/';
+  return destination && !path.includes('#') && fragment.startsWith('#') ? path + fragment : path;
+}

@@ -384,7 +384,7 @@ export function write(mutate: () => void): Transaction {
   return transaction;
 }
 
-/** Incoming shares must survive a reload before they leave their staging inbox. */
+/** Captures must survive a reload or popup closing before confirming success. */
 export async function waitForWriteStored(transaction: Transaction): Promise<void> {
   await waitForQueuedWrite(transaction.id, transaction.isPersisted.promise);
 }
@@ -401,7 +401,7 @@ export async function waitForQueuedWrite(id: string, completion: Promise<unknown
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     if (!finished)
-      throw new Error('Could not save the share. Close other Catch windows and try again.');
+      throw new Error('Could not save on this device. Close other Catch windows and try again.');
     return persisted;
   })();
   await Promise.race([persisted, queued]);
@@ -447,6 +447,12 @@ export function useSyncedNotes() {
     };
   }, []);
   return synced;
+}
+
+/** Notes available on this device, including local writes, for capture duplicate checks. */
+export function useCaptureNotes() {
+  const { data = [] } = useLiveQuery({ query: (q) => q.from({ note: notesCollection }) });
+  return data;
 }
 
 export function useSyncedAttachments() {

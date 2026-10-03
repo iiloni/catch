@@ -15,6 +15,7 @@ export const incomingShareSchema = z.object({
   files: z.array(sharedFileSchema),
   userId: z.string().nullable(),
   complete: z.boolean(),
+  dismissed: z.boolean().optional(),
 });
 export type IncomingShare = z.infer<typeof incomingShareSchema>;
 

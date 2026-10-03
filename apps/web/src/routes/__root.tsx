@@ -13,8 +13,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
+import { enqueueLinkCapture } from '@/lib/linkCapture';
 import { watchNativeShares } from '@/lib/nativeShares';
-import { receiveShare } from '@/lib/receiveShare';
+import { prepareShare } from '@/lib/receiveShare';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { pendingIncomingShares } from '@/lib/shareInbox';
 import { useSystemBarsStyle } from '@/lib/systemBars';
@@ -52,10 +53,22 @@ function Root() {
     };
     const open = async (id: string) => {
       if (stopped) return;
+      if (
+        window.location.pathname === '/share' &&
+        new URLSearchParams(window.location.search).get('id') === id
+      )
+        return;
       if (getAuthToken() && getSignedInUser() && !needsServerUrl()) {
-        let note: string;
         try {
-          note = await receiveShare(id);
+          const share = await prepareShare(id);
+          if (stopped || share.kind === 'dismissed') return;
+          // Keep the signed-in layout mounted so open notes and composer drafts can flush.
+          if (share.kind !== 'link' || quickNote.get() !== 'capture') quickNote.set('closed');
+          if (share.kind === 'link') {
+            if (['/share', '/capture', '/login', '/setup'].includes(window.location.pathname))
+              await navigate({ to: '/' });
+            if (!stopped) enqueueLinkCapture(share);
+          } else await navigate({ to: '/', search: { note: share.id } });
         } catch (error) {
           if (!stopped)
             toast.error(
@@ -71,11 +84,6 @@ function Root() {
             );
           return;
         }
-        if (stopped) return;
-        // Keep the signed-in layout mounted: closing its composer saves a draft, and
-        // swapping an editor flushes that note's autosave before showing the share.
-        quickNote.set('closed');
-        await navigate({ to: '/', search: { note } });
       } else {
         await navigate({ to: '/share', search: { id } });
       }
