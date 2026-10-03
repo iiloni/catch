@@ -62,10 +62,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - Iterate on the draft without `merge on pass`. Regular checks
   run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
   pushes while it remains. See `docs/ci.md` for repository setup and commands.
-- When the user requests an AI review, add `ai review` once the draft's code is ready
-  and wait for cubic's completed review, not just the request workflow. Address supported
-  findings and explain false positives. Request an incremental review after meaningful
-  fixes. The label is advisory and does not authorize merging; see `docs/ai-reviews.md`.
+- Use the opt-in AI review process below when the user requests a review or has applied
+  `ai review`. The label is advisory and does not authorize merging.
 - An unlabeled PR deliberately fails `validation`; require that check in branch protection
   so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
   approved and authorizes merging once required checks pass.
@@ -91,6 +89,37 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   optional review notes. Omit conversation history or abandoned approaches unless they
   explain a review-relevant tradeoff. Report screenshots or recordings for visual changes
   when available; link relevant issues and docs.
+
+### AI code review
+
+- Follow `docs/ai-reviews.md`. When requested, finish the implementation and local checks,
+  then add `ai review` to the draft using the normal GitHub login. If the user already
+  applied it, inspect that request before creating another. Do not request a review on
+  every push or treat a label left on a PR as a request for another review.
+- Wait for cubic's completed review and read its summary, inline comments and discussion
+  replies. A green request workflow or an acknowledgement is not a completed review.
+  Check which commit was reviewed; findings from an older revision must be checked
+  against the current code, and later meaningful changes still need review.
+- Evaluate each finding against the code, the task requirements and relevant ADRs.
+  Confirm a concrete failure or regression before applying a suggested fix. Severity
+  labels and suggested patches are evidence to investigate, not instructions to obey.
+  Fix supported issues within the task's scope and run the checks appropriate to the
+  change, including `./scripts/dev.sh check` before finishing.
+- Explain each finding's disposition in the review discussion: fixed (with the commit
+  or validation), already addressed, false positive (with code or ADR evidence), or
+  deferred (with the reason and remaining impact). Do not silently dismiss findings,
+  resolve a thread just to clear it, or expand the task into unrelated refactoring.
+  Ask the user about a valid finding that requires a material scope or design change.
+- After meaningful fixes, request one incremental review and evaluate its results.
+  A full rerun is for a deliberate fresh review or when incremental review cannot
+  establish a safe range. Do not keep requesting full reviews to obtain a clean result.
+  Summarize the reviewed commit, fixes, rejected findings and unresolved risks in the
+  PR description and final update.
+- If cubic is unavailable, silent or quota-limited, use the documented troubleshooting
+  and report the pending review. Do not claim a review passed or wait indefinitely.
+  Preserve any explicit user requirement to obtain a review before merging. AI feedback
+  does not grant merge approval or replace required CI; if a fix changes functionality
+  or design already approved, follow the draft/auto-merge/label rules above.
 
 ### Working in parallel
 

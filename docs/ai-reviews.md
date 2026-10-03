@@ -83,6 +83,35 @@ Retries of the same workflow run do not post duplicate requests. Removing the
 label does not cancel a request already posted; use cubic's **Cancel AI review**
 control to stop a running review.
 
+## Handling review results
+
+Agents follow the [AI review instructions in AGENTS.md](../AGENTS.md#ai-code-review)
+when you request a review or apply the label. Review remains opt-in; agents do not
+spend another review simply because a label is still present after a push.
+
+Read cubic's completed summary, inline findings and follow-up discussion, and
+confirm the reviewed revision. `gh pr view <number> --comments` shows the PR
+conversation; fetch inline review comments separately:
+
+```bash
+gh api --paginate repos/iiloni/catch/pulls/<number>/comments
+gh api --paginate repos/iiloni/catch/pulls/<number>/reviews
+```
+
+Check each claim against the current implementation, requirements and relevant
+ADRs. Fix reproducible bugs and supported regressions within the task's scope;
+do not automatically apply every suggestion. Reply with the disposition and
+evidence: fixed, already addressed, false positive, or deferred with its remaining
+impact. A thread should reflect the actual outcome, not be resolved merely to
+clear the review. Material scope or design changes need the maintainer's decision.
+
+Run relevant checks after fixes and request an incremental review for meaningful
+changes. Summarize the reviewed commit, fixes, rejected findings and outstanding
+risks in the PR description and final update. If cubic cannot complete a review,
+report it as pending and use the troubleshooting below. A clean AI review does
+not authorize merging; fixes that change approved behavior still follow Catch's
+existing process for returning to draft and obtaining renewed approval.
+
 ## Troubleshooting
 
 - **No workflow run:** confirm the workflow is on `main`, the PR targets `main`,
