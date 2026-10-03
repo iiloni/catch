@@ -3,19 +3,24 @@ import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Clock, SearchX } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
-import { BrowseTags, SearchFilters } from '@/components/SearchFilters/SearchFilters';
+import {
+  ActiveSearchFilters,
+  BrowseTags,
+  SearchFilterPanel,
+  SearchFilters,
+} from '@/components/SearchFilters/SearchFilters';
 import {
   boardColumnsCollection,
   notesCollection,
   useNoteTagAssignments,
   useTags,
 } from '@/lib/collections';
-import { searchQuery } from '@/lib/dockState';
+import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
 import { springs } from '@/lib/motion';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
@@ -33,6 +38,7 @@ const recentSchema = z.array(z.string()).max(8);
 
 function SearchPage() {
   const query = searchQuery.use();
+  const filtersOpen = searchFiltersOpen.use();
   const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<TagSearchFilter>({ ids: [], match: 'any', untagged: false });
   const [color, setColor] = useState<NoteColor | null>(null);
@@ -75,23 +81,59 @@ function SearchPage() {
     [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
   );
   const searching = query.trim() !== '' || color !== null || browsing;
+  const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
+  useEffect(() => {
+    searchFilterCount.set(filterCount);
+  }, [filterCount]);
+  useEffect(
+    () => () => {
+      searchFiltersOpen.set(false);
+      searchFilterCount.set(0);
+    },
+    [],
+  );
+
+  function closeFilters() {
+    searchFiltersOpen.set(false);
+  }
 
   function openResult(result: SearchResult, card: HTMLElement) {
     const trimmed = query.trim();
     if (trimmed) setRecent([trimmed, ...recent.filter((item) => item !== trimmed)].slice(0, 8));
+    closeFilters();
     open(result.note.id, card);
   }
 
   return (
     <>
+      <AnimatePresence>
+        {filtersOpen && (
+          <SearchFilterPanel
+            filtered={filterCount > 0}
+            onClose={closeFilters}
+            onClear={() => {
+              setFilter({ ids: [], match: 'any', untagged: false });
+              setColor(null);
+            }}
+          >
+            <SearchFilters
+              tags={tags}
+              filter={filter}
+              color={color}
+              counts={counts}
+              untaggedCount={untaggedCount}
+              onFilterChange={setFilter}
+              onColorChange={setColor}
+            />
+          </SearchFilterPanel>
+        )}
+      </AnimatePresence>
       <TabPageHeader title="Search" />
       <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 pb-6 sm:px-6">
-        <SearchFilters
+        <ActiveSearchFilters
           tags={tags}
           filter={filter}
           color={color}
-          counts={counts}
-          untaggedCount={untaggedCount}
           onFilterChange={setFilter}
           onColorChange={setColor}
         />

@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
-import { card, createNote, noteToolbar, openNote, seedNotes, signIn, signUp } from './helpers';
+import {
+  card,
+  createNote,
+  noteToolbar,
+  openNote,
+  seedNotes,
+  settledBox,
+  signIn,
+  signUp,
+} from './helpers';
 
 test.setTimeout(90_000);
 
@@ -453,7 +462,7 @@ test('wide tag cards, copied assignments and color search follow the primary bra
     await expect(copy.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
   }
   await page.goto('/search');
-  await page.getByRole('button', { name: 'Colors', exact: true }).click();
+  await page.getByRole('button', { name: 'Filter notes', exact: true }).click();
   await page.getByRole('button', { name: 'Blue', exact: true }).click();
   const results = page.getByRole('region', { name: 'Results' }).getByRole('article');
   await expect(results).toHaveCount(2);
@@ -627,39 +636,134 @@ test('search combines descendant tags, any and all matching, text, colors and un
       .getByRole('button'),
   ).toHaveCount(2);
   const filters = page.getByRole('region', { name: 'Search filters' });
-  await filters.getByRole('button', { name: /^Tags/ }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await filters.getByRole('textbox', { name: 'Find tags' }).fill('Ideas');
   await filters.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
   await expect(notes).toHaveCount(3);
   await filters.getByRole('button', { name: 'All tags', exact: true }).click();
   await expect(notes).toHaveCount(1);
-  await filters.getByRole('button', { name: /^Tags/ }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await page.getByRole('textbox', { name: 'Search notes' }).fill('release');
   await expect(notes).toHaveCount(1);
-  await filters.getByRole('button', { name: 'Colors', exact: true }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await filters.getByRole('button', { name: 'Blue', exact: true }).click();
   await expect(notes).toHaveCount(1);
   await filters.getByRole('button', { name: 'Green', exact: true }).click();
   await expect(notes).toHaveCount(0);
-  await filters.getByRole('button', { name: 'Remove color filter' }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await page.getByRole('button', { name: 'Remove color filter' }).click();
   await expect(notes).toHaveCount(1);
   await page.getByRole('textbox', { name: 'Search notes' }).clear();
-  await filters.getByRole('button', { name: 'Remove Work filter' }).click();
+  await page.getByRole('button', { name: 'Remove Work filter' }).click();
   await expect(notes).toHaveCount(2);
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await filters.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await browse.getByRole('button', { name: 'Browse Untagged' }).click();
   await expect(notes).toHaveCount(1);
   await expect(results).toContainText('Loose thought');
-  await expect(filters.getByRole('button', { name: 'Colors', exact: true })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await expect(filters.getByRole('heading', { name: 'Colors' })).toBeVisible();
   await filters.getByRole('button', { name: 'No color', exact: true }).click();
   await expect(notes).toHaveCount(1);
   // Filtering remains local while the API is unavailable.
   await page.route('**/api/**', (route) => route.abort());
-  await filters.getByRole('button', { name: 'Remove Untagged filter' }).click();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await page.getByRole('button', { name: 'Remove Untagged filter' }).click();
   await expect(notes).toHaveCount(2);
   await page.getByRole('textbox', { name: 'Search notes' }).fill('sketches');
   await expect(notes).toHaveCount(1);
+});
+
+test('search filter glass stays above the keyboard and closes before leaving search', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  await addTag(request, headers, 'Projects', work);
+  for (let index = 0; index < 10; index++) await addTag(request, headers, `Other ${index}`, work);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Search notes' });
+  const button = page.getByRole('button', { name: 'Filter notes' });
+  await expect(page.getByRole('search').getByRole('button', { name: 'Filter notes' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: 'New note', exact: true })).toHaveCount(0);
+  // Sample real frames to catch a panel that snaps in or out instead of expanding.
+  for (const opening of [true, false]) {
+    const heights = await button.evaluate(async (button) => {
+      button.click();
+      const heights: number[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        heights.push(
+          document.getElementById('search-filter-panel')?.parentElement?.getBoundingClientRect()
+            .height ?? 0,
+        );
+      }
+      return heights;
+    });
+    const maximum = Math.max(...heights);
+    expect(heights.some((height) => height > maximum * 0.15 && height < maximum * 0.85)).toBe(true);
+    if (opening) expect(heights.at(-1)!).toBeGreaterThan(maximum * 0.9);
+    else expect(heights.at(-1)!).toBeLessThan(maximum * 0.1);
+  }
+  await button.click();
+  await expect(input).toBeFocused();
+  const panel = page.getByRole('region', { name: 'Search filters' });
+  await expect(panel.getByRole('heading', { name: 'Tags', exact: true })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: 'Colors', exact: true })).toBeVisible();
+  await expect(panel).toHaveClass(/glass/);
+  await expect(panel.getByRole('heading', { name: 'Filters', exact: true })).toHaveCount(0);
+  await expect(
+    panel.getByText('Includes primary tags, secondary tags and descendants.'),
+  ).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Blue', exact: true }).locator('svg')).toHaveCount(
+    1,
+  );
+  await settledBox(panel.locator('..'));
+  await page.screenshot({ path: testInfo.outputPath('search-filters.png') });
+  const search = panel.getByRole('textbox', { name: 'Find tags' });
+  await search.click();
+  await page.evaluate(async () => {
+    const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+    keyboardHeight.jump(320);
+  });
+  await expect(search).toBeFocused();
+  await page.keyboard.type('Projects');
+  await panel.getByRole('checkbox', { name: 'Work / Projects' }).check();
+  await panel.getByRole('button', { name: 'Blue', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Blue', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await search.click();
+  await search.clear();
+  await panel.getByRole('button', { name: 'Collapse Work' }).click();
+  await expect(panel.getByRole('checkbox', { name: 'Work / Projects' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Expand Work' }).click();
+  await expect(panel.getByRole('checkbox', { name: 'Work / Projects' })).toBeChecked();
+  await search.click();
+  const bounds = await panel.boundingBox();
+  const keyboardTop = await page.evaluate(() => innerHeight - 320);
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(keyboardTop);
+  await page.screenshot({ path: testInfo.outputPath('search-filters-keyboard.png') });
+  await search.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(button).toBeFocused();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole('button', { name: 'Remove Projects filter' })).toBeVisible();
+  await button.click();
+  await input.click();
+  await expect(panel).toHaveCount(0);
+  await button.click();
+  await page.getByRole('button', { name: 'Close search' }).click();
+  await expect(page).not.toHaveURL(/\/search$/);
+  await expect(panel).toHaveCount(0);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await expect(button).toHaveAttribute('aria-expanded', 'false');
 });

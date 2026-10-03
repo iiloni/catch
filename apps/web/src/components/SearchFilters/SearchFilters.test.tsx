@@ -43,7 +43,6 @@ describe('search filters', () => {
       />,
       { wrapper: TooltipProvider },
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Tags\s*1$/ }));
     expect(screen.getByRole('checkbox', { name: 'Work / Projects' })).toBeChecked();
     const ancestor = screen.getByRole('checkbox', { name: 'Work' });
     expect(ancestor).toBeEnabled();
@@ -53,7 +52,10 @@ describe('search filters', () => {
       match: 'any',
       untagged: false,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Colors' }));
+    const linkedSwatch = screen.getByRole('button', { name: 'Blue' });
+    expect(linkedSwatch).toHaveAttribute('title', 'Blue: Work');
+    expect(linkedSwatch.querySelector('svg')).toHaveClass('lucide-briefcase');
+    expect(screen.getByRole('button', { name: 'Green' }).querySelector('svg')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'No color' }));
     expect(onColorChange).toHaveBeenLastCalledWith('default');
     expect(onFilterChange).toHaveBeenCalledTimes(1);
@@ -78,7 +80,6 @@ describe('search filters', () => {
       match: 'all',
       untagged: false,
     });
-    fireEvent.click(screen.getByRole('button', { name: /^Tags\s*2$/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /^Untagged/ }));
     expect(onFilterChange).toHaveBeenLastCalledWith({ ids: [], match: 'any', untagged: true });
   });
