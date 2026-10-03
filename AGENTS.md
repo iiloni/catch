@@ -62,6 +62,14 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   design, disable pending auto-merge, return the PR to draft, remove the label and obtain
   renewed approval. Keep the branch up to date as required checks rerun.
   The local `./scripts/dev.sh check` requirement still applies.
+- Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
+  concrete problem and resulting behavior; include a before/after example when useful.
+  Summarize the final scope, relevant validation (passed, failed or still pending) and
+  material limitations. Scale detail to the change: simple PRs need only a short paragraph
+  plus validation. Use a Conventional Commit title, update the title/description when scope
+  changes, follow any repository PR template and omit conversation history or abandoned
+  approaches unless they explain a review-relevant tradeoff. Report screenshots or
+  recordings for visual changes when available; link relevant issues and docs.
 
 ### Working in parallel
 
