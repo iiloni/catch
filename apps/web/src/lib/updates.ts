@@ -4,6 +4,7 @@ import { androidUpdateAvailable, type VersionInfo, versionInfoSchema } from '@ca
 import { api } from './api';
 import { checkCompatibility } from './compatibility';
 import { createStore } from './store';
+import { checkForWebUpdates } from './webUpdates';
 
 const NativeUpdates = registerPlugin<{
   getVersion(): Promise<unknown>;
@@ -45,6 +46,7 @@ export function checkForUpdates() {
         ? NativeUpdates.getVersion().then((result) => versionInfoSchema.parse(result))
         : Promise.resolve(null),
       checkCompatibility(true),
+      checkForWebUpdates(),
     ]);
     updates.set({
       ...updates.get(),

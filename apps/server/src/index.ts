@@ -22,6 +22,14 @@ const app = new Hono()
   .route('/', createApp());
 
 if (webDist && indexHtml !== null) {
+  app.use('/*', async (c, next) => {
+    if (c.req.path === '/sw.js' || c.req.path === '/build.json') {
+      c.header('Cache-Control', 'no-store');
+    } else if (!c.req.path.startsWith('/assets/')) {
+      c.header('Cache-Control', 'no-cache');
+    }
+    await next();
+  });
   app.use('/*', serveStatic({ root: webDist }));
   // Client-side routes fall back to the SPA shell.
   app.get('*', (c) => (c.req.path.startsWith('/api/') ? c.notFound() : c.html(indexHtml)));
