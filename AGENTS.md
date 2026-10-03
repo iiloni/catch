@@ -50,6 +50,12 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   on `main`, create a feature branch there. Commit and push reviewable changes, open the
   draft PR and include its link in progress updates. Reuse an existing PR for the branch
   rather than creating a duplicate. Read-only questions do not require a PR.
+- Add a small set of existing descriptive labels when opening the draft: `enhancement`
+  for features or improvements, `bug` for defect fixes, `documentation` for substantive
+  documentation changes and `accessibility` for accessibility work. Choose labels that
+  reflect the actual scope; do not create new labels or apply unrelated issue-status
+  labels during routine PR work. Set descriptive labels before `merge on pass`, because
+  label edits also trigger CI. Descriptive labels do not authorize merging.
 - Iterate on the draft without `merge on pass`. Regular checks
   run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
   pushes while it remains. See `docs/ci.md` for repository setup and commands.

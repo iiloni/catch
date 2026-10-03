@@ -62,6 +62,21 @@ reviewable changes and opens a draft PR. After reviewing functionality and desig
 `merge on pass` yourself or tell the agent the feature is approved for merging after tests
 pass. The agent then handles validation and merging under the branch rules.
 
+Agents add existing descriptive labels while opening a draft, using a small set that
+matches the change:
+
+| Label | Use for |
+| --- | --- |
+| `enhancement` | New features or improvements |
+| `bug` | Fixing defects |
+| `documentation` | Substantive documentation changes |
+| `accessibility` | Accessibility improvements or fixes |
+
+These labels describe scope. `merge on pass` records approval and merge authorization.
+Set descriptive labels before requesting full validation, since later label edits also
+trigger CI. Ordinary PR work does not require inventing new labels or adding unrelated
+labels such as `duplicate`, `invalid` or `wontfix`.
+
 1. Work on a branch and open a draft PR targeting `main`. Push iterations while reviewing
    functionality and design. Leave `merge on pass` absent; no Docker E2E runners start.
 2. Once functionality and design are approved for merging after tests pass, update the
