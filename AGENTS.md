@@ -62,6 +62,10 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - Iterate on the draft without `merge on pass`. Regular checks
   run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
   pushes while it remains. See `docs/ci.md` for repository setup and commands.
+- When the user requests an AI review, add `ai review` once the draft's code is ready
+  and wait for cubic's completed review, not just the request workflow. Address supported
+  findings and explain false positives. Request an incremental review after meaningful
+  fixes. The label is advisory and does not authorize merging; see `docs/ai-reviews.md`.
 - An unlabeled PR deliberately fails `validation`; require that check in branch protection
   so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
   approved and authorizes merging once required checks pass.
