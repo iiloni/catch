@@ -17,11 +17,20 @@ and preview must advance independently, including preview versions ahead of stab
 - `scripts/release.sh` creates annotated local tags on HEAD. Bumps start from the highest
   stable or preview tag reachable from HEAD; `stable promote` preserves a tested preview's
   version and commit, including an earlier preview. The helper never fetches or pushes.
-- Ordinary CI runs checks and E2E on main pushes and pull requests. The tag-triggered
+- Ordinary CI runs checks on every pull request update; the `merge on pass` label records
+  approval of functionality and design, authorizes merging once required checks pass and
+  opts a PR into full Docker-backed E2E, including later pushes while the label remains.
+  Fixes that change approved functionality or design require renewed approval. The always-running
+  `validation` gate fails when E2E is unrequested, skipped, cancelled or unsuccessful; it
+  is the required branch check (see [CI setup](../ci.md)). PRs test GitHub's temporary merge
+  commit and require an up-to-date branch before merging. New PR runs cancel superseded
+  PR runs. Main pushes, manual CI requests and merge groups request checks and full E2E
+  without a label. PRs and merge groups always test their combined code rather than reusing
+  main/tag CI. The tag-triggered
   release workflow waits for successful CI at the exact tagged commit and verifies checks
   and both E2E projects succeeded. If no CI run appears within a minute, it requests CI
-  on the release tag, including for an intermediate commit in a batch push. CI runs for
-  the same commit queue without cancellation and check for a previous pass before running
+  on the release tag, including for an intermediate commit in a batch push. Main/tag CI runs
+  for the same commit queue without cancellation and check for a previous pass before running
   tests, so competing push and release requests do not duplicate E2E. A release waits up
   to 30 minutes; without a previous pass, unsuccessful CI blocks release until rerun
   successfully.

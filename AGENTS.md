@@ -43,6 +43,26 @@ checkout's stack. Never hard-code container or project names.
 
 Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `userpassword`.
 
+### Pull requests and CI
+
+- For new features and code fixes, use a draft PR targeting `main` by default unless the
+  user explicitly requests a different workflow. Work in the assigned checkout; if it is
+  on `main`, create a feature branch there. Commit and push reviewable changes, open the
+  draft PR and include its link in progress updates. Reuse an existing PR for the branch
+  rather than creating a duplicate. Read-only questions do not require a PR.
+- Iterate on the draft without `merge on pass`. Regular checks
+  run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
+  pushes while it remains. See `docs/ci.md` for repository setup and commands.
+- An unlabeled PR deliberately fails `validation`; require that check in branch protection
+  so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
+  approved and authorizes merging once required checks pass.
+- After the user approves functionality and design for merging, update the PR branch with
+  current `main`, mark it ready and add `merge on pass`. Fix failures with the label left in
+  place, then merge or enable auto-merge. If a fix changes the approved functionality or
+  design, disable pending auto-merge, return the PR to draft, remove the label and obtain
+  renewed approval. Keep the branch up to date as required checks rerun.
+  The local `./scripts/dev.sh check` requirement still applies.
+
 ### Working in parallel
 
 - Work in the checkout or worktree you are started in. Agents must not create or switch
@@ -50,9 +70,10 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   from the assigned checkout when needed.
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
-- When asked to merge a worktree into `main`, merge its branch into `main` from the primary
-  checkout, then push the updated `main` to its configured upstream. Check the merge result
-  and working tree before pushing; never force-push `main`.
+- When asked to merge a worktree into `main`, merge through its GitHub PR after required
+  checks pass and the branch is up to date. Then fast-forward the primary checkout's
+  `main` from its configured upstream, after checking its working tree. Never force-push
+  `main` or bypass its required PR/check rules.
 - When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
   from inside the worktree. It refuses to delete uncommitted work.
 

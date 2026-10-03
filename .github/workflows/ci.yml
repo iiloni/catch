@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  merge_group:
+    branches: [main]
+    types: [checks_requested]
   workflow_dispatch:
   workflow_call:
 
@@ -12,9 +16,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.sha }}
-  queue: max
-  cancel-in-progress: false
+  # PR updates supersede old commits and label state. Main/release requests still queue
+  # by exact commit so a release never cancels the CI it is waiting for.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   reuse:
@@ -25,6 +31,7 @@ jobs:
       actions: read
     outputs:
       run_checks: ${{ steps.ci.outputs.run_checks }}
+      run_e2e: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -33,11 +40,18 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter catch
-      - name: Check for a previous successful CI run
+      - name: Decide whether to reuse full CI
         id: ci
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/wait-for-ci.ts check
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
+            # Test the combined code on every update; release reuse is for exact main/tag commits.
+            echo 'run_checks=true' >> "$GITHUB_OUTPUT"
+          else
+            node scripts/wait-for-ci.ts check
+          fi
 
   check:
     needs: reuse
@@ -62,7 +76,7 @@ jobs:
   e2e-desktop:
     name: e2e desktop (${{ matrix.shard }}/2)
     needs: reuse
-    if: needs.reuse.outputs.run_checks == 'true'
+    if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy: &e2e-shards
@@ -132,7 +146,7 @@ jobs:
   e2e-android:
     name: e2e android (${{ matrix.shard }}/2)
     needs: reuse
-    if: needs.reuse.outputs.run_checks == 'true'
+    if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy: *e2e-shards
@@ -145,7 +159,7 @@ jobs:
   e2e-desktop-passed:
     name: e2e (desktop)
     needs: [reuse, e2e-desktop]
-    if: always() && needs.reuse.outputs.run_checks == 'true'
+    if: always() && needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -154,8 +168,31 @@ jobs:
   e2e-android-passed:
     name: e2e (android)
     needs: [reuse, e2e-android]
-    if: always() && needs.reuse.outputs.run_checks == 'true'
+    if: always() && needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - run: test "${{ needs.e2e-android.result }}" = success
+
+  # Require this check in branch protection: GitHub accepts conditionally skipped jobs,
+  # so requiring the E2E jobs alone would let an unlabeled PR merge without testing.
+  validation:
+    name: validation
+    needs: [reuse, check, e2e-desktop-passed, e2e-android-passed]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require completed validation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          E2E_REQUESTED: ${{ needs.reuse.outputs.run_e2e }}
+          REUSE_RESULT: ${{ needs.reuse.result }}
+          RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          DESKTOP_RESULT: ${{ needs.e2e-desktop-passed.result }}
+          ANDROID_RESULT: ${{ needs.e2e-android-passed.result }}
+        run: bash scripts/ci-validation.sh
