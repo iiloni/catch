@@ -2,8 +2,8 @@ import { type BoardColumn, type NoteColor, tagColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Clock, SearchX } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
@@ -86,6 +86,7 @@ function SearchPage() {
     [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
   );
   const searching = query.trim() !== '' || color !== null || browsing;
+  const view = !searching ? 'browse' : results.length > 0 ? 'results' : 'empty';
   const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
   useEffect(() => {
     searchFilterCount.set(filterCount);
@@ -135,89 +136,120 @@ function SearchPage() {
         )}
       </AnimatePresence>
       <TabPageHeader title="Search" />
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 pb-6 sm:px-6">
-        <ActiveSearchFilters
-          tags={tags}
-          filter={filter}
-          color={color}
-          onFilterChange={setFilter}
-          onColorChange={setColor}
-        />
-        {!searching && (
-          <BrowseTags
-            tags={tags}
-            counts={counts}
-            untaggedCount={untaggedCount}
-            onSelect={(id) => setFilter({ ...filter, ids: [id], untagged: false })}
-            onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
-          />
-        )}
-        {!searching ? (
-          recent.length > 0 ? (
-            <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
-              <div className="flex items-center justify-between px-1">
-                <h2 id="recent-heading" className="font-medium text-muted-foreground text-sm">
-                  Recent
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setRecent([])}
-                  className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                >
-                  Clear
-                </button>
-              </div>
-              <ul className="flex flex-col">
-                {recent.map((item) => (
-                  <li key={item}>
-                    <button
-                      type="button"
-                      onClick={() => searchQuery.set(item)}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
-                    >
-                      <Clock className="size-4 text-muted-foreground" aria-hidden />
-                      <span className="truncate">{item}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <p className="px-1 text-sm text-muted-foreground">
-              Search words, browse a tag, or filter by color. Archived notes are included.
-            </p>
-          )
-        ) : results.length > 0 ? (
-          <section aria-label="Results">
-            <p className="px-1 pb-2 text-muted-foreground text-xs">
-              {results.length === MAX_RESULTS
-                ? `First ${MAX_RESULTS} notes`
-                : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
-            </p>
-            <ul className="flex flex-col gap-2">
-              <AnimatePresence initial={false} mode="popLayout">
-                {results.map((result) => (
-                  <motion.li
-                    key={result.note.id}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={springs.smooth}
-                  >
-                    <ResultCard result={result} columns={columns} onOpen={openResult} />
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
-          </section>
-        ) : (
-          <EmptyState icon={SearchX} title="No matching notes">
-            Try fewer words or remove a filter.
-          </EmptyState>
-        )}
+      <div className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+        <div className="relative">
+          <AnimatePresence initial={false}>
+            <SearchView key={view} view={view}>
+              <ActiveSearchFilters
+                tags={tags}
+                filter={filter}
+                color={color}
+                onFilterChange={setFilter}
+                onColorChange={setColor}
+              />
+              {!searching && (
+                <BrowseTags
+                  tags={tags}
+                  counts={counts}
+                  untaggedCount={untaggedCount}
+                  onSelect={(id) => setFilter({ ...filter, ids: [id], untagged: false })}
+                  onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
+                />
+              )}
+              {!searching ? (
+                recent.length > 0 ? (
+                  <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between px-1">
+                      <h2 id="recent-heading" className="font-medium text-muted-foreground text-sm">
+                        Recent
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setRecent([])}
+                        className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <ul className="flex flex-col">
+                      {recent.map((item) => (
+                        <li key={item}>
+                          <button
+                            type="button"
+                            onClick={() => searchQuery.set(item)}
+                            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
+                          >
+                            <Clock className="size-4 text-muted-foreground" aria-hidden />
+                            <span className="truncate">{item}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : (
+                  <p className="px-1 text-sm text-muted-foreground">
+                    Search words, browse a tag, or filter by color. Archived notes are included.
+                  </p>
+                )
+              ) : results.length > 0 ? (
+                <section aria-label="Results">
+                  <p className="px-1 pb-2 text-muted-foreground text-xs">
+                    {results.length === MAX_RESULTS
+                      ? `First ${MAX_RESULTS} notes`
+                      : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {results.map((result) => (
+                        <motion.li
+                          key={result.note.id}
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.97 }}
+                          transition={springs.smooth}
+                        >
+                          <ResultCard result={result} columns={columns} onOpen={openResult} />
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                </section>
+              ) : (
+                <EmptyState icon={SearchX} title="No matching notes">
+                  Try fewer words or remove a filter.
+                </EmptyState>
+              )}
+            </SearchView>
+          </AnimatePresence>
+        </div>
       </div>
     </>
+  );
+}
+
+function SearchView({
+  children,
+  view,
+}: {
+  children: ReactNode;
+  view: 'browse' | 'results' | 'empty';
+}) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.div
+      data-search-view={view}
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: reducedMotion ? 0 : -8 }}
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+      className={cn('flex flex-col gap-5', !isPresent && 'absolute inset-x-0 top-0')}
+    >
+      {children}
+    </motion.div>
   );
 }
 
