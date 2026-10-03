@@ -71,6 +71,7 @@ matches the change:
 | `bug` | Fixing defects |
 | `documentation` | Substantive documentation changes |
 | `accessibility` | Accessibility improvements or fixes |
+| `maintenance` | CI, build tooling, dependencies, refactoring or test infrastructure |
 
 These labels describe scope. `merge on pass` records approval and merge authorization.
 Set descriptive labels before requesting full validation, since later label edits also

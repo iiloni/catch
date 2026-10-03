@@ -52,7 +52,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   rather than creating a duplicate. Read-only questions do not require a PR.
 - Add a small set of existing descriptive labels when opening the draft: `enhancement`
   for features or improvements, `bug` for defect fixes, `documentation` for substantive
-  documentation changes and `accessibility` for accessibility work. Choose labels that
+  documentation changes, `accessibility` for accessibility work and `maintenance` for CI,
+  build tooling, dependencies, refactoring or test infrastructure. Choose labels that
   reflect the actual scope; do not create new labels or apply unrelated issue-status
   labels during routine PR work. Set descriptive labels before `merge on pass`, because
   label edits also trigger CI. Descriptive labels do not authorize merging.
