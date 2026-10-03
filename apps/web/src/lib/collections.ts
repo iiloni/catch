@@ -311,16 +311,26 @@ function classifyWriteError(error: unknown): Error {
     }
     // A 404 is an edit to a note or column deleted on another device before it arrived.
     if (error.status === 404) return reject('It was deleted on another device.');
-    // A 413 is the server's limit on one request, or on an account's attachment storage.
+    // A 413 is the server's limit on one request or on an account's attachment storage, or
+    // an upload that is not the size it was announced as. The server says which.
     return reject(
       error.status === 413
-        ? 'It is too large, or your storage on the server is full.'
+        ? (serverReason(error.message) ?? 'It is too large for the server.')
         : 'The server turned it down.',
     );
   }
   // `fetch` rejects when the server cannot be reached.
   updateSyncStatus({ offline: true });
   return new Error('Server unreachable');
+}
+
+/** The reason in an API error's `{ error }` body, when it has one. */
+function serverReason(body: string) {
+  try {
+    return z.object({ error: z.string().min(1) }).parse(JSON.parse(body)).error;
+  } catch {
+    return null;
+  }
 }
 
 function reject(reason: string) {

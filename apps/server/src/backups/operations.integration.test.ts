@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationsFolder } from '../db/migrations';
 import { backUpBeforeUpdate } from './beforeUpdate';
 import { createBackup, restoreBackup } from './operations';
+import { restoreDatabase } from './postgres';
 import { type BackupConfig, listBackups } from './store';
 
 /**
@@ -185,6 +186,31 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
       safetyBackups,
     );
   }, 120_000);
+
+  it('does not load a dump as a role that reaches the host without being a superuser', async () => {
+    const role = `catch_test_${suffix}_role`;
+    const database = `catch_test_${suffix}_owned`;
+    await admin.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD 'secret' CREATEDB`);
+    await admin.unsafe(`GRANT pg_read_server_files TO "${role}"`);
+    await admin.unsafe(`CREATE DATABASE "${database}" OWNER "${role}"`);
+    try {
+      const url = new URL(urlOf(database));
+      url.username = role;
+      url.password = 'secret';
+      await expect(
+        restoreDatabase(url.toString(), join(dir, 'unused.dump'), {
+          workDir: dir,
+          migrationsFolder,
+        }),
+      ).rejects.toThrow(/Restore with a superuser/);
+      expect(
+        await admin`SELECT datname FROM pg_database WHERE datname LIKE 'catch_restore_%'`,
+      ).toHaveLength(0);
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
+      await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+    }
+  }, 60_000);
 
   it('backs up before an update, once', async () => {
     const backupsDir = join(dir, 'update-backups');

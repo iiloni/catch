@@ -45,6 +45,9 @@ function withDatabase(url: string, name: string, login?: { user: string; passwor
  */
 const WITHOUT_SESSIONS = '--exclude-table-data=public.session';
 
+const UNSAFE_ROLE =
+  'The database user can make roles or reach the database host’s files or programs, which a backup could misuse. Restore with a superuser, or with a user that has none of those powers.';
+
 function run(command: string, args: string[], url: string) {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -186,9 +189,17 @@ export async function restoreDatabase(
     // has no tables to restore into yet.
     await migrate(drizzle(live), { migrationsFolder });
     try {
-      const [role] = await live<{ superuser: boolean }[]>`
-        SELECT rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`;
-      // A role without those powers has none to keep from the dump, and cannot make another.
+      const [role] = await live<{ superuser: boolean; powerful: boolean }[]>`
+        SELECT rolsuper AS superuser,
+          rolcreaterole
+            OR pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER')
+            OR pg_has_role(current_user, 'pg_write_server_files', 'MEMBER')
+            OR pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS powerful
+        FROM pg_roles WHERE rolname = current_user`;
+      // A plain role has no such powers to keep from the dump, and cannot make another. One
+      // that reaches the host's files or programs without being a superuser cannot hand
+      // the dump to a lesser role either, so it does not restore at all.
+      if (role && !role.superuser && role.powerful) throw new BackupError(UNSAFE_ROLE);
       if (role?.superuser) {
         const password = randomBytes(24).toString('hex');
         await live.unsafe(`CREATE ROLE "${scratchName}" LOGIN PASSWORD '${password}'`);
@@ -199,6 +210,7 @@ export async function restoreDatabase(
         `CREATE DATABASE "${scratchName}"${sandboxed ? ` OWNER "${scratchName}"` : ''}`,
       );
     } catch (error) {
+      if (error instanceof BackupError) throw error;
       throw new BackupError(
         `Restoring needs a scratch database, which the database user could not create: ${
           error instanceof Error ? error.message : String(error)

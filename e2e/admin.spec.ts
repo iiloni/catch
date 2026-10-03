@@ -584,7 +584,11 @@ test('last login advances on successful sign-in but not on failure or session re
   expect(Date.parse(latest!)).toBeGreaterThan(Date.parse(first!));
 });
 
-test('an admin invites someone, and the link makes one account', async ({ page, browser }) => {
+test('an admin invites someone, and the link makes one account', async ({
+  page,
+  browser,
+  request,
+}) => {
   await page.goto('/login');
   await page.getByLabel('Email').fill('admin@example.com');
   await page.getByLabel('Password').fill('adminadmin');
@@ -634,4 +638,12 @@ test('an admin invites someone, and the link makes one account', async ({ page, 
   await expect(page.getByText(`by ${email}`)).toBeVisible();
   await page.getByRole('button', { name: `Remove invite for ${who}` }).click();
   await expect(page.getByText(who)).toHaveCount(0);
+
+  const admin = await adminSession(request);
+  const invited = await directoryUser(request, admin.token, email);
+  expect(invited).toBeDefined();
+  expect(await directoryUser(request, admin.token, `again-${email}`)).toBeUndefined();
+  await request.delete(`/api/admin/users/${invited!.id}`, {
+    headers: { Authorization: `Bearer ${admin.token}` },
+  });
 });

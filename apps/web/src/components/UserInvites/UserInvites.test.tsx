@@ -39,6 +39,41 @@ describe('UserInvites', () => {
     expect(screen.getByText(/by ada@example\.com$/)).toBeInTheDocument();
   });
 
+  it('says when an invite has run out', async () => {
+    vi.mocked(api.listInvites).mockResolvedValue({
+      invites: [{ ...waiting, expiresAt: '2026-10-02T00:00:00.000Z' }],
+    });
+    render(<UserInvites onAccessDenied={vi.fn()} />);
+    expect(await screen.findByText(/^Expired /)).toBeInTheDocument();
+  });
+
+  it('leaves when the list is refused, and hides on a server without invites', async () => {
+    vi.mocked(api.listInvites).mockRejectedValueOnce(new ApiError(403, 'Admin access required'));
+    const onAccessDenied = vi.fn();
+    const refused = render(<UserInvites onAccessDenied={onAccessDenied} />);
+    await waitFor(() => expect(onAccessDenied).toHaveBeenCalled());
+    // Nothing can be made before the list is known.
+    expect(screen.getByRole('button', { name: 'Create invite' })).toBeDisabled();
+    refused.unmount();
+
+    vi.mocked(api.listInvites).mockRejectedValueOnce(new ApiError(404, 'Not Found'));
+    const { container } = render(<UserInvites onAccessDenied={vi.fn()} />);
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it('copies the link', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    vi.mocked(api.createInvite).mockResolvedValue({ invite: waiting, token });
+    render(<UserInvites onAccessDenied={vi.fn()} />);
+    await screen.findByText('Sam');
+    fireEvent.click(screen.getByRole('button', { name: 'Create invite' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy link' }));
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/login#invite=${token}`);
+    vi.unstubAllGlobals();
+  });
+
   it('shows a new invite’s link once, with the token in its fragment', async () => {
     vi.mocked(api.createInvite).mockResolvedValue({ invite: { ...waiting, label: 'Kim' }, token });
     render(<UserInvites onAccessDenied={vi.fn()} />);

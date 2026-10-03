@@ -33,8 +33,9 @@ display, so new tables are covered without touching it.
 
 **Sessions are left out.** A backup is a file that gets downloaded and copied, and a
 session is a way into an account, so the dump carries the session table without its rows.
-A restore skips them in backups made before this too, and therefore signs everyone out
-except the admin who started it. This is the one table the backup code names for a reason
+A restore skips them in backups made before this too, and therefore signs everyone out.
+A restore started in the app puts back the session of the admin who asked for it, provided
+the backup has that account; one from the command line keeps none. This is the one table the backup code names for a reason
 other than display.
 
 **An uploaded dump runs without the server's powers.** A dump is SQL, and the server's

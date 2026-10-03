@@ -53,8 +53,11 @@ to resume and follow its shape, not the ones that choose rows.
 ## Compatibility
 
 No existing request, response, shape or outbox format changes; the API protocol stays at 1.
-Invites add admin routes and one optional sign-up header: an older server ignores the header
-and an older client simply has no page for them. Clients
+Invites add admin routes and one optional sign-up header. An older client has no page for
+them and ignores a link's fragment. A newer client hides the Invites section when the server
+has no invite routes. Only a server with invites makes invite links, so the header reaches
+an older one only after a downgrade: there the web app's header is ignored and the Android
+app's sign-up fails its CORS preflight until the link's fragment is dropped. Clients
 already send the signed token and none uses Electric's subset parameters. A `413` reaches
 old clients as an ordinary refused write. Anything else that used the bare session token as
 a bearer token has to use the `set-auth-token` value instead.

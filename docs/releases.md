@@ -276,7 +276,7 @@ new version to be healthy. [Server backups](backups.md) covers both scripts.
 
 Create your account before making a new instance generally accessible: the first account
 becomes admin. Sign-up closes after it, and the admin invites other people with links from
-Settings > Admin > Users. Release channels do not change authentication.
+Settings > Admin > Users. Setting `REGISTRATION=open` keeps sign-up open to anyone instead. Release channels do not change authentication.
 
 For preview, use a separate Compose project, hostname, `.env`, and named volumes, selecting
 `:preview`. It must have its own Postgres and Electric data rather than share production.

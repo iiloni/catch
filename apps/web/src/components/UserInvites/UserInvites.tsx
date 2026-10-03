@@ -37,6 +37,13 @@ export function UserInvites({ onAccessDenied }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [unsupported, setUnsupported] = useState(false);
+  // An invite that runs out while the page is open should stop reading as waiting.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fail = useCallback(
     (failure: unknown, message: string) => {
@@ -53,6 +60,11 @@ export function UserInvites({ onAccessDenied }: Props) {
     try {
       setInvites(invitesResponseSchema.parse(await api.listInvites()).invites);
     } catch (failure) {
+      // A server from before invites has no such route, and nothing here would work.
+      if (failure instanceof ApiError && failure.status === 404) {
+        setUnsupported(true);
+        return;
+      }
       fail(failure, 'Could not load invites. Check your connection and try again.');
     }
   }, [fail]);
@@ -74,7 +86,12 @@ export function UserInvites({ onAccessDenied }: Props) {
       setLink(inviteLink(getServerUrl(), made.token));
       haptics.success();
     } catch (failure) {
-      fail(failure, 'Could not make the invite. Try again.');
+      fail(
+        failure,
+        failure instanceof ApiError && failure.status === 409
+          ? 'There are too many unused invites. Remove some before making more.'
+          : 'Could not make the invite. Try again.',
+      );
     } finally {
       setPending(false);
     }
@@ -102,7 +119,7 @@ export function UserInvites({ onAccessDenied }: Props) {
     }
   }
 
-  const now = Date.now();
+  if (unsupported) return null;
   return (
     <>
       <SettingsSection
@@ -118,7 +135,12 @@ export function UserInvites({ onAccessDenied }: Props) {
             onChange={(event) => setLabel(event.target.value)}
             className="h-11 min-w-40 flex-1 rounded-xl"
           />
-          <Button type="submit" disabled={pending} className="h-11 rounded-full">
+          {/* Until the list has loaded, its answer would replace an invite made meanwhile. */}
+          <Button
+            type="submit"
+            disabled={pending || invites === null}
+            className="h-11 rounded-full"
+          >
             Create invite
           </Button>
         </form>

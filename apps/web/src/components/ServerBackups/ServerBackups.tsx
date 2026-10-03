@@ -315,7 +315,10 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
               {!restoring.includesAttachments && (
                 <li>This backup has no attachments. The files on the server stay as they are.</li>
               )}
-              <li>Everyone else has to sign in again.</li>
+              <li>
+                Everyone else has to sign in again, and so do you if this backup is from before your
+                account.
+              </li>
             </ul>
           )}
           <div className="flex justify-end gap-2">
