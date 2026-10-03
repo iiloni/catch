@@ -1,11 +1,12 @@
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
-import { useNoteTagAssignments, useTags } from '@/lib/collections';
+import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { setSecondaryTag } from '@/lib/tags';
 
 export function TagPicker({ noteId }: { noteId: string }) {
   const tags = useTags();
+  const { awaitingTags, awaitingAssignments } = useTagReadiness();
   const assignment = useNoteTagAssignments().get(noteId);
   const ancestors = useMemo(
     () => secondaryTagAncestors(tags, assignment?.secondaryTagIds ?? []),
@@ -14,7 +15,11 @@ export function TagPicker({ noteId }: { noteId: string }) {
   return (
     <section aria-label="Secondary tags" className="px-3 pt-3 pb-1">
       <p className="mb-2 text-sm font-medium">Secondary tags</p>
-      {!tags.length ? (
+      {awaitingTags || awaitingAssignments ? (
+        <p role="status" className="py-3 text-sm text-muted-foreground">
+          Loading tags…
+        </p>
+      ) : !tags.length ? (
         <p className="py-3 text-sm text-muted-foreground">Create tags in Settings → Tags.</p>
       ) : (
         <TagTree

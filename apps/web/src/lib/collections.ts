@@ -69,6 +69,7 @@ import {
   getSyncStatus,
   settlePendingWrite,
   updateSyncStatus,
+  useAwaitingSync,
 } from './syncStatus';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
@@ -277,8 +278,20 @@ function requestsFor(mutations: readonly PendingMutation[]) {
     (mutation) => mutation.collection.id === notesCollection.id && mutation.type === 'insert',
   );
   const batched = newNotes.length > 1 ? new Set(newNotes) : new Set<PendingMutation>();
+  const treeCleanup = mutations.some(
+    (mutation) =>
+      mutation.collection.id === tagsCollection.id &&
+      (mutation.type === 'delete' ||
+        (mutation.type === 'update' && mutation.changes.parentId !== undefined)),
+  );
+  // Derived optimistic cleanup is handled against the server's current assignments.
+  // Sending local arrays here would overwrite assignments added on another device.
   const requests = mutations
-    .filter((mutation) => !batched.has(mutation))
+    .filter(
+      (mutation) =>
+        !batched.has(mutation) &&
+        !(treeCleanup && mutation.collection.id === noteTagsCollection.id),
+    )
     .map((mutation) => ({ collectionId: mutation.collection.id, request: () => send(mutation) }));
   for (let start = 0; start < batched.size; start += MAX_NOTES_PER_REQUEST) {
     const chunk = newNotes.slice(start, start + MAX_NOTES_PER_REQUEST);
@@ -343,10 +356,18 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
   }
   if (mutation.collection.id === noteTagsCollection.id) {
     if (mutation.type === 'delete') return null; // Server cascades note deletion.
-    return api.updateNoteTags(
-      key,
-      updateNoteTagsSchema.parse(mutation.type === 'insert' ? mutation.modified : mutation.changes),
+    const body = updateNoteTagsSchema.parse(
+      mutation.type === 'insert' ? mutation.modified : mutation.changes,
     );
+    if (mutation.type === 'update' && body.primaryTagId !== undefined) {
+      // Secondary cleanup when changing a primary is derived on the server as well.
+      delete body.secondaryTagIds;
+    } else if (mutation.type === 'insert') {
+      // A locally missing row does not prove that the other role is empty on the server.
+      if (body.primaryTagId === null) delete body.primaryTagId;
+      else if (!body.secondaryTagIds?.length) delete body.secondaryTagIds;
+    }
+    return api.updateNoteTags(key, body);
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -668,4 +689,26 @@ function subscribeNoteTags(listener: () => void) {
 }
 export function useNoteTagAssignments(): ReadonlyMap<string, NoteTags> {
   return useSyncExternalStore(subscribeNoteTags, () => assignmentRows);
+}
+
+/** An empty cached relationship is meaningful only after its first snapshot online. */
+export function useTagReadiness() {
+  const [tagsReady, setTagsReady] = useState(() => tagsCollection.isReady());
+  const [assignmentsReady, setAssignmentsReady] = useState(() => noteTagsCollection.isReady());
+  useEffect(() => {
+    const tags = tagsCollection.subscribeChanges(() => {});
+    const assignments = noteTagsCollection.subscribeChanges(() => {});
+    const stopTags = tagsCollection.onFirstReady(() => setTagsReady(true));
+    const stopAssignments = noteTagsCollection.onFirstReady(() => setAssignmentsReady(true));
+    return () => {
+      stopTags();
+      stopAssignments();
+      tags.unsubscribe();
+      assignments.unsubscribe();
+    };
+  }, []);
+  return {
+    awaitingTags: useAwaitingSync(!tagsReady, 0),
+    awaitingAssignments: useAwaitingSync(!assignmentsReady, 0),
+  };
 }

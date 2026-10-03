@@ -23,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useNoteTagAssignments, useTags } from '@/lib/collections';
+import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import type { useNoteSelection } from '@/lib/noteSelection';
@@ -69,6 +69,7 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
   const ids = notes.map((note) => note.id);
   const tags = useTags();
   const assignments = useNoteTagAssignments();
+  const { awaitingAssignments } = useTagReadiness();
   const colors = notes.map((note) => {
     const primary = assignments.get(note.id)?.primaryTagId;
     return primary ? tagColor(tags, primary) : note.color;
@@ -163,6 +164,7 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
       )}
       <ToolbarButton
         label="Make a copy"
+        disabled={awaitingAssignments}
         icon={Copy}
         onClick={then(() => {
           haptics.success();

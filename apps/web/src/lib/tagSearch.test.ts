@@ -46,4 +46,18 @@ describe('tag search', () => {
     expect(matchesTagFilter(undefined, { ids: [], match: 'any', untagged: true })).toBe(true);
     expect(matchesTagFilter(undefined, { ids: [], match: 'all', untagged: false })).toBe(true);
   });
+  it('does not index unresolved tags or missing ancestors during partial sync', () => {
+    const partial = indexNoteTags([leaf], new Map([[assignment.id, assignment]]));
+    expect(partial.get(assignment.id)).toEqual(new Set([leaf.id]));
+    expect(
+      matchesTagFilter(partial.get(assignment.id), {
+        ids: [child.id],
+        match: 'any',
+        untagged: false,
+      }),
+    ).toBe(false);
+    expect(indexNoteTags([], new Map([[assignment.id, assignment]])).get(assignment.id)).toEqual(
+      new Set(),
+    );
+  });
 });

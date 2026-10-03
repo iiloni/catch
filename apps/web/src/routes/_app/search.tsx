@@ -19,6 +19,7 @@ import {
   notesCollection,
   tagsCollection,
   useNoteTagAssignments,
+  useTagReadiness,
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
 import { springs } from '@/lib/motion';
@@ -26,7 +27,6 @@ import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
 import { usePersistentState } from '@/lib/storage';
-import { useAwaitingSync } from '@/lib/syncStatus';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
 
@@ -52,11 +52,12 @@ function SearchPage() {
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
 
-  const { data: tags = [], isLoading: tagsLoading } = useLiveQuery({
+  const { data: tags = [] } = useLiveQuery({
     query: (q) => q.from({ tag: tagsCollection }),
   });
   // An apparently unlinked swatch is meaningful only after the initial tag snapshot.
-  const awaitingTags = useAwaitingSync(tagsLoading, 0);
+  const { awaitingTags, awaitingAssignments } = useTagReadiness();
+  const awaitingTagData = awaitingTags || awaitingAssignments;
   const assignments = useNoteTagAssignments();
   const indexed = useMemo(() => indexNoteTags(tags, assignments), [tags, assignments]);
   const { counts, untaggedCount } = useMemo(() => {
@@ -86,7 +87,13 @@ function SearchPage() {
     [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
   );
   const searching = query.trim() !== '' || color !== null || browsing;
-  const view = !searching ? 'browse' : results.length > 0 ? 'results' : 'empty';
+  const view = awaitingTagData
+    ? 'loading'
+    : !searching
+      ? 'browse'
+      : results.length > 0
+        ? 'results'
+        : 'empty';
   const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
   useEffect(() => {
     searchFilterCount.set(filterCount);
@@ -124,7 +131,7 @@ function SearchPage() {
           >
             <SearchFilters
               tags={tags}
-              awaitingTags={awaitingTags}
+              awaitingTags={awaitingTagData}
               filter={filter}
               color={color}
               counts={counts}
@@ -147,7 +154,12 @@ function SearchPage() {
         <div className="relative">
           <AnimatePresence initial={false}>
             <SearchView key={view} view={view}>
-              {!searching && (
+              {awaitingTagData && (
+                <p role="status" className="px-1 text-sm text-muted-foreground">
+                  Loading tags…
+                </p>
+              )}
+              {!awaitingTagData && !searching && (
                 <BrowseTags
                   tags={tags}
                   counts={counts}
@@ -156,7 +168,7 @@ function SearchPage() {
                   onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
                 />
               )}
-              {!searching ? (
+              {awaitingTagData ? null : !searching ? (
                 recent.length > 0 ? (
                   <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
                     <div className="flex items-center justify-between px-1">
@@ -233,7 +245,7 @@ function SearchView({
   view,
 }: {
   children: ReactNode;
-  view: 'browse' | 'results' | 'empty';
+  view: 'browse' | 'results' | 'empty' | 'loading';
 }) {
   const isPresent = useIsPresent();
   const reducedMotion = useReducedMotion();

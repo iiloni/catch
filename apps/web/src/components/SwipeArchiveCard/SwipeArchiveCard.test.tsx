@@ -7,6 +7,7 @@ import { SwipeArchiveCard } from './SwipeArchiveCard';
 
 // Cards read link previews; these notes have no links, so no sync is needed.
 vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),
   useLinkPreviews: () => new Map(),

@@ -38,7 +38,9 @@ Copies preserve assignments. Icons are a curated, bundled Lucide set that works 
 
 **Deletion removes a branch and its assignments, never notes.** The server cleans secondary
 arrays and clears affected primaries in the same transaction before deleting tags. Note
-removal cascades its assignment row. Clients apply the same changes optimistically. Roots
+removal cascades its assignment row. Clients apply the same changes optimistically, but
+send only the hierarchy edit: derived assignment cleanup is performed against current
+server state, preserving unrelated assignments made on another device. Roots
 cannot borrow another root's linked color; unlink or change that root first.
 
 **Pickers and badges.** Linked swatches show the root icon (a generic tag when unset). A
@@ -53,7 +55,10 @@ a selected tag preview frees space above the palette while its height settles.
 Closing rows stop accepting input immediately and remain in flow until their exit finishes.
 A separate entry opens roots without colors. The note dock has a searchable secondary-tag
 tree with checkboxes; selecting a child replaces its secondary ancestors. The tree
-uses subtle vertical ancestry guides and rotating expand/collapse chevrons. Badges name
+uses subtle vertical ancestry guides and rotating expand/collapse chevrons. Hierarchy data
+is indexed once per snapshot, and search/collapse visibility is inherited in one tree pass.
+Large trees keep measured placeholders for offscreen row contents, loading controls and
+full paths near the viewport with a shared observer; there is no nesting-depth cutoff. Badges name
 the assigned tag, with a frosted glass base, a fine border, a top highlight and a subtle
 shadow above the note card. All badges tint the glass with their root's color and show
 its icon beside the assigned tag's name. Hovering, keyboard focus or tapping reveals a
@@ -101,7 +106,10 @@ changing a note color. Protocol-2 clients pause against a protocol-1 server. Upg
 server, then clients; the existing protocol-aware clients preserve unsent edits while
 waiting. Existing note shapes and their collection schemaVersion remain unchanged. Existing
 note content and outbox payloads keep their format and replay losslessly after upgrading;
-new collections start at schemaVersion 1. No local-data reset or outbox migration is needed.
+new collections start at schemaVersion 1. Explicit note color PATCH requests atomically clear
+any current primary while preserving secondaries, including queued pre-tag color writes.
+They remain plain-color choices; an explicit primary assignment is a separate queued write.
+This server adapter preserves their intent without changing or resetting device data.
 The assignment normalization and search refinements are part of this unpublished
 protocol-2 feature; they require no additional protocol or shape-version bump. Existing
 queued assignment arrays retain their format and are normalized on replay.

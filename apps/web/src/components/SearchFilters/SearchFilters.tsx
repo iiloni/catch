@@ -242,7 +242,7 @@ export function SearchFilters({
                   <Tags className="size-4 text-muted-foreground" aria-hidden />
                   Tags
                 </h3>
-                {awaitingTags && !tags.length ? (
+                {awaitingTags ? (
                   <p role="status" className="py-2 text-sm text-muted-foreground">
                     Loading tags…
                   </p>
@@ -296,10 +296,13 @@ export function SearchFilters({
                 <label className="mt-2 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5">
                   <Tags className="size-4 text-muted-foreground" aria-hidden />
                   <span className="flex-1">Untagged</span>
-                  <span className="text-xs text-muted-foreground">{untaggedCount}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {awaitingTags ? '…' : untaggedCount}
+                  </span>
                   <input
                     type="checkbox"
                     checked={filter.untagged}
+                    disabled={awaitingTags}
                     onChange={() =>
                       onFilterChange({ ...filter, ids: [], untagged: !filter.untagged })
                     }
@@ -460,7 +463,19 @@ export function ActiveSearchFilters({
                   <FilterChip key={id}>
                     <TagBadge tag={tag} tags={tags} onRemove={() => toggleTag(id)} />
                   </FilterChip>
-                ) : null;
+                ) : (
+                  <FilterChip key={id}>
+                    <button
+                      type="button"
+                      className="glass-badge flex min-h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      aria-label={`Remove unavailable tag filter ${id}`}
+                      onClick={() => toggleTag(id)}
+                    >
+                      Unavailable tag
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </FilterChip>
+                );
               })}
               {filter.untagged && (
                 <FilterChip key="untagged">

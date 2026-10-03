@@ -1,14 +1,14 @@
 import type { Note } from '@catch/shared';
 import { NOTE_COLORS, type NoteColor, type Tag, tagPath } from '@catch/shared';
 import { Check, ChevronLeft, ChevronRight, Palette, Slash } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useState } from 'react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import { type ComponentProps, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useNoteTagAssignments, useTags } from '@/lib/collections';
+import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useNoteColor } from '@/lib/tags';
@@ -52,15 +52,18 @@ export function ColorSwatches({
   layout = 'grid',
   className,
   tags = [],
+  disabled = false,
 }: {
   value: NoteColor | null;
   onChange: (color: NoteColor) => void;
   layout?: 'grid' | 'row';
   className?: string;
   tags?: readonly Tag[];
+  disabled?: boolean;
 }) {
   return (
     <fieldset
+      disabled={disabled}
       className={cn(
         'min-w-0',
         layout === 'grid'
@@ -146,8 +149,8 @@ export function ColorTagSelector({
   const [branch, setBranch] = useState<string | 'uncolored' | null>(null);
   const [direction, setDirection] = useState(1);
   const reducedMotion = useReducedMotion();
-  const selected =
-    tags.find((tag) => tag.id === primaryTagId) ?? tags.find((tag) => tag.color === value);
+  const { awaitingTags, awaitingAssignments } = useTagReadiness();
+  const selected = tags.find((tag) => tag.id === primaryTagId);
   const current = tags.find((tag) => tag.id === branch);
   const children = tags
     .filter((tag) =>
@@ -172,10 +175,15 @@ export function ColorTagSelector({
   };
   const slideTransition = { duration: reducedMotion ? 0 : 0.16 };
   return (
-    <div className={cn('min-w-0 overflow-hidden', className)}>
+    <fieldset
+      disabled={awaitingTags || awaitingAssignments}
+      aria-busy={awaitingTags || awaitingAssignments}
+      className={cn('min-w-0 overflow-hidden', className)}
+    >
+      <legend className="sr-only">Primary tag</legend>
       <AnimatedHeight>
         <AnimatePresence initial={false} mode="wait" custom={direction}>
-          <motion.div
+          <PickerView
             key={branch === null ? 'colors' : 'tags'}
             custom={direction}
             variants={slideVariants}
@@ -238,7 +246,7 @@ export function ColorTagSelector({
                 </div>
                 <div className="overflow-hidden">
                   <AnimatePresence initial={false} mode="wait" custom={direction}>
-                    <motion.div
+                    <PickerView
                       key={branch}
                       custom={direction}
                       variants={slideVariants}
@@ -270,15 +278,15 @@ export function ColorTagSelector({
                           )}
                         </button>
                       ))}
-                    </motion.div>
+                    </PickerView>
                   </AnimatePresence>
                 </div>
               </div>
             )}
-          </motion.div>
+          </PickerView>
         </AnimatePresence>
       </AnimatedHeight>
-    </div>
+    </fieldset>
   );
 }
 
@@ -301,4 +309,9 @@ export function NoteColorPicker({
       onTagChange={onTagChange}
     />
   );
+}
+
+function PickerView(props: ComponentProps<typeof motion.div>) {
+  const isPresent = useIsPresent();
+  return <motion.div {...props} inert={!isPresent} aria-hidden={!isPresent} />;
 }

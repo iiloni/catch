@@ -25,7 +25,7 @@ import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
-import { notesCollection, useNoteTagAssignments } from '@/lib/collections';
+import { notesCollection } from '@/lib/collections';
 import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -44,7 +44,7 @@ import {
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
-import { useNoteColor } from '@/lib/tags';
+import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
 import { useEditorDock } from './useEditorDock';
@@ -146,8 +146,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const popupState = quickNote.use();
   const capture = linkCaptureControls.use();
   const color = useNoteColor(note);
-  const assignment = useNoteTagAssignments().get(note.id);
-  const hasTags = !!assignment?.primaryTagId || !!assignment?.secondaryTagIds.length;
+  const hasTags = useResolvedNoteTags(note.id).length > 0;
   const [isPresent, safeToRemove] = usePresence();
   const [, rerender] = useState(0);
   // The back button, Escape and an outside click can all fire for one close.

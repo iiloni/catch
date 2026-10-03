@@ -39,6 +39,7 @@ describe('nested tags', () => {
     expect(tagSubtreeIds([root, child], root.id).size).toBe(2);
     expect(tagPath([child], child.id)).toEqual([child]);
     expect(tagColor([child], child.id)).toBe('default');
+    expect(tagTree([child])).toEqual([{ tag: child, depth: 0 }]);
   });
   it('only roots have icons or linked colors, and No color is not linkable', () => {
     const root = tag(1);

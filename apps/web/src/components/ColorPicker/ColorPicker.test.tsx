@@ -21,7 +21,10 @@ const child: Tag = {
   icon: null,
 };
 const leaf: Tag = { ...child, id: 'leaf', name: 'Catch', parentId: child.id };
-vi.mock('@/lib/collections', () => ({ useTags: () => [root, child, leaf] }));
+vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
+  useTags: () => [root, child, leaf],
+}));
 
 describe('primary tag color picker', () => {
   it('assigns intermediate tags immediately and drills down through children', async () => {
@@ -55,5 +58,21 @@ describe('primary tag color picker', () => {
     expect(onChange).toHaveBeenLastCalledWith('default');
     fireEvent.click(screen.getByRole('button', { name: 'Red' }));
     expect(onChange).toHaveBeenLastCalledWith('red');
+  });
+  it('does not imply a primary assignment from a linked raw color or mixed primaries', () => {
+    render(
+      <ColorTagSelector
+        value="blue"
+        primaryTagId={null}
+        onChange={vi.fn()}
+        onTagChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider },
+    );
+    expect(screen.queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Blue: Work' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

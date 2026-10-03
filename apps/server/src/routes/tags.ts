@@ -14,15 +14,11 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { notes, noteTags, tags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { lockTagTree } from '../lib/tagTreeLock';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const idParam = zValidator('param', z.object({ id: z.uuid({ version: 'v7' }) }));
 
-async function lockTree(tx: Tx, userId: string) {
-  // Serialize hierarchy edits and assignment validation across devices, preventing cycles
-  // and assignments to a tag concurrently being removed.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}), 14001)`);
-}
 async function txid(tx: Tx) {
   const [row] = await tx.execute<{ txid: string }>(
     sql`SELECT pg_current_xact_id()::xid::text AS txid`,
@@ -68,7 +64,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const body = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
-      await lockTree(tx, userId);
+      await lockTagTree(tx, userId);
       const rows = await userTags(tx, userId);
       if (rows.some((tag) => tag.id === body.id)) return null;
       validateTag({ ...body, userId }, rows);
@@ -87,7 +83,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
-      await lockTree(tx, userId);
+      await lockTagTree(tx, userId);
       const rows = await userTags(tx, userId);
       const current = rows.find((tag) => tag.id === id);
       if (!current) throw new TagError('Tag not found', 404);
@@ -118,7 +114,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
     const result = await db.transaction(async (tx) => {
-      await lockTree(tx, userId);
+      await lockTagTree(tx, userId);
       const rows = await userTags(tx, userId);
       if (!rows.some((tag) => tag.id === id)) return null;
       const removed = tagSubtreeIds(rows, id);
@@ -157,7 +153,7 @@ export const noteTagRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
-      await lockTree(tx, userId);
+      await lockTagTree(tx, userId);
       const [note] = await tx
         .select({ id: notes.id })
         .from(notes)

@@ -1,9 +1,10 @@
-import { type Tag, tagPath, tagTree } from '@catch/shared';
+import type { Tag } from '@catch/shared';
 import { ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { springs } from '@/lib/motion';
+import { indexTagTree } from '@/lib/tagTreeIndex';
 import { cn } from '@/lib/utils';
 
 export function TagTree({
@@ -24,13 +25,14 @@ export function TagTree({
   const [searchFocused, setSearchFocused] = useState(false);
   const reducedMotion = useReducedMotion();
   const query = search.trim().toLowerCase();
-  const rows = tagTree(tags).filter(({ tag }) =>
-    query
-      ? tagPath(tags, tag.id).some((ancestor) => ancestor.name.toLowerCase().includes(query))
-      : !tagPath(tags, tag.id)
-          .slice(0, -1)
-          .some((ancestor) => collapsed.has(ancestor.id)),
+  const index = useMemo(() => indexTagTree(tags), [tags]);
+  const largeTree = tags.length > 200;
+  const observer = useMemo(
+    () => (largeTree && typeof IntersectionObserver !== 'undefined' ? rowObserver() : null),
+    [largeTree],
   );
+  useEffect(() => () => observer?.disconnect(), [observer]);
+  const rows = index.visibleRows(query, collapsed);
   const visibleIds = new Set(rows.map(({ tag }) => tag.id));
   const searchInput = (
     <div
@@ -57,20 +59,19 @@ export function TagTree({
       <ScrollArea className={cn('flex flex-col [--scrollbar-inset:0.25rem]', className)}>
         <ScrollAreaViewport className="h-auto max-h-[inherit] pr-3">
           <AnimatePresence initial={false}>
-            {rows.map(({ tag, depth }) => {
-              const path = tagPath(tags, tag.id);
-              const hasChildren = tags.some((child) => child.parentId === tag.id);
-              const expanded = !collapsed.has(tag.id);
-              return (
-                <AnimatedTagRow key={tag.id} reducedMotion={!!reducedMotion}>
+            {rows.map(({ tag, depth }, rowIndex) => {
+              const renderRow = () => {
+                const path = index.pathFor(tag.id);
+                const hasChildren = index.hasChildren(tag.id);
+                const expanded = !collapsed.has(tag.id);
+                return (
                   <div
                     className="relative flex min-h-11 items-center gap-1"
                     style={{ paddingLeft: `${Math.min(depth, 8) * 12}px` }}
                   >
                     <span aria-hidden className="pointer-events-none absolute inset-0">
                       {path
-                        .slice(0, -1)
-                        .slice(0, 8)
+                        .slice(0, Math.min(path.length - 1, 8))
                         .map((ancestor, level) =>
                           visibleIds.has(ancestor.id) ? (
                             <span
@@ -110,6 +111,19 @@ export function TagTree({
                     )}
                     {renderTag(tag, path)}
                   </div>
+                );
+              };
+              return observer ? (
+                <DeferredTagRow
+                  key={tag.id}
+                  observer={observer}
+                  initiallyVisible={rowIndex < 40}
+                  reducedMotion={!!reducedMotion}
+                  renderRow={renderRow}
+                />
+              ) : (
+                <AnimatedTagRow key={tag.id} reducedMotion={!!reducedMotion}>
+                  {renderRow()}
                 </AnimatedTagRow>
               );
             })}
@@ -130,9 +144,11 @@ export function TagTree({
 function AnimatedTagRow({
   children,
   reducedMotion,
+  animateEntry = true,
 }: {
   children: ReactNode;
   reducedMotion: boolean;
+  animateEntry?: boolean;
 }) {
   const isPresent = useIsPresent();
   return (
@@ -140,7 +156,7 @@ function AnimatedTagRow({
       className="overflow-hidden"
       inert={!isPresent}
       aria-hidden={!isPresent}
-      initial={{ height: 0, opacity: 0 }}
+      initial={animateEntry ? { height: 0, opacity: 0 } : false}
       animate={{ height: 'auto', opacity: 1 }}
       exit={{ height: 0, opacity: 0 }}
       transition={
@@ -149,5 +165,71 @@ function AnimatedTagRow({
     >
       {children}
     </motion.div>
+  );
+}
+
+function rowObserver() {
+  const listeners = new Map<Element, (visible: boolean) => void>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) listeners.get(entry.target)?.(entry.isIntersecting);
+    },
+    { rootMargin: '200px' },
+  );
+  return {
+    subscribe(element: Element, listener: (visible: boolean) => void) {
+      listeners.set(element, listener);
+      observer.observe(element);
+      return () => {
+        listeners.delete(element);
+        observer.unobserve(element);
+      };
+    },
+    disconnect: () => observer.disconnect(),
+  };
+}
+
+/** Keep offscreen row height without building its full path, controls or tooltips. */
+function DeferredTagRow({
+  observer,
+  initiallyVisible,
+  reducedMotion,
+  renderRow,
+}: {
+  observer: ReturnType<typeof rowObserver>;
+  initiallyVisible: boolean;
+  reducedMotion: boolean;
+  renderRow: () => ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const height = useRef(44);
+  const [visible, setVisible] = useState(initiallyVisible);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    return observer.subscribe(element, (visible) => {
+      // Keep a focused row mounted even if its controls scroll out of view.
+      setVisible(visible || element.contains(document.activeElement));
+    });
+  }, [observer]);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!visible || !element) return;
+    const measure = () => {
+      height.current = element.getBoundingClientRect().height || height.current;
+    };
+    measure();
+    const resize = new ResizeObserver(measure);
+    resize.observe(element);
+    return () => resize.disconnect();
+  }, [visible]);
+  return (
+    <div ref={ref} style={visible ? undefined : { height: height.current }}>
+      {visible && (
+        <AnimatedTagRow reducedMotion={reducedMotion} animateEntry={initiallyVisible}>
+          {renderRow()}
+        </AnimatedTagRow>
+      )}
+    </div>
   );
 }

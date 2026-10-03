@@ -24,6 +24,7 @@ const sibling: Tag = { ...child, id: 'sibling', name: 'Ideas' };
 let primaryTagId: string | null = root.id;
 let secondaryTagIds = [child.id];
 vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [root, child, sibling],
   useNoteTagAssignments: () => new Map([['note', { primaryTagId, secondaryTagIds }]]),
 }));

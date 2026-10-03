@@ -171,7 +171,11 @@ export function tagTree(tags: readonly Tag[]): { tag: Tag; depth: number }[] {
     children.set(tag.parentId, siblings);
   }
   for (const siblings of children.values()) siblings.sort((a, b) => a.name.localeCompare(b.name));
-  const pending = [...(children.get(null) ?? [])].reverse().map((tag) => ({ tag, depth: 0 }));
+  const present = new Set(tags.map((tag) => tag.id));
+  const roots = tags
+    .filter((tag) => tag.parentId === null || !present.has(tag.parentId))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const pending = [...roots].reverse().map((tag) => ({ tag, depth: 0 }));
   const rows: { tag: Tag; depth: number }[] = [];
   const seen = new Set<string>();
   while (pending.length) {

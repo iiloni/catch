@@ -2,7 +2,7 @@ import type { Tag } from '@catch/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BrowseTags, SearchFilters } from './SearchFilters';
+import { ActiveSearchFilters, BrowseTags, SearchFilters } from './SearchFilters';
 
 const root: Tag = {
   id: 'work',
@@ -217,5 +217,20 @@ describe('search filters', () => {
     expect(button).toHaveTextContent('2');
     fireEvent.click(button);
     expect(onSelect).toHaveBeenCalledWith(root.id);
+  });
+  it('keeps deleted tag selections visible and removable', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ActiveSearchFilters
+        tags={[]}
+        filter={{ ids: ['deleted'], match: 'any', untagged: false }}
+        color={null}
+        onFilterChange={onFilterChange}
+        onColorChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove unavailable tag filter deleted' }));
+    expect(onFilterChange).toHaveBeenCalledWith({ ids: [], match: 'any', untagged: false });
   });
 });

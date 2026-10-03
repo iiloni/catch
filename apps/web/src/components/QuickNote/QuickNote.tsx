@@ -19,12 +19,12 @@ import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
-import { useTags } from '@/lib/collections';
+import { useTagReadiness, useTags } from '@/lib/collections';
 import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { springs } from '@/lib/motion';
-import { createNote, discardIfEmpty, updateNote } from '@/lib/notes';
+import { createNote, discardIfEmpty, setNoteColor, updateNote } from '@/lib/notes';
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
@@ -90,6 +90,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
 
   const [content, setContent] = useState<Note['content']>([]);
   const tags = useTags();
+  const { awaitingTags } = useTagReadiness();
   const [color, setColor] = useState<NoteColor>('default');
   const [controls, setControls] = useState<EditorControls | null>(null);
   // The footer's tool row shows either formatting or the color swatches.
@@ -139,9 +140,9 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     if (draft.current) {
       updateNote(draft.current, {
         content,
-        color,
         status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
       });
+      setNoteColor(draft.current, color);
       return draft.current;
     }
     return createNote({
@@ -417,6 +418,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
                 ) : (
                   <ColorSwatches
                     tags={tags}
+                    disabled={awaitingTags}
                     value={color}
                     onChange={setColor}
                     layout="row"

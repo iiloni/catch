@@ -15,7 +15,7 @@ export function indexNoteTags(
     if (cached) return cached;
     const path = new Set<string>();
     let current: string | null | undefined = id;
-    while (current && !path.has(current)) {
+    while (current && byId.has(current) && !path.has(current)) {
       path.add(current);
       current = byId.get(current)?.parentId;
     }

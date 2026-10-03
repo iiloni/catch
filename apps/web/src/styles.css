@@ -308,7 +308,7 @@
     0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
 
   @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--note-bg);
+    background-color: var(--note-bg, var(--popover));
     backdrop-filter: none;
   }
 }

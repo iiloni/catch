@@ -66,7 +66,10 @@ export function assignPrimaryTag(id: string, primaryTagId: string | null) {
   if (current) {
     noteTagsCollection.update(id, (draft) => {
       draft.primaryTagId = primaryTagId;
-      draft.secondaryTagIds = draft.secondaryTagIds.filter((tagId) => tagId !== primaryTagId);
+      draft.secondaryTagIds = normalizeSecondaryTags(
+        [...tagsCollection.values()],
+        draft.secondaryTagIds.filter((tagId) => tagId !== primaryTagId),
+      );
     });
   } else if (primaryTagId) {
     noteTagsCollection.insert({ id, userId: note.userId, primaryTagId, secondaryTagIds: [] });
@@ -125,4 +128,15 @@ export function setPrimaryTags(ids: readonly string[], primaryTagId: string) {
     });
     for (const id of ids) assignPrimaryTag(id, primaryTagId);
   });
+}
+
+/** Unresolved assignment IDs must not create empty tag sections during partial sync. */
+export function useResolvedNoteTags(noteId: string): Tag[] {
+  const tags = useTags();
+  const assignment = useNoteTagAssignments().get(noteId);
+  const ids = new Set([
+    ...(assignment?.primaryTagId ? [assignment.primaryTagId] : []),
+    ...(assignment?.secondaryTagIds ?? []),
+  ]);
+  return tags.filter((tag) => ids.has(tag.id));
 }

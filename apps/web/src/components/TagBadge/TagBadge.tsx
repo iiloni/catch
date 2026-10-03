@@ -57,7 +57,7 @@ export function TagBadge({
   const contents = (
     <>
       <TagIcon name={root.icon} className="size-3.5 shrink-0" />
-      <span className="truncate">{tag.name}</span>
+      <span className="min-w-0 truncate">{tag.name}</span>
     </>
   );
   const className = cn(
@@ -137,7 +137,7 @@ export function TagBadge({
           {trigger}
           <button
             type="button"
-            aria-label={`Remove ${tag.name} filter`}
+            aria-label={`Remove ${label} filter`}
             onPointerDown={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation();

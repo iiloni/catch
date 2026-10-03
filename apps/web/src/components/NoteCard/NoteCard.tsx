@@ -10,13 +10,12 @@ import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { useNoteAttachments } from '@/lib/attachments';
-import { useNoteTagAssignments } from '@/lib/collections';
 import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
 import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
 import { paneNoteId } from '@/lib/splitView';
-import { useNoteColor } from '@/lib/tags';
+import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -43,11 +42,21 @@ type Props = {
  * preview. The editor draws the same face while it grows out of the card.
  */
 export function NoteCardFace({ note }: { note: Note }) {
+  const tagged = useResolvedNoteTags(note.id).length > 0;
+  return (
+    <>
+      <NoteCardContent note={note} />
+      <NoteTags noteId={note.id} className="px-3.5 pb-3" interactive={false} />
+      {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
+    </>
+  );
+}
+
+function NoteCardContent({ note }: { note: Note }) {
   const links = useNoteLinks(note);
   const [link] = links;
   const color = useNoteColor(note);
-  const assignments = useNoteTagAssignments().get(note.id);
-  const tagged = !!assignments?.primaryTagId || !!assignments?.secondaryTagIds.length;
+  const tagged = useResolvedNoteTags(note.id).length > 0;
   const linkNote = useIsLinkNote(note, links);
   if (linkNote && link && !tagged) {
     return <LinkNoteFace link={link} tinted={color === 'default'} />;
@@ -94,8 +103,7 @@ export function NoteCard({
   className,
 }: Props) {
   const color = useNoteColor(note);
-  const assignment = useNoteTagAssignments().get(note.id);
-  const tagged = !!assignment?.primaryTagId || !!assignment?.secondaryTagIds.length;
+  const tagged = useResolvedNoteTags(note.id).length > 0;
   const selecting = selected !== undefined;
   const actions = withActions && !selecting;
   const canPin = actions && !note.deletedAt && !note.isArchived;
@@ -132,6 +140,11 @@ export function NoteCard({
     <motion.article
       data-note-card={note.id}
       data-note-color={color}
+      onClick={(event) => {
+        if ((event.target as Element).closest('button, input, a, [role="button"]')) return;
+        if (selecting) onSelect?.(note);
+        else onOpen?.(note, event.currentTarget);
+      }}
       aria-label={note.deletedAt ? 'Trashed note' : 'Note'}
       // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
       whileTap={{ scale: pressable ? 0.97 : 1 }}
@@ -167,7 +180,7 @@ export function NoteCard({
         aria-label={selecting ? 'Select note' : 'Open note'}
         aria-pressed={selecting ? selected : undefined}
       >
-        <NoteCardFace note={note} />
+        <NoteCardContent note={note} />
       </button>
       <NoteTags noteId={note.id} className="px-3.5 pb-3" />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}

@@ -21,6 +21,7 @@ const columns: BoardColumn[] = [
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
 ];
 vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),
   useBoardColumns: () => columns,
