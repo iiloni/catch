@@ -47,6 +47,16 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((value) => value === 'true'),
+  /**
+   * Who push services may contact about this server's notifications: a `mailto:` or
+   * `https:` address. Defaults to the server's own URL.
+   */
+  PUSH_CONTACT: z
+    .string()
+    .regex(/^(mailto:|https:\/\/)/)
+    .optional()
+    // Compose passes an unset variable as an empty one.
+    .or(z.literal('').transform(() => undefined)),
   /** Directory containing the built web app. Served when set. */
   WEB_DIST_DIR: z.string().optional(),
   ATTACHMENTS_DIR: z.string().default('/data/attachments'),

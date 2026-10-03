@@ -22,10 +22,11 @@ import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
+import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
-import { notesCollection } from '@/lib/collections';
+import { notesCollection, useReminders } from '@/lib/collections';
 import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -43,6 +44,7 @@ import {
   takeOrigin,
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
+import { reminderSheet } from '@/lib/reminders';
 import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
@@ -143,6 +145,7 @@ const leavingPanes = new Set<() => void>();
 const SWAP_MS = 250;
 
 function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
+  const reminder = useReminders().get(note.id);
   const popupState = quickNote.use();
   const capture = linkCaptureControls.use();
   const color = useNoteColor(note);
@@ -468,6 +471,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           {!sideLinks && (
             <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />
           )}
+          {reminder && !note.deletedAt && (
+            <div className="flex justify-center px-4 pt-6">
+              <ReminderChip reminder={reminder} onClick={() => reminderSheet.set(note.id)} />
+            </div>
+          )}
           <NoteTimestamp updatedAt={note.updatedAt} />
           {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
           <div
@@ -518,7 +526,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             if (
               !target.isConnected ||
               target.closest(
-                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
+                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], [data-bottom-sheet], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
               )
             ) {
               event.preventDefault();

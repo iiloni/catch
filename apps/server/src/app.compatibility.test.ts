@@ -86,6 +86,28 @@ describe('API compatibility gate', () => {
     expect((await app.request('/api/updates', { method: 'POST' })).status).toBe(426);
   });
 
+  it('still serves protocol 1 clients, which have no reminders (ADR 0016)', async () => {
+    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 1, max: 2 });
+    const older = { [API_PROTOCOL_HEADER]: '1' };
+    expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(401);
+    expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);
+  });
+
+  it('gates the reminder and push routes like every other data route', async () => {
+    const id = '0199a0a0-0000-7000-8000-000000000000';
+    for (const [path, method] of [
+      [`/api/reminders/${id}`, 'PUT'],
+      [`/api/reminders/${id}`, 'DELETE'],
+      ['/api/reminders/time-zone', 'PUT'],
+      ['/api/shapes/reminders', 'GET'],
+      ['/api/push/key', 'GET'],
+      ['/api/push/subscriptions', 'POST'],
+    ] as const) {
+      expect((await app.request(path, { method })).status).toBe(426);
+      expect((await app.request(path, { method, headers: supportedHeaders })).status).toBe(401);
+    }
+  });
+
   it('allows Android CORS preflights to declare the protocol', async () => {
     const response = await app.request('/api/notes', {
       method: 'OPTIONS',

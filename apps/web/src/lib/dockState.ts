@@ -19,7 +19,7 @@ export const searchFilterCount = createStore(0);
 export const TAB_PATHS = ['/deck', '/', '/search'] as const;
 export type TabPath = (typeof TAB_PATHS)[number];
 
-/** The tab a page belongs to. Archive and Trash live under the Gallery. */
+/** The tab a page belongs to. Reminders, Archive and Trash live under the Gallery. */
 export function tabFor(pathname: string): TabPath {
   if (pathname.startsWith('/deck')) return '/deck';
   if (pathname.startsWith('/search')) return '/search';
@@ -33,6 +33,7 @@ export const lastBrowsingTab = createStore<Exclude<TabPath, '/search'>>('/');
 const PAGE_ORDER: Record<string, number> = {
   '/deck': 0,
   '/': 1,
+  '/reminders': 1.2,
   '/archive': 1.25,
   '/trash': 1.5,
   '/search': 2,

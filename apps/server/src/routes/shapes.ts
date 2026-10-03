@@ -47,6 +47,21 @@ const SHAPES: Record<string, { table: string; columns: string[] }> = {
     table: 'board_columns',
     columns: ['id', 'user_id', 'name', 'color', 'position'],
   },
+  reminders: {
+    table: 'reminders',
+    columns: [
+      'note_id',
+      'user_id',
+      'kind',
+      'starts_at',
+      'time_zone',
+      'floating',
+      'recurrence',
+      'next_at',
+      'snoozed_until',
+      'fired_at',
+    ],
+  },
   'link-previews': {
     table: 'link_previews',
     columns: [

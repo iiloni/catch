@@ -10,11 +10,15 @@ import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
 import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
+import { ReminderSheet } from '@/components/ReminderSheet/ReminderSheet';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
+import { useOpenNote } from '@/lib/openNote';
+import { onNotificationOpen, syncPush } from '@/lib/push';
+import { reportDeviceTimeZone } from '@/lib/reminders';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
@@ -37,6 +41,20 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   useEffect(watchUpdates, []);
+  const { open } = useOpenNote();
+  useEffect(() => onNotificationOpen(open), [open]);
+  useEffect(() => {
+    void syncPush();
+    const user = getSignedInUser();
+    if (!user) return;
+    // A phone that has travelled reports its new zone when the app comes back into view.
+    const report = () => {
+      if (document.visibilityState === 'visible') void reportDeviceTimeZone(user.id);
+    };
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, []);
   const { note } = Route.useSearch();
   const pane = useNotePaneLayout();
   const noteState = quickNote.use();
@@ -64,6 +82,7 @@ function AppLayout() {
       <Dock />
       <NoteEditorOverlay noteId={note} />
       <LinkPreviewOverlay />
+      <ReminderSheet />
       <AppUpdatePrompt />
       <WebUpdatePrompt />
       <AnimatePresence>
