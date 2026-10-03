@@ -209,6 +209,7 @@ function DeferredTagRow({
   const ref = useRef<HTMLDivElement>(null);
   const height = useRef(estimatedRowHeight);
   const intersects = useRef(initiallyVisible);
+  const focused = useRef(false);
   const [visible, setVisible] = useState(initiallyVisible);
   useEffect(() => {
     const element = ref.current;
@@ -216,7 +217,7 @@ function DeferredTagRow({
     return observer.subscribe(element, (visible) => {
       intersects.current = visible;
       // Keep a focused row mounted even if its controls scroll out of view.
-      setVisible(visible || element.contains(document.activeElement));
+      setVisible(visible || focused.current || element.contains(document.activeElement));
     });
   }, [observer]);
   useLayoutEffect(() => {
@@ -234,8 +235,15 @@ function DeferredTagRow({
     <div
       ref={ref}
       style={visible ? undefined : { height: height.current }}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setVisible(intersects.current);
+      onFocusCapture={() => {
+        focused.current = true;
+      }}
+      onBlurCapture={() => {
+        focused.current = false;
+        // React focus events include portaled menus; let their focus arrive before releasing.
+        queueMicrotask(() => {
+          if (ref.current && !focused.current) setVisible(intersects.current);
+        });
       }}
     >
       {visible && (

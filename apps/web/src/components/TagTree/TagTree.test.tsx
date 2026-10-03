@@ -1,5 +1,6 @@
 import type { Tag } from '@catch/shared';
 import { act, fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TagTree } from './TagTree';
 
@@ -41,10 +42,14 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
     }),
   );
   const renderTag = vi.fn((tag: Tag, path: readonly Tag[]) => (
-    <button type="button" style={{ minHeight: 48 }}>
-      {tag.name}
-      <span>{path.length} levels</span>
-    </button>
+    <span>
+      <button type="button" style={{ minHeight: 48 }}>
+        {tag.name}
+        <span>{path.length} levels</span>
+      </button>
+      {tag.id === '4999' &&
+        createPortal(<button type="button">Manage deepest tag</button>, document.body)}
+    </span>
   ));
   render(<TagTree tags={tags} renderTag={renderTag} estimatedRowHeight={48} />);
   expect(renderTag.mock.calls.length).toBeLessThanOrEqual(40);
@@ -57,7 +62,11 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
   act(() => deepest.focus());
   act(() => notify([{ target: observed.at(-1)!, isIntersecting: false }]));
   expect(deepest).toBeInTheDocument();
-  fireEvent.blur(deepest, { relatedTarget: screen.getByRole('textbox', { name: 'Find tags' }) });
+  await act(async () => screen.getByRole('button', { name: 'Manage deepest tag' }).focus());
+  act(() => notify([{ target: observed.at(-1)!, isIntersecting: false }]));
+  expect(deepest).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Manage deepest tag' })).toHaveFocus();
+  await act(async () => screen.getByRole('textbox', { name: 'Find tags' }).focus());
   expect(screen.queryByText('Tag 4999')).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
     target: { value: 'Tag 4999' },
