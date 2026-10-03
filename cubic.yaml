@@ -2,7 +2,8 @@
 version: 1
 
 reviews:
-  enabled: true
+  # Disable automatic reviews; explicit comment requests still work.
+  enabled: false
   sensitivity: medium
   check_drafts: true
   incremental_commits: false
@@ -10,10 +11,7 @@ reviews:
   auto_approve: disabled
   ultrareview: manual
   auto_ultrareview: disabled
-  # Suppress automatic reviews on every base branch; explicit requests still work.
   ignore:
-    base_branches:
-      - '*'
     files:
       - pnpm-lock.yaml
       - apps/web/src/routeTree.gen.ts

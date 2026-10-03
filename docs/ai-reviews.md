@@ -20,11 +20,11 @@ evaluating the reviewer.
    account and install its GitHub App. Select **Only select repositories** and
    choose `iiloni/catch`.
 2. Before this change lands on `main`, open cubic's **AI review settings** for
-   Catch and set the temporary dashboard controls to match the repo policy:
-   keep AI reviews enabled, add `*` to the **base branch ignore patterns**, allow
-   draft reviews, disable automatic incremental reviews and auto-approval, and
-   disable automatic PR descriptions and code fixes. The base branch ignore
-   pattern suppresses automatic reviews; explicit comment requests still work.
+   Catch and turn off **AI reviews** for this repository. Explicit comment
+   requests still work with that switch off. Disable automatic incremental
+   reviews, auto-approval, automatic PR descriptions and code fixes too, and
+   allow draft reviews. There is no need to configure branch ignore patterns.
+   Once merged, `cubic.yaml` supplies these settings.
 3. Merge the setup PR through Catch's normal approval and validation process.
    Both the workflow and `cubic.yaml` need to be on `main` before the complete
    setup takes effect. cubic reads its configuration from the default branch,
@@ -52,8 +52,9 @@ See cubic's [quickstart](https://docs.cubic.dev/ai-review/quickstart),
 
 ## Everyday workflow
 
-1. Push iterations to the draft PR. Automatic reviews are suppressed by
-   `cubic.yaml`, including after marking a draft ready or pushing more commits.
+1. Push iterations to the draft PR. `reviews.enabled: false` in `cubic.yaml`
+   disables automatic reviews, including after marking a draft ready or pushing
+   more commits. Explicit comment requests still work.
 2. Add `ai review` when you want a full review. The workflow accepts requests only
    from people with write, maintain, or admin access. It checks that the PR is
    still open, targets `main`, still carries the label, and has the same head
@@ -119,12 +120,15 @@ existing process for returning to draft and obtaining renewed approval.
   token. Remove and reapply it. Check the workflow notices for permission or
   stale-PR skips.
 - **The request posted but cubic is silent:** confirm the App has access to Catch,
-  AI reviews and draft reviews are enabled, and there are no YAML validation or
-  quota warnings in cubic's settings. The Actions job only verifies posting; the
-  App's response cannot be tested until it is installed. Try posting
+  draft reviews are allowed, and there are no YAML validation or quota warnings
+  in cubic's settings. The AI reviews switch can stay off for manual requests.
+  The Actions job only verifies posting; the App's response must be checked on
+  the PR. Try posting
   `@cubic-dev-ai review this PR` from your own account. If that works but the
   Actions comment does not, use the manual command and report the bot-comment
   handling to cubic before depending on the label workflow.
-- **Reviews start without the label:** verify the wildcard base branch ignore
-  pattern is active. The repo YAML overrides the dashboard once it is on `main`;
+- **Unrequested reviews start:** verify AI reviews are off for Catch, or
+  `reviews.enabled: false` is active in the repo YAML. Explicit comment requests
+  also start reviews without the label. The repo YAML overrides the dashboard
+  once it is on `main`;
   changes to YAML on a feature branch do not take effect yet.
