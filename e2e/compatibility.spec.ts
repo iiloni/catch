@@ -61,7 +61,14 @@ test('an incompatible server pauses sync, retains queued edits through reload, a
   });
 
   // The initial bootstrap is still cached: rejection of this write tests the upgrade race.
-  await createNote(page, 'Queued during upgrade');
+  const updatePrompt = page.getByRole('dialog', { name: 'Update required to sync' });
+  await Promise.all([
+    createNote(page, 'Queued during upgrade'),
+    (async () => {
+      await expect(updatePrompt).toBeVisible();
+      await updatePrompt.getByRole('button', { name: 'Keep working offline' }).click();
+    })(),
+  ]);
   const paused = page.getByRole('button', { name: /^App update required/ });
   await expect(paused).toBeVisible();
   await expect(card(page, 'Queued during upgrade')).toBeVisible();
@@ -69,16 +76,22 @@ test('an incompatible server pauses sync, retains queued edits through reload, a
   await paused.click();
   await expect(page.getByText(/local notes and queued changes are kept/)).toBeVisible();
   await page.getByRole('link', { name: 'View updates' }).click();
+  await expect(updatePrompt).toBeVisible();
+  await updatePrompt.getByRole('button', { name: 'Keep working offline' }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'This app needs an update' }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
 
   await page.goto('/');
+  await expect(updatePrompt).toBeVisible();
+  await updatePrompt.getByRole('button', { name: 'Keep working offline' }).click();
   await expect(card(page, 'Before upgrade')).toBeVisible();
   await expect(card(page, 'Queued during upgrade')).toBeVisible();
   await createNote(page, 'Another queued note');
   await page.reload();
+  await expect(updatePrompt).toBeVisible();
+  await updatePrompt.getByRole('button', { name: 'Keep working offline' }).click();
   await expect(card(page, 'Queued during upgrade')).toBeVisible();
   await expect(card(page, 'Another queued note')).toBeVisible();
   await expect(paused).toBeVisible();

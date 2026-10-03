@@ -81,9 +81,13 @@ and preview must advance independently, including preview versions ahead of stab
   in browsers without service workers. Development's Vite server and native apps do not
   use this check. Missing or malformed metadata on an older server is ignored.
   A dismissible prompt offers **Reload to update** and **Later**; Settings > Update keeps
-  the reload action available after dismissal. Prompts wait until open editors and drafts
-  close. Reload waits for pending writes to reach the outbox or server, installs and explicitly
-  activates a waiting service worker, then waits for it to control the page before reloading.
+  the reload action available after dismissal. When the compatibility gate says the client
+  is too old, the prompt says **Update required to sync** and **Keep working offline**, even
+  if build metadata is unavailable or the optional update was already dismissed. A server
+  that is too old still asks for a server upgrade instead. Prompts wait until open editors
+  and drafts close. Reload waits for pending writes to reach the outbox or server, installs
+  and explicitly activates a waiting service worker, then waits for it to control the page
+  before reloading.
   Other tabs retain control of when their page reloads. Notes, outboxes and staged shares
   are never cleared. Offline or failed preparation keeps the current page and offers retry.
 - Android updates target the server's exact published version, only within the installed
