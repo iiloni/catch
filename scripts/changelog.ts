@@ -285,7 +285,7 @@ function renderEntry(entry: Entry, section: SectionId) {
   // Secondary entries keep their type, which is what tells a reader why they are secondary.
   const prefix = section === 'other' ? entry.type : null;
   const scope = prefix
-    ? `${prefix}${entry.scope ? `(${entry.scope})` : ''}: `
+    ? `${prefix}${entry.scope ? `(${inline(entry.scope)})` : ''}: `
     : entry.scope
       ? `**${inline(entry.scope)}:** `
       : '';
