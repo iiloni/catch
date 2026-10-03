@@ -74,25 +74,15 @@ export function SearchFilterPanel({
           }}
           className="glass pointer-events-auto relative flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.5rem)] w-full max-w-md flex-col gap-2 overflow-hidden rounded-[var(--dock-radius)] p-3"
         >
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-            {filtered && (
-              <button
-                type="button"
-                className={cn(control, 'text-muted-foreground')}
-                onClick={onClear}
-              >
-                Clear filters
-              </button>
-            )}
+          {filtered && (
             <button
               type="button"
-              aria-label="Close filters"
-              onClick={onClose}
-              className="flex size-11 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(control, 'absolute top-3 right-3 z-10 text-muted-foreground')}
+              onClick={onClear}
             >
-              <X className="size-4" aria-hidden />
+              Clear filters
             </button>
-          </div>
+          )}
           {children}
         </section>
       </motion.div>

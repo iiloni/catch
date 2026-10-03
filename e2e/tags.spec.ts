@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test';
 import {
   card,
   createNote,
@@ -738,6 +738,7 @@ test('search filter glass stays above the keyboard and closes before leaving sea
   const panel = page.getByRole('region', { name: 'Search filters' });
   await expect(panel.getByRole('heading', { name: 'Colors', exact: true })).toBeVisible();
   await expect(panel).toHaveClass(/glass/);
+  await expect(panel.getByRole('button', { name: 'Close filters' })).toHaveCount(0);
   await expect(panel.getByRole('heading', { name: 'Filters', exact: true })).toHaveCount(0);
   await expect(
     panel.getByText('Includes primary tags, secondary tags and descendants.'),
@@ -831,4 +832,95 @@ test('search filter glass stays above the keyboard and closes before leaving sea
     'aria-selected',
     'true',
   );
+});
+
+test('first and last search filters animate browsing, results and no matches', async ({
+  page,
+  request,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  await addTag(request, headers, 'Empty');
+  await seedNotes(page, ['Tagged task', 'Unrelated task']);
+  const noteId = await card(page, 'Tagged task').getAttribute('data-note-card');
+  expect(
+    (
+      await request.patch(`/api/note-tags/${noteId}`, {
+        headers,
+        data: { primaryTagId: work, secondaryTagIds: [] },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  const browse = page.getByRole('region', { name: 'Browse tags' });
+  await expect(browse.getByRole('button', { name: 'Browse Work', exact: true })).toContainText('1');
+
+  async function transition(button: Locator, from: string, to: string) {
+    const samples = await button.evaluate(
+      async (button, { from, to }) => {
+        button.click();
+        const samples: { opacity: number; y: number; outgoing: boolean; inert: boolean }[] = [];
+        for (let frame = 0; frame < 40; frame++) {
+          await new Promise(requestAnimationFrame);
+          const incoming = document.querySelector<HTMLElement>(
+            `[data-search-view="${to}"]:not([aria-hidden="true"])`,
+          );
+          const outgoing = document.querySelector<HTMLElement>(`[data-search-view="${from}"]`);
+          if (incoming) {
+            const style = getComputedStyle(incoming);
+            samples.push({
+              opacity: Number(style.opacity),
+              y: new DOMMatrix(style.transform).m42,
+              outgoing: !!outgoing,
+              inert: !!outgoing?.inert && outgoing.getAttribute('aria-hidden') === 'true',
+            });
+          }
+        }
+        return samples;
+      },
+      { from, to },
+    );
+    expect(samples.some(({ opacity }) => opacity > 0.1 && opacity < 0.9)).toBe(true);
+    expect(samples.some(({ y }) => Math.abs(y) > 1)).toBe(true);
+    expect(samples.some(({ outgoing }) => outgoing)).toBe(true);
+    expect(samples.filter(({ outgoing }) => outgoing).every(({ inert }) => inert)).toBe(true);
+    await expect(page.locator(`[data-search-view="${from}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-search-view="${to}"]`)).toHaveCSS('opacity', '1');
+  }
+
+  await transition(
+    browse.getByRole('button', { name: 'Browse Work', exact: true }),
+    'browse',
+    'results',
+  );
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(results.getByRole('article')).toHaveCount(1);
+  await expect(results).toContainText('Tagged task');
+  await transition(page.getByRole('button', { name: 'Remove Work filter' }), 'results', 'browse');
+
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const panel = page.getByRole('region', { name: 'Search filters' });
+  const blue = panel.getByRole('button', { name: 'Blue', exact: true });
+  await transition(blue, 'browse', 'results');
+  await transition(blue, 'results', 'browse');
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+
+  await transition(
+    browse.getByRole('button', { name: 'Browse Empty', exact: true }),
+    'browse',
+    'empty',
+  );
+  await expect(page.getByText('No matching notes', { exact: true })).toBeVisible();
+  await transition(page.getByRole('button', { name: 'Remove Empty filter' }), 'empty', 'browse');
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await browse.getByRole('button', { name: 'Browse Work', exact: true }).click();
+  await expect(results).toBeVisible();
+  await expect(page.locator('[data-search-view="browse"]')).toHaveCount(0);
+  await expect(page.locator('[data-search-view="results"]')).toHaveCSS('transform', 'none');
+  await page.getByRole('button', { name: 'Remove Work filter' }).click();
+  await expect(browse).toBeVisible();
+  await expect(page.locator('[data-search-view="results"]')).toHaveCount(0);
 });
