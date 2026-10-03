@@ -34,8 +34,11 @@ and preview must advance independently, including preview versions ahead of stab
   tests, so competing push and release requests do not duplicate E2E. A release waits up
   to 30 minutes; without a previous pass, unsuccessful CI blocks release until rerun
   successfully.
-  It then builds a signed APK, publishes a multi-platform
-  container image to GHCR, and publishes a GitHub Release with the APK and checksum.
+  Android signing secrets are checked before either build starts. After CI passes, it
+  builds a signed APK and builds and pushes a multi-platform container image to GHCR in
+  parallel. The GitHub Release with the APK and checksum and the channel image aliases
+  are published only after both builds succeed. If Android fails, an exact-version image
+  may remain without a published release or updated channel aliases.
 - Publishing is opt-in through the repository variable `RELEASES_ENABLED=true`. The release
   workflow has no manual dispatch trigger and never deploys to a production server.
 - Exact image tags remain fixed once their GitHub Release is published. `stable` and
