@@ -9,7 +9,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useState } from 'react';
-import { ColorPicker } from '@/components/ColorPicker/ColorPicker';
+import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +25,7 @@ import {
   setNoteColor,
   trashNote,
 } from '@/lib/notes';
+import { setPrimaryTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -58,7 +59,11 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   return (
     <div className={cn('flex flex-col', className, moving && 'opacity-100')}>
       <div className="flex items-center gap-0.5">
-        <ColorPicker value={note.color} onChange={(color) => setNoteColor(note.id, color)} />
+        <NoteColorPicker
+          note={note}
+          onChange={(color) => setNoteColor(note.id, color)}
+          onTagChange={(id) => setPrimaryTag(note.id, id)}
+        />
         <Popover open={moving} onOpenChange={setMoving}>
           <PopoverTrigger asChild>
             <IconButton label="Move note" onClick={() => haptics.toggle()}>

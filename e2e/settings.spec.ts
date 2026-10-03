@@ -1,5 +1,61 @@
 import { expect, type Page, test } from '@playwright/test';
-import { signUp, waitForPageTransition } from './helpers';
+import { createNote, openNote, signUp, waitForPageTransition } from './helpers';
+
+test('settings pages load promptly while all six collections keep syncing over HTTP', async ({
+  page,
+  isMobile,
+}) => {
+  const polls = new Map<string, number>();
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname.startsWith('/api/shapes/') &&
+      (url.searchParams.get('live') === 'true' || url.searchParams.has('cache-buster'))
+    )
+      polls.set(url.pathname, (polls.get(url.pathname) ?? 0) + 1);
+  });
+  await signUp(page);
+  await createNote(page, 'Navigation while syncing');
+  if (!isMobile) await openNote(page, 'Navigation while syncing');
+  await page.evaluate(async () => {
+    const collections = await import('/src/lib/collections.ts');
+    await Promise.all(
+      [
+        collections.notesCollection,
+        collections.boardColumnsCollection,
+        collections.linkPreviewsCollection,
+        collections.attachmentsCollection,
+        collections.tagsCollection,
+        collections.noteTagsCollection,
+      ].map((collection) => collection.preload()),
+    );
+  });
+  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(6);
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Appearance', exact: true })).toBeVisible({
+    timeout: 4000,
+  });
+  const pages = page.getByRole('navigation', { name: 'Settings pages' });
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Settings page: General' }).click();
+    await pages.getByRole('button', { name: 'Tags', exact: true }).click();
+  } else {
+    await pages.getByRole('link', { name: 'Tags', exact: true }).click();
+  }
+  await expect(page.getByRole('button', { name: 'New tag', exact: true })).toBeVisible({
+    timeout: 4000,
+  });
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Settings page: Tags' }).click();
+    await pages.getByRole('button', { name: 'Account', exact: true }).click();
+  } else {
+    await pages.getByRole('link', { name: 'Account', exact: true }).click();
+  }
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible({
+    timeout: 4000,
+  });
+});
 
 /** Update is a user setting, with the project's links and the server's version. */
 async function expectUpdatePage(page: Page) {

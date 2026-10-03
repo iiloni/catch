@@ -45,9 +45,10 @@ export function searchNotes(
   notes: readonly Note[],
   query: string,
   color: NoteColor | null = null,
+  browse = false,
 ): SearchResult[] {
   const words = terms(query);
-  if (words.length === 0 && !color) return [];
+  if (words.length === 0 && !color && !browse) return [];
 
   const results: Array<SearchResult & { titleHit: boolean }> = [];
   for (const note of notes) {

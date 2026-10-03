@@ -1,0 +1,665 @@
+import { randomUUID } from 'node:crypto';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
+import { card, createNote, noteToolbar, openNote, seedNotes, signIn, signUp } from './helpers';
+
+test.setTimeout(90_000);
+
+const id = () => {
+  const value = randomUUID();
+  return `${value.slice(0, 14)}7${value.slice(15)}`;
+};
+async function auth(page: Page) {
+  const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
+  return { Authorization: `Bearer ${token}` };
+}
+async function addTag(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+  name: string,
+  parentId: string | null = null,
+  color: string | null = null,
+) {
+  const tagId = id();
+  const response = await request.post('/api/tags', {
+    headers,
+    data: { id: tagId, name, parentId, color, icon: parentId ? null : 'briefcase' },
+  });
+  expect(response.status()).toBe(200);
+  return tagId;
+}
+
+test('secondary tag search keeps focus and selection usable above the keyboard', async ({
+  page,
+  request,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  await addTag(request, headers, 'Projects', work);
+  await addTag(request, headers, 'Ideas');
+  for (let index = 0; index < 10; index++) await addTag(request, headers, `Other ${index}`, work);
+  await createNote(page, 'Searchable tags');
+  const dialog = await openNote(page, 'Searchable tags');
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  const search = picker.getByRole('textbox', { name: 'Find tags' });
+  await search.click();
+  await expect(search).toBeFocused();
+  // Chromium emulation has no on-screen keyboard; report its height as Android does.
+  await page.evaluate(async () => {
+    const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+    keyboardHeight.jump(320);
+  });
+  await expect(search).toBeVisible();
+  await expect(search).toBeFocused();
+  await page.keyboard.type('Projects');
+  await expect(search).toHaveValue('Projects');
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toHaveCount(0);
+  const projects = picker.getByRole('checkbox', { name: 'Work / Projects', exact: true });
+  await projects.check();
+  await expect(projects).toBeChecked();
+  await search.click();
+  await expect(search).toBeFocused();
+  await search.clear();
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toBeVisible();
+  const bounds = await picker.boundingBox();
+  const keyboardTop = await page.evaluate(() => innerHeight - 320);
+  expect(bounds).not.toBeNull();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(keyboardTop);
+  await picker.getByRole('button', { name: 'Collapse Work' }).click();
+  await dialog.getByRole('heading', { name: 'Searchable tags' }).click();
+  await expect(search).toHaveCount(0);
+  await expect(page.getByRole('toolbar', { name: 'Formatting' })).toBeVisible();
+});
+
+test('secondary branches move following rows smoothly on collapse, expansion and reversal', async ({
+  page,
+  request,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  const child = await addTag(request, headers, 'Projects', root);
+  await addTag(request, headers, 'Catch', child);
+  await addTag(request, headers, 'Zebra');
+  await createNote(page, 'Animated tags');
+  await openNote(page, 'Animated tags');
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  const selected = picker.getByRole('checkbox', { name: 'Work / Projects', exact: true });
+  await selected.check();
+  await expect
+    .poll(() => picker.evaluate((section) => section.parentElement?.style.height))
+    .toBe('auto');
+
+  for (const action of ['Collapse Work', 'Expand Work']) {
+    const samples = await picker.evaluate(async (section, label) => {
+      const following = section.querySelector('input[aria-label="Zebra"]')?.closest('label');
+      const button = section.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+      if (!following || !button) throw new Error('Missing tree controls');
+      const position = () =>
+        following.getBoundingClientRect().top - section.getBoundingClientRect().top;
+      const values = [position()];
+      button.click();
+      const start = performance.now();
+      while (performance.now() - start < 750) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        values.push(position());
+      }
+      return values;
+    }, action);
+    const start = samples[0];
+    const end = samples[samples.length - 1];
+    expect(Math.abs(end - start)).toBeGreaterThan(80);
+    const intermediate = samples.filter(
+      (value) => value > Math.min(start, end) + 2 && value < Math.max(start, end) - 2,
+    );
+    expect(new Set(intermediate.map((value) => Math.round(value))).size).toBeGreaterThan(3);
+  }
+
+  // Reopening during an exit must cancel it without duplicating rows or losing selection.
+  await picker.evaluate(async (section) => {
+    section.querySelector<HTMLButtonElement>('button[aria-label="Collapse Work"]')?.click();
+    const start = performance.now();
+    while (performance.now() - start < 60)
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    section.querySelector<HTMLButtonElement>('button[aria-label="Expand Work"]')?.click();
+  });
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toBeChecked();
+  await expect(picker.getByRole('checkbox', { name: 'Work / Projects / Catch' })).toBeVisible();
+});
+
+test('nested primary tags, secondary selection, recoloring and deletion work on touch and desktop', async ({
+  page,
+  request,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  let parent = root;
+  for (const name of ['Projects', 'Software', 'Catch', 'Release'])
+    parent = await addTag(request, headers, name, parent);
+  await addTag(request, headers, 'Ideas');
+  await createNote(page, 'Tagged note', 'A note with context');
+  const dialog = await openNote(page, 'Tagged note');
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Blue: Work', exact: true }).click();
+  // Closing on a parent keeps it, without choosing a leaf.
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'blue');
+  await expect(dialog.getByRole('button', { name: 'Work', exact: true })).toBeVisible();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Blue: Work', exact: true }).click();
+  for (const name of ['Projects', 'Software', 'Catch', 'Release'])
+    await page.getByRole('button', { name, exact: true }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Work / Projects / Software / Catch / Release' }),
+  ).toBeVisible();
+
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects / Software / Catch / Release' }),
+  ).toBeDisabled();
+  await picker.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
+  await picker.getByRole('checkbox', { name: 'Work / Projects', exact: true }).check();
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(3);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(
+    card(page, 'Tagged note').getByRole('region', { name: 'Tags' }).getByRole('button'),
+  ).toHaveCount(3);
+
+  const recolor = await request.patch(`/api/tags/${root}`, { headers, data: { color: 'green' } });
+  expect(recolor.status()).toBe(200);
+  await expect(card(page, 'Tagged note')).toHaveAttribute('data-note-color', 'green');
+  await openNote(page, 'Tagged note');
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Red', exact: true }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'red');
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'No color', exact: true }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'default');
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Tags without a color', exact: true }).click();
+  await page
+    .locator('[data-note-toolbar]')
+    .getByRole('button', { name: 'Ideas', exact: true })
+    .click();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'default');
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Ideas', exact: true })).toBeDisabled();
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.goto('/settings/tags');
+  await page.getByRole('button', { name: 'Manage Work', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Delete Work', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete tag', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Manage Release', exact: true })).toHaveCount(0);
+  await page.goto('/');
+  await expect(card(page, 'Tagged note')).toBeVisible();
+  await expect(
+    card(page, 'Tagged note').getByRole('region', { name: 'Tags' }).getByRole('button'),
+  ).toHaveCount(1);
+});
+
+test('settings tag tree supports search, branch expansion and direct editing', async ({
+  page,
+  request,
+}, testInfo) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  const projects = await addTag(request, headers, 'Projects', work);
+  await addTag(request, headers, 'Catch', projects);
+  const life = await addTag(request, headers, 'Life', null, 'mint');
+  const habits = await addTag(request, headers, 'Habits', life);
+  await addTag(request, headers, 'Fitness and weekend adventures', habits);
+  await addTag(request, headers, 'Ideas');
+  await page.goto('/settings/tags');
+  const settings = page.getByRole('region', { name: 'Tags', exact: true });
+  await expect(settings.getByRole('button', { name: 'Manage Catch', exact: true })).toBeVisible();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath(`tags-settings-${colorScheme}.png`),
+      fullPage: true,
+    });
+  }
+  await settings.getByRole('button', { name: 'Collapse Work' }).click();
+  await expect(settings.getByRole('button', { name: 'Manage Projects' })).toHaveCount(0);
+  const search = settings.getByRole('textbox', { name: 'Find tags' });
+  await search.fill('Catch');
+  await expect(settings.getByRole('button', { name: 'Edit Catch', exact: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: 'Edit Life', exact: true })).toHaveCount(0);
+  await search.fill('Work');
+  await expect(settings.getByRole('button', { name: 'Edit Projects', exact: true })).toBeVisible();
+  await search.clear();
+  await expect(settings.getByRole('button', { name: 'Edit Projects', exact: true })).toHaveCount(0);
+  await settings.getByRole('button', { name: 'Expand Work' }).click();
+  await settings.getByRole('button', { name: 'Edit Projects', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Projects');
+  await dialog.getByLabel('Name', { exact: true }).fill('Personal projects');
+  await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(settings.getByRole('button', { name: 'Manage Personal projects' })).toBeVisible();
+});
+
+test('settings creates roots and children and reserves linked colors', async ({ page }) => {
+  await signUp(page);
+  await page.goto('/settings/tags');
+  await page.getByRole('button', { name: 'New tag', exact: true }).click();
+  let dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name', { exact: true }).fill('Travel');
+  await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Travel', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage Travel', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add child to Travel', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name', { exact: true }).fill('Japan');
+  await expect(dialog.getByRole('button', { name: 'Teal', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Manage Japan', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'New tag', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name', { exact: true }).fill('Other');
+  await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('already linked');
+});
+
+test('tag API rejects cycles, cross-user references and reused colors, and safely replays writes', async ({
+  page,
+  request,
+  browser,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  const child = await addTag(request, headers, 'Catch', root);
+  expect(
+    (
+      await request.patch(`/api/tags/${root}`, {
+        headers,
+        data: { parentId: child, color: null, icon: null },
+      })
+    ).status(),
+  ).toBe(409);
+  expect(
+    (
+      await request.post('/api/tags', {
+        headers,
+        data: { id: id(), name: 'Duplicate', parentId: null, color: 'blue', icon: null },
+      })
+    ).status(),
+  ).toBe(409);
+  expect(
+    await (
+      await request.post('/api/tags', {
+        headers,
+        data: { id: root, name: 'Replay', parentId: null, color: 'blue', icon: null },
+      })
+    ).json(),
+  ).toEqual({ txid: null });
+  const otherContext = await browser.newContext();
+  const other = await otherContext.newPage();
+  try {
+    await signUp(other);
+    const otherHeaders = await auth(other);
+    expect(
+      (
+        await request.patch(`/api/tags/${root}`, {
+          headers: otherHeaders,
+          data: { name: 'Stolen' },
+        })
+      ).status(),
+    ).toBe(404);
+    expect(
+      (
+        await request.post('/api/tags', {
+          headers: otherHeaders,
+          data: { id: id(), name: 'Foreign parent', parentId: root, color: null, icon: null },
+        })
+      ).status(),
+    ).toBe(404);
+    const noteId = id();
+    expect(
+      (
+        await request.post('/api/notes', {
+          headers: otherHeaders,
+          data: { id: noteId, content: [] },
+        })
+      ).status(),
+    ).toBe(201);
+    expect(
+      (
+        await request.patch(`/api/note-tags/${noteId}`, {
+          headers: otherHeaders,
+          data: { primaryTagId: root },
+        })
+      ).status(),
+    ).toBe(404);
+    expect(
+      (
+        await request.patch(`/api/note-tags/${noteId}`, {
+          headers,
+          data: { secondaryTagIds: [root] },
+        })
+      ).status(),
+    ).toBe(404);
+  } finally {
+    await otherContext.close();
+  }
+  expect((await request.delete(`/api/tags/${root}`, { headers })).status()).toBe(200);
+  expect(await (await request.delete(`/api/tags/${root}`, { headers })).json()).toEqual({
+    txid: null,
+  });
+});
+
+test('offline primary and secondary assignments survive reload and sync after reconnecting', async ({
+  page,
+  request,
+  browser,
+}) => {
+  const email = await signUp(page);
+  const headers = await auth(page);
+  await addTag(request, headers, 'Work', null, 'blue');
+  await addTag(request, headers, 'Ideas');
+  await createNote(page, 'Offline tags', 'Keep my assignments');
+  let dialog = await openNote(page, 'Offline tags');
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await expect(page.getByRole('button', { name: 'Blue: Work', exact: true })).toBeVisible();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.route('**/api/**', (route) => route.abort());
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Blue: Work', exact: true }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await page.reload();
+  dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2, {
+    timeout: 15_000,
+  });
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'blue');
+  await page.unroute('**/api/**');
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  // A fresh device consumes the complete shape log, including changes after its snapshot.
+  const device = await browser.newContext();
+  try {
+    const freshPage = await device.newPage();
+    await signIn(freshPage, email);
+    const freshNote = card(freshPage, 'Offline tags');
+    await expect(freshNote).toHaveAttribute('data-note-color', 'blue', { timeout: 15_000 });
+    await expect(freshNote.getByRole('button', { name: 'Work', exact: true })).toBeVisible();
+    await expect(freshNote.getByRole('button', { name: 'Ideas', exact: true })).toBeVisible();
+  } finally {
+    await device.close();
+  }
+});
+
+test('wide tag cards, copied assignments and color search follow the primary branch', async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The wide pane needs a desktop viewport.');
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  const leaf = await addTag(request, headers, 'Catch', root);
+  const secondary = await addTag(request, headers, 'Ideas');
+  await createNote(page, 'Wide tags', 'Keep these assignments when copying');
+  const noteId = await card(page, 'Wide tags').getAttribute('data-note-card');
+  expect(
+    (
+      await request.patch(`/api/note-tags/${noteId}`, {
+        headers,
+        data: { primaryTagId: leaf, secondaryTagIds: [secondary] },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect(card(page, 'Wide tags')).toHaveAttribute('data-note-color', 'blue');
+  const dialog = await openNote(page, 'Wide tags');
+  const sideTags = dialog.locator('aside').getByRole('region', { name: 'Tags' });
+  await expect(sideTags).toBeVisible();
+  await expect(sideTags.getByRole('button')).toHaveCount(2);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await card(page, 'Wide tags').hover();
+  await page.getByRole('button', { name: 'Select note', exact: true }).click();
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Make a copy', exact: true })
+    .click();
+  await expect(card(page, 'Wide tags')).toHaveCount(2);
+  for (const copy of await card(page, 'Wide tags').all()) {
+    await expect(copy).toHaveAttribute('data-note-color', 'blue');
+    await expect(copy.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  }
+  await page.goto('/search');
+  await page.getByRole('button', { name: 'Colors', exact: true }).click();
+  await page.getByRole('button', { name: 'Blue', exact: true }).click();
+  const results = page.getByRole('region', { name: 'Results' }).getByRole('article');
+  await expect(results).toHaveCount(2);
+  expect(
+    (await request.patch(`/api/tags/${root}`, { headers, data: { color: 'green' } })).status(),
+  ).toBe(200);
+  await expect(results).toHaveCount(0);
+  await page.getByRole('button', { name: 'Green', exact: true }).click();
+  await expect(results).toHaveCount(2);
+});
+
+test('secondary descendants replace ancestors, preserve siblings and keep the primary independent', async ({
+  page,
+  request,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  const parent = await addTag(request, headers, 'Projects', root);
+  const leaf = await addTag(request, headers, 'Catch', parent);
+  const sibling = await addTag(request, headers, 'Website', parent);
+  await createNote(page, 'Specific tags');
+  const noteId = await card(page, 'Specific tags').getAttribute('data-note-card');
+  const dialog = await openNote(page, 'Specific tags');
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  await picker.getByRole('checkbox', { name: 'Work', exact: true }).check();
+  await picker.getByRole('checkbox', { name: 'Work / Projects', exact: true }).check();
+  await expect(picker.getByRole('checkbox', { name: 'Work', exact: true })).not.toBeChecked();
+  await picker.getByRole('checkbox', { name: 'Work / Projects / Catch' }).check();
+  await picker.getByRole('checkbox', { name: 'Work / Projects / Website' }).check();
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects', exact: true }),
+  ).not.toBeChecked();
+  await expect(picker.getByRole('checkbox', { name: 'Work', exact: true })).toBeDisabled();
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects', exact: true }),
+  ).toBeDisabled();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await picker.getByRole('checkbox', { name: 'Work / Projects / Catch' }).uncheck();
+  await expect(picker.getByRole('checkbox', { name: 'Work', exact: true })).toBeDisabled();
+  await picker.getByRole('checkbox', { name: 'Work / Projects / Website' }).uncheck();
+  await expect(picker.getByRole('checkbox', { name: 'Work', exact: true })).toBeEnabled();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          const { getSyncStatus } = await import('/src/lib/syncStatus.ts');
+          return getSyncStatus().pending;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe(0);
+  // The same normalization runs server-side, including replayed or previously queued arrays.
+  const assignment = { primaryTagId: root, secondaryTagIds: [root, parent, leaf, sibling, leaf] };
+  for (let replay = 0; replay < 2; replay++) {
+    expect(
+      (await request.patch(`/api/note-tags/${noteId}`, { headers, data: assignment })).status(),
+    ).toBe(200);
+    await expect(picker.getByRole('checkbox', { name: 'Work / Projects / Catch' })).toBeChecked();
+    await expect(picker.getByRole('checkbox', { name: 'Work / Projects / Website' })).toBeChecked();
+    await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(3);
+  }
+  await expect(picker.getByRole('checkbox', { name: 'Work', exact: true })).toBeChecked();
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects', exact: true }),
+  ).not.toBeChecked();
+  // Moving a selected sibling under another also removes the now-redundant ancestor.
+  expect(
+    (await request.patch(`/api/tags/${sibling}`, { headers, data: { parentId: leaf } })).status(),
+  ).toBe(200);
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects / Catch', exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    picker.getByRole('checkbox', { name: 'Work / Projects / Catch / Website' }),
+  ).toBeChecked();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+});
+
+test('search combines descendant tags, any and all matching, text, colors and untagged notes', async ({
+  page,
+  request,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work', null, 'blue');
+  const projects = await addTag(request, headers, 'Projects', root);
+  const leaf = await addTag(request, headers, 'Catch', projects);
+  const ideas = await addTag(request, headers, 'Ideas');
+  const rows = [
+    {
+      title: 'Release checklist',
+      primaryTagId: leaf,
+      secondaryTagIds: [ideas],
+      isArchived: false,
+      color: 'default',
+    },
+    {
+      title: 'Archived roadmap',
+      primaryTagId: null,
+      secondaryTagIds: [leaf],
+      isArchived: true,
+      color: 'green',
+    },
+    {
+      title: 'Design sketches',
+      primaryTagId: null,
+      secondaryTagIds: [ideas],
+      isArchived: false,
+      color: 'default',
+    },
+    {
+      title: 'Loose thought',
+      primaryTagId: null,
+      secondaryTagIds: [],
+      isArchived: false,
+      color: 'default',
+    },
+    {
+      title: 'Deleted release',
+      primaryTagId: leaf,
+      secondaryTagIds: [],
+      isArchived: false,
+      color: 'default',
+      deletedAt: new Date().toISOString(),
+    },
+  ];
+  await seedNotes(
+    page,
+    rows.map((row) => row.title),
+  );
+  for (const row of rows) {
+    const noteId = await card(page, row.title).getAttribute('data-note-card');
+    expect(noteId).toBeTruthy();
+    expect(
+      (
+        await request.patch(`/api/notes/${noteId}`, {
+          headers,
+          data: {
+            color: row.color,
+            isArchived: row.isArchived,
+            deletedAt: row.deletedAt,
+          },
+        })
+      ).status(),
+    ).toBe(200);
+    if (row.primaryTagId || row.secondaryTagIds.length)
+      expect(
+        (
+          await request.patch(`/api/note-tags/${noteId}`, {
+            headers,
+            data: { primaryTagId: row.primaryTagId, secondaryTagIds: row.secondaryTagIds },
+          })
+        ).status(),
+      ).toBe(200);
+  }
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  const browse = page.getByRole('region', { name: 'Browse tags' });
+  await expect(browse.getByRole('button', { name: 'Browse Work', exact: true })).toContainText('2');
+  await browse.getByRole('button', { name: 'Browse Work', exact: true }).click();
+  const results = page.getByRole('region', { name: 'Results' });
+  const notes = results.getByRole('article');
+  await expect(notes).toHaveCount(2);
+  await expect(results).toContainText('Archived roadmap');
+  await expect(results).not.toContainText('Deleted release');
+  await expect(
+    notes
+      .filter({ hasText: 'Release checklist' })
+      .getByRole('region', { name: 'Tags' })
+      .getByRole('button'),
+  ).toHaveCount(2);
+  const filters = page.getByRole('region', { name: 'Search filters' });
+  await filters.getByRole('button', { name: /^Tags/ }).click();
+  await filters.getByRole('textbox', { name: 'Find tags' }).fill('Ideas');
+  await filters.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
+  await expect(notes).toHaveCount(3);
+  await filters.getByRole('button', { name: 'All tags', exact: true }).click();
+  await expect(notes).toHaveCount(1);
+  await filters.getByRole('button', { name: /^Tags/ }).click();
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('release');
+  await expect(notes).toHaveCount(1);
+  await filters.getByRole('button', { name: 'Colors', exact: true }).click();
+  await filters.getByRole('button', { name: 'Blue', exact: true }).click();
+  await expect(notes).toHaveCount(1);
+  await filters.getByRole('button', { name: 'Green', exact: true }).click();
+  await expect(notes).toHaveCount(0);
+  await filters.getByRole('button', { name: 'Remove color filter' }).click();
+  await expect(notes).toHaveCount(1);
+  await page.getByRole('textbox', { name: 'Search notes' }).clear();
+  await filters.getByRole('button', { name: 'Remove Work filter' }).click();
+  await expect(notes).toHaveCount(2);
+  await filters.getByRole('button', { name: 'Clear filters' }).click();
+  await browse.getByRole('button', { name: 'Browse Untagged' }).click();
+  await expect(notes).toHaveCount(1);
+  await expect(results).toContainText('Loose thought');
+  await expect(filters.getByRole('button', { name: 'Colors', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await filters.getByRole('button', { name: 'No color', exact: true }).click();
+  await expect(notes).toHaveCount(1);
+  // Filtering remains local while the API is unavailable.
+  await page.route('**/api/**', (route) => route.abort());
+  await filters.getByRole('button', { name: 'Remove Untagged filter' }).click();
+  await expect(notes).toHaveCount(2);
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('sketches');
+  await expect(notes).toHaveCount(1);
+});

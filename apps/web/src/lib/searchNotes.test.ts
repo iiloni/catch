@@ -46,6 +46,15 @@ describe('searchNotes', () => {
     expect(searchNotes([groceries, books], '', 'teal').map((r) => r.note)).toEqual([books]);
     expect(searchNotes([groceries, books], '')).toEqual([]);
   });
+  it('can browse notes prefiltered by tags without text or a color', () => {
+    expect(searchNotes([groceries, books], '', null, true).map((result) => result.note)).toEqual([
+      books,
+      groceries,
+    ]);
+    expect(
+      searchNotes([groceries, books], '', 'default', true).map((result) => result.note),
+    ).toEqual([groceries]);
+  });
 
   it('treats regex characters literally', () => {
     expect(highlight('a+b', ['+'])).toEqual([

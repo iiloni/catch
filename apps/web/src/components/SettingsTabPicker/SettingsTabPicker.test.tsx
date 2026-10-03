@@ -63,7 +63,7 @@ describe('settingsTabAt', () => {
     );
     mockLayout();
     expect(settingsTabAt(container, 150, 110)).toBe('/settings/general');
-    expect(settingsTabAt(container, 320, 190)).toBe('/settings/account');
+    expect(settingsTabAt(container, 320, 190)).toBe('/settings/tags');
     // Just above the card still reaches the first page.
     expect(settingsTabAt(container, 150, 80)).toBe('/settings/general');
     // Back down on the dock, or off to the side, is no page.
@@ -118,7 +118,7 @@ describe('SettingsTabSelector', () => {
     mockLayout();
     fireEvent.pointerMove(selector, { pointerId: 1, clientX: 150, clientY: 170 });
     fireEvent.pointerUp(selector, { pointerId: 1, clientX: 150, clientY: 170 });
-    expect(onSelect).toHaveBeenCalledWith('/settings/account');
+    expect(onSelect).toHaveBeenCalledWith('/settings/tags');
   });
 
   it('opens the picker when the finger slides off before the hold', () => {
