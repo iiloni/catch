@@ -50,6 +50,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   on `main`, create a feature branch there. Commit and push reviewable changes, open the
   draft PR and include its link in progress updates. Reuse an existing PR for the branch
   rather than creating a duplicate. Read-only questions do not require a PR.
+- Assign the PR to its creator by default. With `gh pr create`, use `--assignee @me`;
+  when reusing an existing PR, check its author and add that author as an assignee.
 - Add a small set of existing descriptive labels when opening the draft: `enhancement`
   for features or improvements, `bug` for defect fixes, `documentation` for substantive
   documentation changes, `accessibility` for accessibility work and `maintenance` for CI,

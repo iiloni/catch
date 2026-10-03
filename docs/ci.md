@@ -58,7 +58,8 @@ that action. See [workflow token behavior](https://docs.github.com/en/actions/co
 
 Agents follow this process by default for new features and code fixes, as specified in
 [the agent guide](../AGENTS.md). Request the feature normally; the agent commits and pushes
-reviewable changes and opens a draft PR. After reviewing functionality and design, apply
+reviewable changes and opens a draft PR assigned to its creator (`--assignee @me` when
+using `gh pr create`). After reviewing functionality and design, apply
 `merge on pass` yourself or tell the agent the feature is approved for merging after tests
 pass. The agent then handles validation and merging under the branch rules.
 
