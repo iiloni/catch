@@ -2,24 +2,33 @@ import { type CDPSession, expect, test } from '@playwright/test';
 import { card, settledBox, signUp } from './helpers';
 
 async function swipe(touch: CDPSession, x: number, y: number, delta: number) {
+  // Preserve the intended finger timing even when browser-command delivery is slow.
+  let timestamp = Date.now() / 1000;
   await touch.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [{ x, y, id: 1 }],
+    timestamp,
   });
   // Include the small initial movements that a finger makes before a swipe commits.
   const distances = [2, 4, 7, 10, 14, 20, 30, 45, 60, 80, 100, 120]
     .filter((distance) => distance < Math.abs(delta))
     .concat(Math.abs(delta));
   for (const distance of distances) {
+    timestamp += 0.016;
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [{ x, y: y + Math.sign(delta) * distance, id: 1 }],
+      timestamp,
     });
     await new Promise((resolve) => setTimeout(resolve, 16));
   }
   // Rest before release so Chrome does not consume the next tap after a fling.
   await new Promise((resolve) => setTimeout(resolve, 100));
-  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+    timestamp: timestamp + 0.1,
+  });
 }
 
 test('quick-note swipes save from text, blank space, and a formatting button', async ({
