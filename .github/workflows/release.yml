@@ -59,6 +59,20 @@ jobs:
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
             jq '[.[][] | {tagName: .tag_name, isDraft: .draft}]' > "$RUNNER_TEMP/releases.json"
           node scripts/release.ts promotion "$RELEASE_TAG" "$RUNNER_TEMP/releases.json"
+      - name: Validate Android signing secrets
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing Actions secret: $name"
+              exit 1
+            fi
+          done
 
   checks:
     needs: version
@@ -103,16 +117,7 @@ jobs:
       - name: Configure release signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::Missing Actions secret: $name"
-              exit 1
-            fi
-          done
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/catch-release.keystore"
           printf 'ANDROID_KEYSTORE_PATH=%s\n' "$RUNNER_TEMP/catch-release.keystore" >> "$GITHUB_ENV"
@@ -155,7 +160,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/catch-release.keystore"
 
   image:
-    needs: [version, android]
+    needs: [version, checks]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

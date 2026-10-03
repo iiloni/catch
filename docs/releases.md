@@ -64,11 +64,12 @@ commit messages, but choose release versions explicitly.
   its own copy of E2E.
 - `release.yml`: a pushed `v*` tag validates the version. Builds and publishing proceed
   only when the Actions repository variable `RELEASES_ENABLED` is exactly `true`.
-  Release runs are queued, with no cancellation or manual dispatch. Missing Android
-  credentials fail before the image job can build or publish.
-- Signed APK builds use Node 24, JDK 21, SDK 36, and the Gradle wrapper. The Docker job then
-  builds the production Dockerfile for `linux/amd64` and `linux/arm64`, and pushes only the
-  exact version. Once both artifacts are ready, the publishing job uploads the APK and
+  Release runs are queued, with no cancellation or manual dispatch. The version job checks
+  Android signing secrets before either build can start; missing credentials block both.
+- After CI passes, signed APK and Docker image builds run in parallel. APK builds use
+  Node 24, JDK 21, SDK 36, and the Gradle wrapper. The Docker job builds the production
+  Dockerfile for `linux/amd64` and `linux/arm64`, and pushes only the exact version.
+  Once both artifacts are ready, the publishing job uploads the APK and
   checksum to a draft release, updates the appropriate image aliases, and publishes the
   release. Preview GitHub Releases are marked as prereleases.
 
@@ -205,9 +206,10 @@ Pushing the tag triggers the release workflow; merging ordinary code does not pu
 images or APKs. Leave `RELEASES_ENABLED` absent until you intend to enable release builds.
 
 Follow the Release workflow in Actions. An interrupted unpublished release can be retried
-using Re-run jobs; the draft and assets can be resumed. A failed publication may leave an
-exact image or draft release, but stable/preview aliases only advance after both build jobs
-succeed. Once published, choose a new version for any changes.
+using Re-run jobs; the draft and assets can be resumed. An Android build failure may leave
+an exact image, and a failed publication may leave an exact image or draft release, but
+stable/preview aliases only advance after both build jobs succeed. Once published, choose
+a new version for any changes.
 
 ## Production configuration outside the repository
 
