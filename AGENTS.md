@@ -63,13 +63,16 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   renewed approval. Keep the branch up to date as required checks rerun.
   The local `./scripts/dev.sh check` requirement still applies.
 - Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
-  concrete problem and resulting behavior; include a before/after example when useful.
+  feature, improvement or fix and what it enables or changes. Include motivation or a
+  before/after example when useful; a linked issue is optional.
   Summarize the final scope, relevant validation (passed, failed or still pending) and
   material limitations. Scale detail to the change: simple PRs need only a short paragraph
   plus validation. Use a Conventional Commit title, update the title/description when scope
-  changes, follow any repository PR template and omit conversation history or abandoned
-  approaches unless they explain a review-relevant tradeoff. Report screenshots or
-  recordings for visual changes when available; link relevant issues and docs.
+  changes and use `.github/pull_request_template.md` for the body, including when creating
+  PRs through a CLI or API. Fill its sections, remove instructional comments and omit empty
+  optional review notes. Omit conversation history or abandoned approaches unless they
+  explain a review-relevant tradeoff. Report screenshots or recordings for visual changes
+  when available; link relevant issues and docs.
 
 ### Working in parallel
 
