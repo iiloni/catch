@@ -11,6 +11,7 @@ import { db } from '../db/client';
 import { account, attachments, session, user } from '../db/schema';
 import { requireAdmin } from '../lib/requireAdmin';
 import { backupRoutes } from './backups';
+import { inviteRoutes } from './invites';
 
 const userColumns = {
   id: user.id,
@@ -143,4 +144,5 @@ export const adminRoutes = new Hono<AppEnv>()
     await deleteFiles(result);
     return c.json({ ok: true });
   })
+  .route('/invites', inviteRoutes)
   .route('/backups', backupRoutes);

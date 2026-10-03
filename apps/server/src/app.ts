@@ -1,4 +1,4 @@
-import { API_PROTOCOL_HEADER, SUPPORTED_API_PROTOCOLS } from '@catch/shared';
+import { API_PROTOCOL_HEADER, INVITE_HEADER, SUPPORTED_API_PROTOCOLS } from '@catch/shared';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -69,7 +69,7 @@ export function createApp() {
     cors({
       origin: [...NATIVE_APP_ORIGINS, ...env.TRUSTED_ORIGINS],
       credentials: true,
-      allowHeaders: ['Content-Type', 'Authorization', 'Range', API_PROTOCOL_HEADER],
+      allowHeaders: ['Content-Type', 'Authorization', 'Range', API_PROTOCOL_HEADER, INVITE_HEADER],
       exposeHeaders: [
         'set-auth-token',
         'electric-offset',

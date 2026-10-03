@@ -285,7 +285,8 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - The production server sends a content security policy (`lib/securityHeaders.ts`, ADR 0015)
   that Vite's dev server does not. A script, frame or request to another origin works in
   development and is blocked in a release until the policy allows it.
-- Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
+- Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set;
+  otherwise it takes an admin's invite link (`lib/invites.ts`, ADR 0015).
   Only the signed token from `set-auth-token` works as a bearer token.
 - `pnpm check` on a machine without FFmpeg or the Postgres client tools skips the tests that
   need them; `./scripts/dev.sh check` and CI's stack run them.

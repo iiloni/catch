@@ -12,7 +12,8 @@ docker compose up -d --build
 
 The app listens on port 3000 (`CATCH_PORT` to change it). Put it behind HTTPS; the Android
 app requires it. The first account you create becomes the instance admin, and sign-up then
-closes: set `REGISTRATION=open` while other people make their accounts. Set `TRUSTED_PROXIES`
+closes: invite other people from Settings > Admin > Users, which gives you a link to send
+each of them. `REGISTRATION=open` lets anyone sign up instead. Set `TRUSTED_PROXIES`
 to your reverse proxy's address so the sign-in rate limit counts each visitor rather than
 the proxy (see `.env.example`).
 

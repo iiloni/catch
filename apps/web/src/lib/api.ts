@@ -3,8 +3,11 @@ import type {
   AttachmentAccess,
   CreateAttachment,
   CreateBoardColumn,
+  CreateInvite,
+  CreateInviteResponse,
   CreateNote,
   CreateNotes,
+  InvitesResponse,
   LinkIntake,
   ListUsers,
   RefreshLinkPreview,
@@ -75,6 +78,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  listInvites: () => request<InvitesResponse>('/admin/invites', { method: 'GET' }),
+  createInvite: (body: CreateInvite) =>
+    request<CreateInviteResponse>('/admin/invites', { method: 'POST', body: JSON.stringify(body) }),
+  deleteInvite: (id: string) =>
+    request<UserActionResponse>(`/admin/invites/${id}`, { method: 'DELETE' }),
   createAttachment: (body: CreateAttachment) =>
     request<TxidResponse>('/attachments', { method: 'POST', body: JSON.stringify(body) }),
   uploadAttachment: (id: string, blob: Blob) =>

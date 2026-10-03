@@ -1,3 +1,4 @@
+import { INVITE_HEADER, inviteFromFragment } from '@catch/shared';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
@@ -23,7 +24,9 @@ const devCredentials =
 
 function LoginPage() {
   const { redirect: returnTo } = Route.useSearch();
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  // An invite link opens the form to make the account it is for.
+  const [invite] = useState(() => inviteFromFragment(window.location.hash));
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>(invite ? 'sign-up' : 'sign-in');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -38,17 +41,17 @@ function LoginPage() {
       const result =
         mode === 'sign-in'
           ? await authClient.signIn.email({ email, password })
-          : await authClient.signUp.email({
-              email,
-              password,
-              name: String(form.get('name') ?? ''),
-            });
+          : await authClient.signUp.email(
+              { email, password, name: String(form.get('name') ?? '') },
+              invite ? { headers: { [INVITE_HEADER]: invite } } : undefined,
+            );
       if (result.error) {
         setError(result.error.message ?? 'Something went wrong');
         return;
       }
       // A full load, so the collections open this user's copy of their notes on the device.
-      window.location.assign(authReturnTo(returnTo, window.location.hash));
+      // The invite is spent: it must not ride along as a destination's fragment.
+      window.location.assign(authReturnTo(returnTo, invite ? '' : window.location.hash));
     } catch {
       setError('Could not reach the Catch server. Check your connection and try again.');
     } finally {
@@ -60,6 +63,11 @@ function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
       <BrandLockup orientation="stacked" iconSize={96} />
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+        {invite && mode === 'sign-up' && (
+          <p className="text-center text-muted-foreground text-sm">
+            You have been invited to this Catch server. Make your account to join.
+          </p>
+        )}
         {mode === 'sign-up' && <Input name="name" placeholder="Name" aria-label="Name" />}
         <Input
           name="email"

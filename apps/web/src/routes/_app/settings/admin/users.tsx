@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
+import { UserInvites } from '@/components/UserInvites/UserInvites';
 import { UserManagement } from '@/components/UserManagement/UserManagement';
 import { authClient, getSignedInUser } from '@/lib/auth';
 
@@ -15,6 +16,9 @@ function UsersSettings() {
     void navigate({ to: '/settings/general', replace: true });
   }, [navigate, refetch]);
   return (
-    <UserManagement currentUserId={getSignedInUser()?.id ?? ''} onAccessDenied={onAccessDenied} />
+    <div className="flex flex-col gap-6">
+      <UserManagement currentUserId={getSignedInUser()?.id ?? ''} onAccessDenied={onAccessDenied} />
+      <UserInvites onAccessDenied={onAccessDenied} />
+    </div>
   );
 }

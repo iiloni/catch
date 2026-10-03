@@ -28,6 +28,8 @@ transaction. The password is returned with `Cache-Control: no-store` and stays o
 open result dialog, where the admin can copy it. It does not expire automatically; the user
 can replace it through Account > Change password, which revokes other sessions.
 
+Admins also make and revoke invite links on the users page (ADR 0015).
+
 Deleting an account cascades to its credentials, sessions, notes, board columns, previews
 and attachment metadata. The server also removes that user's attachment bytes and thumbnails.
 The target row is locked before collecting files to prevent new dependent rows from being

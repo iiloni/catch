@@ -8,10 +8,19 @@ A Catch server is usually one household's, but it is reachable by anyone who has
 address. These defaults assume that.
 
 **Sign-up closes after the first account.** The first account is the admin's and can always
-be made. Every later one is refused unless `REGISTRATION=open`, which the admin sets while
-other people join. The refusal comes from Better Auth's own sign-up response, so the sign-in
-page shows it with no new endpoint. Development stacks run open: seeding and the E2E tests
-make accounts.
+be made. Every later one needs an invite, unless `REGISTRATION=open` lets anyone in. The
+refusal comes from Better Auth's own sign-up response, so the sign-in page shows it with no
+new endpoint. Development stacks run open: seeding and the E2E tests make accounts.
+
+**Admins invite people with a link.** Settings > Admin > Users makes an invite: a link to
+the sign-in page with a random token in its fragment, good for one account and seven days.
+The page sends the token with sign-up in an `X-Catch-Invite` header, and the server uses the
+invite up in the same statement that checks it, so a link cannot make two accounts. A token
+that is sent must be good even when registration is open. The server keeps only the token's
+hash, shows the link once, and lists each invite with the account it made; removing one
+revokes it. Invites are admin server state like the user directory (ADR 0011): plain
+requests under `/api/admin/invites`, not a synced collection. An invite is not tied to an
+email address, since the server sends no mail to check one against.
 
 **Requests are bounded.** JSON bodies are read into memory whole, so `/api` refuses one over
 16 MiB with `413`; attachment and backup uploads stream to disk under their own limits.
@@ -43,7 +52,9 @@ to resume and follow its shape, not the ones that choose rows.
 
 ## Compatibility
 
-No request, response, shape or outbox format changes; the API protocol stays at 1. Clients
+No existing request, response, shape or outbox format changes; the API protocol stays at 1.
+Invites add admin routes and one optional sign-up header: an older server ignores the header
+and an older client simply has no page for them. Clients
 already send the signed token and none uses Electric's subset parameters. A `413` reaches
 old clients as an ordinary refused write. Anything else that used the bare session token as
 a bearer token has to use the `set-auth-token` value instead.

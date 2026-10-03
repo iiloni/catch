@@ -583,3 +583,55 @@ test('last login advances on successful sign-in but not on failure or session re
   const latest = await lastLogin();
   expect(Date.parse(latest!)).toBeGreaterThan(Date.parse(first!));
 });
+
+test('an admin invites someone, and the link makes one account', async ({ page, browser }) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Password').fill('adminadmin');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({ timeout: 30_000 });
+  await page.goto('/settings/admin/users');
+  const who = `Invitee ${Date.now()}`;
+  await page.getByLabel('Who the invite is for').fill(who);
+  await page.getByRole('button', { name: 'Create invite' }).click();
+  const link = await page.getByRole('textbox', { name: 'Invite link' }).inputValue();
+  expect(link).toMatch(/\/login#invite=[\w-]{43}$/);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveCount(0);
+
+  const email = `invited-${Date.now()}@example.com`;
+  async function join(address: string) {
+    const context = await browser.newContext();
+    const guest = await context.newPage();
+    await guest.goto(link);
+    await expect(guest.getByText('You have been invited to this Catch server.')).toBeVisible();
+    await guest.getByLabel('Name').fill('Invited');
+    await guest.getByLabel('Email').fill(address);
+    await guest.getByLabel('Password').fill('password123');
+    await guest.getByRole('button', { name: 'Create account' }).click();
+    return { context, guest };
+  }
+
+  const first = await join(email);
+  try {
+    await expect(first.guest.getByRole('heading', { name: 'Gallery' })).toBeVisible({
+      timeout: 30_000,
+    });
+    // The spent token does not linger in the address bar.
+    expect(first.guest.url()).not.toContain('invite=');
+  } finally {
+    await first.context.close();
+  }
+
+  const second = await join(`again-${email}`);
+  try {
+    await expect(second.guest.getByText('This invite has been used or has expired.')).toBeVisible();
+  } finally {
+    await second.context.close();
+  }
+
+  await page.reload();
+  await expect(page.getByText(`by ${email}`)).toBeVisible();
+  await page.getByRole('button', { name: `Remove invite for ${who}` }).click();
+  await expect(page.getByText(who)).toHaveCount(0);
+});

@@ -1,4 +1,4 @@
-import { BOARD_COLUMNS } from '@catch/shared';
+import { BOARD_COLUMNS, INVITE_HEADER } from '@catch/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
@@ -8,6 +8,11 @@ import { db } from './db/client';
 import * as schema from './db/schema';
 import { env, NATIVE_APP_ORIGINS } from './env';
 import { CLIENT_IP_HEADER } from './lib/clientIp';
+import { claimInvite, recordInvitedUser } from './lib/invites';
+
+type HookContext = { request?: Request; headers?: Headers } | null | undefined;
+const inviteToken = (context: HookContext) =>
+  context?.request?.headers.get(INVITE_HEADER) ?? context?.headers?.get(INVITE_HEADER) ?? null;
 
 export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
@@ -46,17 +51,28 @@ export const auth = betterAuth({
     user: {
       create: {
         // The first account on a self-hosted instance becomes its admin.
-        before: async (user) => {
+        before: async (user, context) => {
           const [row] = await db.select({ total: count() }).from(schema.user);
           const first = row?.total === 0;
-          if (!first && env.REGISTRATION === 'closed') {
+          const invite = inviteToken(context);
+          // An invite is one account's way past closed registration. A link that is offered
+          // has to be good even when registration is open, so it is never quietly reusable.
+          if (!first && invite !== null) {
+            if (!(await claimInvite(invite))) {
+              throw new APIError('FORBIDDEN', {
+                message: 'This invite has been used or has expired. Ask the admin for a new one.',
+              });
+            }
+          } else if (!first && env.REGISTRATION === 'closed') {
             throw new APIError('FORBIDDEN', {
-              message: 'This server is not accepting new accounts. Ask its admin for one.',
+              message: 'This server is not accepting new accounts. Ask its admin for an invite.',
             });
           }
           return { data: { ...user, role: first ? 'admin' : 'user' } };
         },
-        after: async (user) => {
+        after: async (user, context) => {
+          const invite = inviteToken(context);
+          if (invite !== null) await recordInvitedUser(invite, user.id);
           await db.insert(schema.boardColumns).values(
             BOARD_COLUMNS.map((column, index) => ({
               ...column,
