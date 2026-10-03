@@ -143,9 +143,13 @@ export function TagBadge({
               event.stopPropagation();
               onRemove();
             }}
-            className="flex size-9 shrink-0 items-center justify-center rounded-r-md outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="group relative flex size-9 shrink-0 items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            <X className="size-3.5" aria-hidden />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-1 rounded-md bg-foreground/5 opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100"
+            />
+            <X className="relative size-3.5" aria-hidden />
           </button>
         </span>
       ) : (

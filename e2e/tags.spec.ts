@@ -980,7 +980,11 @@ test('filter badges stay steady through empty results and spring into place afte
   await settledBox(group);
   const results = page.getByRole('region', { name: 'Results' });
   await expect(results.getByRole('article')).toHaveCount(2);
-  await page.screenshot({ path: testInfo.outputPath('compact-match-and-filter-badges.png') });
+  await group.getByRole('button', { name: 'Remove Work filter' }).hover();
+  await page.screenshot({
+    path: testInfo.outputPath('compact-match-and-filter-badges.png'),
+    animations: 'disabled',
+  });
   for (const name of ['All tags', 'Any tag']) {
     const samples = await panel
       .getByRole('button', { name, exact: true })
