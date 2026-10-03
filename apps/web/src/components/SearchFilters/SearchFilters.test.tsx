@@ -171,6 +171,36 @@ describe('search filters', () => {
     await waitFor(() => expect(screen.getByRole('tabpanel', { name: 'Colors' })).toBeVisible());
     expect(localStorage.getItem('catch-search-filter-tab')).toBe('"colors"');
   });
+  it('hides matching controls during tag search and restores the selected mode on blur', () => {
+    const onFilterChange = vi.fn();
+    render(
+      <SearchFilters
+        tags={tags}
+        filter={{ ids: [root.id, child.id], match: 'all', untagged: false }}
+        color={null}
+        counts={new Map()}
+        untaggedCount={0}
+        onFilterChange={onFilterChange}
+        onColorChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Tags' }));
+    expect(screen.getByRole('button', { name: 'All tags' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const search = screen.getByRole('textbox', { name: 'Find tags' });
+    fireEvent.focus(search);
+    expect(screen.queryByRole('button', { name: 'All tags' })).toBeNull();
+    fireEvent.change(search, { target: { value: 'Projects' } });
+    expect(screen.getByRole('checkbox', { name: 'Work / Projects' })).toBeChecked();
+    fireEvent.blur(search);
+    expect(screen.getByRole('button', { name: 'All tags' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(onFilterChange).not.toHaveBeenCalled();
+  });
   it('browses roots without treating a child as a separate top-level topic', () => {
     const onSelect = vi.fn();
     render(

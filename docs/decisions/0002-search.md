@@ -34,8 +34,10 @@ close it. Switching between browsing, results and no matches fades and settles t
 with the shared spring, while subsequent result changes retain their list animation. Active
 filters stay mounted above these views; only changed badges enter or exit, and the remaining
 badges spring into position after removal. Each removal button shares its badge’s glass
-surface. Any/All matching uses a compact segmented control that expands and collapses
-when the second tag is added or removed.
+surface. Any/All matching sits beside Find tags when multiple tags are selected. Focusing
+the search field expands it to full width and hides matching controls; leaving focus restores
+them without changing the selection or match mode. The tab views share a bottom anchor
+while sliding and resizing, and horizontal overflow is clipped.
 Reduced motion switches views immediately. Untagged is separate from No color. Archived
 notes are included, trashed notes excluded, and result badges show the assigned tags.
 Recent text searches remain available. See ADR 0015 for tag semantics.
