@@ -87,8 +87,13 @@ control to stop a running review.
 ## Handling review results
 
 Agents follow the [AI review instructions in AGENTS.md](../AGENTS.md#ai-code-review)
-when you request a review or apply the label. Review remains opt-in; agents do not
-spend another review simply because a label is still present after a push.
+when you request a review or apply the label. They also request one full review on
+their own for changes to the higher-risk areas listed there (API compatibility, auth
+and security, schema and backups, the outbox and local persistence, CI and release),
+and skip it for docs, tests, styling and small contained fixes. A review an agent
+requested itself does not hold the PR if cubic stays silent; one you requested does.
+Review remains optional for merging; agents do not spend another review simply
+because a label is still present after a push.
 
 Read cubic's completed summary, inline findings and follow-up discussion, and
 confirm the reviewed revision. `gh pr view <number> --comments` shows the PR

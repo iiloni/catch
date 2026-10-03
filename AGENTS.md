@@ -62,8 +62,9 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - Iterate on the draft without `merge on pass`. Regular checks
   run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
   pushes while it remains. See `docs/ci.md` for repository setup and commands.
-- Use the opt-in AI review process below when the user requests a review or has applied
-  `ai review`. The label is advisory and does not authorize merging.
+- Use the AI review process below when the user requests a review, has applied
+  `ai review`, or the PR changes one of the areas listed there. The label is advisory
+  and does not authorize merging.
 - An unlabeled PR deliberately fails `validation`; require that check in branch protection
   so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
   approved and authorizes merging once required checks pass.
@@ -92,10 +93,31 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 
 ### AI code review
 
-- Follow `docs/ai-reviews.md`. When requested, finish the implementation and local checks,
-  then add `ai review` to the draft using the normal GitHub login. If the user already
+- AI review is advisory and never required for merging. Request one, without being
+  asked, when the PR changes any of:
+  - API requests/responses, synced shapes, note encoding or write/replay behavior
+    (anything ADR 0013 covers), or the protocol version;
+  - auth, sessions, invites, admin guards, the CSP, `safeFetch` or shape-proxy
+    user filters and column allowlists;
+  - the Drizzle schema or a migration, or backup/restore code;
+  - the outbox, local persistence (`localStore.ts`, `schemaVersion`) or device
+    migrations;
+  - CI, release or deployment workflows and scripts.
+
+  Skip it for docs-only, test-only, formatting, copy and styling changes, and for
+  small fixes confined to one component, unless the user asks. When unsure, say in
+  the progress update that you did not request a review and why; the user can add
+  `ai review` themselves.
+- Follow `docs/ai-reviews.md`. Finish the implementation and local checks, then add
+  `ai review` to the draft using the normal GitHub login. If the user already
   applied it, inspect that request before creating another. Do not request a review on
   every push or treat a label left on a PR as a request for another review.
+- Request at most one full review per PR on your own initiative, before asking for
+  merge approval. Further full reviews need the user's request; incremental reviews
+  after meaningful fixes are still allowed. A self-requested review does not block
+  the task: if cubic has not completed after a reasonable wait, report it as pending
+  instead of holding the PR. A review the user asked for must still complete before
+  merging.
 - Wait for cubic's completed review and read its summary, inline comments and discussion
   replies. A green request workflow or an acknowledgement is not a completed review.
   Check which commit was reviewed; findings from an older revision must be checked
