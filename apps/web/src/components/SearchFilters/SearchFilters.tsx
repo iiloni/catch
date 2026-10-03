@@ -182,8 +182,8 @@ function FilterTabView({
       exit="leave"
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
       className={cn(
-        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-6.25rem))] overflow-auto overscroll-contain',
-        !isPresent && 'absolute inset-x-0 top-0',
+        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-6.25rem))] overflow-x-hidden overflow-y-auto overscroll-contain',
+        !isPresent && 'absolute inset-x-0 bottom-0',
       )}
     >
       {children}
@@ -242,14 +242,6 @@ export function SearchFilters({
                   <Tags className="size-4 text-muted-foreground" aria-hidden />
                   Tags
                 </h3>
-                <AnimatePresence initial={false}>
-                  {filter.ids.length > 1 && (
-                    <TagMatchControl
-                      match={filter.match}
-                      onChange={(match) => onFilterChange({ ...filter, match })}
-                    />
-                  )}
-                </AnimatePresence>
                 {awaitingTags && !tags.length ? (
                   <p role="status" className="py-2 text-sm text-muted-foreground">
                     Loading tags…
@@ -258,6 +250,16 @@ export function SearchFilters({
                   <TagTree
                     tags={tags}
                     searchPosition="bottom"
+                    searchAccessory={(focused) => (
+                      <AnimatePresence initial={false}>
+                        {filter.ids.length > 1 && !focused && (
+                          <TagMatchControl
+                            match={filter.match}
+                            onChange={(match) => onFilterChange({ ...filter, match })}
+                          />
+                        )}
+                      </AnimatePresence>
+                    )}
                     className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-16rem),16rem)]"
                     renderTag={(tag, path) => (
                       <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
@@ -556,17 +558,14 @@ function TagMatchControl({
     <motion.div
       inert={!isPresent}
       aria-hidden={!isPresent}
-      className="overflow-hidden"
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: 'auto', opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
+      className="shrink-0 overflow-hidden"
+      initial={{ width: 0, opacity: 0 }}
+      animate={{ width: 'auto', opacity: 1 }}
+      exit={{ width: 0, opacity: 0 }}
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
     >
-      <fieldset className="flex items-center justify-end gap-2">
+      <fieldset className="ml-2 flex h-11 w-26 items-center justify-end">
         <legend className="sr-only">Match tags</legend>
-        <span className="text-xs text-muted-foreground" aria-hidden>
-          Match
-        </span>
         <LayoutGroup id={layoutId}>
           <div className="relative flex px-1">
             <span aria-hidden className="absolute inset-x-0 inset-y-2 rounded-lg bg-foreground/5" />

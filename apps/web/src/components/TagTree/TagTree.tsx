@@ -11,14 +11,17 @@ export function TagTree({
   renderTag,
   className,
   searchPosition = 'top',
+  searchAccessory,
 }: {
   tags: readonly Tag[];
   renderTag: (tag: Tag, path: readonly Tag[]) => ReactNode;
   className?: string;
   searchPosition?: 'top' | 'bottom';
+  searchAccessory?: (focused: boolean) => ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const reducedMotion = useReducedMotion();
   const query = search.trim().toLowerCase();
   const rows = tagTree(tags).filter(({ tag }) =>
@@ -30,16 +33,23 @@ export function TagTree({
   );
   const visibleIds = new Set(rows.map(({ tag }) => tag.id));
   const searchInput = (
-    <input
-      aria-label="Find tags"
-      placeholder="Find tags"
-      value={search}
-      onChange={(event) => setSearch(event.target.value)}
+    <div
       className={cn(
-        'h-10 w-full shrink-0 rounded-xl border border-border bg-background/40 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        'flex h-11 shrink-0 items-center',
         searchPosition === 'bottom' ? 'mt-2' : 'mb-2',
       )}
-    />
+    >
+      <input
+        aria-label="Find tags"
+        placeholder="Find tags"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        onFocus={() => setSearchFocused(true)}
+        onBlur={() => setSearchFocused(false)}
+        className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background/40 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      />
+      {searchAccessory?.(searchFocused)}
+    </div>
   );
   return (
     <>

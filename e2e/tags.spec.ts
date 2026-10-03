@@ -753,7 +753,14 @@ test('search filter glass stays above the keyboard and closes before leaving sea
   for (const name of ['Tags', 'Colors', 'Tags']) {
     const samples = await panel.getByRole('tab', { name, exact: true }).evaluate(async (button) => {
       button.click();
-      const samples: { height: number; x: number; bottom: number }[] = [];
+      const samples: {
+        height: number;
+        x: number;
+        bottom: number;
+        outgoingBottom: number | null;
+        activeBottom: number;
+        overflowX: string;
+      }[] = [];
       for (let frame = 0; frame < 40; frame++) {
         await new Promise(requestAnimationFrame);
         const panel = document.getElementById('search-filter-panel');
@@ -765,6 +772,11 @@ test('search filter glass stays above the keyboard and closes before leaving sea
             height: panel.getBoundingClientRect().height,
             x: new DOMMatrix(getComputedStyle(active).transform).m41,
             bottom: panel.querySelector('[role="tablist"]')!.getBoundingClientRect().bottom,
+            outgoingBottom:
+              panel.querySelector('[role="tabpanel"][aria-hidden="true"]')?.getBoundingClientRect()
+                .bottom ?? null,
+            activeBottom: active.getBoundingClientRect().bottom,
+            overflowX: getComputedStyle(active).overflowX,
           });
       }
       return samples;
@@ -774,6 +786,12 @@ test('search filter glass stays above the keyboard and closes before leaving sea
     expect(maximum - minimum).toBeGreaterThan(20);
     expect(samples.some(({ height }) => height > minimum + 5 && height < maximum - 5)).toBe(true);
     expect(samples.some(({ x }) => Math.abs(x) > 2)).toBe(true);
+    expect(samples.every(({ overflowX }) => overflowX === 'hidden')).toBe(true);
+    expect(
+      samples
+        .filter(({ outgoingBottom }) => outgoingBottom !== null)
+        .every(({ outgoingBottom, activeBottom }) => Math.abs(outgoingBottom! - activeBottom) < 1),
+    ).toBe(true);
     expect(
       Math.max(...samples.map(({ bottom }) => bottom)) -
         Math.min(...samples.map(({ bottom }) => bottom)),
@@ -959,23 +977,23 @@ test('filter badges stay steady through empty results and spring into place afte
   const panel = page.getByRole('region', { name: 'Search filters' });
   await panel.getByRole('tab', { name: 'Tags', exact: true }).click();
   await panel.getByRole('checkbox', { name: 'Work', exact: true }).check();
-  // The match control should grow into flow when a second tag is selected.
-  const heights = await panel
+  // A second tag makes the match control grow beside the search field.
+  const widths = await panel
     .getByRole('checkbox', { name: 'Ideas', exact: true })
     .evaluate(async (checkbox) => {
       checkbox.click();
-      const heights: number[] = [];
+      const widths: number[] = [];
       for (let frame = 0; frame < 40; frame++) {
         await new Promise(requestAnimationFrame);
         const legend = [...document.querySelectorAll('legend')].find(
           (legend) => legend.textContent === 'Match tags',
         );
-        heights.push(legend?.parentElement?.parentElement?.getBoundingClientRect().height ?? 0);
+        widths.push(legend?.parentElement?.parentElement?.getBoundingClientRect().width ?? 0);
       }
-      return heights;
+      return widths;
     });
-  expect(heights.some((height) => height > 5 && height < 35)).toBe(true);
-  expect(heights.at(-1)!).toBeGreaterThan(40);
+  expect(widths.some((width) => width > 15 && width < 90)).toBe(true);
+  expect(widths.at(-1)!).toBeGreaterThan(100);
   const group = page.getByRole('group', { name: 'Active filters' });
   await settledBox(group);
   const results = page.getByRole('region', { name: 'Results' });
@@ -1023,21 +1041,57 @@ test('filter badges stay steady through empty results and spring into place afte
       await expect(page.getByText('No matching notes', { exact: true })).toBeVisible();
     else await expect(results.getByRole('article')).toHaveCount(2);
   }
+  const search = panel.getByRole('textbox', { name: 'Find tags' });
+  for (const focused of [true, false]) {
+    const widths = await search.evaluate(async (input, focused) => {
+      const before = input.getBoundingClientRect().width;
+      if (focused) input.focus();
+      else input.blur();
+      const values: number[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        values.push(input.getBoundingClientRect().width);
+      }
+      return { before, values, full: input.parentElement!.getBoundingClientRect().width };
+    }, focused);
+    const final = widths.values.at(-1)!;
+    expect(Math.abs(final - widths.before)).toBeGreaterThan(100);
+    expect(
+      widths.values.some(
+        (width) =>
+          width > Math.min(final, widths.before) + 15 &&
+          width < Math.max(final, widths.before) - 15,
+      ),
+    ).toBe(true);
+    if (focused) {
+      expect(Math.abs(final - widths.full)).toBeLessThan(1);
+      await expect(search).toBeFocused();
+      await expect(panel.getByRole('group', { name: 'Match tags' })).toHaveCount(0);
+      await search.fill('Work');
+      await expect(panel.getByRole('checkbox', { name: 'Work', exact: true })).toBeChecked();
+      await search.clear();
+      await page.screenshot({ path: testInfo.outputPath('expanded-tag-search.png') });
+    } else
+      await expect(panel.getByRole('button', { name: 'Any tag' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+  }
   const collapse = await panel
     .getByRole('checkbox', { name: 'Ideas', exact: true })
     .evaluate(async (checkbox) => {
       checkbox.click();
-      const heights: number[] = [];
+      const widths: number[] = [];
       for (let frame = 0; frame < 40; frame++) {
         await new Promise(requestAnimationFrame);
         const legend = [...document.querySelectorAll('legend')].find(
           (legend) => legend.textContent === 'Match tags',
         );
-        heights.push(legend?.parentElement?.parentElement?.getBoundingClientRect().height ?? 0);
+        widths.push(legend?.parentElement?.parentElement?.getBoundingClientRect().width ?? 0);
       }
-      return heights;
+      return widths;
     });
-  expect(collapse.some((height) => height > 5 && height < 35)).toBe(true);
+  expect(collapse.some((width) => width > 15 && width < 90)).toBe(true);
   expect(collapse.at(-1)!).toBeLessThan(1);
   await panel.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
   await settledBox(group);
