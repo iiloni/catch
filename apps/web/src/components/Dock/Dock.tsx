@@ -1,5 +1,15 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Check, ChevronLeft, Columns3, LayoutDashboard, Plus, Search, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  Columns3,
+  LayoutDashboard,
+  LoaderCircle,
+  Plus,
+  Search,
+  SquarePen,
+  X,
+} from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
@@ -17,6 +27,7 @@ import {
   editorNote,
   lastBrowsingTab,
   quickNote,
+  quickNoteCanSave,
   searchQuery,
   type TabPath,
   tabFor,
@@ -25,6 +36,7 @@ import { useEntryMotion } from '@/lib/entryMotion';
 import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryPages';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
+import { linkCaptureControls } from '@/lib/linkCapture';
 import { HOLD_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
@@ -66,10 +78,14 @@ export function Dock() {
   const pane = useNotePane();
   const tab = tabFor(pathname);
   const inSettings = isSettingsPath(pathname);
-  const hidden = useWideSettings() && inSettings;
+  const noteState = quickNote.use();
+  const capture = linkCaptureControls.use();
+  const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
+  const hidden = useWideSettings() && inSettings && !quickNoteOpen;
   const entry = useEntryMotion('dock', !hidden, 120);
-  const mode =
-    noteOpen && !pane.shown
+  const mode = quickNoteOpen
+    ? 'tabs'
+    : noteOpen && !pane.shown
       ? 'note'
       : inSettings
         ? 'settings'
@@ -109,7 +125,6 @@ export function Dock() {
   useBackHandler(switcherOpen, () => setSwitcherOn(null));
 
   // The quick note opens where the switcher floats, so it folds the switcher away.
-  const quickNoteOpen = quickNote.use() === 'open';
   useEffect(() => {
     if (quickNoteOpen) setSwitcherOn(null);
   }, [quickNoteOpen]);
@@ -126,7 +141,7 @@ export function Dock() {
 
   useEffect(() => {
     if (tab !== '/search') lastBrowsingTab.set(tab);
-    else quickNote.set('closed');
+    else if (quickNote.get() !== 'capture') quickNote.set('closed');
   }, [tab]);
 
   return (
@@ -557,8 +572,24 @@ function SearchField({
  */
 function ComposeButton({ onBack }: { onBack?: () => void }) {
   const state = quickNote.use();
+  const capture = linkCaptureControls.use();
+  const hasContent = quickNoteCanSave.use();
   const open = state === 'open';
-  const back = onBack !== undefined;
+  const active = open || state === 'capture' || Boolean(capture);
+  const canSave = capture ? capture.canSave : open && hasContent;
+  const back = onBack !== undefined && !active;
+  const gradient = canSave || (!active && !back);
+  const label = back
+    ? 'Back'
+    : capture
+      ? canSave
+        ? 'Save link'
+        : 'Close link capture'
+      : open
+        ? canSave
+          ? 'Save note'
+          : 'Close new note'
+        : 'New note';
 
   return (
     <motion.div
@@ -570,29 +601,59 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
     >
       <motion.button
         type="button"
-        aria-label={back ? 'Back' : open ? 'Close new note' : 'New note'}
-        aria-expanded={back ? undefined : open}
+        aria-label={label}
+        title={label}
+        aria-expanded={back ? undefined : active}
+        disabled={capture?.busy || (state === 'capture' && !capture)}
+        onPointerDown={(event) => {
+          if (active) event.preventDefault();
+        }}
         onClick={() => {
           haptics.toggle();
-          if (onBack) onBack();
+          if (capture) {
+            if (capture.canSave) capture.save();
+            else capture.cancel();
+          } else if (back) onBack();
           else quickNote.set(open ? 'closed' : 'open');
         }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
           'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-          open || back ? 'text-foreground' : 'text-brand-foreground',
+          gradient ? 'text-brand-foreground' : 'text-foreground',
+          capture?.busy && 'opacity-60',
         )}
       >
         <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
         <motion.span
           aria-hidden
           className="absolute inset-0 rounded-[var(--dock-radius)] bg-[image:var(--brand-gradient)] shadow-[0_8px_24px_-6px_rgb(213_123_20/0.4),inset_0_1px_0_rgb(255_255_255/0.45)]"
-          animate={{ opacity: open || back ? 0 : 1, scale: open || back ? 0.85 : 1 }}
+          animate={{ opacity: gradient ? 1 : 0, scale: gradient ? 1 : 0.85 }}
           transition={springs.snappy}
         />
         <AnimatePresence initial={false} mode="popLayout">
-          {back ? (
+          {capture?.saving ? (
+            <motion.span
+              key="busy"
+              className="relative"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <LoaderCircle className="size-7 animate-spin" aria-hidden />
+            </motion.span>
+          ) : canSave ? (
+            <motion.span
+              key="save"
+              className="relative"
+              initial={{ scale: 0.4, opacity: 0, rotate: -45 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.4, opacity: 0, rotate: 45 }}
+              transition={springs.snappy}
+            >
+              <SquarePen className="size-7" strokeWidth={2.25} aria-hidden />
+            </motion.span>
+          ) : back ? (
             <motion.span
               key="back"
               className="relative"
@@ -603,7 +664,7 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
             >
               <ChevronLeft className="size-7" strokeWidth={2.25} aria-hidden />
             </motion.span>
-          ) : state === 'saved' ? (
+          ) : !active && state === 'saved' ? (
             <motion.span
               key="saved"
               className="relative"
@@ -619,7 +680,7 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
               key="plus"
               className="relative"
               initial={{ scale: 0.4, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1, rotate: open ? 45 : 0 }}
+              animate={{ scale: 1, opacity: 1, rotate: active ? 45 : 0 }}
               exit={{ scale: 0.4, opacity: 0 }}
               transition={springs.bouncy}
             >

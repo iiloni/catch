@@ -4,10 +4,12 @@ import { isSettingsPath, isWideSettings, SETTINGS_TABS } from './settings';
 import { createStore } from './store';
 
 /**
- * The quick-note window above the dock. `saved` briefly shows a check on the
+ * The quick-note window above the dock. `capture` keeps its editor while saving a link.
+ * `saved` briefly shows a check on the
  * compose button after a note is created.
  */
-export const quickNote = createStore<'closed' | 'open' | 'saved'>('closed');
+export const quickNote = createStore<'closed' | 'open' | 'capture' | 'saved'>('closed');
+export const quickNoteCanSave = createStore(false);
 
 /** The search text, kept when leaving the Search tab so returning restores it. */
 export const searchQuery = createStore('');

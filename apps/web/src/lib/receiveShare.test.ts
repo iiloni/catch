@@ -1,11 +1,21 @@
 // @vitest-environment node
+
+import { blocksToPlainText } from '@catch/shared';
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureWebShare, getIncomingShare, saveIncomingShare } from './shareInbox';
+import {
+  captureWebShare,
+  getIncomingShare,
+  pendingIncomingShares,
+  saveIncomingShare,
+} from './shareInbox';
 
 const mocks = vi.hoisted(() => ({
   user: vi.fn((): { id: string } | null => ({ id: 'user-1' })),
-  create: vi.fn(() => ({ transaction: {} })),
+  create: vi.fn((_input: { id?: string; userId: string; content: Record<string, unknown>[] }) => ({
+    transaction: {},
+  })),
+  update: vi.fn(() => ({})),
   hasNote: vi.fn(() => false),
   attachment: vi.fn(async () => ({ id: 'attachment-write', persisted: Promise.resolve() })),
   load: vi.fn(async () => {}),
@@ -18,10 +28,14 @@ vi.mock('./collections', () => ({
   waitForWriteStored: mocks.noteStored,
   waitForQueuedWrite: mocks.fileStored,
 }));
-vi.mock('./notes', () => ({ createNote: mocks.create, hasNote: mocks.hasNote }));
+vi.mock('./notes', () => ({
+  createNote: mocks.create,
+  hasNote: mocks.hasNote,
+  updateNote: mocks.update,
+}));
 vi.mock('./attachments', () => ({ importAttachment: mocks.attachment }));
 
-import { receiveShare } from './receiveShare';
+import { dismissLinkShare, prepareShare, receiveShare, saveLinkShare } from './receiveShare';
 
 beforeEach(() => {
   vi.stubGlobal('indexedDB', new IDBFactory());
@@ -29,6 +43,80 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.user.mockReturnValue({ id: 'user-1' });
   mocks.hasNote.mockReturnValue(false);
+});
+
+async function captureLink() {
+  const form = new FormData();
+  form.set('title', 'Shared page');
+  form.set('text', 'https://example.com/page#section');
+  return captureWebShare(form);
+}
+
+const editedDraft = {
+  url: 'https://example.com/page#section',
+  title: 'My title',
+  description: 'Page details',
+  notes: 'Read later',
+};
+
+describe('link share preparation', () => {
+  it('binds the account and prepares a draft without writing a note', async () => {
+    const id = await captureLink();
+    expect(await prepareShare(id)).toEqual({
+      kind: 'link',
+      id,
+      draft: { ...editedDraft, title: 'Shared page', description: '', notes: '' },
+    });
+    expect(await getIncomingShare(id)).toMatchObject({ userId: 'user-1', complete: false });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.load).not.toHaveBeenCalled();
+  });
+  it('uses the same stable id on retry, waits for storage and preserves edits on replay', async () => {
+    const id = await captureLink();
+    mocks.noteStored.mockRejectedValueOnce(new Error('Storage unavailable'));
+    await expect(saveLinkShare(id, editedDraft)).rejects.toThrow('Storage unavailable');
+    expect((await getIncomingShare(id))?.complete).toBe(false);
+    mocks.hasNote.mockReturnValue(true);
+    await saveLinkShare(id, editedDraft);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ id, userId: 'user-1' }));
+    expect(blocksToPlainText(mocks.create.mock.calls[0]?.[0]?.content ?? [])).toContain('My title');
+    expect(mocks.update).toHaveBeenCalledWith(
+      id,
+      expect.objectContaining({ content: expect.any(Array) }),
+    );
+    expect(await prepareShare(id)).toEqual({ kind: 'note', id });
+    await saveLinkShare(id, { ...editedDraft, title: 'Do not overwrite' });
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+  it('records cancellation without creating a note or reopening on reload', async () => {
+    const id = await captureLink();
+    await dismissLinkShare(id);
+    expect(await prepareShare(id)).toEqual({ kind: 'dismissed' });
+    expect(await pendingIncomingShares()).toEqual([]);
+    expect(await getIncomingShare(id)).toMatchObject({
+      userId: 'user-1',
+      complete: true,
+      dismissed: true,
+      text: '',
+    });
+    await expect(saveLinkShare(id, editedDraft)).rejects.toThrow('cancelled');
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('prevents another account from preparing, saving or dismissing a claimed share', async () => {
+    const id = await captureLink();
+    await prepareShare(id);
+    mocks.user.mockReturnValue({ id: 'user-2' });
+    await expect(prepareShare(id)).rejects.toThrow('another account');
+    await expect(saveLinkShare(id, editedDraft)).rejects.toThrow('another account');
+    await expect(dismissLinkShare(id)).rejects.toThrow('another account');
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it('keeps file shares and plain text on their existing path', async () => {
+    const id = await capture(true);
+    expect(await prepareShare(id)).toEqual({ kind: 'note', id });
+    expect(mocks.attachment).toHaveBeenCalledOnce();
+  });
 });
 
 async function capture(files = false) {

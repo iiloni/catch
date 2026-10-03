@@ -200,6 +200,27 @@ decides whether a pull saves or expands.
 Touch listeners follow the original touched element for the whole gesture: Android caret
 changes can replace an editor node, and subsequent events no longer bubble through the window.
 
+The quick-note toolbar puts an icon-only link action immediately after attachments. Choosing
+it replaces the popup's content with the capture form: the same width and bottom edge stay
+above the dock while its height follows the surface-sizing spring. The form starts with
+only the URL and fetch control, then grows upward to reveal the other fields when fetching
+finishes. Any note draft is saved during this handoff without the usual flight into its card.
+Once the handoff finishes, the form returns to responsive CSS sizing so keyboard and viewport
+changes keep working, with custom scrollbars on overflowing fields. The quick-note editor
+stays mounted, hidden and inert while capturing; the close icon, back or Escape shrinks the
+retained popup from the form's rectangle and restores focus, content, tools and history.
+The editor is re-enabled and focused before the focused link field is removed, so the keyboard
+does not hide and reopen during the return. Its content and toolbar fade in during the morph
+and are visible before the surface settles; closing keeps the dock icon without a loader. Saving the
+link or opening an existing note closes both surfaces. Reduced-motion users switch directly.
+
+The dock's compose control stays accessible above the scrim in both modes. Empty quick notes
+show X; content or attachments morph it into a square-pen with the compose button's brand
+gradient, indicating that dismissal saves the note. Link capture uses the same control: X
+returns to the quick note when the URL is empty or invalid, and a gradient square-pen saves
+when it is valid. Link capture never saves on outside dismissal or back. Bookmarklet and
+standalone share windows have the same icon-only close/save control in their form footer.
+
 **Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
 redo history. From 640 px it sits beside the back button, including in narrow split panes.

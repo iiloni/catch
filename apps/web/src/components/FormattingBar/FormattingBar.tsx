@@ -2,6 +2,7 @@ import {
   Bold,
   Heading,
   Italic,
+  Link2,
   List,
   ListChecks,
   ListIndentDecrease,
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils';
 type Tool =
   | { label: string; action: 'slash' }
   | { label: string; icon: LucideIcon; action: 'attachments' }
+  | { label: string; icon: LucideIcon; action: 'link' }
   | { label: string; icon: LucideIcon; style: TextStyle }
   | { label: string; icon: LucideIcon; block: BlockKind }
   | { label: string; icon: LucideIcon; action: 'indent' | 'outdent' };
@@ -61,7 +63,8 @@ function isActive(tool: Tool, state: FormattingState | null) {
 function isEnabled(tool: Tool, state: FormattingState | null) {
   if (!state) return false;
   if ('action' in tool) {
-    if (tool.action === 'slash' || tool.action === 'attachments') return true;
+    if (tool.action === 'slash' || tool.action === 'attachments' || tool.action === 'link')
+      return true;
     return tool.action === 'indent' ? state.canIndent : state.canOutdent;
   }
   return true;
@@ -75,11 +78,13 @@ export function FormattingBar({
   controls,
   attachmentsOpen = false,
   onAttachments,
+  onLink,
   className,
 }: {
   controls: EditorControls | null;
   attachmentsOpen?: boolean;
   onAttachments?: () => void;
+  onLink?: () => void;
   className?: string;
 }) {
   const state = useSyncExternalStore(
@@ -94,6 +99,7 @@ export function FormattingBar({
     else if ('block' in tool) controls.toggleBlock(tool.block);
     else if (tool.action === 'slash') controls.insertSlash();
     else if (tool.action === 'attachments') onAttachments?.();
+    else if (tool.action === 'link') onLink?.();
     else if (tool.action === 'indent') controls.indent();
     else controls.outdent();
   }
@@ -108,7 +114,11 @@ export function FormattingBar({
         className,
       )}
     >
-      {TOOLS.map((tool) => (
+      {TOOLS.flatMap((tool) =>
+        onLink && 'action' in tool && tool.action === 'attachments'
+          ? [tool, { label: 'Save link', icon: Link2, action: 'link' } satisfies Tool]
+          : [tool],
+      ).map((tool) => (
         <FormattingButton
           key={tool.label}
           tool={tool}

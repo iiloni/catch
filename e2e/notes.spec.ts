@@ -114,7 +114,7 @@ test('a quick note can go straight to the deck', async ({ page }) => {
   await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
   await page.keyboard.type('Refactor sync');
   await page.getByRole('button', { name: 'Save to Gallery' }).click();
-  await page.getByRole('button', { name: 'Close new note' }).click();
+  await page.getByRole('button', { name: 'Save note' }).click();
   await expect(card(page, 'Refactor sync')).toBeHidden();
   await page.getByRole('link', { name: 'Deck' }).click();
   await expect(card(page, 'Refactor sync')).toBeVisible();

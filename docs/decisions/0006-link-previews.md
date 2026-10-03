@@ -17,6 +17,32 @@ without its fragment). They are never stored in the note, so they do not reach `
 Markdown export or the editor. A note's `hidden_links` column lists previews the user removed;
 removing one leaves the link in the text and, like rearranging, is not an edit.
 
+**Link capture.** The compose window offers an Add Rich Link form with URL, title, description
+and personal notes. An optional authenticated `POST /api/link-previews/intake` reuses the
+preview fetcher before a note exists, returning metadata and local asset hashes without
+creating a synced preview row. Pasting a valid URL fetches immediately; a fetch button also
+allows manual requests and retries. Bookmarklet and shared URLs fetch when the form opens.
+The form initially shows only its URL field and fetch button; the title, description and
+personal notes appear after a valid URL's fetch completes, with animated vertical growth.
+A failed fetch also reveals the fields for manual entry, including offline use and older
+servers. Changing the URL hides these fields until its own fetch completes.
+Fetching respects `LINK_PREVIEWS=false`. Manual edits survive
+late fetch responses, and changing the URL cancels stale results. Failure, offline use and
+older servers without this endpoint leave manual capture available.
+
+Saving puts the edited title, URL, description and personal notes in ordinary BlockNote
+blocks. This is an intentional snapshot in note content, searchable and exportable; the
+derived preview remains independent and is not overridden. Duplicate warnings compare URLs
+using the existing fragment-free normalization against device notes, including the Deck and
+Archive, excluding Trash. Duplicates can still be saved.
+
+Settings > General provides an instance-specific bookmarklet that opens the same form at
+`/capture` in a compact browser window. It sends the current URL, page title and selected
+text in a URL fragment, so those values do not reach server access logs, and carries no
+credentials. Setup/login retains the capture destination. The popup confirms success only
+after the ordinary note write is durably queued or completed; other windows retain ADR
+0007's offline limitation. It never saves automatically on opening or canceling.
+
 **Fetched by the server.** Saving a note adds a `pending` row to `link_previews` (per user,
 keyed by URL) for each new link, in the note's transaction. An in-process queue then fetches
 the page and fills the row, and Electric syncs it like any other table. Rows left pending by a
@@ -66,6 +92,10 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   a card shows the link's address. Settings → General can turn previews off on a device.
 
 ## Consequences
+
+- Link capture adds an optional REST endpoint with a manual-save fallback on older servers.
+  Old clients continue to use unchanged note and preview APIs. API protocol, synced columns,
+  collection schema versions, persisted note encoding and queued write formats are unchanged.
 
 - Previews are best effort and eventually consistent: a card may show only its URL for a moment.
 - Assets are never deleted yet. They are small, but a cleanup of unreferenced ones will be

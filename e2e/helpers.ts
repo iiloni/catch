@@ -69,7 +69,7 @@ export async function createNote(page: Page, title: string, body?: string) {
     await page.keyboard.press('Enter');
     await page.keyboard.type(body);
   }
-  await page.getByRole('button', { name: 'Close new note' }).click();
+  await page.getByRole('button', { name: 'Save note' }).click();
   await expect(card(page, title)).toBeVisible();
 }
 

@@ -280,7 +280,7 @@ test('the quick-note formatting attachment button expands the picker', async ({ 
   await page.keyboard.type('Quick attachment');
   await upload(page);
   await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
-  await page.getByRole('button', { name: 'Close new note' }).click();
+  await page.getByRole('button', { name: 'Save note' }).click();
   await expect(card(page, 'Quick attachment')).toBeVisible();
   await openNote(page, 'Quick attachment');
   await expect(page.getByRole('region', { name: 'Media' }).getByRole('img')).toBeVisible();

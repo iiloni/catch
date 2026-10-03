@@ -4,13 +4,13 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authClient } from '@/lib/auth';
-import { authRedirectSearchSchema } from '@/lib/authRedirect';
+import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
 export const Route = createFileRoute('/login')({
   validateSearch: authRedirectSearchSchema,
-  beforeLoad: ({ search }) => {
-    if (needsServerUrl()) throw redirect({ to: '/setup', search });
+  beforeLoad: ({ search, location }) => {
+    if (needsServerUrl()) throw redirect({ to: '/setup', search, hash: location.hash });
   },
   component: LoginPage,
 });
@@ -48,7 +48,7 @@ function LoginPage() {
         return;
       }
       // A full load, so the collections open this user's copy of their notes on the device.
-      window.location.assign(returnTo ?? '/');
+      window.location.assign(authReturnTo(returnTo, window.location.hash));
     } catch {
       setError('Could not reach the Catch server. Check your connection and try again.');
     } finally {

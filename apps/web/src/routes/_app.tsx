@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { z } from 'zod';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { Dock } from '@/components/Dock/Dock';
+import { LinkCapture } from '@/components/LinkCapture/LinkCapture';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
@@ -11,6 +12,8 @@ import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { getAuthToken } from '@/lib/auth';
+import { quickNote } from '@/lib/dockState';
+import { linkCaptureControls } from '@/lib/linkCapture';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
@@ -35,6 +38,8 @@ function AppLayout() {
   useEffect(watchUpdates, []);
   const { note } = Route.useSearch();
   const pane = useNotePaneLayout();
+  const noteState = quickNote.use();
+  const capture = linkCaptureControls.use();
 
   return (
     <>
@@ -43,11 +48,17 @@ function AppLayout() {
       <div
         className="min-h-dvh pb-[var(--dock-space)]"
         style={{ marginRight: pane.shown ? pane.noteWidth : 0 }}
-        inert={Boolean(note) && !pane.split}
+        inert={
+          (Boolean(note) && !pane.split) ||
+          noteState === 'open' ||
+          noteState === 'capture' ||
+          Boolean(capture)
+        }
       >
         <Outlet />
       </div>
       <QuickNote />
+      <LinkCapture />
       <PageBottomBlur />
       <Dock />
       <NoteEditorOverlay noteId={note} />

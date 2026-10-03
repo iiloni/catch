@@ -405,6 +405,9 @@ function createControls(editor: AnyEditor): EditorControls {
       editor.focus();
       refresh();
     },
+    focus() {
+      editor.focus();
+    },
     focusEnd() {
       const last = editor.document.at(-1);
       if (last) editor.setTextCursorPosition(last, 'end');

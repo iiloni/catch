@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ShareRouteImport } from './routes/share'
@@ -30,6 +31,11 @@ import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/setting
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaptureRoute = CaptureRouteImport.update({
+  id: '/capture',
+  path: '/capture',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -120,6 +126,7 @@ const AppSettingsAdminUsersRoute = AppSettingsAdminUsersRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/capture': typeof CaptureRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
 export interface FileRoutesByTo {
+  '/capture': typeof CaptureRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
@@ -158,6 +166,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/capture': typeof CaptureRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/capture'
     | '/login'
     | '/setup'
     | '/share'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/settings/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/capture'
     | '/login'
     | '/setup'
     | '/share'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/capture'
     | '/login'
     | '/setup'
     | '/share'
@@ -238,6 +250,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  CaptureRoute: typeof CaptureRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   ShareRoute: typeof ShareRoute
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/capture': {
+      id: '/capture'
+      path: '/capture'
+      fullPath: '/capture'
+      preLoaderRoute: typeof CaptureRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -431,6 +451,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  CaptureRoute: CaptureRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   ShareRoute: ShareRoute,

@@ -53,6 +53,7 @@ const controls: EditorControls = {
   insertSlash: vi.fn(),
   indent: vi.fn(),
   outdent: vi.fn(),
+  focus: vi.fn(),
   focusEnd: vi.fn(),
   undo: vi.fn(),
   redo: vi.fn(),

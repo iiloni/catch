@@ -5,6 +5,7 @@ import type {
   CreateBoardColumn,
   CreateNote,
   CreateNotes,
+  LinkIntake,
   ListUsers,
   RefreshLinkPreview,
   ReleasesResponse,
@@ -103,5 +104,11 @@ export const api = {
     request<TxidResponse>('/link-previews/refresh', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  linkIntake: (body: RefreshLinkPreview, signal?: AbortSignal) =>
+    request<LinkIntake>('/link-previews/intake', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal,
     }),
 };

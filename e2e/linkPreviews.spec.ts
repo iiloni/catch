@@ -104,7 +104,7 @@ test('the dock tray fades away and its overlay gathers media above links', async
   }
   await page.keyboard.press('Enter');
   await page.keyboard.type('https://example.com and https://example.org');
-  await page.getByRole('button', { name: 'Close new note' }).click();
+  await page.getByRole('button', { name: 'Save note' }).click();
   await openNote(page, 'Preview tray');
   const noteId = new URL(page.url()).searchParams.get('note');
   if (!noteId) throw new Error('Missing note ID');
