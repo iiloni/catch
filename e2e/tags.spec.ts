@@ -54,6 +54,8 @@ test('secondary tag search keeps focus and selection usable above the keyboard',
   const search = picker.getByRole('textbox', { name: 'Find tags' });
   await search.click();
   await expect(search).toBeFocused();
+  await expect(picker.locator('[data-slot="scroll-area-viewport"]')).toHaveCount(1);
+  await expect(picker.locator('[data-slot="scroll-area-thumb"]')).toBeVisible();
   // Chromium emulation has no on-screen keyboard; report its height as Android does.
   await page.evaluate(async () => {
     const { keyboardHeight } = await import('/src/lib/keyboard.ts');
@@ -778,6 +780,8 @@ test('search filter glass stays above the keyboard and closes before leaving sea
     ).toBeLessThan(1);
   }
   await settledBox(panel.locator('..'));
+  await expect(panel.locator('[data-slot="scroll-area-viewport"]')).toHaveCount(1);
+  await expect(panel.locator('[data-slot="scroll-area-thumb"]')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('search-filters.png') });
   const search = panel.getByRole('textbox', { name: 'Find tags' });
   await search.click();
@@ -923,4 +927,147 @@ test('first and last search filters animate browsing, results and no matches', a
   await page.getByRole('button', { name: 'Remove Work filter' }).click();
   await expect(browse).toBeVisible();
   await expect(page.locator('[data-search-view="results"]')).toHaveCount(0);
+});
+
+test('filter badges stay steady through empty results and spring into place after removal', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  const ideas = await addTag(request, headers, 'Ideas', null, 'amber');
+  await seedNotes(page, ['Work task', 'Idea task']);
+  for (const [title, tagId] of [
+    ['Work task', work],
+    ['Idea task', ideas],
+  ]) {
+    const noteId = await card(page, title).getAttribute('data-note-card');
+    expect(
+      (
+        await request.patch(`/api/note-tags/${noteId}`, {
+          headers,
+          data: { primaryTagId: tagId, secondaryTagIds: [] },
+        })
+      ).status(),
+    ).toBe(200);
+  }
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Browse Work', exact: true })).toContainText('1');
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const panel = page.getByRole('region', { name: 'Search filters' });
+  await panel.getByRole('tab', { name: 'Tags', exact: true }).click();
+  await panel.getByRole('checkbox', { name: 'Work', exact: true }).check();
+  // The match control should grow into flow when a second tag is selected.
+  const heights = await panel
+    .getByRole('checkbox', { name: 'Ideas', exact: true })
+    .evaluate(async (checkbox) => {
+      checkbox.click();
+      const heights: number[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        const legend = [...document.querySelectorAll('legend')].find(
+          (legend) => legend.textContent === 'Match tags',
+        );
+        heights.push(legend?.parentElement?.parentElement?.getBoundingClientRect().height ?? 0);
+      }
+      return heights;
+    });
+  expect(heights.some((height) => height > 5 && height < 35)).toBe(true);
+  expect(heights.at(-1)!).toBeGreaterThan(40);
+  const group = page.getByRole('group', { name: 'Active filters' });
+  await settledBox(group);
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(results.getByRole('article')).toHaveCount(2);
+  await page.screenshot({ path: testInfo.outputPath('compact-match-and-filter-badges.png') });
+  for (const name of ['All tags', 'Any tag']) {
+    const samples = await panel
+      .getByRole('button', { name, exact: true })
+      .evaluate(async (button) => {
+        const group = document.querySelector('fieldset[aria-label="Active filters"]')!;
+        const badges = [...group.querySelectorAll<HTMLElement>('.glass-badge')];
+        const initial = badges.map((badge) => badge.getBoundingClientRect());
+        button.click();
+        const samples: { retained: boolean; opacity: number; movement: number }[] = [];
+        for (let frame = 0; frame < 40; frame++) {
+          await new Promise(requestAnimationFrame);
+          for (const [index, badge] of badges.entries()) {
+            let opacity = 1;
+            for (
+              let ancestor: HTMLElement | null = badge;
+              ancestor;
+              ancestor = ancestor.parentElement
+            )
+              opacity *= Number(getComputedStyle(ancestor).opacity);
+            const box = badge.getBoundingClientRect();
+            samples.push({
+              retained: badge.isConnected,
+              opacity,
+              movement: Math.hypot(box.x - initial[index].x, box.y - initial[index].y),
+            });
+          }
+        }
+        return samples;
+      });
+    expect(
+      samples.every(
+        ({ retained, opacity, movement }) => retained && opacity > 0.99 && movement < 0.5,
+      ),
+    ).toBe(true);
+    if (name === 'All tags')
+      await expect(page.getByText('No matching notes', { exact: true })).toBeVisible();
+    else await expect(results.getByRole('article')).toHaveCount(2);
+  }
+  const collapse = await panel
+    .getByRole('checkbox', { name: 'Ideas', exact: true })
+    .evaluate(async (checkbox) => {
+      checkbox.click();
+      const heights: number[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        const legend = [...document.querySelectorAll('legend')].find(
+          (legend) => legend.textContent === 'Match tags',
+        );
+        heights.push(legend?.parentElement?.parentElement?.getBoundingClientRect().height ?? 0);
+      }
+      return heights;
+    });
+  expect(collapse.some((height) => height > 5 && height < 35)).toBe(true);
+  expect(collapse.at(-1)!).toBeLessThan(1);
+  await panel.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
+  await settledBox(group);
+  await expect(panel.getByRole('group', { name: 'Match tags' })).toBeVisible();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const removal = await page
+    .getByRole('button', { name: 'Remove Work filter' })
+    .evaluate(async (button) => {
+      const group = button.closest('fieldset')!;
+      const remaining = group
+        .querySelector<HTMLButtonElement>('button[aria-label="Remove Ideas filter"]')!
+        .closest('.glass-badge')!;
+      const before = remaining.getBoundingClientRect();
+      const badge = button.closest('.glass-badge')!;
+      const contained = button.getBoundingClientRect().right <= badge.getBoundingClientRect().right;
+      button.click();
+      const positions: number[] = [];
+      for (let frame = 0; frame < 40; frame++) {
+        await new Promise(requestAnimationFrame);
+        const box = remaining.getBoundingClientRect();
+        positions.push(Math.hypot(box.x - before.x, box.y - before.y));
+      }
+      return { contained, positions };
+    });
+  expect(removal.contained).toBe(true);
+  const distance = removal.positions.at(-1)!;
+  expect(distance).toBeGreaterThan(40);
+  expect(
+    removal.positions.some((position) => position > distance * 0.15 && position < distance * 0.85),
+  ).toBe(true);
+  await expect(group.getByRole('button', { name: 'Remove Work filter' })).toHaveCount(0);
+  await expect(group.getByRole('button', { name: 'Remove Ideas filter' })).toBeVisible();
+  await expect(results.getByRole('article')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath('remaining-filter-badge.png') });
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await expect(panel.getByRole('group', { name: 'Match tags' })).toHaveCount(0);
 });

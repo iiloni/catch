@@ -30,6 +30,14 @@ vi.mock('@/lib/collections', () => ({
 vi.mock('@/lib/tags', () => ({ setSecondaryTag: vi.fn() }));
 describe('secondary tag picker', () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
     primaryTagId = root.id;
     secondaryTagIds = [child.id];
   });

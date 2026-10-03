@@ -1,4 +1,5 @@
 import { type Tag, tagPath } from '@catch/shared';
+import { X } from 'lucide-react';
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
@@ -12,12 +13,14 @@ export function TagBadge({
   primary = false,
   interactive = true,
   morph = false,
+  onRemove,
 }: {
   tag: Tag;
   tags: readonly Tag[];
   primary?: boolean;
   interactive?: boolean;
   morph?: boolean;
+  onRemove?: () => void;
 }) {
   const path = tagPath(tags, tag.id);
   const root = path[0] ?? tag;
@@ -99,25 +102,55 @@ export function TagBadge({
         {badgeContents}
       </motion.span>
     );
+  const trigger = (
+    <TooltipTrigger asChild>
+      <motion.button
+        type="button"
+        data-note-color={root.color ?? 'default'}
+        className={cn(
+          onRemove
+            ? 'flex min-w-0 items-center gap-1 self-stretch rounded-l-md py-1 pl-2.5'
+            : className,
+          'outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          onRemove && 'focus-visible:ring-inset',
+        )}
+        style={morph ? { width } : undefined}
+        aria-label={label}
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        {badgeContents}
+      </motion.button>
+    </TooltipTrigger>
+  );
   return (
     <Tooltip open={open} onOpenChange={setOpen}>
-      <TooltipTrigger asChild>
-        <motion.button
-          type="button"
+      {onRemove ? (
+        <span
           data-note-color={root.color ?? 'default'}
-          className={cn(className, 'outline-none focus-visible:ring-2 focus-visible:ring-ring')}
-          style={morph ? { width } : undefined}
-          aria-label={label}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpen((current) => !current);
-          }}
+          className={cn(className, 'min-h-9 gap-0 p-0')}
         >
-          {badgeContents}
-        </motion.button>
-      </TooltipTrigger>
+          {trigger}
+          <button
+            type="button"
+            aria-label={`Remove ${tag.name} filter`}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+            className="flex size-9 shrink-0 items-center justify-center rounded-r-md outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </span>
+      ) : (
+        trigger
+      )}
       <TooltipContent
         variant="glass"
         data-note-color={root.color ?? 'default'}

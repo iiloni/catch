@@ -8,7 +8,15 @@ import {
   useIsPresent,
   useReducedMotion,
 } from 'motion/react';
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
@@ -234,25 +242,14 @@ export function SearchFilters({
                   <Tags className="size-4 text-muted-foreground" aria-hidden />
                   Tags
                 </h3>
-                {filter.ids.length > 1 && (
-                  <fieldset className="flex items-center gap-1 text-sm">
-                    <legend className="sr-only">Match tags</legend>
-                    <span className="mr-1 text-xs text-muted-foreground" aria-hidden>
-                      Match
-                    </span>
-                    {(['any', 'all'] as const).map((match) => (
-                      <button
-                        key={match}
-                        type="button"
-                        aria-pressed={filter.match === match}
-                        className={cn(control, filter.match === match && 'bg-foreground/8')}
-                        onClick={() => onFilterChange({ ...filter, match })}
-                      >
-                        {match === 'any' ? 'Any tag' : 'All tags'}
-                      </button>
-                    ))}
-                  </fieldset>
-                )}
+                <AnimatePresence initial={false}>
+                  {filter.ids.length > 1 && (
+                    <TagMatchControl
+                      match={filter.match}
+                      onChange={(match) => onFilterChange({ ...filter, match })}
+                    />
+                  )}
+                </AnimatePresence>
                 {awaitingTags && !tags.length ? (
                   <p role="status" className="py-2 text-sm text-muted-foreground">
                     Loading tags…
@@ -450,56 +447,160 @@ export function ActiveSearchFilters({
     onFilterChange({ ...filter, ids: filter.ids.filter((value) => value !== id) });
   }
   return (
-    <>
+    <AnimatePresence initial={false}>
       {filtered && (
-        <fieldset aria-label="Active filters" className="flex flex-wrap items-center gap-2">
-          {filter.ids.map((id) => {
-            const tag = tags.find((item) => item.id === id);
-            return tag ? (
-              <span key={id} className="flex items-center gap-0.5">
-                <TagBadge tag={tag} tags={tags} />
-                <button
-                  type="button"
-                  aria-label={`Remove ${tag.name} filter`}
-                  className="flex size-9 items-center justify-center rounded-full outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => toggleTag(id)}
-                >
-                  <X className="size-3.5" aria-hidden />
-                </button>
-              </span>
-            ) : null;
-          })}
-          {filter.untagged && (
-            <button
-              type="button"
-              className={control}
-              onClick={() => onFilterChange({ ...filter, untagged: false })}
-              aria-label="Remove Untagged filter"
-            >
-              Untagged
-              <X className="size-3.5" aria-hidden />
-            </button>
-          )}
-          {color !== null && (
-            <button
-              type="button"
-              className={control}
-              onClick={() => onColorChange(null)}
-              aria-label="Remove color filter"
-            >
-              <span
-                data-note-color={color}
-                className="flex size-5 items-center justify-center rounded-full border border-foreground/15 bg-note"
-              >
-                {color === 'default' && <Slash className="size-3" aria-hidden />}
-              </span>
-              {COLOR_NAMES[color]}
-              <X className="size-3.5" aria-hidden />
-            </button>
-          )}
-        </fieldset>
+        <ActiveFilterGroup>
+          <div className="flex flex-wrap items-center gap-2 pb-5">
+            <AnimatePresence initial={false} mode="popLayout">
+              {filter.ids.map((id) => {
+                const tag = tags.find((item) => item.id === id);
+                return tag ? (
+                  <FilterChip key={id}>
+                    <TagBadge tag={tag} tags={tags} onRemove={() => toggleTag(id)} />
+                  </FilterChip>
+                ) : null;
+              })}
+              {filter.untagged && (
+                <FilterChip key="untagged">
+                  <button
+                    type="button"
+                    className="glass-badge flex min-h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => onFilterChange({ ...filter, untagged: false })}
+                    aria-label="Remove Untagged filter"
+                  >
+                    Untagged
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </FilterChip>
+              )}
+              {color !== null && (
+                <FilterChip key={`color:${color}`}>
+                  <button
+                    type="button"
+                    className="glass-badge flex min-h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => onColorChange(null)}
+                    aria-label="Remove color filter"
+                  >
+                    <span
+                      data-note-color={color}
+                      className="flex size-5 items-center justify-center rounded-full border border-foreground/15 bg-note"
+                    >
+                      {color === 'default' && <Slash className="size-3" aria-hidden />}
+                    </span>
+                    {COLOR_NAMES[color]}
+                    <X className="size-3.5" aria-hidden />
+                  </button>
+                </FilterChip>
+              )}
+            </AnimatePresence>
+          </div>
+        </ActiveFilterGroup>
       )}
-    </>
+    </AnimatePresence>
+  );
+}
+
+function ActiveFilterGroup({ children }: { children: ReactNode }) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.fieldset
+      aria-label="Active filters"
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      className="relative min-w-0"
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.fieldset>
+  );
+}
+
+const FilterChip = forwardRef<HTMLSpanElement, { children: ReactNode }>(function FilterChip(
+  { children },
+  ref,
+) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  return (
+    <motion.span
+      ref={ref}
+      layout="position"
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      className="inline-flex max-w-full"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+    >
+      {children}
+    </motion.span>
+  );
+});
+
+function TagMatchControl({
+  match,
+  onChange,
+}: {
+  match: TagSearchFilter['match'];
+  onChange: (match: TagSearchFilter['match']) => void;
+}) {
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
+  const layoutId = useId();
+  return (
+    <motion.div
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      className="overflow-hidden"
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+    >
+      <fieldset className="flex items-center gap-2">
+        <legend className="sr-only">Match tags</legend>
+        <span className="text-xs text-muted-foreground" aria-hidden>
+          Match
+        </span>
+        <LayoutGroup id={layoutId}>
+          <div className="relative flex px-1">
+            <span
+              aria-hidden
+              className="absolute inset-x-0 inset-y-1.5 rounded-lg bg-foreground/5"
+            />
+            {(['any', 'all'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={value === 'any' ? 'Any tag' : 'All tags'}
+                aria-pressed={match === value}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  haptics.selection();
+                  onChange(value);
+                }}
+                className="relative flex h-11 min-w-14 items-center justify-center rounded-lg px-3 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {match === value && (
+                  <motion.span
+                    layoutId="tag-match"
+                    aria-hidden
+                    className="absolute inset-x-0 inset-y-2 rounded-md bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                    transition={reducedMotion ? { duration: 0 } : springs.snappy}
+                  />
+                )}
+                <span className="relative">{value === 'any' ? 'Any' : 'All'}</span>
+              </button>
+            ))}
+          </div>
+        </LayoutGroup>
+      </fieldset>
+    </motion.div>
   );
 }
 

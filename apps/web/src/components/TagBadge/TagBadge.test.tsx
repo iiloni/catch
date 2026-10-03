@@ -27,3 +27,25 @@ it('colors the leaf badge and lets touch reveal its full hierarchy without bubbl
   fireEvent.click(badge);
   expect(screen.queryByRole('tooltip')).toBeNull();
 });
+
+it('keeps removal inside the badge as a separate action from revealing its hierarchy', async () => {
+  const tag: Tag = {
+    id: 'work',
+    userId: 'ada',
+    name: 'Work',
+    parentId: null,
+    color: 'blue',
+    icon: null,
+  };
+  const onRemove = vi.fn();
+  render(<TagBadge tag={tag} tags={[tag]} onRemove={onRemove} />, { wrapper: TooltipProvider });
+  const label = screen.getByRole('button', { name: /^Work$/ });
+  const remove = screen.getByRole('button', { name: 'Remove Work filter' });
+  expect(label.closest('.glass-badge')).toBe(remove.closest('.glass-badge'));
+  expect(remove.closest('button button')).toBeNull();
+  fireEvent.click(label);
+  expect(await screen.findByRole('tooltip')).toHaveTextContent('Work');
+  expect(onRemove).not.toHaveBeenCalled();
+  fireEvent.click(remove);
+  expect(onRemove).toHaveBeenCalledOnce();
+});

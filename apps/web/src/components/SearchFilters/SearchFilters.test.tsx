@@ -23,7 +23,17 @@ const child: Tag = {
 const tags = [root, child];
 
 describe('search filters', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
   it('allows ancestor filters alongside descendants and keeps color filtering independent', () => {
     const onFilterChange = vi.fn();
     const onColorChange = vi.fn();

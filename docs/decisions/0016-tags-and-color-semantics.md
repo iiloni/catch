@@ -60,7 +60,8 @@ its icon beside the assigned tag's name. Hovering, keyboard focus or tapping rev
 neutral glass tooltip containing the full hierarchy separated by slashes, with a border
 in the tag's color.
 Secondary-picker icons inherit their root's color, with contrast adjusted for each theme.
-The full path remains their accessible label.
+The full path remains their accessible label. Tree scroll areas use the shared custom
+scrollbar, following the app’s platform-specific visibility rules.
 Tags form one wrapping list with the primary first. They precede media and links, moving
 to the right column when the note pane is wide enough. Settings > Tags creates, edits,
 reparents and deletes branches. It shares the secondary picker’s searchable tree, ancestry
