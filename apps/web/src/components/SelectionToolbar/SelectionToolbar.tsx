@@ -1,4 +1,4 @@
-import type { Note } from '@catch/shared';
+import { type Note, tagColor } from '@catch/shared';
 import {
   Archive,
   ArchiveRestore,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ComponentProps, useState } from 'react';
-import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
+import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import type { HeaderSelection } from '@/components/PageHeader/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import type { useNoteSelection } from '@/lib/noteSelection';
@@ -36,6 +37,7 @@ import {
   trashNotes,
   unarchiveNotes,
 } from '@/lib/notes';
+import { setPrimaryTags } from '@/lib/tags';
 
 type Place = 'gallery' | 'deck' | 'archive' | 'trash';
 
@@ -65,8 +67,21 @@ export function selectionHeader(
 export function SelectionToolbar({ notes, place, onDone }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ids = notes.map((note) => note.id);
-  const firstColor = notes[0]?.color ?? null;
-  const sharedColor = notes.every((note) => note.color === firstColor) ? firstColor : null;
+  const tags = useTags();
+  const assignments = useNoteTagAssignments();
+  const { awaitingAssignments } = useTagReadiness();
+  const colors = notes.map((note) => {
+    const primary = assignments.get(note.id)?.primaryTagId;
+    return primary ? tagColor(tags, primary) : note.color;
+  });
+  const firstColor = colors[0] ?? null;
+  const sharedColor = colors.every((color) => color === firstColor) ? firstColor : null;
+  const firstPrimary = assignments.get(notes[0]?.id ?? '')?.primaryTagId ?? null;
+  const sharedPrimary = notes.every(
+    (note) => (assignments.get(note.id)?.primaryTagId ?? null) === firstPrimary,
+  )
+    ? firstPrimary
+    : null;
 
   const then = (action: () => unknown) => () => {
     action();
@@ -91,7 +106,12 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
         </PopoverTrigger>
         <PopoverContent align="end" sideOffset={10} className="w-auto rounded-3xl p-3">
           {/* The selection stays, so a color can be tried and changed again. */}
-          <ColorSwatches value={sharedColor} onChange={(color) => setNotesColor(ids, color)} />
+          <ColorTagSelector
+            value={sharedColor}
+            primaryTagId={sharedPrimary}
+            onChange={(color) => setNotesColor(ids, color)}
+            onTagChange={(id) => setPrimaryTags(ids, id)}
+          />
         </PopoverContent>
       </Popover>
       {place === 'deck' && (
@@ -144,6 +164,7 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
       )}
       <ToolbarButton
         label="Make a copy"
+        disabled={awaitingAssignments}
         icon={Copy}
         onClick={then(() => {
           haptics.success();

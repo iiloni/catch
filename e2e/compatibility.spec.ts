@@ -48,7 +48,10 @@ test('an incompatible server pauses sync, retains queued edits through reload, a
   let rejectedWrites = 0;
   await page.route('**/api/**', (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/api/compatibility') return route.fulfill({ json: protocol });
+    if (path === '/api/compatibility')
+      return route.fulfill({ json: rejectedWrites ? protocol : SUPPORTED_API_PROTOCOLS });
+    // Exercise write rejection first; a background shape must not win this race.
+    if (path.startsWith('/api/shapes/') && !rejectedWrites) return route.continue();
     if (path.startsWith('/api/auth/') || path.startsWith('/api/updates') || path === '/api/health')
       return route.continue();
     if (route.request().method() === 'POST') rejectedWrites++;

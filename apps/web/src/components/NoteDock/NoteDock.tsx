@@ -1,4 +1,4 @@
-import { type ColumnColor, DEFAULT_BOARD_STATUS } from '@catch/shared';
+import { type ColumnColor, DEFAULT_BOARD_STATUS, tagColor } from '@catch/shared';
 import {
   Columns3,
   LayoutDashboard,
@@ -7,16 +7,18 @@ import {
   Paperclip,
   Pin,
   RotateCcw,
+  Tags,
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type ComponentProps, type PointerEvent, useEffect, useRef, useState } from 'react';
 import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
-import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
+import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { NoteMovePicker, noteDestinationAt } from '@/components/NoteMovePicker/NoteMovePicker';
+import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { useBoardColumns } from '@/lib/collections';
+import { useBoardColumns, useNoteTagAssignments, useTags } from '@/lib/collections';
 import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
@@ -30,6 +32,7 @@ import {
   setNotePinned,
 } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
+import { setPrimaryTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Action = {
@@ -73,15 +76,20 @@ export function NoteDock() {
   const { close } = useOpenNote();
   const columns = sortBoardColumns(useBoardColumns());
   const ref = useRef<HTMLDivElement>(null);
-  const [panel, setPanel] = useState<'palette' | 'columns' | 'attachments' | null>(null);
+  const [panel, setPanel] = useState<'palette' | 'columns' | 'attachments' | 'tags' | null>(null);
+  const [paletteSession, setPaletteSession] = useState(0);
   const [hoveredColumn, setHoveredColumn] = useState<string | null | undefined>(undefined);
   const hold = useRef<Hold | null>(null);
   useBackHandler(panel !== null, () => setPanel(null));
 
   const editable = note !== null && !note.deletedAt;
-  const formatting = keyboardOpen && editable && controls !== null;
+  // The tag search also raises the keyboard; keep its panel mounted while typing.
+  const formatting = keyboardOpen && panel !== 'tags' && editable && controls !== null;
   const showPanel = editable && !formatting && isPresent;
   const showPalette = panel === 'palette' && showPanel;
+  const showTags = panel === 'tags' && showPanel;
+  const tags = useTags();
+  const assignment = useNoteTagAssignments().get(note?.id ?? '');
   const showColumns = panel === 'columns' && showPanel;
   const showAttachments = panel === 'attachments' && editable && isPresent;
 
@@ -93,7 +101,7 @@ export function NoteDock() {
   }, [noteId]);
 
   // The dock's link tray steps aside while the dock is grown (see NoteLinkTray).
-  const grown = showPalette || showColumns || showAttachments;
+  const grown = showPalette || showColumns || showAttachments || showTags;
   useEffect(() => {
     noteDockPanelOpen.set(grown);
     return () => noteDockPanelOpen.set(false);
@@ -101,13 +109,13 @@ export function NoteDock() {
 
   // The columns are a passing menu: a tap anywhere outside the dock folds them away.
   useEffect(() => {
-    if (!showColumns && !showAttachments) return;
+    if (!grown) return;
     const onPointerDown = (event: globalThis.PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) setPanel(null);
     };
     document.addEventListener('pointerdown', onPointerDown, true);
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
-  }, [showColumns, showAttachments]);
+  }, [grown]);
 
   useEffect(() => {
     if (!grown) return;
@@ -214,7 +222,19 @@ export function NoteDock() {
         expanded: panel === 'palette',
         onPress: () => {
           haptics.toggle();
+          if (panel !== 'palette') setPaletteSession((session) => session + 1);
           setPanel(panel === 'palette' ? null : 'palette');
+        },
+      },
+      {
+        id: 'tags',
+        label: 'Tags',
+        icon: Tags,
+        active: showTags,
+        expanded: showTags,
+        onPress: () => {
+          haptics.toggle();
+          setPanel(showTags ? null : 'tags');
         },
       },
       {
@@ -280,7 +300,7 @@ export function NoteDock() {
         {showAttachments && note && (
           <motion.div
             key="attachments"
-            className="overflow-hidden"
+            className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -292,23 +312,40 @@ export function NoteDock() {
         {showPalette && note && (
           <motion.div
             key="palette"
-            className="overflow-hidden"
+            className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={springs.smooth}
           >
-            <ColorSwatches
-              value={note.color}
+            <ColorTagSelector
+              key={paletteSession}
+              value={
+                assignment?.primaryTagId ? tagColor(tags, assignment.primaryTagId) : note.color
+              }
               onChange={(color) => setNoteColor(note.id, color)}
-              className="w-full justify-items-center px-3 pt-4 pb-1 [&_button]:size-10"
+              primaryTagId={assignment?.primaryTagId}
+              onTagChange={(id) => setPrimaryTag(note.id, id)}
+              className="w-full pt-1 pb-1"
             />
+          </motion.div>
+        )}
+        {showTags && note && (
+          <motion.div
+            key="tags"
+            className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.smooth}
+          >
+            <TagPicker key={note.id} noteId={note.id} />
           </motion.div>
         )}
         {showColumns && note && (
           <motion.div
             key="columns"
-            className="overflow-hidden"
+            className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

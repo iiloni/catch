@@ -1,21 +1,33 @@
-import type { BoardColumn, Note } from '@catch/shared';
+import type { BoardColumn, Note, Tag } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { linkOverlay } from '@/lib/linkPreviews';
 import { moveNoteToDeck, sendNoteToGallery, setNotePinned, trashNote } from '@/lib/notes';
 import { link, makePreview, paragraph } from '@/test/links';
-import { NoteCard } from './NoteCard';
+import { NoteCard, NoteCardFace } from './NoteCard';
 
 vi.mock('@/lib/notes');
 const previews = new Map([
   ['https://a.example/', makePreview('https://a.example/', { title: 'Page A', siteName: 'A' })],
 ]);
+const tags: Tag[] = [];
+const assignments = new Map<string, { primaryTagId: string | null; secondaryTagIds: string[] }>();
+const files: { id: string; name: string; kind: 'image' }[] = [];
+vi.mock('@/lib/attachments', () => ({ useNoteAttachments: () => files }));
+afterEach(() => {
+  tags.length = 0;
+  assignments.clear();
+  files.length = 0;
+});
 const columns: BoardColumn[] = [
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
   { id: 'doing', userId: 'user-1', name: 'Doing', color: 'blue', position: 'a1' },
 ];
 vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
+  useTags: () => tags,
+  useNoteTagAssignments: () => assignments,
   useLinkPreviews: () => previews,
   useBoardColumns: () => columns,
 }));
@@ -171,5 +183,63 @@ describe('NoteCard', () => {
     renderCard({ note: { ...note, content: [paragraph(link('https://a.example/'))] } });
     expect(screen.getByRole('heading', { name: 'Page A' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Link/ })).not.toBeInTheDocument();
+  });
+  it('opens and selects tagged card surroundings and attachment faces', () => {
+    const tag: Tag = {
+      id: 'work',
+      userId: note.userId,
+      name: 'Work',
+      parentId: null,
+      color: 'blue',
+      icon: null,
+    };
+    tags.push(tag);
+    assignments.set(note.id, { primaryTagId: tag.id, secondaryTagIds: [] });
+    files.push({ id: 'file', name: 'photo.png', kind: 'image' });
+    const mediaNote = { ...note, content: [] };
+    const onOpen = vi.fn(),
+      onSelect = vi.fn();
+    const { rerender } = render(
+      <TooltipProvider>
+        {/* biome-ignore lint/a11y/useSemanticElements: Matches the gallery's draggable wrapper. */}
+        <div role="button" tabIndex={0} aria-label="Move note">
+          <NoteCard note={mediaNote} onOpen={onOpen} />
+        </div>
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole('heading', { name: 'Tags' }));
+    fireEvent.click(screen.getByText('photo.png'));
+    expect(onOpen).toHaveBeenCalledTimes(2);
+    expect(onOpen).toHaveBeenLastCalledWith(mediaNote, expect.any(HTMLElement));
+    fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onOpen).toHaveBeenCalledTimes(2);
+    rerender(
+      <TooltipProvider>
+        {/* biome-ignore lint/a11y/useSemanticElements: Matches the gallery's draggable wrapper. */}
+        <div role="button" tabIndex={0} aria-label="Move note">
+          <NoteCard note={mediaNote} selected={false} onSelect={onSelect} onOpen={onOpen} />
+        </div>
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole('heading', { name: 'Tags' }));
+    fireEvent.click(screen.getByText('photo.png'));
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+  it('includes resolved tags and media in the noninteractive transition face', () => {
+    const tag: Tag = {
+      id: 'work',
+      userId: note.userId,
+      name: 'Work',
+      parentId: null,
+      color: 'blue',
+      icon: null,
+    };
+    tags.push(tag);
+    assignments.set(note.id, { primaryTagId: tag.id, secondaryTagIds: [] });
+    files.push({ id: 'file', name: 'photo.png', kind: 'image' });
+    render(<NoteCardFace note={{ ...note, content: [] }} />);
+    expect(screen.getByRole('heading', { name: 'Tags' })).toBeInTheDocument();
+    expect(screen.getByText('photo.png')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

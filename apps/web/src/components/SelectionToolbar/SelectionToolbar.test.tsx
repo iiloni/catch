@@ -13,7 +13,13 @@ import {
 } from '@/lib/notes';
 import { SelectionToolbar } from './SelectionToolbar';
 
+const readiness = { awaitingTags: false, awaitingAssignments: false };
 vi.mock('@/lib/notes');
+vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => readiness,
+  useTags: () => [],
+  useNoteTagAssignments: () => new Map(),
+}));
 
 function makeNote(id: string, overrides: Partial<Note> = {}): Note {
   return {
@@ -35,7 +41,10 @@ function makeNote(id: string, overrides: Partial<Note> = {}): Note {
 
 const notes = [makeNote('note-1', { color: 'teal' }), makeNote('note-2', { color: 'teal' })];
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  readiness.awaitingAssignments = false;
+});
 
 describe('SelectionToolbar', () => {
   it.each([
@@ -70,7 +79,7 @@ describe('SelectionToolbar', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
     expect(screen.getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Default' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'No color' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
@@ -106,5 +115,20 @@ describe('SelectionToolbar', () => {
     expect(deleteNotesForever).toHaveBeenCalledWith(['note-1', 'note-2']);
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     expect(restoreNotes).toHaveBeenCalledWith(notes);
+  });
+  it('waits for assignments before copying without ending selection', () => {
+    readiness.awaitingAssignments = true;
+    const onDone = vi.fn();
+    const { rerender } = render(
+      <SelectionToolbar notes={[makeNote('one')]} place="gallery" onDone={onDone} />,
+    );
+    const copy = screen.getByRole('button', { name: 'Make a copy' });
+    expect(copy).toBeDisabled();
+    fireEvent.click(copy);
+    expect(duplicateNotes).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    readiness.awaitingAssignments = false;
+    rerender(<SelectionToolbar notes={[makeNote('one')]} place="gallery" onDone={onDone} />);
+    expect(copy).toBeEnabled();
   });
 });

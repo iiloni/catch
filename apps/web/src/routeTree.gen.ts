@@ -25,6 +25,7 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsTagsRouteImport } from './routes/_app/settings/tags'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
@@ -108,6 +109,11 @@ const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsTagsRoute = AppSettingsTagsRouteImport.update({
+  id: '/tags',
+  path: '/tags',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
   id: '/update',
   path: '/update',
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/general': typeof AppSettingsGeneralRoute
+  '/_app/settings/tags': typeof AppSettingsTagsRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
+    | '/settings/tags'
     | '/settings/update'
     | '/settings/'
     | '/settings/admin/backups'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
+    | '/settings/tags'
     | '/settings/update'
     | '/settings'
     | '/settings/admin/backups'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/_app/settings/admin'
     | '/_app/settings/data'
     | '/_app/settings/general'
+    | '/_app/settings/tags'
     | '/_app/settings/update'
     | '/_app/settings/'
     | '/_app/settings/admin/backups'
@@ -370,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsGeneralRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/tags': {
+      id: '/_app/settings/tags'
+      path: '/tags'
+      fullPath: '/settings/tags'
+      preLoaderRoute: typeof AppSettingsTagsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/update': {
       id: '/_app/settings/update'
       path: '/update'
@@ -412,6 +431,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
   AppSettingsDataRoute: typeof AppSettingsDataRoute
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
+  AppSettingsTagsRoute: typeof AppSettingsTagsRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
@@ -421,6 +441,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
   AppSettingsDataRoute: AppSettingsDataRoute,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
+  AppSettingsTagsRoute: AppSettingsTagsRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }

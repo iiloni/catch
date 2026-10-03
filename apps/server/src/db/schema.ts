@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   index,
@@ -9,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -225,3 +227,39 @@ export const linkPreviewAssets = pgTable('link_preview_assets', {
   data: bytea().notNull(),
   createdAt: createdAt(),
 });
+
+/** Tag hierarchy is independent of note content and can be arbitrarily deep. */
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    parentId: uuid().references((): AnyPgColumn => tags.id, { onDelete: 'cascade' }),
+    icon: text(),
+    color: text(),
+  },
+  (table) => [
+    index().on(table.userId, table.parentId),
+    uniqueIndex('tags_user_color_idx')
+      .on(table.userId, table.color)
+      .where(sql`${table.color} IS NOT NULL`),
+  ],
+);
+
+export const noteTags = pgTable(
+  'note_tags',
+  {
+    id: uuid()
+      .primaryKey()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    primaryTagId: uuid().references(() => tags.id, { onDelete: 'set null' }),
+    secondaryTagIds: jsonb().$type<string[]>().notNull().default([]),
+  },
+  (table) => [index().on(table.userId)],
+);

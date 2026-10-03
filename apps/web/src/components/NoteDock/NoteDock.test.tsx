@@ -20,7 +20,12 @@ const columns: BoardColumn[] = [
   { id: 'in_progress', userId: 'user-1', name: 'In progress', color: 'blue', position: 'a1' },
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
 ];
-vi.mock('@/lib/collections', () => ({ useBoardColumns: () => columns }));
+vi.mock('@/lib/collections', () => ({
+  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
+  useTags: () => [],
+  useNoteTagAssignments: () => new Map(),
+  useBoardColumns: () => columns,
+}));
 const close = vi.fn();
 vi.mock('@/lib/openNote', () => ({ useOpenNote: () => ({ open: vi.fn(), close }) }));
 
@@ -69,6 +74,17 @@ describe('NoteDock', () => {
     expect(colors).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Teal' }));
     expect(setNoteColor).toHaveBeenCalledWith(note.id, 'teal');
+  });
+
+  it('opens the secondary tag tree and folds it before leaving the note', () => {
+    renderDock();
+    const tags = screen.getByRole('button', { name: 'Tags' });
+    fireEvent.click(tags);
+    expect(tags).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('region', { name: 'Secondary tags' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(tags).toHaveAttribute('aria-expanded', 'false');
+    expect(close).not.toHaveBeenCalled();
   });
 
   it.each([null, 'new'])('opens the same move picker from %s without moving the note', (status) => {
@@ -131,12 +147,12 @@ describe('NoteDock', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('orders attachments second and pin last, with archive in the header', () => {
+  it('orders tags second and pin last, with archive in the header', () => {
     renderDock();
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeEnabled();
     expect(
       screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
-    ).toEqual(['Background color', 'Attach files', 'Move note', 'Pin']);
+    ).toEqual(['Background color', 'Tags', 'Attach files', 'Move note', 'Pin']);
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
     expect(screen.getByRole('region', { name: 'Add attachment' })).toBeInTheDocument();

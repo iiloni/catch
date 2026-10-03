@@ -5,6 +5,11 @@ import { requireUser } from '../lib/requireUser';
 
 /** Columns clients may sync. Server-only columns (search vectors) stay out. */
 const SHAPES: Record<string, { table: string; columns: string[] }> = {
+  tags: { table: 'tags', columns: ['id', 'user_id', 'name', 'parent_id', 'icon', 'color'] },
+  'note-tags': {
+    table: 'note_tags',
+    columns: ['id', 'user_id', 'primary_tag_id', 'secondary_tag_ids'],
+  },
   attachments: {
     table: 'attachments',
     columns: [

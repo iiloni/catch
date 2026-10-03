@@ -366,11 +366,12 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   await signUp(page);
   await seedNotes(page, ['Old receipts']);
 
-  // Archive sits in the header, which leaves the dock these four in this order.
+  // Archive sits in the header; the dock includes tags alongside the other note actions.
   const opened = await openNote(page, 'Old receipts');
   const toolbar = noteToolbar(page);
-  await expect(toolbar.getByRole('button')).toHaveCount(4);
-  await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Attach files');
+  await expect(toolbar.getByRole('button')).toHaveCount(5);
+  await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Tags');
+  await expect(toolbar.getByRole('button').nth(2)).toHaveAccessibleName('Attach files');
   await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Pin');
   await toolbar.getByRole('button', { name: 'Pin', exact: true }).click();
   await opened.getByRole('button', { name: 'Archive', exact: true }).click();

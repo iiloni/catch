@@ -7,6 +7,7 @@ import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
+import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { useNoteAttachments } from '@/lib/attachments';
 import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
@@ -14,6 +15,7 @@ import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
 import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
 import { paneNoteId } from '@/lib/splitView';
+import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -40,12 +42,26 @@ type Props = {
  * preview. The editor draws the same face while it grows out of the card.
  */
 export function NoteCardFace({ note }: { note: Note }) {
+  const tagged = useResolvedNoteTags(note.id).length > 0;
+  return (
+    <>
+      <NoteCardContent note={note} />
+      <NoteTags noteId={note.id} className="px-3.5 pb-3" interactive={false} />
+      {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
+    </>
+  );
+}
+
+function NoteCardContent({ note }: { note: Note }) {
   const links = useNoteLinks(note);
   const [link] = links;
-  if (useIsLinkNote(note, links) && link) {
-    return <LinkNoteFace link={link} tinted={note.color === 'default'} />;
+  const color = useNoteColor(note);
+  const tagged = useResolvedNoteTags(note.id).length > 0;
+  const linkNote = useIsLinkNote(note, links);
+  if (linkNote && link && !tagged) {
+    return <LinkNoteFace link={link} tinted={color === 'default'} />;
   }
-  if (note.content.length === 0) return <MediaOnlyFace note={note} />;
+  if (note.content.length === 0 && !tagged) return <MediaOnlyFace note={note} />;
   return (
     <div className="px-3.5 pt-3 pb-3.5">
       <NotePreview content={note.content} className={cn(note.isPinned && 'pr-5')} />
@@ -86,6 +102,8 @@ export function NoteCard({
   onSelect,
   className,
 }: Props) {
+  const color = useNoteColor(note);
+  const tagged = useResolvedNoteTags(note.id).length > 0;
   const selecting = selected !== undefined;
   const actions = withActions && !selecting;
   const canPin = actions && !note.deletedAt && !note.isArchived;
@@ -99,7 +117,7 @@ export function NoteCard({
   const openBeside = paneNoteId.use() === note.id;
   const links = useNoteLinks(note);
   // A note that is only a link shows it on its face; any other note lists links underneath.
-  const underlay = !useIsLinkNote(note, links) && links.length > 0;
+  const underlay = (!useIsLinkNote(note, links) || tagged) && links.length > 0;
 
   // A note shrinking back into its card lands without the underlay, which slides out from
   // behind the card as the note settles, as if the card were setting it down.
@@ -121,7 +139,14 @@ export function NoteCard({
   const card = (
     <motion.article
       data-note-card={note.id}
-      data-note-color={note.color}
+      data-note-color={color}
+      onClick={(event) => {
+        const control = (event.target as Element).closest('button, input, a, [role="button"]');
+        // The draggable wrapper also has a button role; only card controls consume clicks.
+        if (control && event.currentTarget.contains(control)) return;
+        if (selecting) onSelect?.(note);
+        else onOpen?.(note, event.currentTarget);
+      }}
       aria-label={note.deletedAt ? 'Trashed note' : 'Note'}
       // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
       whileTap={{ scale: pressable ? 0.97 : 1 }}
@@ -134,7 +159,7 @@ export function NoteCard({
         if (!hidesActions()) arm();
       }}
       className={cn(
-        'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
+        'group relative flex cursor-pointer flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
         forceHover && 'shadow-md',
         hidden && 'invisible',
         openBeside && 'ring-2 ring-brand ring-inset',
@@ -157,8 +182,10 @@ export function NoteCard({
         aria-label={selecting ? 'Select note' : 'Open note'}
         aria-pressed={selecting ? selected : undefined}
       >
-        <NoteCardFace note={note} />
+        <NoteCardContent note={note} />
       </button>
+      <NoteTags noteId={note.id} className="px-3.5 pb-3" />
+      {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
       <motion.span
         aria-hidden
         className="-inset-px pointer-events-none absolute rounded-2xl border-2 border-foreground"
@@ -214,7 +241,7 @@ export function NoteCard({
         <LinkUnderlay
           variant="card"
           links={links}
-          color={note.color}
+          color={color}
           onOpen={() => {
             if (selecting) onSelect?.(note);
             else openLinkOverlay(note.id);

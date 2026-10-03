@@ -13,8 +13,9 @@ import { z } from 'zod';
 import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes } from '../db/schema';
+import { attachments, notes, noteTags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { lockTagTree } from '../lib/tagTreeLock';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -120,6 +121,7 @@ export const notesRoutes = new Hono<AppEnv>()
     // "Last edited" alone.
     const notAnEdit = Object.keys(body).every((key) => key === 'position' || key === 'hiddenLinks');
     const result = await db.transaction(async (tx) => {
+      if (body.color !== undefined) await lockTagTree(tx, user.id);
       const updated = await tx
         .update(notes)
         .set({
@@ -130,6 +132,14 @@ export const notesRoutes = new Hono<AppEnv>()
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
       if (updated.length === 0) return null;
+      // A plain color edit, including one queued before tags existed, replaces the primary.
+      // New tag selections follow this request with their explicit assignment write.
+      if (body.color !== undefined) {
+        await tx
+          .update(noteTags)
+          .set({ primaryTagId: null })
+          .where(and(eq(noteTags.id, id), eq(noteTags.userId, user.id)));
+      }
       const links = body.content ? await trackNoteLinks(tx, user.id, [body.content]) : [];
       return { txid: await currentTxid(tx), links };
     });

@@ -7,6 +7,7 @@ import type {
   CreateInviteResponse,
   CreateNote,
   CreateNotes,
+  CreateTag,
   InvitesResponse,
   LinkIntake,
   ListUsers,
@@ -17,6 +18,8 @@ import type {
   UpdateAttachment,
   UpdateBoardColumn,
   UpdateNote,
+  UpdateNoteTags,
+  UpdateTag,
   UpdateUserRole,
   UserActionResponse,
   UsersResponse,
@@ -51,6 +54,13 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 export const api = {
+  createTag: (body: CreateTag) =>
+    request<TxidResponse>('/tags', { method: 'POST', body: JSON.stringify(body) }),
+  updateTag: (id: string, body: UpdateTag) =>
+    request<TxidResponse>(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteTag: (id: string) => request<TxidResponse>(`/tags/${id}`, { method: 'DELETE' }),
+  updateNoteTags: (id: string, body: UpdateNoteTags) =>
+    request<TxidResponse>(`/note-tags/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   versionInfo: () =>
     request<VersionInfo>('/updates', {
       method: 'GET',

@@ -15,7 +15,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   }: ComponentProps<'a'> & { to: string; replace?: boolean }) => <a href={to} {...props} />,
 }));
 
-const account = SETTINGS_TABS[1];
+const account = SETTINGS_TABS.find((tab) => tab.path === '/settings/account')!;
 
 describe('SettingsLayout', () => {
   it('lists the pages beside the open one when wide', () => {
