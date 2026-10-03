@@ -188,7 +188,10 @@ const protocolRange = ({ min, max }: Protocol) => (min === max ? `${min}` : `${m
 /** `from` is the protocol at the range's first tag; undefined when there is no such tag. */
 export function compareProtocols(from: Protocol | null | undefined, to: Protocol | null) {
   const none = { from: from ?? null, to, changed: false, summary: null };
-  if (from === undefined || !to) return none;
+  if (from === undefined) return none;
+  // The file can be absent before the protocol existed, but not disappear afterwards.
+  if (from && !to) throw new Error(`${protocolPath} is missing; the changelog reads it.`);
+  if (!to) return none;
   if (!from) {
     return {
       from,
@@ -274,9 +277,12 @@ export function buildRelease(input: {
   };
 }
 
-// Commit text is not ours to trust with markup: outside code spans, `<` would start HTML.
+// Commit text is not ours to trust with markup: outside code spans, `<` would start HTML
+// and brackets a link or image.
 const inline = (text: string) =>
-  text.replace(/(`+)[^`]*\1|</g, (match) => (match === '<' ? '&lt;' : match));
+  text.replace(/(`+)[^`]*\1|[<[\]]/g, (match) =>
+    match === '<' ? '&lt;' : match.length === 1 ? `\\${match}` : match,
+  );
 
 function renderEntry(entry: Entry, section: SectionId) {
   const link = entry.pr
@@ -377,9 +383,12 @@ export function repositoryChangelog(cwd: string, repository: string) {
   const protocols = new Map<string, Protocol | null>();
   const protocol = (ref: string) => {
     if (!protocols.has(ref)) {
-      const file = spawnSync('git', ['show', `${ref}:${protocolPath}`], { cwd, encoding: 'utf8' });
-      if (file.error) throw file.error;
-      protocols.set(ref, parseProtocol(file.status === 0 ? file.stdout : null));
+      // Only a tree without the file counts as absent; any other failure throws.
+      const present = git(cwd, ['ls-tree', '--name-only', ref, '--', protocolPath]) !== '';
+      protocols.set(
+        ref,
+        parseProtocol(present ? git(cwd, ['show', `${ref}:${protocolPath}`]) : null),
+      );
     }
     return protocols.get(ref) ?? null;
   };

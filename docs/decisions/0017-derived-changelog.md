@@ -35,8 +35,10 @@ earlier preview's exact commit.
 - **The protocol is compared across the range.** The notes state the old and new
   `API_PROTOCOL_VERSION` and supported range when they differ (ADR 0013), with the upgrade
   order those numbers imply. They are read from the source text of `protocol.ts` at each
-  tag rather than by running tagged code; an unreadable file is an error rather than a
-  silently missing line, and a unit test checks the current file.
+  tag rather than by running tagged code. A tag from before the file existed has no
+  protocol; a file that cannot be parsed, cannot be read, or is gone at the end of a range
+  that started with one is an error rather than a silently missing line, and a unit test
+  checks the current file.
 - **The JSON output is a contract.** It carries a `schemaVersion`, every release newest
   first and the unreleased commits, with each entry in exactly one section. The site
   renders it at build time; its text is unescaped commit text.
@@ -46,7 +48,7 @@ earlier preview's exact commit.
   the rest of `release.yml` does.
 - **One value locates the changelog.** `CHANGELOG_BASE_URL` in `scripts/changelog.ts` is
   null until the site exists, and release bodies link to GitHub's compare view for the
-  range. Once set, they link to `<base>/<version>`.
+  range (the commit list for a first release). Once set, they link to `<base>/<version>`.
 
 ## Consequences
 

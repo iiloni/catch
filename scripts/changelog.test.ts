@@ -192,6 +192,7 @@ test('protocol changes state both ranges and the upgrade order', () => {
   // No earlier tag, or neither end has the file: nothing to compare.
   assert.equal(compareProtocols(undefined, at(2, 2)).changed, false);
   assert.equal(compareProtocols(null, null).changed, false);
+  assert.throws(() => compareProtocols(at(2, 2), null), /missing/);
 
   const incompatible = compareProtocols(at(1, 1), at(2, 2));
   assert.equal(incompatible.changed, true);
@@ -228,7 +229,7 @@ test('previews, a promoted stable release and unreleased work each cover their o
   repo.protocol(2, 2, 'feat(sync)!: raise the protocol (#9)');
   repo.git('tag', 'v0.2.2-preview');
   repo.git('tag', '-a', 'v0.2.1', '-m', 'Catch 0.2.1', tested);
-  repo.commit('Tidy up <b>markup</b> in `<code>`');
+  repo.commit('Tidy up <b>markup</b> and ![img](http://x) in `<code>[0]`');
 
   const first = repo.release('v0.1.0-preview');
   assert.equal(first.previous, null);
@@ -327,7 +328,10 @@ test('previews, a promoted stable release and unreleased work each cover their o
 `,
   );
   // Commit text cannot add markup to the notes, but code spans stay as written.
-  assert.match(repo.run().stdout, /- Tidy up &lt;b>markup&lt;\/b> in `<code>` \(/);
+  assert.match(
+    repo.run().stdout,
+    /- Tidy up &lt;b>markup&lt;\/b> and !\\\[img\\\]\(http:\/\/x\) in `<code>\[0\]` \(\[/,
+  );
   const document = repo.run('--all');
   assert.match(document.stdout, /^# Changelog\n\n## Unreleased\n/);
   assert.match(

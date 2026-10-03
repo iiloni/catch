@@ -286,12 +286,15 @@ shallow clone. Outside Actions the repository for links comes from the `origin` 
 - **Compatibility.** `API_PROTOCOL_VERSION` and `SUPPORTED_API_PROTOCOLS` are read from
   `packages/shared/src/protocol.ts` at both ends of the range. When they differ, the notes
   state the old and new protocol and supported range and the upgrade order they imply.
-  Keep those two declarations as plain literals; the generator reads the source text, and a
-  unit test fails if it no longer can. Add anything else an upgrade needs to the
+  Keep those two declarations as plain literals in that file; the generator reads the
+  source text, a unit test fails if it no longer can, and generation fails rather than
+  leave the line out. Only a range that starts before the file existed is read as having
+  no protocol. Add anything else an upgrade needs to the
   `BREAKING CHANGE:` footer.
 - **Changelog link.** Each body ends with a link for the release's range. It is GitHub's
-  compare view until `CHANGELOG_BASE_URL` in `scripts/changelog.ts` is set; after that it
-  is `<base>/<version>`, for example `https://catchnotes.site/changelog/0.4.1`.
+  compare view, or the tag's commit list for a first release, until `CHANGELOG_BASE_URL`
+  in `scripts/changelog.ts` is set; after that it is `<base>/<version>`, for example
+  `https://catchnotes.site/changelog/0.4.1`.
 
 `--json` prints one release, or with `--all` this document:
 
