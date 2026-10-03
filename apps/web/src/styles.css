@@ -181,6 +181,13 @@
   --note-bg: light-dark(oklch(0.915 0.006 255), oklch(0.33 0.008 255));
 }
 
+@utility text-note-icon {
+  color: light-dark(
+    oklch(from var(--note-bg) 0.5 calc(c * 2) h),
+    oklch(from var(--note-bg) 0.78 calc(c * 1.5) h)
+  );
+}
+
 /*
  * Link previews take a site's hue (set inline as --link-hue, with data-link-hue) at one
  * lightness and chroma per theme, as note colors do, so a loud brand and a quiet one read
@@ -288,6 +295,20 @@
 
   @media (prefers-reduced-transparency: reduce) {
     background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-badge {
+  background-color: var(--badge-glass, var(--glass));
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--note-bg);
     backdrop-filter: none;
   }
 }

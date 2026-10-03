@@ -16,6 +16,8 @@ const columns: BoardColumn[] = [
   { id: 'doing', userId: 'user-1', name: 'Doing', color: 'blue', position: 'a1' },
 ];
 vi.mock('@/lib/collections', () => ({
+  useTags: () => [],
+  useNoteTagAssignments: () => new Map(),
   useLinkPreviews: () => previews,
   useBoardColumns: () => columns,
 }));

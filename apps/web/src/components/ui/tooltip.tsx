@@ -20,15 +20,17 @@ function TooltipTrigger(props: React.ComponentProps<typeof TooltipPrimitive.Trig
 function TooltipContent({
   className,
   sideOffset = 4,
+  variant = 'default',
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: React.ComponentProps<typeof TooltipPrimitive.Content> & { variant?: 'default' | 'glass' }) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 z-50 animate-in rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-xs data-[state=closed]:animate-out',
+          'fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 z-50 animate-in rounded-md px-3 py-1.5 text-xs data-[state=closed]:animate-out',
+          variant === 'glass' ? 'glass text-foreground' : 'bg-primary text-primary-foreground',
           className,
         )}
         {...props}

@@ -1,21 +1,33 @@
-import { type BoardColumn, NOTE_COLORS, type NoteColor } from '@catch/shared';
+import { type BoardColumn, type NoteColor, tagColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { Clock, Search, SearchX, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useDeferredValue, useMemo, useRef, useState } from 'react';
+import { Clock, SearchX } from 'lucide-react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
+import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
-import { boardColumnsCollection, notesCollection } from '@/lib/collections';
-import { searchQuery } from '@/lib/dockState';
-import { haptics } from '@/lib/haptics';
+import {
+  ActiveSearchFilters,
+  BrowseTags,
+  SearchFilterPanel,
+  SearchFilters,
+} from '@/components/SearchFilters/SearchFilters';
+import {
+  boardColumnsCollection,
+  notesCollection,
+  tagsCollection,
+  useNoteTagAssignments,
+} from '@/lib/collections';
+import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
 import { springs } from '@/lib/motion';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
 import { usePersistentState } from '@/lib/storage';
+import { useAwaitingSync } from '@/lib/syncStatus';
+import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
 
 export const Route = createFileRoute('/_app/search')({
@@ -27,7 +39,9 @@ const recentSchema = z.array(z.string()).max(8);
 
 function SearchPage() {
   const query = searchQuery.use();
+  const filtersOpen = searchFiltersOpen.use();
   const deferredQuery = useDeferredValue(query);
+  const [filter, setFilter] = useState<TagSearchFilter>({ ids: [], match: 'any', untagged: false });
   const [color, setColor] = useState<NoteColor | null>(null);
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
@@ -38,203 +52,204 @@ function SearchPage() {
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
 
+  const { data: tags = [], isLoading: tagsLoading } = useLiveQuery({
+    query: (q) => q.from({ tag: tagsCollection }),
+  });
+  // An apparently unlinked swatch is meaningful only after the initial tag snapshot.
+  const awaitingTags = useAwaitingSync(tagsLoading, 0);
+  const assignments = useNoteTagAssignments();
+  const indexed = useMemo(() => indexNoteTags(tags, assignments), [tags, assignments]);
+  const { counts, untaggedCount } = useMemo(() => {
+    const counts = new Map<string, number>();
+    let untaggedCount = 0;
+    for (const note of notes) {
+      const ids = indexed.get(note.id);
+      if (!ids?.size) untaggedCount++;
+      for (const id of ids ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return { counts, untaggedCount };
+  }, [notes, indexed]);
+  const browsing = filter.ids.length > 0 || filter.untagged;
   const results = useMemo(
-    () => searchNotes(notes, deferredQuery, color).slice(0, MAX_RESULTS),
-    [notes, deferredQuery, color],
+    () =>
+      searchNotes(
+        notes
+          .filter((note) => matchesTagFilter(indexed.get(note.id), filter))
+          .map((note) => {
+            const primary = assignments.get(note.id)?.primaryTagId;
+            return primary ? { ...note, color: tagColor(tags, primary) } : note;
+          }),
+        deferredQuery,
+        color,
+        browsing,
+      ).slice(0, MAX_RESULTS),
+    [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
   );
-  const searching = query.trim() !== '' || color !== null;
+  const searching = query.trim() !== '' || color !== null || browsing;
+  const view = !searching ? 'browse' : results.length > 0 ? 'results' : 'empty';
+  const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
+  useEffect(() => {
+    searchFilterCount.set(filterCount);
+  }, [filterCount]);
+  useEffect(
+    () => () => {
+      searchFiltersOpen.set(false);
+      searchFilterCount.set(0);
+    },
+    [],
+  );
+
+  function closeFilters() {
+    searchFiltersOpen.set(false);
+  }
 
   function openResult(result: SearchResult, card: HTMLElement) {
     const trimmed = query.trim();
     if (trimmed) setRecent([trimmed, ...recent.filter((item) => item !== trimmed)].slice(0, 8));
+    closeFilters();
     open(result.note.id, card);
   }
 
   return (
     <>
-      <TabPageHeader title="Search" />
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-3 pt-3 pb-16 sm:px-6">
-        {!searching ? (
-          recent.length > 0 ? (
-            <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
-              <div className="flex items-center justify-between px-1">
-                <h2 id="recent-heading" className="font-medium text-muted-foreground text-sm">
-                  Recent
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setRecent([])}
-                  className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                >
-                  Clear
-                </button>
-              </div>
-              <ul className="flex flex-col">
-                {recent.map((item) => (
-                  <li key={item}>
-                    <button
-                      type="button"
-                      onClick={() => searchQuery.set(item)}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
-                    >
-                      <Clock className="size-4 text-muted-foreground" aria-hidden />
-                      <span className="truncate">{item}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <EmptyState icon={Search}>
-              Type a word, or pick a color. Archived notes are included.
-            </EmptyState>
-          )
-        ) : results.length > 0 ? (
-          <section aria-label="Results">
-            <p className="px-1 pb-2 text-muted-foreground text-xs">
-              {results.length === MAX_RESULTS
-                ? `First ${MAX_RESULTS} notes`
-                : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
-            </p>
-            <ul className="flex flex-col gap-2">
-              <AnimatePresence initial={false} mode="popLayout">
-                {results.map((result) => (
-                  <motion.li
-                    key={result.note.id}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={springs.smooth}
-                  >
-                    <ResultCard result={result} columns={columns} onOpen={openResult} />
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
-          </section>
-        ) : (
-          <EmptyState
-            icon={SearchX}
-            title={query.trim() ? `No notes contain “${query.trim()}”` : 'No notes in that color'}
+      <AnimatePresence>
+        {filtersOpen && (
+          <SearchFilterPanel
+            filtered={filterCount > 0}
+            onClose={closeFilters}
+            onClear={() => {
+              setFilter({ ids: [], match: 'any', untagged: false });
+              setColor(null);
+            }}
           >
-            {query.trim() ? 'Check the spelling, or try fewer words.' : 'Pick another color.'}
-          </EmptyState>
+            <SearchFilters
+              tags={tags}
+              awaitingTags={awaitingTags}
+              filter={filter}
+              color={color}
+              counts={counts}
+              untaggedCount={untaggedCount}
+              onFilterChange={setFilter}
+              onColorChange={setColor}
+            />
+          </SearchFilterPanel>
         )}
-      </div>
-      <div className="pointer-events-none fixed right-[var(--note-pane)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] left-0 z-30 flex justify-center px-3">
-        <section
-          aria-label="Search filters"
-          className="glass pointer-events-auto min-w-0 w-full max-w-md overflow-hidden rounded-[var(--dock-radius)]"
-        >
-          <ColorFilter value={color} onChange={setColor} />
-        </section>
+      </AnimatePresence>
+      <TabPageHeader title="Search" />
+      <div className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+        <ActiveSearchFilters
+          tags={tags}
+          filter={filter}
+          color={color}
+          onFilterChange={setFilter}
+          onColorChange={setColor}
+        />
+        <div className="relative">
+          <AnimatePresence initial={false}>
+            <SearchView key={view} view={view}>
+              {!searching && (
+                <BrowseTags
+                  tags={tags}
+                  counts={counts}
+                  untaggedCount={untaggedCount}
+                  onSelect={(id) => setFilter({ ...filter, ids: [id], untagged: false })}
+                  onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
+                />
+              )}
+              {!searching ? (
+                recent.length > 0 ? (
+                  <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between px-1">
+                      <h2 id="recent-heading" className="font-medium text-muted-foreground text-sm">
+                        Recent
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setRecent([])}
+                        className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <ul className="flex flex-col">
+                      {recent.map((item) => (
+                        <li key={item}>
+                          <button
+                            type="button"
+                            onClick={() => searchQuery.set(item)}
+                            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
+                          >
+                            <Clock className="size-4 text-muted-foreground" aria-hidden />
+                            <span className="truncate">{item}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : (
+                  <p className="px-1 text-sm text-muted-foreground">
+                    Search words, browse a tag, or filter by color. Archived notes are included.
+                  </p>
+                )
+              ) : results.length > 0 ? (
+                <section aria-label="Results">
+                  <p className="px-1 pb-2 text-muted-foreground text-xs">
+                    {results.length === MAX_RESULTS
+                      ? `First ${MAX_RESULTS} notes`
+                      : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    <AnimatePresence initial={false} mode="popLayout">
+                      {results.map((result) => (
+                        <motion.li
+                          key={result.note.id}
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.97 }}
+                          transition={springs.smooth}
+                        >
+                          <ResultCard result={result} columns={columns} onOpen={openResult} />
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                </section>
+              ) : (
+                <EmptyState icon={SearchX} title="No matching notes">
+                  Try fewer words or remove a filter.
+                </EmptyState>
+              )}
+            </SearchView>
+          </AnimatePresence>
+        </div>
       </div>
     </>
   );
 }
 
-function ColorFilter({
-  value,
-  onChange,
+function SearchView({
+  children,
+  view,
 }: {
-  value: NoteColor | null;
-  onChange: (color: NoteColor | null) => void;
+  children: ReactNode;
+  view: 'browse' | 'results' | 'empty';
 }) {
-  const drag = useRef<{ pointerId: number; x: number; scrollLeft: number; moved: boolean } | null>(
-    null,
-  );
-  const suppressClick = useRef(false);
-
-  function finishDrag() {
-    if (drag.current?.moved) {
-      suppressClick.current = true;
-      window.setTimeout(() => {
-        suppressClick.current = false;
-      }, 0);
-    }
-    drag.current = null;
-  }
-
+  const isPresent = useIsPresent();
+  const reducedMotion = useReducedMotion();
   return (
-    <fieldset
-      className="flex min-w-0 cursor-grab items-center gap-1.5 overflow-x-auto px-3 py-3 [scrollbar-width:none] [&>button]:cursor-grab [&:active>button]:cursor-grabbing"
-      onPointerDown={(event) => {
-        if (event.pointerType !== 'mouse' || event.button !== 0) return;
-        drag.current = {
-          pointerId: event.pointerId,
-          x: event.clientX,
-          scrollLeft: event.currentTarget.scrollLeft,
-          moved: false,
-        };
-      }}
-      onPointerMove={(event) => {
-        const start = drag.current;
-        if (!start || event.pointerId !== start.pointerId) return;
-        if ((event.buttons & 1) === 0) {
-          drag.current = null;
-          return;
-        }
-        const distance = event.clientX - start.x;
-        if (!start.moved && Math.abs(distance) < 5) return;
-        if (!start.moved) {
-          start.moved = true;
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }
-        event.currentTarget.scrollLeft = start.scrollLeft - distance;
-        event.preventDefault();
-      }}
-      onPointerLeave={() => {
-        if (drag.current && !drag.current.moved) drag.current = null;
-      }}
-      onPointerUp={finishDrag}
-      onPointerCancel={finishDrag}
-      onClickCapture={(event) => {
-        if (!suppressClick.current) return;
-        event.preventDefault();
-        event.stopPropagation();
-        suppressClick.current = false;
-      }}
+    <motion.div
+      data-search-view={view}
+      inert={!isPresent}
+      aria-hidden={!isPresent}
+      initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: reducedMotion ? 0 : -8 }}
+      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+      className={cn('flex flex-col gap-5', !isPresent && 'absolute inset-x-0 top-0')}
     >
-      <legend className="sr-only">Filter by color</legend>
-      <AnimatePresence initial={false}>
-        {value && (
-          <motion.button
-            key="clear"
-            type="button"
-            aria-label="Any color"
-            initial={{ opacity: 0, width: 0 }}
-            animate={{ opacity: 1, width: 32 }}
-            exit={{ opacity: 0, width: 0 }}
-            transition={springs.snappy}
-            onClick={() => onChange(null)}
-            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-          >
-            <X className="size-4" aria-hidden />
-          </motion.button>
-        )}
-      </AnimatePresence>
-      {NOTE_COLORS.filter((color) => color !== 'default').map((color) => (
-        <motion.button
-          key={color}
-          type="button"
-          data-note-color={color}
-          aria-label={COLOR_NAMES[color]}
-          aria-pressed={value === color}
-          whileTap={{ scale: 0.85 }}
-          animate={{ scale: value === color ? 1.12 : 1 }}
-          transition={springs.snappy}
-          onClick={() => {
-            haptics.selection();
-            onChange(value === color ? null : color);
-          }}
-          className={cn(
-            'size-8 shrink-0 rounded-full border bg-note outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
-            value === color ? 'border-foreground/70' : 'border-foreground/10',
-          )}
-        />
-      ))}
-    </fieldset>
+      {children}
+    </motion.div>
   );
 }
 
@@ -299,6 +314,7 @@ function ResultCard({
           </span>
         )}
       </button>
+      <NoteTags noteId={note.id} className="px-3.5 pb-3 [&>h3]:sr-only" />
     </article>
   );
 }

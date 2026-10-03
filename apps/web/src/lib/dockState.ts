@@ -13,6 +13,8 @@ export const quickNoteCanSave = createStore(false);
 
 /** The search text, kept when leaving the Search tab so returning restores it. */
 export const searchQuery = createStore('');
+export const searchFiltersOpen = createStore(false);
+export const searchFilterCount = createStore(0);
 
 export const TAB_PATHS = ['/deck', '/', '/search'] as const;
 export type TabPath = (typeof TAB_PATHS)[number];

@@ -7,13 +7,16 @@ import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
+import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { useNoteAttachments } from '@/lib/attachments';
+import { useNoteTagAssignments } from '@/lib/collections';
 import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
 import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
 import { paneNoteId } from '@/lib/splitView';
+import { useNoteColor } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -42,10 +45,14 @@ type Props = {
 export function NoteCardFace({ note }: { note: Note }) {
   const links = useNoteLinks(note);
   const [link] = links;
-  if (useIsLinkNote(note, links) && link) {
-    return <LinkNoteFace link={link} tinted={note.color === 'default'} />;
+  const color = useNoteColor(note);
+  const assignments = useNoteTagAssignments().get(note.id);
+  const tagged = !!assignments?.primaryTagId || !!assignments?.secondaryTagIds.length;
+  const linkNote = useIsLinkNote(note, links);
+  if (linkNote && link && !tagged) {
+    return <LinkNoteFace link={link} tinted={color === 'default'} />;
   }
-  if (note.content.length === 0) return <MediaOnlyFace note={note} />;
+  if (note.content.length === 0 && !tagged) return <MediaOnlyFace note={note} />;
   return (
     <div className="px-3.5 pt-3 pb-3.5">
       <NotePreview content={note.content} className={cn(note.isPinned && 'pr-5')} />
@@ -86,6 +93,9 @@ export function NoteCard({
   onSelect,
   className,
 }: Props) {
+  const color = useNoteColor(note);
+  const assignment = useNoteTagAssignments().get(note.id);
+  const tagged = !!assignment?.primaryTagId || !!assignment?.secondaryTagIds.length;
   const selecting = selected !== undefined;
   const actions = withActions && !selecting;
   const canPin = actions && !note.deletedAt && !note.isArchived;
@@ -99,7 +109,7 @@ export function NoteCard({
   const openBeside = paneNoteId.use() === note.id;
   const links = useNoteLinks(note);
   // A note that is only a link shows it on its face; any other note lists links underneath.
-  const underlay = !useIsLinkNote(note, links) && links.length > 0;
+  const underlay = (!useIsLinkNote(note, links) || tagged) && links.length > 0;
 
   // A note shrinking back into its card lands without the underlay, which slides out from
   // behind the card as the note settles, as if the card were setting it down.
@@ -121,7 +131,7 @@ export function NoteCard({
   const card = (
     <motion.article
       data-note-card={note.id}
-      data-note-color={note.color}
+      data-note-color={color}
       aria-label={note.deletedAt ? 'Trashed note' : 'Note'}
       // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
       whileTap={{ scale: pressable ? 0.97 : 1 }}
@@ -159,6 +169,8 @@ export function NoteCard({
       >
         <NoteCardFace note={note} />
       </button>
+      <NoteTags noteId={note.id} className="px-3.5 pb-3" />
+      {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
       <motion.span
         aria-hidden
         className="-inset-px pointer-events-none absolute rounded-2xl border-2 border-foreground"
@@ -214,7 +226,7 @@ export function NoteCard({
         <LinkUnderlay
           variant="card"
           links={links}
-          color={note.color}
+          color={color}
           onOpen={() => {
             if (selecting) onSelect?.(note);
             else openLinkOverlay(note.id);

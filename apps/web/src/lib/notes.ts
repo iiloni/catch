@@ -11,7 +11,15 @@ import {
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { copyAttachmentFiles } from './attachmentFiles';
-import { attachmentsCollection, notesCollection, write } from './collections';
+import {
+  attachmentsCollection,
+  notesCollection,
+  noteTagsCollection,
+  tagsCollection,
+  write,
+} from './collections';
+
+import { assignPrimaryTag, setPrimaryTag } from './tags';
 
 type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
@@ -52,12 +60,15 @@ export function createNote(input: {
 }) {
   const now = new Date();
   const id = input.id ?? uuidv7();
-  const transaction = write(() =>
+  const linkedTag = input.color
+    ? [...tagsCollection.values()].find((tag) => tag.color === input.color)
+    : undefined;
+  const transaction = write(() => {
     notesCollection.insert({
       id,
       userId: input.userId,
       content: input.content,
-      color: input.color ?? 'default',
+      color: linkedTag ? 'default' : (input.color ?? 'default'),
       status: input.status ?? null,
       isPinned: false,
       isArchived: false,
@@ -66,8 +77,9 @@ export function createNote(input: {
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
-    }),
-  );
+    });
+    if (linkedTag) assignPrimaryTag(id, linkedTag.id);
+  });
   return { id, transaction };
 }
 
@@ -149,7 +161,10 @@ export function hideLinkPreview(id: string, url: string) {
   return transaction;
 }
 
-export const setNoteColor = (id: string, color: NoteColor) => updateNote(id, { color });
+export function setNoteColor(id: string, color: NoteColor) {
+  const root = [...tagsCollection.values()].find((tag) => tag.color === color);
+  return setPrimaryTag(id, root?.id ?? null, root ? 'default' : color);
+}
 
 export const setNotePinned = (id: string, isPinned: boolean) => updateNote(id, { isPinned });
 
@@ -213,14 +228,16 @@ const plural = (count: number, one: string, many: string) =>
 /** Changes the color of several notes in one transaction. */
 export function setNotesColor(ids: readonly string[], color: NoteColor) {
   const now = new Date();
-  return write(() =>
+  const root = [...tagsCollection.values()].find((tag) => tag.color === color);
+  return write(() => {
     notesCollection.update([...ids], (drafts) => {
       for (const draft of drafts) {
-        draft.color = color;
+        draft.color = root ? 'default' : color;
         draft.updatedAt = now;
       }
-    }),
-  );
+    });
+    for (const id of ids) assignPrimaryTag(id, root?.id ?? null);
+  });
 }
 
 /** Puts notes back as they were: in place, pinned or not. */
@@ -358,7 +375,19 @@ export function duplicateNotes(notes: readonly Note[]) {
       createdAt: now,
     }));
   });
-  const transaction = write(() => notesCollection.insert(copies));
+  const transaction = write(() => {
+    notesCollection.insert(copies);
+    for (const [index, copy] of copies.entries()) {
+      const original = notes[index];
+      const assignments = original ? noteTagsCollection.get(original.id) : undefined;
+      if (assignments)
+        noteTagsCollection.insert({
+          ...assignments,
+          id: copy.id,
+          secondaryTagIds: [...assignments.secondaryTagIds],
+        });
+    }
+  });
   // Queue copies after their notes exist; pending originals reach the server first.
   if (files.length) write(() => attachmentsCollection.insert(files));
   // Cached originals and thumbnails let copies preview before the server is reachable.

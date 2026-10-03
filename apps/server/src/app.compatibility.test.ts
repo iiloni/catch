@@ -25,6 +25,7 @@ describe('API compatibility gate', () => {
     undefined,
     '',
     '0',
+    '1',
     '1.0',
     '01',
     '-1',
@@ -38,6 +39,10 @@ describe('API compatibility gate', () => {
       vi.stubGlobal('fetch', fetcher);
       for (const [path, method] of [
         ['/api/notes', 'POST'],
+        ['/api/tags', 'POST'],
+        ['/api/note-tags/id', 'PATCH'],
+        ['/api/shapes/tags', 'GET'],
+        ['/api/shapes/note-tags', 'GET'],
         ['/api/shapes/notes', 'GET'],
         ['/api/attachments/id/content', 'PUT'],
         ['/api/admin/backups/upload', 'POST'],

@@ -14,6 +14,7 @@ import {
 import { SelectionToolbar } from './SelectionToolbar';
 
 vi.mock('@/lib/notes');
+vi.mock('@/lib/collections', () => ({ useTags: () => [], useNoteTagAssignments: () => new Map() }));
 
 function makeNote(id: string, overrides: Partial<Note> = {}): Note {
   return {
@@ -70,7 +71,7 @@ describe('SelectionToolbar', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
     expect(screen.getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Default' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'No color' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
