@@ -62,9 +62,19 @@ commit messages, but choose release versions explicitly.
   intermediate commit in a batch push that only tested the tip. Without a previous pass,
   failed or canceled CI blocks release until CI is rerun successfully. No release runs
   its own copy of E2E.
-- `release.yml`: a pushed `v*` tag validates the version. Builds and publishing proceed
-  only when the Actions repository variable `RELEASES_ENABLED` is exactly `true`.
-  Release runs are queued, with no cancellation or manual dispatch. The version job checks
+- `tag-release.yml`: manual channel and version-bump inputs call `scripts/release.sh`,
+  create its annotated tag on GitHub, then dispatch `release.yml` on that tag. Requests
+  queue without cancellation and fetch full history and tags before choosing the next version.
+  Preparation runs the default branch's helper and dependencies at an immutable commit
+  with read-only permissions, using a separate checkout of the selected release target.
+  A separate job with write permissions creates the tag and dispatches Release through
+  the GitHub API, without checking out or executing repository code.
+  Requires `RELEASES_ENABLED=true` before creating any tag.
+- `release.yml`: a pushed `v*` tag or manual dispatch on a release tag validates the version.
+  Branch refs, including branches named like version tags, are rejected before checkout.
+  Builds and publishing proceed only when the Actions repository variable `RELEASES_ENABLED`
+  is exactly `true`.
+  Release runs are queued, with no cancellation. The version job checks
   Android signing secrets before either build can start; missing credentials block both.
 - After CI passes, signed APK and Docker image builds run in parallel. APK builds use
   Node 24, JDK 21, SDK 36, and the Gradle wrapper. The Docker job builds the production
@@ -83,7 +93,9 @@ attached to a published GitHub Release remain available there.
    public repositories; larger runners and excess storage have separate billing rules.
 2. Allow the pinned actions used by these workflows in Settings > Actions > General.
    Jobs declare the required `contents: write` and `packages: write` permissions themselves;
-   the built-in `GITHUB_TOKEN` publishes releases and images, with no personal access token.
+   the built-in `GITHUB_TOKEN` creates tags and publishes releases and images, with no
+   personal access token. Manual tagging also declares `actions: write` to dispatch the
+   existing release workflow.
 3. Configure the four signing secrets below in Settings > Secrets and variables > Actions.
 4. Once signing is ready and you intend to release, set the Actions **repository variable**
    `RELEASES_ENABLED` to `true`. Leaving it absent or false keeps all release builds off.
@@ -94,7 +106,8 @@ attached to a published GitHub Release remain available there.
 Protect main with the CI `check`, `e2e (desktop)` and `e2e (android)` status checks, and use
 a tag ruleset for `v*` to limit release tag creation and prevent deletion or modification.
 These are GitHub settings;
-the workflow files do not change them. If an existing GHCR package is already associated
+the workflow files do not change them. The tag ruleset must permit GitHub Actions to create
+release tags for manual tagging to work. If an existing GHCR package is already associated
 with another repository, grant this repository Actions write access to that package.
 
 ## Android signing setup
@@ -161,6 +174,28 @@ flavor; an unset channel is dev. See [Brand assets](branding.md) for regeneratio
 and the channel-specific icon paths. Application UI and theme colors are shared unchanged.
 
 ## Creating a release
+
+After merging the workflows and configuring signing and `RELEASES_ENABLED`, open
+**Actions > Tag release > Run workflow**. Select the branch to release (normally `main`),
+choose `channel` (`preview` or `stable`) and `version_type` (`patch`, `minor` or `major`),
+then run it. It tags the selected ref's commit at dispatch time using the same version
+rules as the local helper below, creates the tag on GitHub and starts the **Release**
+workflow.
+The Release workflow keeps its existing CI gate, signing checks and Android version-code
+sequence. The GitHub token's tag creation does not start workflows itself, so Tag release
+explicitly dispatches Release on the new tag.
+
+For example, run it from the CLI with:
+
+```bash
+gh workflow run tag-release.yml --ref main -f channel=preview -f version_type=minor
+```
+
+Wait for the Release workflow to finish before creating another release. If a tag was
+created on GitHub but dispatch failed, use **Actions > Release > Run workflow** on that
+existing tag or `gh workflow run release.yml --ref <tag>`. If Release already started and failed, rerun
+that Release run to preserve its Android version code. Rerunning Tag release creates
+another version. Use the local helper for preview promotion.
 
 The local helper requires Node 24+ and installed dependencies (`pnpm install`). It creates
 an annotated tag on the latest commit (`HEAD`), and never fetches or pushes. Ordinary bumps

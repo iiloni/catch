@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { compareReleaseTags, nextReleaseTag, promotePreviewTag } from './release.ts';
@@ -88,6 +89,9 @@ function main() {
     console.log(`Would create ${tag} at ${commit} (base ${base}). No tag was created.`);
   } else {
     git(['tag', '--annotate', '--message', `Catch ${tag.slice(1)}`, tag, commit], cwd);
+    if (process.env.GITHUB_OUTPUT) {
+      appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
+    }
     console.log(`Created ${tag} at ${commit} (base ${base}).`);
   }
   console.log(`Push explicitly when ready:\n  git push origin ${tag}`);

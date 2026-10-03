@@ -17,6 +17,17 @@ and preview must advance independently, including preview versions ahead of stab
 - `scripts/release.sh` creates annotated local tags on HEAD. Bumps start from the highest
   stable or preview tag reachable from HEAD; `stable promote` preserves a tested preview's
   version and commit, including an earlier preview. The helper never fetches or pushes.
+- The manually dispatched `tag-release.yml` workflow selects a channel and a major, minor
+  or patch bump, fetches full history and tags, and calls the same helper at the selected
+  ref's dispatch commit. A read-only preparation job resolves the default branch to an
+  immutable commit and runs its helper and dependencies against a separate checkout of
+  the target; it never executes the selected ref's code. A separate privileged job checks
+  the tag name, creates an annotated tag for the dispatch commit through the GitHub API,
+  and dispatches `release.yml` on that tag. This job uses only a pinned action's inline
+  code, with no checkout, package installation or runner state from preparation.
+  `GITHUB_TOKEN` ref creation does not trigger another workflow itself.
+  Tag creation requests queue to avoid competing manual bumps. Preview promotion remains
+  available through the local helper.
 - Ordinary CI runs checks on every pull request update; the `merge on pass` label records
   approval of functionality and design, authorizes merging once required checks pass and
   opts a PR into full Docker-backed E2E, including later pushes while the label remains.
@@ -26,7 +37,7 @@ and preview must advance independently, including preview versions ahead of stab
   commit and require an up-to-date branch before merging. New PR runs cancel superseded
   PR runs. Main pushes, manual CI requests and merge groups request checks and full E2E
   without a label. PRs and merge groups always test their combined code rather than reusing
-  main/tag CI. The tag-triggered
+  main/tag CI. The tag-push or manually dispatched
   release workflow waits for successful CI at the exact tagged commit and verifies checks
   and both E2E projects succeeded. If no CI run appears within a minute, it requests CI
   on the release tag, including for an intermediate commit in a batch push. Main/tag CI runs
@@ -40,7 +51,9 @@ and preview must advance independently, including preview versions ahead of stab
   are published only after both builds succeed. If Android fails, an exact-version image
   may remain without a published release or updated channel aliases.
 - Publishing is opt-in through the repository variable `RELEASES_ENABLED=true`. The release
-  workflow has no manual dispatch trigger and never deploys to a production server.
+  workflow accepts manual dispatch on a release tag for automated tagging and recovery,
+  rejects branch refs before checkout or builds, and never deploys to a production server.
+  Manual tag creation also requires releases to be enabled.
 - Exact image tags remain fixed once their GitHub Release is published. `stable` and
   `latest` point to the highest published stable version; `preview` points to the highest
   published preview version. Publishing an older backport does not move a channel backwards.
