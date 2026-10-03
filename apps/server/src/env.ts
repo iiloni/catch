@@ -1,5 +1,12 @@
 import { releaseChannelSchema } from '@catch/shared';
 import { z } from 'zod';
+import { isProxyRange } from './lib/clientIp';
+
+const list = (value: string) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -10,15 +17,23 @@ const envSchema = z.object({
   ELECTRIC_URL: z.url(),
   ELECTRIC_SECRET: z.string().optional(),
   /** Extra origins allowed to call the API, e.g. the Vite dev server. Comma separated. */
-  TRUSTED_ORIGINS: z
+  TRUSTED_ORIGINS: z.string().default('').transform(list),
+  /**
+   * Whether anyone who reaches the server may make an account. The first account, the
+   * admin's, can always be made; `closed` turns away every one after it.
+   */
+  REGISTRATION: z.enum(['open', 'closed']).default('closed'),
+  /**
+   * Addresses or CIDR ranges of the reverse proxies in front of the server. Only a
+   * connection from one of them has its X-Forwarded-For believed. Comma separated.
+   */
+  TRUSTED_PROXIES: z
     .string()
     .default('')
-    .transform((value) =>
-      value
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean),
-    ),
+    .transform(list)
+    .refine((entries) => entries.every(isProxyRange), 'Use IP addresses or CIDR ranges'),
+  /** The most attachment storage one account may hold, in megabytes. 0 means no limit. */
+  ATTACHMENT_QUOTA_MB: z.coerce.number().int().min(0).default(10240),
   /** Better Auth rate limiting (on in production). Disable only for automated tests. */
   AUTH_RATE_LIMIT: z
     .enum(['true', 'false'])

@@ -28,11 +28,22 @@ function connectionEnv(url: string): NodeJS.ProcessEnv {
   };
 }
 
-function withDatabase(url: string, name: string) {
+function withDatabase(url: string, name: string, login?: { user: string; password: string }) {
   const parsed = new URL(url);
   parsed.pathname = `/${name}`;
+  if (login) {
+    parsed.username = login.user;
+    parsed.password = login.password;
+  }
   return parsed.toString();
 }
+
+/**
+ * Sessions stay out of backups, and out of what a restore loads from an older backup that
+ * has them: a backup is a file that gets copied around, and a session is a way in. The
+ * table itself is kept, so a restore leaves everyone to sign in again.
+ */
+const WITHOUT_SESSIONS = '--exclude-table-data=public.session';
 
 function run(command: string, args: string[], url: string) {
   return new Promise<void>((resolve, reject) => {
@@ -127,6 +138,7 @@ export async function dumpDatabase(url: string, file: string) {
       // Electric's publication belongs to the running server, not to the data.
       '--no-publications',
       '--no-subscriptions',
+      WITHOUT_SESSIONS,
       '--file',
       file,
     ],
@@ -149,6 +161,10 @@ async function publicTables(sql: postgres.Sql) {
  *
  * 1. Load the dump into a scratch database and migrate it to this build's schema. A damaged
  *    dump or a failing migration stops here, with the live database untouched.
+ *    A dump is SQL, and an uploaded one is whatever its author wrote. The server's own role
+ *    is usually the cluster's superuser, which could run programs on the database host, so
+ *    the dump is loaded, migrated and read back by a role made for this one restore that
+ *    owns the scratch database and nothing else.
  * 2. Copy the scratch database's rows out.
  * 3. In one transaction, truncate the live tables and load those rows.
  *
@@ -163,13 +179,25 @@ export async function restoreDatabase(
 ) {
   const live = connect(url);
   const scratchName = `catch_restore_${randomBytes(6).toString('hex')}`;
-  const scratchUrl = withDatabase(url, scratchName);
+  let scratchUrl = withDatabase(url, scratchName);
+  let sandboxed = false;
   try {
     // The server's database is migrated already. A new server's (the CLI on a fresh host)
     // has no tables to restore into yet.
     await migrate(drizzle(live), { migrationsFolder });
     try {
-      await live.unsafe(`CREATE DATABASE "${scratchName}"`);
+      const [role] = await live<{ superuser: boolean }[]>`
+        SELECT rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`;
+      // A role without those powers has none to keep from the dump, and cannot make another.
+      if (role?.superuser) {
+        const password = randomBytes(24).toString('hex');
+        await live.unsafe(`CREATE ROLE "${scratchName}" LOGIN PASSWORD '${password}'`);
+        sandboxed = true;
+        scratchUrl = withDatabase(url, scratchName, { user: scratchName, password });
+      }
+      await live.unsafe(
+        `CREATE DATABASE "${scratchName}"${sandboxed ? ` OWNER "${scratchName}"` : ''}`,
+      );
     } catch (error) {
       throw new BackupError(
         `Restoring needs a scratch database, which the database user could not create: ${
@@ -180,7 +208,7 @@ export async function restoreDatabase(
     await run(
       'pg_restore',
       ['--no-owner', '--no-privileges', '--exit-on-error', '--dbname', scratchName, dumpFile],
-      url,
+      scratchUrl,
     );
 
     const scratch = connect(scratchUrl);
@@ -199,7 +227,15 @@ export async function restoreDatabase(
     const dataFile = join(workDir, 'data.sql');
     await run(
       'pg_dump',
-      ['--data-only', '--schema=public', '--no-owner', '--no-privileges', '--file', dataFile],
+      [
+        '--data-only',
+        '--schema=public',
+        '--no-owner',
+        '--no-privileges',
+        WITHOUT_SESSIONS,
+        '--file',
+        dataFile,
+      ],
       scratchUrl,
     );
     const clearFile = join(workDir, 'clear.sql');
@@ -226,6 +262,11 @@ export async function restoreDatabase(
     await live
       .unsafe(`DROP DATABASE IF EXISTS "${scratchName}" WITH (FORCE)`)
       .catch((error: unknown) => console.error(`Could not drop ${scratchName}`, error));
+    if (sandboxed) {
+      await live
+        .unsafe(`DROP ROLE IF EXISTS "${scratchName}"`)
+        .catch((error: unknown) => console.error(`Could not drop role ${scratchName}`, error));
+    }
     await live.end();
   }
 }

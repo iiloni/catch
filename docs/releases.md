@@ -275,8 +275,8 @@ on `./update.sh` is the update: it backs up the database, pulls the image and wa
 new version to be healthy. [Server backups](backups.md) covers both scripts.
 
 Create your account before making a new instance generally accessible: the first account
-becomes admin, and the current app allows open registration. A private instance needs access
-restriction or a future registration control; release channels do not change authentication.
+becomes admin. Sign-up closes after it; set `REGISTRATION=open` and restart while other
+people make their accounts. Release channels do not change authentication.
 
 For preview, use a separate Compose project, hostname, `.env`, and named volumes, selecting
 `:preview`. It must have its own Postgres and Electric data rather than share production.

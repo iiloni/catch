@@ -310,8 +310,12 @@ function classifyWriteError(error: unknown): Error {
       return new Error('Server unavailable');
     }
     // A 404 is an edit to a note or column deleted on another device before it arrived.
+    if (error.status === 404) return reject('It was deleted on another device.');
+    // A 413 is the server's limit on one request, or on an account's attachment storage.
     return reject(
-      error.status === 404 ? 'It was deleted on another device.' : 'The server turned it down.',
+      error.status === 413
+        ? 'It is too large, or your storage on the server is full.'
+        : 'The server turned it down.',
     );
   }
   // `fetch` rejects when the server cannot be reached.

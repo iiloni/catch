@@ -31,6 +31,18 @@ image in the Compose file). A dump is one consistent snapshot taken while the se
 Nothing in the backup code names a table beyond counting users, notes and attachments for
 display, so new tables are covered without touching it.
 
+**Sessions are left out.** A backup is a file that gets downloaded and copied, and a
+session is a way into an account, so the dump carries the session table without its rows.
+A restore skips them in backups made before this too, and therefore signs everyone out
+except the admin who started it. This is the one table the backup code names for a reason
+other than display.
+
+**An uploaded dump runs without the server's powers.** A dump is SQL, and the server's
+database role is usually the cluster's superuser, which can run programs on the database
+host. When it is, a restore makes a role for itself that owns the scratch database and
+nothing else, and that role loads the dump, migrates it and reads the rows back out. The
+server's own role only creates and drops the two and loads the resulting rows.
+
 **Restore replaces rows, not tables.** The dump is restored into a scratch database, migrated
 to the current schema there, and its data is then loaded into the live database in a single
 transaction that first truncates every table. Dropping and recreating the live tables would

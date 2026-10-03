@@ -78,8 +78,9 @@ anyone else.
 
 ### What a restore does
 
-A restore puts the whole server back to the backup, for every user: notes, accounts,
-passwords and sessions. Changes made since the backup are lost.
+A restore puts the whole server back to the backup, for every user: notes, accounts and
+passwords. Changes made since the backup are lost. Sessions are not part of a backup, so a
+copy of one signs nobody in, and a restore leaves people to sign in again.
 
 1. The backup is checked against its checksums. Nothing changes if it is damaged, was made
    by a newer Catch than the one running, or if the server's database has itself been
@@ -89,10 +90,10 @@ passwords and sessions. Changes made since the backup are lost.
 4. The database is replaced in one transaction. Until it commits, the server answers every
    request with `503` and clients wait and retry.
 5. Every device syncs again on its own. The admin who started the restore stays signed in
-   (if their account is in the backup); other sessions are the ones in the backup.
+   (if their account is in the backup); everyone else signs in again.
 
-A backup from an older Catch is migrated to the current schema as it is restored. A backup
-made under a different `BETTER_AUTH_SECRET` restores, but everyone has to sign in again.
+A backup from an older Catch is migrated to the current schema as it is restored. One made
+before sessions were left out restores without them.
 After restoring a database-only backup, notes can list attachments whose files are not on the
 server; the result says how many.
 

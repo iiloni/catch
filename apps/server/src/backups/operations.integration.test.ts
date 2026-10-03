@@ -64,6 +64,9 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     await sql`
       INSERT INTO attachments (id, user_id, note_id, name, mime_type, size, kind, status)
       VALUES (${FILE}, 'ada', ${NOTE}, 'photo.png', 'image/png', 5, 'image', 'ready')`;
+    await sql`
+      INSERT INTO session (id, expires_at, token, user_id)
+      VALUES ('session', now() + interval '1 day', 'a-way-in', 'ada')`;
     await writeFile(join(config.attachmentsDir, FILE), 'photo');
   }, 60_000);
 
@@ -103,6 +106,12 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     expect(await users()).toEqual(['ada']);
     expect(await readFile(join(config.attachmentsDir, FILE), 'utf8')).toBe('photo');
     expect(outcome.missingAttachments).toBe(0);
+    // Sessions are not in the backup, so the ones from before the restore are gone too.
+    expect(await sql`SELECT id FROM session`).toHaveLength(0);
+    // The role that loaded the dump goes with its scratch database.
+    expect(
+      await admin`SELECT rolname FROM pg_roles WHERE rolname LIKE 'catch_restore_%'`,
+    ).toHaveLength(0);
 
     // The state the restore replaced can itself be restored.
     expect(outcome.safetyBackup).toMatch(/-pre-restore\.zip$/);

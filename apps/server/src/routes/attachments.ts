@@ -23,6 +23,7 @@ import {
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { attachments, notes } from '../db/schema';
+import { env } from '../env';
 import { requireUser } from '../lib/requireUser';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
@@ -97,6 +98,15 @@ export const attachmentRoutes = new Hono<AppEnv>()
         return c.json({ error: 'Attachment id is taken' }, 409);
       if (!body.sourceId || existing.status === 'ready' || existing.deletedAt)
         return c.json({ txid: null });
+    }
+    if (!existing && env.ATTACHMENT_QUOTA_MB > 0) {
+      // Removed attachments have had their files deleted; ones still uploading hold their place.
+      const [used] = await db
+        .select({ bytes: sql<string>`coalesce(sum(${attachments.size}), 0)` })
+        .from(attachments)
+        .where(and(eq(attachments.userId, userId), isNull(attachments.deletedAt)));
+      if (Number(used?.bytes ?? 0) + body.size > env.ATTACHMENT_QUOTA_MB * 1024 * 1024)
+        return c.json({ error: 'Your attachment storage on this server is full' }, 413);
     }
     if (body.sourceId) {
       const [source] = await db

@@ -1,9 +1,13 @@
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, type APIResponse, expect, test } from '@playwright/test';
 import { z } from 'zod';
 import { resetUserPasswordResponseSchema, usersResponseSchema } from '../packages/shared/src/users';
-import { signIn, signUp } from './helpers';
+import { bearerToken, signIn, signUp } from './helpers';
 
-const authResponse = z.object({ token: z.string(), user: z.object({ id: z.string() }) });
+const authResponse = z.object({ user: z.object({ id: z.string() }) });
+
+async function sessionOf(response: APIResponse) {
+  return { ...authResponse.parse(await response.json()), token: bearerToken(response) };
+}
 
 async function passwordSignIn(request: APIRequestContext, email: string, password: string) {
   return request.post('/api/auth/sign-in/email', {
@@ -25,9 +29,7 @@ test('password reset revokes sessions, preserves login history and protects self
   const admin = await adminSession(request);
   const headers = { Authorization: `Bearer ${admin.token}` };
   const target = await newAccount(request);
-  const extra = authResponse.parse(
-    await (await passwordSignIn(request, target.email, 'password123')).json(),
-  );
+  const extra = await sessionOf(await passwordSignIn(request, target.email, 'password123'));
   const other = await newAccount(request);
   const before = await directoryUser(request, admin.token, target.email);
   expect(
@@ -123,9 +125,7 @@ test('admins confirm password reset and deletion, and users can replace the temp
     await userPage.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(userPage.getByRole('heading', { name: 'Gallery' })).toBeVisible();
     const oldToken = await userPage.evaluate(() => localStorage.getItem('catch-auth-token'));
-    const extra = authResponse.parse(
-      await (await passwordSignIn(request, target.email, password)).json(),
-    );
+    const extra = await sessionOf(await passwordSignIn(request, target.email, password));
     const before = await directoryUser(request, admin.token, target.email);
     await userPage.goto('/settings/account');
     await userPage.getByRole('button', { name: 'Change password' }).click();
@@ -314,7 +314,7 @@ async function adminSession(request: APIRequestContext) {
     data: { email: 'admin@example.com', password: 'adminadmin' },
   });
   expect(response.ok()).toBeTruthy();
-  return authResponse.parse(await response.json());
+  return sessionOf(response);
 }
 
 async function newAccount(request: APIRequestContext, name = 'Role test user') {
@@ -324,7 +324,7 @@ async function newAccount(request: APIRequestContext, name = 'Role test user') {
     data: { email, name, password: 'password123' },
   });
   expect(response.ok()).toBeTruthy();
-  return { ...authResponse.parse(await response.json()), email };
+  return { ...(await sessionOf(response)), email };
 }
 
 test('admins can open Users from either settings navigation and edit roles', async ({

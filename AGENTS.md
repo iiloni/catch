@@ -263,8 +263,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   link, which carries a ticket and is mounted ahead of that guard in `app.ts`. A restore truncates and
   reloads the live tables in one transaction and never drops them, because Electric follows
   tables by identity; while it runs, every `/api` route but the health check answers 503.
-  The backup code names no tables beyond counting rows for display, so a new table needs no
-  change there. `POSTGRES_MAJOR` in the Dockerfile must follow the postgres image's version.
+  The backup code names no tables beyond counting rows for display and leaving sessions out,
+  so a new table needs no change there. A restore loads the dump as a throwaway role with no
+  powers (ADR 0012), so a migration must not need a superuser. `POSTGRES_MAJOR` in the Dockerfile must follow the postgres image's version.
 - `db/migrate` backs up the database before migrating when migrations are pending, so a
   dev stack collects `update` backups too; they live in the `backup_data` volume.
 - Importers (Settings > Data Management) read exports on the device and add notes with
@@ -281,6 +282,11 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   instead of once per layout. A test of behavior no layout changes (sync, the outbox,
   importers) skips one layout with `test.skip(isMobile, reason)`, provided another test in the
   file still drives the same screens on both.
+- The production server sends a content security policy (`lib/securityHeaders.ts`, ADR 0015)
+  that Vite's dev server does not. A script, frame or request to another origin works in
+  development and is blocked in a release until the policy allows it.
+- Sign-up closes after the first account unless `REGISTRATION=open`, which dev stacks set.
+  Only the signed token from `set-auth-token` works as a bearer token.
 - `pnpm check` on a machine without FFmpeg or the Postgres client tools skips the tests that
   need them; `./scripts/dev.sh check` and CI's stack run them.
 - Traces slow every E2E test, so only the rerun of a failed test records one
