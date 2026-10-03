@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationsFolder } from '../db/migrations';
 import { backUpBeforeUpdate } from './beforeUpdate';
 import { createBackup, restoreBackup } from './operations';
+import { restoreDatabase } from './postgres';
 import { type BackupConfig, listBackups } from './store';
 
 /**
@@ -64,6 +65,9 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     await sql`
       INSERT INTO attachments (id, user_id, note_id, name, mime_type, size, kind, status)
       VALUES (${FILE}, 'ada', ${NOTE}, 'photo.png', 'image/png', 5, 'image', 'ready')`;
+    await sql`
+      INSERT INTO session (id, expires_at, token, user_id)
+      VALUES ('session', now() + interval '1 day', 'a-way-in', 'ada')`;
     await writeFile(join(config.attachmentsDir, FILE), 'photo');
   }, 60_000);
 
@@ -103,6 +107,12 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     expect(await users()).toEqual(['ada']);
     expect(await readFile(join(config.attachmentsDir, FILE), 'utf8')).toBe('photo');
     expect(outcome.missingAttachments).toBe(0);
+    // Sessions are not in the backup, so the ones from before the restore are gone too.
+    expect(await sql`SELECT id FROM session`).toHaveLength(0);
+    // The role that loaded the dump goes with its scratch database.
+    expect(
+      await admin`SELECT rolname FROM pg_roles WHERE rolname LIKE 'catch_restore_%'`,
+    ).toHaveLength(0);
 
     // The state the restore replaced can itself be restored.
     expect(outcome.safetyBackup).toMatch(/-pre-restore\.zip$/);
@@ -176,6 +186,31 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
       safetyBackups,
     );
   }, 120_000);
+
+  it('does not load a dump as a role that reaches the host without being a superuser', async () => {
+    const role = `catch_test_${suffix}_role`;
+    const database = `catch_test_${suffix}_owned`;
+    await admin.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD 'secret' CREATEDB`);
+    await admin.unsafe(`GRANT pg_read_server_files TO "${role}"`);
+    await admin.unsafe(`CREATE DATABASE "${database}" OWNER "${role}"`);
+    try {
+      const url = new URL(urlOf(database));
+      url.username = role;
+      url.password = 'secret';
+      await expect(
+        restoreDatabase(url.toString(), join(dir, 'unused.dump'), {
+          workDir: dir,
+          migrationsFolder,
+        }),
+      ).rejects.toThrow(/Restore with a superuser/);
+      expect(
+        await admin`SELECT datname FROM pg_database WHERE datname LIKE 'catch_restore_%'`,
+      ).toHaveLength(0);
+    } finally {
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
+      await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+    }
+  }, 60_000);
 
   it('backs up before an update, once', async () => {
     const backupsDir = join(dir, 'update-backups');

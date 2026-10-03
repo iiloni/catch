@@ -11,7 +11,11 @@ docker compose up -d --build
 ```
 
 The app listens on port 3000 (`CATCH_PORT` to change it). Put it behind HTTPS; the Android
-app requires it. The first account you create becomes the instance admin.
+app requires it. The first account you create becomes the instance admin, and sign-up then
+closes: invite other people from Settings > Admin > Users, which gives you a link to send
+each of them. `REGISTRATION=open` lets anyone sign up instead. Set `TRUSTED_PROXIES`
+to your reverse proxy's address so the sign-in rate limit counts each visitor rather than
+the proxy (see `.env.example`).
 
 Electric uses its pinned prebuilt image when available. If Docker Hub cannot supply it,
 Compose builds the same release from a pinned upstream Git commit; the first build takes
@@ -22,8 +26,8 @@ configuration kept outside this checkout, see [Releasing and deployment](docs/re
 
 Attachments live in the `attachment_data` Docker volume. Set `CATCH_ATTACHMENTS_MOUNT`
 to a host directory for a bind mount, writable by the container's `node` user (UID 1000).
-Files can be up to 100 MiB; uploads made offline stay on the device and resume when it
-reconnects.
+Files can be up to 100 MiB, and each account up to 10 GiB in all (`ATTACHMENT_QUOTA_MB`);
+uploads made offline stay on the device and resume when it reconnects.
 
 ### Backups and updates
 

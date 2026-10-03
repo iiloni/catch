@@ -23,11 +23,15 @@ import {
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { attachments, notes } from '../db/schema';
+import { env } from '../env';
 import { requireUser } from '../lib/requireUser';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 const owned = (id: string, userId: string) =>
   and(eq(attachments.id, id), eq(attachments.userId, userId));
+/** Thrown inside the reservation's transaction to undo a row that does not fit the quota. */
+class QuotaFull extends Error {}
+
 async function currentTxid(tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) {
   const [row] = await tx.execute<{ txid: string }>(
     sql`SELECT pg_current_xact_id()::xid::text AS txid`,
@@ -113,20 +117,40 @@ export const attachmentRoutes = new Hono<AppEnv>()
       if (source.size !== body.size || source.mimeType !== body.mimeType)
         return c.json({ error: 'Source does not match' }, 400);
     }
-    let txid = await db.transaction(async (tx) => {
-      const added = await tx
-        .insert(attachments)
-        .values({
-          ...body,
-          userId,
-          kind: attachmentKind(body.mimeType),
-          status: 'pending',
-        })
-        .onConflictDoNothing()
-        .returning({ id: attachments.id });
-      if (!added.length) return null;
-      return currentTxid(tx);
-    });
+    const quota = env.ATTACHMENT_QUOTA_MB * 1024 * 1024;
+    let txid: number | null;
+    try {
+      txid = await db.transaction(async (tx) => {
+        // One account's reservations take turns, so two at once cannot both fit under a
+        // quota that has room for one.
+        if (quota > 0)
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`);
+        const added = await tx
+          .insert(attachments)
+          .values({
+            ...body,
+            userId,
+            kind: attachmentKind(body.mimeType),
+            status: 'pending',
+          })
+          .onConflictDoNothing()
+          .returning({ id: attachments.id });
+        if (!added.length) return null;
+        if (quota > 0) {
+          // Removed attachments have had their files deleted; ones still uploading hold
+          // their place.
+          const [used] = await tx
+            .select({ bytes: sql<string>`coalesce(sum(${attachments.size}), 0)` })
+            .from(attachments)
+            .where(and(eq(attachments.userId, userId), isNull(attachments.deletedAt)));
+          if (Number(used?.bytes ?? 0) > quota) throw new QuotaFull();
+        }
+        return currentTxid(tx);
+      });
+    } catch (error) {
+      if (!(error instanceof QuotaFull)) throw error;
+      return c.json({ error: 'Your attachment storage on this server is full' }, 413);
+    }
     if (txid === null) {
       const [mine] = await db.select().from(attachments).where(owned(body.id, userId));
       if (

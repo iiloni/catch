@@ -28,7 +28,9 @@ with Keep offline for a durable copy. Sign-out clears the user's files with the 
 `ATTACHMENTS_DIR`, backed by a named Docker volume by default. `CATCH_ATTACHMENTS_MOUNT`
 can select a bind mount; backups must include it and Postgres. Uploads stream to temporary
 files and are renamed only after their exact declared size has arrived. Metadata creation
-and upload completion are replay-safe and return txids. The initial limit is 100 MiB per file;
+and upload completion are replay-safe and return txids. The initial limit is 100 MiB per file,
+and `ATTACHMENT_QUOTA_MB` (10 GiB by default, 0 for none) caps what one account's attachments
+add up to, checked when an attachment is created and answered with `413`;
 upload retries send the whole file. Sharp produces image previews; FFmpeg produces a video's
 first frame, with a timeout, limited threads, and only local media containers permitted.
 Both Docker targets include FFmpeg. Previews are written atomically; failures keep the original

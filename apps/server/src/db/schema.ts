@@ -93,6 +93,23 @@ export const verification = pgTable(
   (table) => [index().on(table.identifier)],
 );
 
+/**
+ * Sign-up for one account, made by an admin while registration is closed (ADR 0015). Only
+ * the hash of the link's token is kept. Server state, not synced to devices.
+ */
+export const invites = pgTable('invites', {
+  id: uuid().primaryKey().defaultRandom(),
+  tokenHash: text().notNull().unique(),
+  label: text().notNull().default(''),
+  createdBy: text()
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: createdAt(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  usedAt: timestamp({ withTimezone: true }),
+  usedBy: text().references(() => user.id, { onDelete: 'set null' }),
+});
+
 // App tables.
 
 export const notes = pgTable(

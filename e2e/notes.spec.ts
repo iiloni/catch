@@ -2,6 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 import {
   backToGallery,
+  bearerToken,
   card,
   createNote,
   noteAction,
@@ -262,7 +263,7 @@ test('users only see and change their own notes', { tag: '@api' }, async ({
       },
     });
     expect(response.ok()).toBeTruthy();
-    const { token } = z.object({ token: z.string() }).parse(await response.json());
+    const token = bearerToken(response);
     const headers = { Authorization: `Bearer ${token}` };
     /** The ids of the notes this account's shape syncs. */
     async function noteIds() {
