@@ -60,7 +60,7 @@ describe('primary tag color picker', () => {
     expect(onChange).toHaveBeenLastCalledWith('red');
   });
   it('does not imply a primary assignment from a linked raw color or mixed primaries', () => {
-    render(
+    const { rerender } = render(
       <ColorTagSelector
         value="blue"
         primaryTagId={null}
@@ -74,5 +74,20 @@ describe('primary tag color picker', () => {
       'aria-pressed',
       'true',
     );
+    rerender(
+      <ColorTagSelector
+        value={null}
+        primaryTagId={null}
+        onChange={vi.fn()}
+        onTagChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('button')
+        .filter((button) => button.getAttribute('aria-pressed') === 'true'),
+    ).toHaveLength(0);
   });
 });

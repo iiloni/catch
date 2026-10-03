@@ -141,7 +141,9 @@ export function NoteCard({
       data-note-card={note.id}
       data-note-color={color}
       onClick={(event) => {
-        if ((event.target as Element).closest('button, input, a, [role="button"]')) return;
+        const control = (event.target as Element).closest('button, input, a, [role="button"]');
+        // The draggable wrapper also has a button role; only card controls consume clicks.
+        if (control && event.currentTarget.contains(control)) return;
         if (selecting) onSelect?.(note);
         else onOpen?.(note, event.currentTarget);
       }}
@@ -157,7 +159,7 @@ export function NoteCard({
         if (!hidesActions()) arm();
       }}
       className={cn(
-        'group relative flex flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
+        'group relative flex cursor-pointer flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
         forceHover && 'shadow-md',
         hidden && 'invisible',
         openBeside && 'ring-2 ring-brand ring-inset',

@@ -1151,10 +1151,15 @@ test('queued plain color changes replace a primary and preserve secondary assign
     ).status(),
   ).toBe(200);
   await expect(noteCard.getByRole('button', { name: 'Work', exact: true })).toBeVisible();
+  await expect(noteCard.getByRole('heading', { name: 'Tags', exact: true })).toHaveCSS(
+    'cursor',
+    'pointer',
+  );
   await noteCard.getByRole('heading', { name: 'Tags', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Note editor' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close note', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Note editor' })).toHaveCount(0);
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   // This is the unchanged PATCH payload restored from a pre-tag outbox.
   expect(
     (

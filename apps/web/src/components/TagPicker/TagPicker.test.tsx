@@ -23,8 +23,9 @@ const child: Tag = {
 const sibling: Tag = { ...child, id: 'sibling', name: 'Ideas' };
 let primaryTagId: string | null = root.id;
 let secondaryTagIds = [child.id];
+const readiness = { awaitingTags: false, awaitingAssignments: false };
 vi.mock('@/lib/collections', () => ({
-  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
+  useTagReadiness: () => readiness,
   useTags: () => [root, child, sibling],
   useNoteTagAssignments: () => new Map([['note', { primaryTagId, secondaryTagIds }]]),
 }));
@@ -41,7 +42,24 @@ describe('secondary tag picker', () => {
     );
     primaryTagId = root.id;
     secondaryTagIds = [child.id];
+    readiness.awaitingTags = false;
+    readiness.awaitingAssignments = false;
+    vi.clearAllMocks();
   });
+  it.each(['awaitingTags', 'awaitingAssignments'] as const)(
+    'waits for %s before offering assignment toggles',
+    (pending) => {
+      readiness[pending] = true;
+      const { rerender } = render(<TagPicker noteId="note" />);
+      expect(screen.getByRole('status')).toHaveTextContent('Loading tags…');
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(setSecondaryTag).not.toHaveBeenCalled();
+      readiness[pending] = false;
+      rerender(<TagPicker noteId="note" />);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Work / Projects' })).toBeVisible();
+    },
+  );
   it('explains disabled secondary ancestors on touch and keeps siblings selectable', () => {
     primaryTagId = null;
     render(<TagPicker noteId="note" />);

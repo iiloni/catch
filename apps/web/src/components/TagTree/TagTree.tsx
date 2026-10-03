@@ -13,12 +13,14 @@ export function TagTree({
   className,
   searchPosition = 'top',
   searchAccessory,
+  estimatedRowHeight = 44,
 }: {
   tags: readonly Tag[];
   renderTag: (tag: Tag, path: readonly Tag[]) => ReactNode;
   className?: string;
   searchPosition?: 'top' | 'bottom';
   searchAccessory?: (focused: boolean) => ReactNode;
+  estimatedRowHeight?: number;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -118,6 +120,7 @@ export function TagTree({
                   key={tag.id}
                   observer={observer}
                   initiallyVisible={rowIndex < 40}
+                  estimatedRowHeight={estimatedRowHeight}
                   reducedMotion={!!reducedMotion}
                   renderRow={renderRow}
                 />
@@ -193,21 +196,25 @@ function rowObserver() {
 function DeferredTagRow({
   observer,
   initiallyVisible,
+  estimatedRowHeight,
   reducedMotion,
   renderRow,
 }: {
   observer: ReturnType<typeof rowObserver>;
   initiallyVisible: boolean;
+  estimatedRowHeight: number;
   reducedMotion: boolean;
   renderRow: () => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const height = useRef(44);
+  const height = useRef(estimatedRowHeight);
+  const intersects = useRef(initiallyVisible);
   const [visible, setVisible] = useState(initiallyVisible);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
     return observer.subscribe(element, (visible) => {
+      intersects.current = visible;
       // Keep a focused row mounted even if its controls scroll out of view.
       setVisible(visible || element.contains(document.activeElement));
     });
@@ -224,7 +231,13 @@ function DeferredTagRow({
     return () => resize.disconnect();
   }, [visible]);
   return (
-    <div ref={ref} style={visible ? undefined : { height: height.current }}>
+    <div
+      ref={ref}
+      style={visible ? undefined : { height: height.current }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setVisible(intersects.current);
+      }}
+    >
       {visible && (
         <AnimatedTagRow reducedMotion={reducedMotion} animateEntry={initiallyVisible}>
           {renderRow()}

@@ -199,7 +199,14 @@ describe('NoteCard', () => {
     const mediaNote = { ...note, content: [] };
     const onOpen = vi.fn(),
       onSelect = vi.fn();
-    const { rerender } = renderCard({ note: mediaNote, onOpen });
+    const { rerender } = render(
+      <TooltipProvider>
+        {/* biome-ignore lint/a11y/useSemanticElements: Matches the gallery's draggable wrapper. */}
+        <div role="button" tabIndex={0} aria-label="Move note">
+          <NoteCard note={mediaNote} onOpen={onOpen} />
+        </div>
+      </TooltipProvider>,
+    );
     fireEvent.click(screen.getByRole('heading', { name: 'Tags' }));
     fireEvent.click(screen.getByText('photo.png'));
     expect(onOpen).toHaveBeenCalledTimes(2);
@@ -208,7 +215,10 @@ describe('NoteCard', () => {
     expect(onOpen).toHaveBeenCalledTimes(2);
     rerender(
       <TooltipProvider>
-        <NoteCard note={mediaNote} selected={false} onSelect={onSelect} onOpen={onOpen} />
+        {/* biome-ignore lint/a11y/useSemanticElements: Matches the gallery's draggable wrapper. */}
+        <div role="button" tabIndex={0} aria-label="Move note">
+          <NoteCard note={mediaNote} selected={false} onSelect={onSelect} onOpen={onOpen} />
+        </div>
       </TooltipProvider>,
     );
     fireEvent.click(screen.getByRole('heading', { name: 'Tags' }));

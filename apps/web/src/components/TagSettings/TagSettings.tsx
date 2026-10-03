@@ -53,6 +53,7 @@ export function TagSettings({ userId }: { userId: string }) {
             </p>
           ) : (
             <TagTree
+              estimatedRowHeight={48}
               tags={tags}
               renderTag={(tag, path) => {
                 const root = path[0] ?? tag;

@@ -41,20 +41,28 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
     }),
   );
   const renderTag = vi.fn((tag: Tag, path: readonly Tag[]) => (
-    <span>
+    <button type="button" style={{ minHeight: 48 }}>
       {tag.name}
       <span>{path.length} levels</span>
-    </span>
+    </button>
   ));
-  render(<TagTree tags={tags} renderTag={renderTag} />);
+  render(<TagTree tags={tags} renderTag={renderTag} estimatedRowHeight={48} />);
   expect(renderTag.mock.calls.length).toBeLessThanOrEqual(40);
   expect(screen.queryByText('Tag 4999')).not.toBeInTheDocument();
+  expect(observed.at(-1)).toHaveStyle({ height: '48px' });
   act(() => notify([{ target: observed.at(-1)!, isIntersecting: true }]));
   expect(screen.getByText('Tag 4999')).toBeInTheDocument();
   expect(screen.getByText('5000 levels')).toBeInTheDocument();
+  const deepest = screen.getByText('Tag 4999');
+  act(() => deepest.focus());
+  act(() => notify([{ target: observed.at(-1)!, isIntersecting: false }]));
+  expect(deepest).toBeInTheDocument();
+  fireEvent.blur(deepest, { relatedTarget: screen.getByRole('textbox', { name: 'Find tags' }) });
+  expect(screen.queryByText('Tag 4999')).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox', { name: 'Find tags' }), {
     target: { value: 'Tag 4999' },
   });
+  act(() => notify([{ target: observed.at(-1)!, isIntersecting: true }]));
   expect(screen.getByText('Tag 4999')).toBeInTheDocument();
   await waitForElementToBeRemoved(() => screen.queryByText('Tag 0'));
 });
