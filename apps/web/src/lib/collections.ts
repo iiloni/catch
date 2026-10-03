@@ -55,7 +55,13 @@ import {
 import { mergeQueuedWrites } from './mergeQueuedWrites';
 import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
-import { addPendingWrite, getSyncStatus, settlePendingWrite, updateSyncStatus } from './syncStatus';
+import {
+  addPendingWrite,
+  getPendingWriteIds,
+  getSyncStatus,
+  settlePendingWrite,
+  updateSyncStatus,
+} from './syncStatus';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
@@ -387,6 +393,19 @@ export function write(mutate: () => void): Transaction {
 /** Captures must survive a reload or popup closing before confirming success. */
 export async function waitForWriteStored(transaction: Transaction): Promise<void> {
   await waitForQueuedWrite(transaction.id, transaction.isPersisted.promise);
+}
+
+/** A reload must wait for in-flight writes to reach durable storage or the server. */
+export async function waitForPendingWritesStored(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (getPendingWriteIds().length) {
+    const queued = new Set((await executor.peekOutbox()).map((write) => write.id));
+    if (getPendingWriteIds().every((id) => queued.has(id))) return;
+    if (Date.now() >= deadline) {
+      throw new Error('Changes are still being saved. Wait a moment and try reloading again.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 export async function waitForQueuedWrite(id: string, completion: Promise<unknown>): Promise<void> {

@@ -75,6 +75,17 @@ and preview must advance independently, including preview versions ahead of stab
   package version. Recent GitHub releases are filtered to the server channel. Android
   checks on launch, resume and periodically; an available update marks Settings and Update,
   and a dismissible prompt links to the page once per installed app/server/target version.
+- Browser and PWA builds publish an uncached `build.json` with a unique build id embedded
+  in the client. Launch, resume, focus, reconnection, periodic and manual checks compare
+  the deployed id, including when another tab already activated an update. This also works
+  in browsers without service workers. Development's Vite server and native apps do not
+  use this check. Missing or malformed metadata on an older server is ignored.
+  A dismissible prompt offers **Reload to update** and **Later**; Settings > Update keeps
+  the reload action available after dismissal. Prompts wait until open editors and drafts
+  close. Reload waits for pending writes to reach the outbox or server, installs and explicitly
+  activates a waiting service worker, then waits for it to control the page before reloading.
+  Other tabs retain control of when their page reloads. Notes, outboxes and staged shares
+  are never cleared. Offline or failed preparation keeps the current page and offers retry.
 - Android updates target the server's exact published version, only within the installed
   app's channel and only forwards. The native plugin downloads the APK and checksum from
   GitHub, checks SHA-256, package identity, release version, increasing version code and
@@ -86,7 +97,10 @@ and preview must advance independently, including preview versions ahead of stab
   notes and queued writes while sync waits for an app or server update; compatible release
   differences do not require an update. Breaking-change commit markers document changes,
   but runtime enforcement comes from the protocol constants. PWAs receive new code through
-  their service worker, but offline or already open clients can still run older code.
+  their service worker with user-approved reloads, but offline or already open clients can
+  still run older code. Static build metadata is an additive recovery contract with a
+  fallback for older servers; it changes no data API, queued write format or synced shape,
+  so the API protocol and collection schema versions remain unchanged.
 
 ## Consequences
 

@@ -26,6 +26,8 @@ import {
   useAndroidUpdateAvailable,
   useUpdates,
 } from '@/lib/updates';
+import { useUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
+import { reloadForWebUpdate, useWebUpdates } from '@/lib/webUpdates';
 
 const channelLabels = { stable: 'Stable', preview: 'Preview', dev: 'Development' };
 
@@ -33,6 +35,8 @@ export function AppUpdate() {
   const { incompatibility } = useSyncStatus();
   const { android, app, server, checking, error, installing, installError } = useUpdates();
   const available = useAndroidUpdateAvailable();
+  const web = useWebUpdates();
+  const reloadBlocked = useUpdateReloadBlocked();
   const channel = (android ? app?.channel : undefined) ?? server?.channel ?? 'dev';
   return (
     <div className="flex flex-col gap-6">
@@ -102,6 +106,30 @@ export function AppUpdate() {
                 updates.
               </p>
             </>
+          )}
+          {!android && (web.target || incompatibility === 'client-too-old') && (
+            <>
+              <Button
+                disabled={web.reloading || reloadBlocked}
+                onClick={() => {
+                  haptics.selection();
+                  void reloadForWebUpdate();
+                }}
+              >
+                <RefreshCw aria-hidden />
+                {web.reloading ? 'Preparing update…' : 'Reload to update'}
+              </Button>
+              <p className="text-muted-foreground text-xs">
+                {reloadBlocked
+                  ? 'Close the open note or draft before reloading.'
+                  : 'Your saved notes and queued changes will stay on this device.'}
+              </p>
+            </>
+          )}
+          {!android && web.error && (
+            <p role="alert" className="text-destructive text-sm">
+              {web.error}
+            </p>
           )}
           {error && (
             <p role="alert" className="text-destructive text-sm">

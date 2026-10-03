@@ -10,6 +10,10 @@ export const versionInfoSchema = z.object({
 });
 export type VersionInfo = z.infer<typeof versionInfoSchema>;
 
+/** Static web build metadata; deliberately outside the service worker's precache. */
+export const webBuildSchema = z.object({ id: z.uuid() });
+export type WebBuild = z.infer<typeof webBuildSchema>;
+
 export function parseReleaseVersion(version: string | null) {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-preview)?$/.exec(version ?? '');
   if (!match || match[0] !== version) return null;
