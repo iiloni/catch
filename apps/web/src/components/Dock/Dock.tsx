@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   Plus,
   Search,
+  SlidersHorizontal,
   SquarePen,
   X,
 } from 'lucide-react';
@@ -28,6 +29,8 @@ import {
   lastBrowsingTab,
   quickNote,
   quickNoteCanSave,
+  searchFilterCount,
+  searchFiltersOpen,
   searchQuery,
   type TabPath,
   tabFor,
@@ -228,6 +231,7 @@ export function Dock() {
                   </div>
                 </div>
                 <AnimatePresence initial={false}>
+                  {mode === 'search' && <SearchFilterButton key="filters" />}
                   {(mode === 'tabs' || mode === 'settings') && (
                     <ComposeButton
                       key="compose"
@@ -501,8 +505,16 @@ function SearchField({
 }) {
   const navigate = useNavigate();
   const query = searchQuery.use();
+  useEffect(() => {
+    if (!active) searchFiltersOpen.set(false);
+  }, [active]);
 
-  function exit() {
+  function exit(closePanel = true) {
+    if (closePanel && searchFiltersOpen.get()) {
+      searchFiltersOpen.set(false);
+      document.querySelector<HTMLButtonElement>('[data-search-filter-trigger]')?.focus();
+      return;
+    }
     inputRef.current?.blur();
     haptics.toggle();
     void navigate({ to: lastBrowsingTab.get(), replace: true });
@@ -512,7 +524,14 @@ function SearchField({
 
   // The input stays mounted (invisible) so tapping the Search tab can focus it at once.
   return (
-    <div
+    <search
+      aria-hidden={!active}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          exit();
+        }
+      }}
       className={cn(
         'absolute inset-x-0 bottom-0 flex h-[var(--dock-height)] items-center gap-2 pr-1.5 pl-4',
         !active && 'pointer-events-none',
@@ -537,7 +556,6 @@ function SearchField({
         value={query}
         onChange={(event) => searchQuery.set(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') exit();
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
         animate={{ opacity: active ? 1 : 0, x: active ? 0 : 16 }}
@@ -550,7 +568,7 @@ function SearchField({
             key="close"
             type="button"
             aria-label="Close search"
-            onClick={exit}
+            onClick={() => exit(false)}
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.5 }}
@@ -562,7 +580,54 @@ function SearchField({
           </motion.button>
         )}
       </AnimatePresence>
-    </div>
+    </search>
+  );
+}
+
+function SearchFilterButton() {
+  const open = searchFiltersOpen.use();
+  const count = searchFilterCount.use();
+  const navigate = useNavigate();
+  return (
+    <motion.div
+      className="shrink-0"
+      initial={{ width: 0, marginLeft: 0 }}
+      animate={{ width: 64, marginLeft: 12 }}
+      exit={{ width: 0, marginLeft: 0 }}
+      transition={springs.smooth}
+    >
+      <motion.button
+        type="button"
+        data-search-filter-trigger
+        aria-label="Filter notes"
+        title={count ? `Filter notes (${count} active)` : 'Filter notes'}
+        aria-expanded={open}
+        aria-controls="search-filter-panel"
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={() => {
+          haptics.toggle();
+          searchFiltersOpen.set(!open);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            if (open) searchFiltersOpen.set(false);
+            else void navigate({ to: lastBrowsingTab.get(), replace: true });
+          }
+        }}
+        whileTap={{ scale: 0.88 }}
+        transition={springs.snappy}
+        className={cn(
+          'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+          (open || count > 0) && 'text-brand',
+        )}
+      >
+        <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
+        <SlidersHorizontal className="relative size-7" strokeWidth={2.25} aria-hidden />
+        {count > 0 && (
+          <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
+        )}
+      </motion.button>
+    </motion.div>
   );
 }
 

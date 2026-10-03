@@ -35,7 +35,7 @@ export function TagTree({
       value={search}
       onChange={(event) => setSearch(event.target.value)}
       className={cn(
-        'h-10 w-full rounded-xl border border-border bg-background/40 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'h-10 w-full shrink-0 rounded-xl border border-border bg-background/40 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
         searchPosition === 'bottom' ? 'mt-2' : 'mb-2',
       )}
     />
