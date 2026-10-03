@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -12,6 +12,7 @@ const env = {
   GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_CONFIG_SYSTEM: '/dev/null',
   GIT_TERMINAL_PROMPT: '0',
+  GITHUB_OUTPUT: undefined,
 };
 
 function fixture() {
@@ -44,6 +45,32 @@ test('a first release annotates HEAD locally without moving HEAD or accessing a 
   assert.equal(repo.git('rev-parse', 'v0.1.0-preview^{commit}'), head);
   assert.equal(repo.git('rev-parse', 'HEAD'), head);
   assert.match(result.stdout, /git push origin v0\.1\.0-preview/);
+});
+
+test('Actions receives the created tag, with no output for dry runs or collisions', (t) => {
+  const repo = fixture();
+  t.after(repo.cleanup);
+  const outputDir = mkdtempSync(join(tmpdir(), 'catch-release-output-'));
+  t.after(() => rmSync(outputDir, { recursive: true, force: true }));
+  const output = join(outputDir, 'output');
+  writeFileSync(output, 'existing=value\n');
+  const run = (...args: string[]) =>
+    spawnSync(script, args, {
+      cwd: repo.cwd,
+      env: { ...env, GITHUB_OUTPUT: output },
+      encoding: 'utf8',
+    });
+  assert.equal(run('preview', 'minor', '--dry-run').status, 0);
+  assert.equal(readFileSync(output, 'utf8'), 'existing=value\n');
+  const result = run('preview', 'minor');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(output, 'utf8'), 'existing=value\ntag=v0.1.0-preview\n');
+  const promoted = run('stable', 'promote');
+  assert.equal(promoted.status, 0, promoted.stderr);
+  const expected = 'existing=value\ntag=v0.1.0-preview\ntag=v0.1.0\n';
+  assert.equal(readFileSync(output, 'utf8'), expected);
+  assert.equal(run('stable', 'promote').status, 1);
+  assert.equal(readFileSync(output, 'utf8'), expected);
 });
 
 test('bumps use reachable tags across channels and ignore unrelated branch versions', (t) => {
