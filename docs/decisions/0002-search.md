@@ -40,7 +40,7 @@ them without changing the selection or match mode. The tab views share a bottom 
 while sliding and resizing, and horizontal overflow is clipped.
 Reduced motion switches views immediately. Untagged is separate from No color. Archived
 notes are included, trashed notes excluded, and result badges show the assigned tags.
-Recent text searches remain available. See ADR 0015 for tag semantics.
+Recent text searches remain available. See ADR 0016 for tag semantics.
 
 ## Why not a separate vector store
 
