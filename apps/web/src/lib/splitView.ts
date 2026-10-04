@@ -1,5 +1,5 @@
 import { useRouterState } from '@tanstack/react-router';
-import { motionValue } from 'motion/react';
+import { type MotionValue, motionValue, useTransform } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { createStore } from './store';
 
@@ -12,6 +12,9 @@ const MIN_HEIGHT = 480;
 /** The page keeps room for a column of cards, the note for comfortable lines. */
 export const LIST_MIN = 280;
 export const NOTE_MIN = 340;
+/** The widest a page of cards gets (`max-w-7xl`), and a page of results (`max-w-2xl`). */
+export const PAGE_MAX = 1280;
+export const READING_MAX = 672;
 /** Space between the page and the note, which holds the resize handle. */
 export const GUTTER = 24;
 const DEFAULT_RATIO = 0.42;
@@ -129,4 +132,48 @@ export function useNotePaneLayout(): NotePane {
     document.documentElement.toggleAttribute('data-note-pane', pane.shown);
   }, [pane.shown]);
   return pane;
+}
+
+/**
+ * A page narrower than the screen is centered, with gutters either side. It takes its new
+ * width at once when the pane opens or closes, which would move it to its new gutter in one
+ * step, or to none at all. This is the offset that keeps it where the gutter was and brings
+ * it across over the whole of the pane's slide. `maxWidth` is the page's, in pixels.
+ *
+ * The gutter is not what centering in the space the pane leaves would give: that one runs
+ * out while the pane is still part of the way in, which packed the page's whole move into
+ * the fastest stretch of an opening slide and the slowest of a closing one.
+ *
+ * Put it on the page's content, never around a fixed header: it is a transform while the
+ * pane slides (and none at rest, so a held card still rides above the header).
+ */
+export function usePageGutterShift(maxWidth: number): MotionValue<number> {
+  const { sliding, rest } = useGutters(maxWidth);
+  return useTransform(() => sliding(paneReveal.get()) - rest);
+}
+
+/**
+ * The same for what sits at the left of a fixed header, which does center itself in the
+ * space the pane leaves: the offset from there to where the page's content is.
+ */
+export function useHeaderGutterShift(maxWidth: number): MotionValue<number> {
+  const { sliding, centered } = useGutters(maxWidth);
+  return useTransform(() => {
+    const reveal = paneReveal.get();
+    return sliding(reveal) - centered(reveal);
+  });
+}
+
+function useGutters(maxWidth: number) {
+  const pane = useNotePane();
+  const covered = pane.split ? pane.noteWidth : 0;
+  const screen = pane.viewport.width;
+  const gutter = (pane: number) => Math.max(0, (screen - pane - maxWidth) / 2);
+  return {
+    /** The gutter of a page that crosses evenly with the pane. */
+    sliding: (reveal: number) => gutter(0) + (gutter(covered) - gutter(0)) * reveal,
+    /** The gutter of something centered in what the pane leaves of the screen. */
+    centered: (reveal: number) => gutter(covered * reveal),
+    rest: gutter(pane.shown ? pane.noteWidth : 0),
+  };
 }

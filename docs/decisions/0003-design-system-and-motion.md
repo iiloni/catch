@@ -113,6 +113,29 @@ target and two morphs cross when switching notes. Instead the pane slides in fro
 edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.
 The page takes its new width at once, so its cards reshuffle once under the moving pane, while
 fixed UI over the page follows the pane's edge through `--note-pane` (`src/lib/splitView.ts`).
+A page wider than its content is centered between gutters, which a narrower page loses; its
+content keeps its place on screen and crosses over the whole of the pane's slide
+(`usePageGutterShift`), a transform that is gone once the pane rests. Centering it in the
+space the pane leaves would use the gutter up while the pane is part of the way in, packing
+the move into the fastest stretch of an opening slide and the slowest of a closing one. The
+header's left corner (brand, title pill, back button) is offset to stay over the page's edge
+(`useHeaderGutterShift`); its centered title and right toolbar keep following the pane. The page's wrapper spans the screen and clips
+there, so cards still on their way to a narrower page reach under the pane, not past it.
+
+**Grid resizes.** When a grid's columns change width (switching the Gallery between masonry
+and a single column, or a note pane opening or closing), cards on screen spring to their new
+width along with their new slots; the rest jump. The width itself is animated rather than
+scaled, so text reflows and stays crisp. A card is measured once at its new width before it
+starts, and not again until it arrives, so the layout is settled from the first frame and
+nothing is laid out twice. A continuous resize (the window or the split handle being dragged)
+is followed exactly instead of sprung behind.
+
+A resize is a long frame: every card is measured again, and opening a pane mounts a note
+beside the page. A spring keeps time, so one started in that frame lost its first moments to
+it and appeared most of the way there. The cards' springs therefore start once the frame is
+painted, and the pane slides in the same way, following the spring it leaves on but
+advancing by frames (`animateSteadySpring`), as the container transform does. Closing the
+pane has no such frame and keeps its spring.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
 The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered

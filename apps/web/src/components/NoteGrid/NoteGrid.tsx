@@ -24,13 +24,18 @@ import {
   useLongPress,
 } from '@/lib/longPress';
 import { dropIndex, masonry, type Point } from '@/lib/masonry';
-import { springs } from '@/lib/motion';
+import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const MIN_COLUMN_WIDTH = 220;
 const GAP = 12;
 /** A held card rides above the page header (30) and the dock (40), below sheets (50). */
 const LIFTED_Z = 45;
+/**
+ * Width changes closer together than this are one continuous resize (the window or the
+ * split handle being dragged), which cards follow exactly instead of springing behind.
+ */
+const RESIZE_SETTLE_MS = 150;
 
 type Props = {
   notes: Note[];
@@ -131,12 +136,17 @@ type Drag = {
   index: number;
 };
 
-/** A card's animated position. `target` is the slot it is at or moving to. */
+/**
+ * A card's animated position and width. `target` is the slot it is at or moving to, and
+ * `targetWidth` the column width it has or is growing to.
+ */
 type Place = {
   x: MotionValue<number>;
   y: MotionValue<number>;
   z: MotionValue<number>;
+  width: MotionValue<number>;
   target?: Point;
+  targetWidth?: number;
   /** Just let go of, so it springs to its slot even if that is where it started. */
   released?: boolean;
 };
@@ -184,6 +194,10 @@ export function NoteGrid({
   const columnWidth = Math.max(0, (width - GAP * (columns - 1)) / columns);
   const grid = { columns, columnWidth, gap: GAP };
   const measuredWidth = useRef(columnWidth);
+  const resized = useRef({ width: columnWidth, at: 0 });
+  // Cards waiting to spring to a new width, and the call that will start them.
+  const settling = useRef({ places: new Set<Place>(), cancel: () => {} });
+  useLayoutEffect(() => () => settling.current.cancel(), []);
 
   const basis = notes.map((note) => note.id).join();
   if (dropped && dropped.basis !== basis) setDropped(null);
@@ -223,7 +237,12 @@ export function NoteGrid({
   function placeOf(id: string) {
     let place = places.current.get(id);
     if (!place) {
-      place = { x: motionValue(0), y: motionValue(0), z: motionValue(0) };
+      place = {
+        x: motionValue(0),
+        y: motionValue(0),
+        z: motionValue(0),
+        width: motionValue(columnWidth),
+      };
       places.current.set(id, place);
     }
     return place;
@@ -232,8 +251,19 @@ export function NoteGrid({
   const measure = useCallback(() => {
     const width = measuredWidth.current;
     if (width === 0) return;
-    let changed = false;
+    // A card still growing or shrinking to this width is measured as it will be, once: its
+    // height on the way there says nothing, and it resizes on every frame.
+    const settled: [string, HTMLElement][] = [];
+    const resizing: [string, HTMLElement, string][] = [];
     for (const [id, element] of elements.current) {
+      const live = places.current.get(id)?.width.get();
+      if (live === undefined || live === width) settled.push([id, element]);
+      else if (measured.get(id)?.width !== width) resizing.push([id, element, element.style.width]);
+    }
+    // Written together, then read together, so the browser lays the cards out once.
+    for (const [, element] of resizing) element.style.width = `${width}px`;
+    let changed = false;
+    for (const [id, element] of [...settled, ...resizing]) {
       const height = element.offsetHeight;
       const previous = measured.get(id);
       if (previous?.width !== width || previous.height !== height) {
@@ -241,6 +271,7 @@ export function NoteGrid({
         changed = true;
       }
     }
+    for (const [, element, live] of resizing) element.style.width = live;
     if (changed) remeasured();
   }, []);
 
@@ -302,13 +333,30 @@ export function NoteGrid({
   // The grid also moves without scrolling, such as when the pinned notes above it change.
   useLayoutEffect(updateView);
 
-  // Send every card to its slot: new cards jump there, moved ones spring. Only cards that
-  // are or will be on screen spring; the rest are just outside it and jump.
+  // Send every card to its slot and width: new cards jump there, moved or resized ones
+  // spring. Only cards that are or will be on screen spring; the rest are just outside it
+  // and jump.
   useLayoutEffect(() => {
     for (const id of places.current.keys()) {
       if (!rendered.has(id)) places.current.delete(id);
     }
     if (!layout || pending) return;
+    let resizing = false;
+    let dragging = false;
+    if (resized.current.width !== columnWidth) {
+      const now = performance.now();
+      resizing = true;
+      dragging = now - resized.current.at < RESIZE_SETTLE_MS;
+      resized.current = { width: columnWidth, at: now };
+    }
+    const spring = (place: Place) => {
+      if (!place.target || place.targetWidth === undefined) return;
+      animate(place.x, place.target.x, springs.smooth);
+      // A card let go of drops back under the header and dock once it lands.
+      animate(place.y, place.target.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
+      // The width is animated itself rather than scaled, so text reflows and stays crisp.
+      animate(place.width, place.targetWidth, springs.smooth);
+    };
     let visible: { top: number; bottom: number } | undefined;
     const onScreen = (y: number, height: number) => {
       if (!visible) {
@@ -323,24 +371,44 @@ export function NoteGrid({
       const slot = layout.slots[index];
       if (!slot || note.id === drag?.id || !rendered.has(note.id)) return;
       const place = placeOf(note.id);
+      const height = heights[index] ?? 0;
+      const visiblyMoves =
+        place.target && (onScreen(place.y.get(), height) || onScreen(slot.y, height));
       if (!place.target) {
         place.x.jump(slot.x);
         place.y.jump(slot.y);
-      } else if (place.released || place.target.x !== slot.x || place.target.y !== slot.y) {
-        const height = heights[index] ?? 0;
-        if (onScreen(place.y.get(), height) || onScreen(slot.y, height)) {
-          animate(place.x, slot.x, springs.smooth);
-          // A card let go of drops back under the header and dock once it lands.
-          animate(place.y, slot.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
-        } else {
-          place.x.jump(slot.x);
-          place.y.jump(slot.y);
-          place.z.set(0);
-        }
       }
+      const moved =
+        place.target && (place.released || place.target.x !== slot.x || place.target.y !== slot.y);
+      const changedWidth = place.targetWidth !== columnWidth;
       place.target = slot;
+      place.targetWidth = columnWidth;
       place.released = false;
+      if (!moved && !changedWidth) return;
+      if (!visiblyMoves) {
+        place.x.jump(slot.x);
+        place.y.jump(slot.y);
+        place.width.jump(columnWidth);
+        place.z.set(0);
+      } else if (dragging) {
+        place.width.jump(columnWidth);
+        if (moved) spring(place);
+      } else if (resizing) {
+        settling.current.places.add(place);
+      } else {
+        spring(place);
+      }
     });
+    if (resizing && settling.current.places.size > 0) {
+      // A resize is a long frame (every card is measured again, and a note may be mounting
+      // beside the page). Springs keep time, so started now they would lose their first
+      // moments to it and show up most of the way there. They start once it is painted.
+      settling.current.cancel();
+      settling.current.cancel = afterPaint(() => {
+        for (const place of settling.current.places) spring(place);
+        settling.current.places.clear();
+      });
+    }
   });
 
   function handleDragStart(event: DragStartEvent) {
@@ -403,7 +471,6 @@ export function NoteGrid({
                 key={note.id}
                 note={note}
                 place={placeOf(note.id)}
-                width={columnWidth}
                 placed={isMeasured(note, columnWidth)}
                 layoutReady={!pending}
                 entryDelay={entryDelays.get(note.id) ?? 0}
@@ -426,7 +493,6 @@ export function NoteGrid({
 const GridCard = memo(function GridCard({
   note,
   place,
-  width,
   placed,
   layoutReady,
   entryDelay,
@@ -440,7 +506,6 @@ const GridCard = memo(function GridCard({
 }: {
   note: Note;
   place: Place;
-  width: number;
   placed: boolean;
   layoutReady: boolean;
   entryDelay: number;
@@ -514,7 +579,7 @@ const GridCard = memo(function GridCard({
         x: place.x,
         y: place.y,
         zIndex: place.z,
-        width,
+        width: place.width,
         visibility: placed ? undefined : 'hidden',
       }}
       animate={{ scale: lifted ? 1.04 : 1 }}
