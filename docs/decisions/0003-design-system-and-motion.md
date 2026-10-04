@@ -39,7 +39,12 @@ selector floats a card of the pages above the dock (`SettingsTabPicker`), and ho
 sliding off it) opens the card under the finger, so letting go on a page picks it. From 768 px
 the pages are listed in a column beside the open one, the dock steps aside, and the header
 holds the back button. Opening Settings pushes a history entry and switching pages replaces
-it, so back leaves Settings in one step.
+it, so back leaves Settings in one step. On phones a capped vertical pull also leaves
+Settings: down at the page's top or up at its bottom, using the note editor's release
+threshold and haptic tick. Scrolling between the edges stays native, and short pulls spring
+back. The title, content, fixed header, dock and bottom blur share one vertical offset, so
+the entire page moves together. The fixed layers apply it themselves rather than inheriting
+a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.

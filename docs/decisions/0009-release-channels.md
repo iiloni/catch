@@ -42,7 +42,8 @@ and preview must advance independently, including preview versions ahead of stab
   `validation` gate fails when a PR lacks `merge on pass`, or E2E is unrequested, skipped,
   cancelled or unsuccessful; it is the required branch check (see [CI setup](../ci.md)).
   PRs test GitHub's temporary merge
-  commit and require an up-to-date branch before merging. New PR runs cancel superseded
+  commit and need not be up to date with `main` to merge; the full suite on each `main` push
+  covers combinations of PRs (see [CI setup](../ci.md)). New PR runs cancel superseded
   PR runs. Main pushes, manual CI requests and merge groups request checks and full E2E
   without a label. PRs and merge groups always test their combined code rather than reusing
   main/tag CI. The tag-push or manually dispatched
