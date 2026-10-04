@@ -1,4 +1,4 @@
-# 0017: Reminders and notifications
+# 0018: Reminders and notifications
 
 Status: accepted (2026-10-03)
 

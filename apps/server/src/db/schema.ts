@@ -266,7 +266,7 @@ export const noteTags = pgTable(
 );
 
 /**
- * A note's reminder (ADR 0017), at most one, so the note's id is its key. Times are wall
+ * A note's reminder (ADR 0018), at most one, so the note's id is its key. Times are wall
  * clock times; `fireAt` is the instant the scheduler waits for, worked out from them and the
  * zone the user is in, and stays on the server.
  */

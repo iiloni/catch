@@ -221,7 +221,7 @@ export const noteTagsCollection = createCollection(
   ),
 );
 
-/** Each note's reminder, keyed by the note's id (ADR 0017). */
+/** Each note's reminder, keyed by the note's id (ADR 0018). */
 export const remindersCollection = createCollection(
   persisted(
     electricCollectionOptions({

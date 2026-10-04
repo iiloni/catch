@@ -9,7 +9,7 @@ export const protocolRangeSchema = z
   .refine(({ min, max }) => min <= max, 'Invalid protocol range');
 export type ProtocolRange = z.infer<typeof protocolRangeSchema>;
 
-// Protocol 3 added reminders (ADR 0017) and changed nothing a protocol 2 client uses.
+// Protocol 3 added reminders (ADR 0018) and changed nothing a protocol 2 client uses.
 export const SUPPORTED_API_PROTOCOLS: ProtocolRange = { min: 2, max: API_PROTOCOL_VERSION };
 
 export type CompatibilityIssue = 'client-too-old' | 'server-too-old';

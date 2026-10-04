@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isTimeZone } from './backups';
 
 /**
- * Reminders (ADR 0017). A note has at most one, keyed by the note's id. Its times are wall
+ * Reminders (ADR 0018). A note has at most one, keyed by the note's id. Its times are wall
  * clock times (`YYYY-MM-DDTHH:MM`) rather than instants: a floating reminder is read in the
  * zone the user is in when it comes due, a fixed one in the zone it was made in.
  */

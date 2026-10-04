@@ -11,7 +11,7 @@ import { requireUser } from '../lib/requireUser';
 import { notifyUser, removeSubscription, saveSubscription, vapidKeys } from '../push';
 import { isPushEndpoint } from '../push/webPush';
 
-/** The browsers each user gets notifications on (ADR 0017). */
+/** The browsers each user gets notifications on (ADR 0018). */
 export const pushRoutes = new Hono<AppEnv>()
   .use(requireUser)
   .get('/key', async (c) => c.json({ publicKey: (await vapidKeys()).publicKey } satisfies PushKey))
