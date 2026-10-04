@@ -17,7 +17,7 @@ fail() {
 [[ "${REUSE_RESULT:-}" == success ]] || fail 'CI setup failed or was cancelled. Rerun CI.'
 
 if [[ "${EVENT_NAME:-}" == pull_request && "${E2E_REQUESTED:-}" != true ]]; then
-    fail 'Full validation has not been requested. Apply the "merge on pass" label once functionality and design are approved for merging after tests pass.'
+    fail 'Full E2E has not been requested. Apply "run e2e" for testing, or "merge on pass" once functionality and design are approved for merging after tests pass.'
 fi
 
 # Only main/tag CI may reuse an exact commit whose checks and both E2E projects passed.
@@ -35,5 +35,9 @@ fi
 [[ "${CHECK_RESULT:-}" == success ]] || fail 'Lint, type checks, unit tests and build must all pass.'
 [[ "${DESKTOP_RESULT:-}" == success ]] || fail 'Desktop E2E must pass; skipped or cancelled tests do not count.'
 [[ "${ANDROID_RESULT:-}" == success ]] || fail 'Android E2E must pass; skipped or cancelled tests do not count.'
+
+if [[ "${EVENT_NAME:-}" == pull_request && "${MERGE_APPROVED:-}" != true ]]; then
+    fail 'Checks and both E2E projects passed, but merge approval is still required. Apply the "merge on pass" label once functionality and design are approved for merging after tests pass.'
+fi
 
 report 'Checks and both E2E projects passed for the tested commit.'

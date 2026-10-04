@@ -27,7 +27,8 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/release.sh <stable|preview> <major|minor|patch> [--dry-run]`: tag HEAD locally.
   Use `stable promote [preview-tag]` to preserve a tested preview's version and commit.
   See `docs/releases.md`; pushing a tag explicitly can trigger release builds.
-- `./scripts/dev.sh e2e`: Playwright tests against this worktree's stack.
+- `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
+  against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
@@ -59,15 +60,24 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   reflect the actual scope; do not create new labels or apply unrelated issue-status
   labels during routine PR work. Set descriptive labels before `merge on pass`, because
   label edits also trigger CI. Descriptive labels do not authorize merging.
-- Iterate on the draft without `merge on pass`. Regular checks
-  run on updates; the full Docker E2E suite starts when `merge on pass` is added and on later
-  pushes while it remains. See `docs/ci.md` for repository setup and commands.
+- Iterate on the draft without `merge on pass`. Regular checks run on updates.
+  Use targeted local E2E for affected behavior, with `--workers=1` to limit contention
+  across active worktrees. Do not run the full local E2E suite as a routine finishing check.
+  Request an early full suite only for sweeping changes that benefit from broad regression
+  coverage (for example, shared navigation, sync or test infrastructure changes), or when
+  the user explicitly requests one. Offload it to GitHub by adding `run e2e` to the draft
+  with `gh pr edit <number> --add-label 'run e2e'`; agents may do this without merge approval.
+  For other changes, rely on the full E2E guard before merge. The full Docker E2E suite
+  starts with either `run e2e` or `merge on pass` and on later pushes while either remains.
+  `run e2e` requests tests only: keep the PR a draft and do not enable auto-merge or merge
+  without separate approval. See `docs/ci.md` for repository setup and commands.
 - Use the AI review process below when the user requests a review, has applied
   `ai review`, or the PR changes one of the areas listed there. The label is advisory
   and does not authorize merging.
-- An unlabeled PR deliberately fails `validation`; require that check in branch protection
-  so skipped E2E cannot permit merging. `merge on pass` means functionality and design are
-  approved and authorizes merging once required checks pass.
+- A PR without `merge on pass` deliberately fails `validation`, even if `run e2e` tests
+  pass; require that check in branch protection so testing alone cannot permit merging.
+  `merge on pass` means functionality and design are approved and authorizes merging
+  once required checks pass.
 - After the user approves functionality and design for merging, update the PR branch with
   current `main`, mark it ready and add `merge on pass`. Fix failures with the label left in
   place, then merge or enable auto-merge. If a fix changes the approved functionality or
