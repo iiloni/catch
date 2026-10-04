@@ -113,11 +113,13 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   );
   const flightX = useTransform(() => (flightTarget.current?.dx ?? 0) * flight.get());
   const flightY = useTransform(() => (flightTarget.current?.dy ?? 0) * flight.get() + y.get());
+  const borderRadius = useTransform(() => 28 - 12 * flight.get());
   const clipPath = useTransform(() => {
     const target = flightTarget.current;
     const p = flight.get();
-    if (!target) return 'inset(0px round 28px)';
-    return `inset(0px ${target.right * p}px ${target.bottom * p}px 0px round ${28 - 12 * p}px)`;
+    // A clip path also cuts off the surface's own shadow; only the flight needs one.
+    if (!target) return 'none';
+    return `inset(0px ${target.right * p}px ${target.bottom * p}px 0px round ${borderRadius.get()}px)`;
   });
   const contentOpacity = useTransform(flight, [0, 0.5], [1, 0]);
 
@@ -294,7 +296,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
         }
       }}
       className={cn(
-        'fixed inset-x-3 z-[70] mx-auto flex max-w-md flex-col rounded-[28px] bg-note text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]',
+        'fixed inset-x-3 z-[70] mx-auto flex max-w-md flex-col overflow-hidden rounded-[28px] bg-note text-card-foreground shadow-[0_24px_60px_-12px_oklch(0_0_0/0.45)]',
         'bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.75rem)] max-h-[calc(100dvh-var(--safe-top)-var(--dock-bottom)-var(--dock-height)-2rem)]',
         (!isPresent || suspended) && 'pointer-events-none',
         suspended && 'invisible',
@@ -304,6 +306,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
         y: flightY,
         scale,
         opacity,
+        borderRadius,
         clipPath,
         // Grow out of the compose button, below the window's bottom-right corner.
         transformOrigin: 'calc(100% - 32px) calc(100% + 44px)',
