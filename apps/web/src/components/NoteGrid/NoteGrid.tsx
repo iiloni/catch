@@ -24,7 +24,7 @@ import {
   useLongPress,
 } from '@/lib/longPress';
 import { dropIndex, masonry, type Point } from '@/lib/masonry';
-import { springs } from '@/lib/motion';
+import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const MIN_COLUMN_WIDTH = 220;
@@ -195,6 +195,9 @@ export function NoteGrid({
   const grid = { columns, columnWidth, gap: GAP };
   const measuredWidth = useRef(columnWidth);
   const resized = useRef({ width: columnWidth, at: 0 });
+  // Cards waiting to spring to a new width, and the call that will start them.
+  const settling = useRef({ places: new Set<Place>(), cancel: () => {} });
+  useLayoutEffect(() => () => settling.current.cancel(), []);
 
   const basis = notes.map((note) => note.id).join();
   if (dropped && dropped.basis !== basis) setDropped(null);
@@ -338,12 +341,22 @@ export function NoteGrid({
       if (!rendered.has(id)) places.current.delete(id);
     }
     if (!layout || pending) return;
+    let resizing = false;
     let dragging = false;
     if (resized.current.width !== columnWidth) {
       const now = performance.now();
+      resizing = true;
       dragging = now - resized.current.at < RESIZE_SETTLE_MS;
       resized.current = { width: columnWidth, at: now };
     }
+    const spring = (place: Place) => {
+      if (!place.target || place.targetWidth === undefined) return;
+      animate(place.x, place.target.x, springs.smooth);
+      // A card let go of drops back under the header and dock once it lands.
+      animate(place.y, place.target.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
+      // The width is animated itself rather than scaled, so text reflows and stays crisp.
+      animate(place.width, place.targetWidth, springs.smooth);
+    };
     let visible: { top: number; bottom: number } | undefined;
     const onScreen = (y: number, height: number) => {
       if (!visible) {
@@ -364,26 +377,38 @@ export function NoteGrid({
       if (!place.target) {
         place.x.jump(slot.x);
         place.y.jump(slot.y);
-      } else if (place.released || place.target.x !== slot.x || place.target.y !== slot.y) {
-        if (visiblyMoves) {
-          animate(place.x, slot.x, springs.smooth);
-          // A card let go of drops back under the header and dock once it lands.
-          animate(place.y, slot.y, { ...springs.smooth, onComplete: () => place.z.set(0) });
-        } else {
-          place.x.jump(slot.x);
-          place.y.jump(slot.y);
-          place.z.set(0);
-        }
       }
-      if (place.targetWidth !== columnWidth) {
-        // The width is animated itself rather than scaled, so text reflows and stays crisp.
-        if (visiblyMoves && !dragging) animate(place.width, columnWidth, springs.smooth);
-        else place.width.jump(columnWidth);
-      }
+      const moved =
+        place.target && (place.released || place.target.x !== slot.x || place.target.y !== slot.y);
+      const changedWidth = place.targetWidth !== columnWidth;
       place.target = slot;
       place.targetWidth = columnWidth;
       place.released = false;
+      if (!moved && !changedWidth) return;
+      if (!visiblyMoves) {
+        place.x.jump(slot.x);
+        place.y.jump(slot.y);
+        place.width.jump(columnWidth);
+        place.z.set(0);
+      } else if (dragging) {
+        place.width.jump(columnWidth);
+        if (moved) spring(place);
+      } else if (resizing) {
+        settling.current.places.add(place);
+      } else {
+        spring(place);
+      }
     });
+    if (resizing && settling.current.places.size > 0) {
+      // A resize is a long frame (every card is measured again, and a note may be mounting
+      // beside the page). Springs keep time, so started now they would lose their first
+      // moments to it and show up most of the way there. They start once it is painted.
+      settling.current.cancel();
+      settling.current.cancel = afterPaint(() => {
+        for (const place of settling.current.places) spring(place);
+        settling.current.places.clear();
+      });
+    }
   });
 
   function handleDragStart(event: DragStartEvent) {

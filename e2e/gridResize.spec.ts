@@ -112,5 +112,10 @@ test.describe('on a wide screen', () => {
       const gutter = Math.max(0, (SCREEN - sample.pane - PAGE_MAX) / 2);
       expect(Math.abs(sample.page - gutter)).toBeLessThan(1);
     }
+    // The pane starts its slide once the page is drawn at its new width and advances by
+    // frames, so even a busy machine shows it setting off rather than nearly there.
+    const panes = samples.map((sample) => sample.pane);
+    const started = panes.find((pane) => pane > 0) ?? 0;
+    expect(started).toBeLessThan(Math.max(...panes) * 0.4);
   });
 });

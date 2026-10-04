@@ -32,6 +32,8 @@ export const curves = {
   expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
   collapse: { duration: 0.5, ease: EASE_EMPHASIZED },
+  /** The note pane sliding in, which starts while the page beside it is still busy. */
+  pane: { duration: 0.5, ease: EASE_EMPHASIZED },
 } satisfies Record<string, Transition>;
 
 const steady = new WeakMap<MotionValue<number>, () => void>();
