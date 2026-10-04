@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { useEffect } from 'react';
 import { api } from './api';
 import { getSignedInUser } from './auth';
 import { nativeReminders } from './nativeReminders';
@@ -56,6 +57,18 @@ async function detect(): Promise<PushState> {
 
 export async function refreshPushState() {
   state.set(await detect());
+}
+
+/**
+ * Whether the Android app is not allowed to show reminders. A browser may well be left
+ * off, since another device can ring; a phone with the app is where they are expected.
+ */
+export function useAppNotificationsOff() {
+  const current = state.use();
+  useEffect(() => {
+    if (nativeReminders.available) void refreshPushState();
+  }, []);
+  return nativeReminders.available && (current === 'off' || current === 'blocked');
 }
 
 const sameKey = (a: ArrayBuffer | null, b: Uint8Array) => {

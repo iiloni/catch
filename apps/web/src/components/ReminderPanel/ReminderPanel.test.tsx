@@ -7,6 +7,9 @@ import { ReminderPanel } from './ReminderPanel';
 
 vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: {} }));
+const app = vi.hoisted(() => ({ notificationsOff: false, openSettings: vi.fn() }));
+vi.mock('@/lib/push', () => ({ useAppNotificationsOff: () => app.notificationsOff }));
+vi.mock('@/lib/settings', () => ({ useSettingsNavigation: () => ({ open: app.openSettings }) }));
 vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('@/lib/reminders', async (original) => ({
   ...(await original<typeof import('@/lib/reminders')>()),
@@ -102,6 +105,19 @@ describe('ReminderPanel', () => {
       recurrence: null,
     });
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it('says when the Android app may not show reminders, and leads to the setting', () => {
+    const { rerender } = render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    app.notificationsOff = true;
+    rerender(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Notifications are off on this phone');
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Turn on' }));
+    expect(app.openSettings).toHaveBeenCalledWith('/settings/notifications');
+    expect(onDone).toHaveBeenCalled();
+    app.notificationsOff = false;
   });
 
   it('lets the day and the time be chosen apart', () => {

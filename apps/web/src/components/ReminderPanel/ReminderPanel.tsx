@@ -8,7 +8,16 @@ import {
   reminderFireTime,
   reminderZone,
 } from '@catch/shared';
-import { Bell, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
+import {
+  Bell,
+  BellOff,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  Repeat,
+  Trash2,
+} from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
@@ -19,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { useAppNotificationsOff } from '@/lib/push';
 import {
   defaultReminderStart,
   describeRecurrence,
@@ -36,6 +46,7 @@ import {
   useReminderTimes,
   WEEKDAYS,
 } from '@/lib/reminders';
+import { useSettingsNavigation } from '@/lib/settings';
 import { cn } from '@/lib/utils';
 
 type RepeatChoice = 'none' | Recurrence['frequency'];
@@ -337,6 +348,8 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   // Redraws the times below when the clock setting changes.
   useHour12();
   const [times] = useReminderTimes();
+  const notificationsOff = useAppNotificationsOff();
+  const settings = useSettingsNavigation();
   const [now, setNow] = useState(() => new Date());
   const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
   const [form, setForm] = useState(opened);
@@ -465,6 +478,27 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           <AnimatePresence initial={false} mode="wait" custom={direction}>
             {page === 'main' ? (
               <motion.div key="main" {...motionProps} className={cn(pageClass, className)}>
+                {notificationsOff && (
+                  <div
+                    role="alert"
+                    className="flex shrink-0 items-center gap-2 rounded-xl bg-destructive/10 py-1 pr-1 pl-3"
+                  >
+                    <BellOff className="size-4 shrink-0 text-destructive" aria-hidden />
+                    <p className="min-w-0 flex-1 text-sm">Notifications are off on this phone</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-10 shrink-0"
+                      onClick={() => {
+                        onDone();
+                        settings.open('/settings/notifications');
+                      }}
+                    >
+                      Turn on
+                    </Button>
+                  </div>
+                )}
                 {/* What is being set stays in view above the steps, and the button to set it below. */}
                 <div className="flex min-h-10 shrink-0 items-center gap-2 pr-1 pl-2">
                   <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden />
