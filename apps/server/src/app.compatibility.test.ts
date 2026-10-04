@@ -101,7 +101,7 @@ describe('API compatibility gate', () => {
       ['/api/reminders/time-zone', 'PUT'],
       ['/api/reminders/settings', 'GET'],
       ['/api/reminders/alarms', 'GET'],
-      ['/api/reminders/settings/times', 'PUT'],
+      ['/api/reminders/settings', 'PUT'],
       ['/api/shapes/reminders', 'GET'],
       ['/api/push/key', 'GET'],
       ['/api/push/subscriptions', 'POST'],

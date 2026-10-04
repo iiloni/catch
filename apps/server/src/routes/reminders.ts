@@ -1,5 +1,6 @@
 import {
   DEFAULT_REMINDER_TIMES,
+  DEFAULT_SNOOZE_MINUTES,
   firstPending,
   type Recurrence,
   type ReminderAlarms,
@@ -9,7 +10,8 @@ import {
   reminderZone,
   reportTimeZoneSchema,
   saveReminderSchema,
-  saveReminderTimesSchema,
+  saveReminderSettingsSchema,
+  snoozeMinutesSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -56,6 +58,8 @@ export const reminderRoutes = new Hono<AppEnv>()
     return c.json({
       timeZone: row?.timeZone ?? null,
       times: row?.times ?? DEFAULT_REMINDER_TIMES,
+      snoozeMinutes:
+        snoozeMinutesSchema.safeParse(row?.snoozeMinutes).data ?? DEFAULT_SNOOZE_MINUTES,
     } satisfies ReminderSettings);
   })
   // The Android app's background check: it rings reminders itself, and asks here for the
@@ -69,13 +73,13 @@ export const reminderRoutes = new Hono<AppEnv>()
     const alarms = rows.flatMap(({ reminder, text }) => reminderAlarm(reminder, text) ?? []);
     return c.json({ alarms } satisfies ReminderAlarms);
   })
-  .put('/settings/times', zValidator('json', saveReminderTimesSchema), async (c) => {
+  .put('/settings', zValidator('json', saveReminderSettingsSchema), async (c) => {
     const userId = c.get('user')!.id;
-    const { times, timeZone } = c.req.valid('json');
+    const { times, snoozeMinutes, timeZone } = c.req.valid('json');
     await db
       .insert(reminderSettings)
-      .values({ userId, timeZone, times })
-      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times } });
+      .values({ userId, timeZone, times, snoozeMinutes })
+      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times, snoozeMinutes } });
     return c.json({ ok: true });
   })
   // Where the user is, which is where their floating reminders ring.

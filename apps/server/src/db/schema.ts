@@ -303,6 +303,8 @@ export const reminderSettings = pgTable('reminder_settings', {
   timeZone: text().notNull(),
   /** The times of day the quick choices use; null until the user changes them. */
   times: jsonb().$type<ReminderTimes>(),
+  /** How long Snooze puts a reminder off; null until the user changes it. */
+  snoozeMinutes: integer(),
   updatedAt: updatedAt(),
 });
 

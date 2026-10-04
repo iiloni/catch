@@ -5,9 +5,11 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { SnoozePicker } from '@/components/SnoozePicker/SnoozePicker';
+import { TimePicker } from '@/components/TimePicker/TimePicker';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import {
   disablePush,
@@ -17,7 +19,7 @@ import {
   sendTestPush,
   usePushState,
 } from '@/lib/push';
-import { useReminderTimes } from '@/lib/reminders';
+import { formatTimeOfDay, useReminderTimes } from '@/lib/reminders';
 import { useSnoozeMinutes } from '@/lib/snooze';
 
 /** Why notifications cannot be turned on here, for the states where they cannot. */
@@ -42,6 +44,55 @@ const TIMES: { key: keyof ReminderTimes; label: string }[] = [
 
 const message = (error: unknown) =>
   error instanceof Error && error.message ? error.message : 'Try again in a moment.';
+
+/** One quick time, set on the same dial as a reminder's time. */
+function QuickTime({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (time: string) => void;
+}) {
+  // Redraws the time when the clock setting changes.
+  useHour12();
+  // Kept until the dial closes: dragging round it passes through many times, and each
+  // one saved would be a request to the server.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? value;
+  return (
+    <Popover
+      open={draft !== null}
+      onOpenChange={(open) => {
+        if (open) {
+          haptics.toggle();
+          setDraft(value);
+          return;
+        }
+        if (draft !== null && draft !== value) onChange(draft);
+        setDraft(null);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          aria-label={`${label} time: ${formatTimeOfDay(shown)}`}
+          className="h-10 min-w-24 rounded-xl bg-foreground/[0.06] font-medium text-base tabular-nums hover:bg-foreground/[0.1] hover:text-foreground"
+        >
+          {formatTimeOfDay(shown)}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        aria-label={`${label} time`}
+        className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl"
+      >
+        <TimePicker value={shown} onChange={setDraft} />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Settings > Notifications: whether this device shows reminders, and the quick times. */
 export function NotificationSettings() {
@@ -104,7 +155,7 @@ export function NotificationSettings() {
       </SettingsSection>
       <SettingsSection
         title="Snooze"
-        description="How long Snooze puts a reminder off, on this device."
+        description="How long Snooze puts a reminder off, on all your devices."
       >
         <SnoozePicker value={snooze} onChange={setSnooze} />
       </SettingsSection>
@@ -114,15 +165,10 @@ export function NotificationSettings() {
       >
         {TIMES.map(({ key, label }) => (
           <SettingsRow key={key} icon={Clock} label={label}>
-            <Input
-              type="time"
-              aria-label={`${label} time`}
-              required
+            <QuickTime
+              label={label}
               value={times[key]}
-              onChange={(event) => {
-                if (event.target.value) setTimes({ ...times, [key]: event.target.value });
-              }}
-              className="h-10 w-36 text-base md:text-base"
+              onChange={(time) => setTimes({ ...times, [key]: time })}
             />
           </SettingsRow>
         ))}

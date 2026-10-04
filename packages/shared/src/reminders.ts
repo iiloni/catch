@@ -134,19 +134,26 @@ export const DEFAULT_REMINDER_TIMES: ReminderTimes = {
   evening: '18:00',
 };
 
+/** How long Snooze puts a reminder off, in minutes. */
+export const snoozeMinutesSchema = z.union([z.literal(15), z.literal(30), z.literal(60)]);
+export type SnoozeMinutes = z.infer<typeof snoozeMinutesSchema>;
+export const DEFAULT_SNOOZE_MINUTES: SnoozeMinutes = 30;
+
 /** A user's reminder settings. Server state fetched by plain requests, not a synced shape. */
 export const reminderSettingsSchema = z.object({
   timeZone: timeZoneSchema.nullable(),
   times: reminderTimesSchema,
+  snoozeMinutes: snoozeMinutesSchema,
 });
 export type ReminderSettings = z.infer<typeof reminderSettingsSchema>;
 
 /** The device's zone comes along for a user the server has not seen a zone for yet. */
-export const saveReminderTimesSchema = z.object({
+export const saveReminderSettingsSchema = z.object({
   times: reminderTimesSchema,
+  snoozeMinutes: snoozeMinutesSchema,
   timeZone: timeZoneSchema,
 });
-export type SaveReminderTimes = z.infer<typeof saveReminderTimesSchema>;
+export type SaveReminderSettings = z.infer<typeof saveReminderSettingsSchema>;
 
 type Parts = { year: number; month: number; day: number; hour: number; minute: number };
 

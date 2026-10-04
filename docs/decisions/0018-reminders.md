@@ -86,7 +86,7 @@ same panel opens in a popover from the card's toolbar.
 
 **Quick times belong to the user.** The times Morning, Afternoon and Evening stand for are
 kept with the user's zone in `reminder_settings` and read and saved with plain requests
-(`GET /api/reminders/settings`, `PUT /api/reminders/settings/times`), not a shape: they
+(`GET /api/reminders/settings`, `PUT /api/reminders/settings`), not a shape: they
 change rarely and are small. A device caches them, so the choices are there offline; a
 change made offline is sent at the next launch or return to the app, and the last one sent
 wins.
@@ -126,8 +126,9 @@ server until the server is updated: **update the server first.**
   - The phone and the server ring independently, so a user with notifications on in both a
     browser and the app gets one from each, as with two browsers.
   - A notification has Snooze and Done. Snooze puts a reminder off for 15 minutes, 30 (the
-    default) or an hour, a device setting in Settings > Notifications (`lib/snooze.ts`) that
-    the phone is told so it holds with the app closed. It rings again on the phone and is
+    default) or an hour, chosen in Settings > Notifications and kept with the user's other
+    reminder settings on the server (`lib/snooze.ts` caches it). The phone is told the
+    length so it holds with the app closed. It rings again on the phone and is
     written as the reminder's snooze the next time the app runs, which is when the server
     and the other devices learn of it. Done only dismisses the notification.
   - Signing out clears the phone's alarms and its copy of the token.

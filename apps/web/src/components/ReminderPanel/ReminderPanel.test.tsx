@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatTimeOfDay, removeReminder, setReminder, snoozeReminder } from '@/lib/reminders';
+import { setSnoozeMinutes } from '@/lib/snooze';
 import { ReminderPanel } from './ReminderPanel';
 
 vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
@@ -365,7 +366,7 @@ describe('ReminderPanel', () => {
     expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 10, 30));
 
     // The length is the device's, from Settings > Notifications.
-    localStorage.setItem('catch-snooze', '60');
+    setSnoozeMinutes(60);
     fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
     expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
 
@@ -373,6 +374,6 @@ describe('ReminderPanel', () => {
     openRepeat();
     expect(screen.queryByRole('button', { name: 'Snooze' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-    localStorage.removeItem('catch-snooze');
+    setSnoozeMinutes(30);
   });
 });
