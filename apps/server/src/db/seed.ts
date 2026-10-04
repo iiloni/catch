@@ -2,13 +2,14 @@ import { blocksToPlainText, type NoteColor, positionBetween } from '@catch/share
 import { eq, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { auth } from '../auth';
+import { lockTagTree } from '../lib/tagTreeLock';
 import { fetchPreviewsNow, trackNoteLinks } from '../linkPreviews';
 import { sql as connection, db } from './client';
-import { linkPreviews, notes, user } from './schema';
+import { linkPreviews, notes, noteTags, tags, user } from './schema';
 
 /**
  * Idempotent development fixtures. `basic` creates the admin account; `demo`
- * adds a regular user and sample notes. Never overwrites existing data.
+ * adds a regular user, sample notes and tags. Never overwrites existing data.
  */
 const profile = process.env.CATCH_SEED_PROFILE ?? 'none';
 
@@ -179,12 +180,107 @@ async function ensureLinkNotes(userId: string) {
   await fetchPreviewsNow(userId, urls);
 }
 
+/** Add tagged examples to older demo databases without changing their existing notes. */
+async function ensureTagNotes(userId: string) {
+  const seeded = await db.transaction(async (tx) => {
+    await lockTagTree(tx, userId);
+    const [existing] = await tx
+      .select({ id: tags.id })
+      .from(tags)
+      .where(eq(tags.userId, userId))
+      .limit(1);
+    if (existing) return false;
+
+    const ids = {
+      home: uuidv7(),
+      work: uuidv7(),
+      projects: uuidv7(),
+      catch: uuidv7(),
+      travel: uuidv7(),
+      europe: uuidv7(),
+      lisbon: uuidv7(),
+      reading: uuidv7(),
+      fiction: uuidv7(),
+    };
+    await tx.insert(tags).values([
+      { id: ids.home, userId, name: 'Home', icon: 'house', color: 'yellow' },
+      { id: ids.work, userId, name: 'Work', icon: 'briefcase', color: 'teal' },
+      { id: ids.projects, userId, name: 'Projects', parentId: ids.work },
+      { id: ids.catch, userId, name: 'Catch', parentId: ids.projects },
+      { id: ids.travel, userId, name: 'Travel', icon: 'plane', color: 'amber' },
+      { id: ids.europe, userId, name: 'Europe', parentId: ids.travel },
+      { id: ids.lisbon, userId, name: 'Lisbon', parentId: ids.europe },
+      { id: ids.reading, userId, name: 'Reading', icon: 'book-open' },
+      { id: ids.fiction, userId, name: 'Fiction', parentId: ids.reading },
+    ]);
+
+    const examples: {
+      content: Block[];
+      primaryTagId: string | null;
+      secondaryTagIds: string[];
+      color: NoteColor;
+    }[] = [
+      {
+        content: [heading('Weekend errands'), bullet('Water the plants'), bullet('Buy coffee')],
+        primaryTagId: ids.home,
+        secondaryTagIds: [],
+        color: 'default',
+      },
+      {
+        content: [
+          heading('Catch tag polish'),
+          bullet('Try nested tags in search'),
+          bullet('Check badges on note cards'),
+        ],
+        primaryTagId: ids.work,
+        secondaryTagIds: [ids.catch],
+        color: 'default',
+      },
+      {
+        content: [heading('Lisbon reading list'), paragraph('Find a novel to take on the trip.')],
+        primaryTagId: ids.lisbon,
+        secondaryTagIds: [ids.fiction],
+        color: 'default',
+      },
+      {
+        content: [heading('Books for the flight'), bullet('The Dispossessed'), bullet('Piranesi')],
+        primaryTagId: null,
+        secondaryTagIds: [ids.fiction, ids.travel],
+        color: 'purple',
+      },
+    ];
+    const [first] = await tx
+      .select({ position: notes.position })
+      .from(notes)
+      .where(eq(notes.userId, userId))
+      .orderBy(sql`${notes.position} collate "C"`)
+      .limit(1);
+    let position: string | null = null;
+    for (const { content, primaryTagId, secondaryTagIds, color } of examples) {
+      const id = uuidv7();
+      position = positionBetween(position, first?.position ?? null);
+      await tx.insert(notes).values({
+        id,
+        userId,
+        content,
+        searchText: blocksToPlainText(content),
+        color,
+        position,
+      });
+      await tx.insert(noteTags).values({ id, userId, primaryTagId, secondaryTagIds });
+    }
+    return true;
+  });
+  if (seeded) console.log('Seeded 9 tags and 4 tagged demo notes');
+}
+
 if (profile === 'basic' || profile === 'demo') {
   const adminId = await ensureAccount(ACCOUNTS.admin);
   if (profile === 'demo') {
     await ensureAccount(ACCOUNTS.user);
     await ensureDemoNotes(adminId);
     await ensureLinkNotes(adminId);
+    await ensureTagNotes(adminId);
   }
 } else if (profile !== 'none') {
   throw new Error(`Unknown CATCH_SEED_PROFILE "${profile}". Use none, basic or demo.`);
