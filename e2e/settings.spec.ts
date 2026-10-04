@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { createNote, openNote, signUp, waitForPageTransition } from './helpers';
 
-test('settings pages load promptly while all six collections keep syncing over HTTP', async ({
+test('settings pages load promptly while all seven collections keep syncing over HTTP', async ({
   page,
   isMobile,
 }) => {
@@ -27,10 +27,11 @@ test('settings pages load promptly while all six collections keep syncing over H
         collections.attachmentsCollection,
         collections.tagsCollection,
         collections.noteTagsCollection,
+        collections.remindersCollection,
       ].map((collection) => collection.preload()),
     );
   });
-  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(6);
+  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(7);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Appearance', exact: true })).toBeVisible({

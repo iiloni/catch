@@ -20,6 +20,12 @@ async function done(page: Page) {
   await expect(panel(page).getByRole('button', { name: 'Back' })).toBeHidden();
 }
 
+/** Goes back from a page that has no Done, such as the clock, and waits for it to leave. */
+async function leave(page: Page) {
+  await panel(page).getByRole('button', { name: 'Back' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Back' })).toBeHidden();
+}
+
 /** Chooses a time on the time page, which follows the browser's twelve hour clock. */
 async function pickTime(page: Page, hour: number, minute: number) {
   await step(page, 'Time')
@@ -30,7 +36,7 @@ async function pickTime(page: Page, hour: number, minute: number) {
     .click();
   await panel(page).locator(`[data-hour="${hour}"]`).click();
   await panel(page).locator(`[data-minute="${minute}"]`).click();
-  await done(page);
+  await leave(page);
 }
 const pad = (value: number) => String(value).padStart(2, '0');
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -71,7 +77,7 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
   );
   await panel(page).getByRole('button', { name: WEEKDAYS[other] }).click();
   await done(page);
-  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await panel(page).getByRole('button', { name: 'Save' }).click();
   await expect(panel(page)).toBeHidden();
 
   // Setting a reminder leaves the note open, with the reminder under its text.
@@ -132,7 +138,7 @@ test('a reminder is set from the quick days and times', async ({ page }) => {
     .getByRole('button', { name: /^Evening/ })
     .click();
   await expect(panel(page).getByRole('status')).toContainText('Tomorrow');
-  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await panel(page).getByRole('button', { name: 'Save' }).click();
   await expect(editor.getByRole('button', { name: /^Reminder: Tomorrow/ })).toBeVisible();
 });
 
@@ -155,8 +161,8 @@ test('times follow the clock chosen in Settings', async ({ page, isMobile }) => 
   await expect(panel(page).locator('[data-period]')).toHaveCount(0);
   await panel(page).locator('[data-hour="18"]').click();
   await panel(page).locator('[data-minute="30"]').click();
-  await done(page);
-  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await leave(page);
+  await panel(page).getByRole('button', { name: 'Save' }).click();
   await expect(editor.getByRole('button', { name: 'Reminder: Tomorrow, 18:30' })).toBeVisible();
 });
 
@@ -187,7 +193,7 @@ test('a reminder for a time that has passed cannot be saved', async ({ page, isM
   // Midnight today is behind us.
   await pickTime(page, 0, 0);
   await expect(panel(page).getByRole('status')).toContainText('That time has passed');
-  const save = panel(page).getByRole('button', { name: 'Set reminder' });
+  const save = panel(page).getByRole('button', { name: 'Save' });
   await expect(save).toBeDisabled();
   // A repeating reminder may start in the past: it rings at its next time.
   await openRepeat(page);

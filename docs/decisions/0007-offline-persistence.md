@@ -24,7 +24,7 @@ again. `lib/localStore.ts` opens the right database; `lib/collections.ts` wraps 
 collections. If the database cannot open (no OPFS, for example), collections fall back to
 memory and the app works online as before.
 
-**HTTP development uses short polls.** With six collections, live long polls occupy all six
+**HTTP development uses short polls.** With six or more collections, live long polls occupy all six
 HTTP/1.1 browser connections to the dev server. Lazy pages, HMR and writes then wait for a
 20-second sync timeout. `lib/shapeFetch.ts` makes live requests to an HTTP development
 server as non-live reads from the same handle and offset, waiting one second on the device

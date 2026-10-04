@@ -495,21 +495,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 </div>
 
                 <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto rounded-xl [scrollbar-width:none] [&>*]:shrink-0">
-                  {rang && reminder && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-11 shrink-0 rounded-xl"
-                      onClick={() => {
-                        haptics.success();
-                        snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
-                        onDone();
-                      }}
-                    >
-                      Remind me again in an hour
-                    </Button>
-                  )}
-
                   <Step title="Day">
                     <div className="grid grid-cols-3 gap-1.5">
                       {days.map((day) => (
@@ -553,17 +538,20 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                   </Step>
 
                   {/* The busiest step has a page of its own, and here only says what it is set to. */}
-                  <button
-                    type="button"
-                    aria-label={`Repeat: ${repeatSummary}`}
-                    onClick={() => go('repeat')}
-                    className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
-                  >
-                    <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="text-muted-foreground">Repeat</span>
-                    <span className="ml-auto min-w-0 truncate font-medium">{repeatSummary}</span>
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  </button>
+                  <Step title="Repeat">
+                    <button
+                      type="button"
+                      aria-label={`Repeat: ${repeatSummary}`}
+                      onClick={() => go('repeat')}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
+                    >
+                      <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate text-left font-medium">
+                        {repeatSummary}
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    </button>
+                  </Step>
 
                   <Step title="Time zone">
                     <div className="grid grid-cols-2 gap-1.5">
@@ -590,13 +578,30 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                   </Step>
                 </div>
 
-                <Button
-                  type="submit"
-                  disabled={!input || passed || !rings}
-                  className="h-11 shrink-0 rounded-xl"
-                >
-                  {reminder ? 'Save reminder' : 'Set reminder'}
-                </Button>
+                <div className="flex shrink-0 gap-1.5">
+                  {/* One that has just rung can be put off without setting it again. */}
+                  {rang && reminder && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-11 min-w-0 flex-1 rounded-xl"
+                      onClick={() => {
+                        haptics.success();
+                        snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
+                        onDone();
+                      }}
+                    >
+                      Snooze (1hr)
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={!input || passed || !rings}
+                    className="h-11 min-w-0 flex-1 rounded-xl"
+                  >
+                    Save
+                  </Button>
+                </div>
               </motion.div>
             ) : page === 'date' ? (
               <motion.fieldset key="date" {...motionProps} className={cn(pageClass, className)}>
@@ -616,8 +621,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
             ) : page === 'time' ? (
               <motion.fieldset key="time" {...motionProps} className={cn(pageClass, className)}>
                 {pageHeader('Time', formatTimeOfDay(form.time), 'main')}
-                <TimePicker value={form.time} onChange={(time) => update({ time })} />
-                {doneButton('main')}
+                <TimePicker
+                  value={form.time}
+                  onChange={(time) => update({ time })}
+                  className="pb-1"
+                />
               </motion.fieldset>
             ) : page === 'zone' ? (
               <motion.fieldset key="zone" {...motionProps} className={cn(pageClass, className)}>

@@ -44,6 +44,7 @@ const choice = (group: string, name: string | RegExp) =>
   within(step(group)).getByRole('button', { name });
 const openRepeat = () => fireEvent.click(screen.getByRole('button', { name: /^Repeat: / }));
 const back = () => fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+const leave = () => fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 const cell = (selector: string) => document.querySelector(selector) as HTMLElement;
 /** Chooses a day on the date page, turning to its month first. */
 function pickDate(date: string) {
@@ -59,7 +60,7 @@ function pickTime(time: string) {
   if (cell('[data-period]')) fireEvent.click(cell(`[data-period="${hour >= 12 ? 'PM' : 'AM'}"]`));
   fireEvent.click(cell(`[data-hour="${hour}"]`));
   fireEvent.click(cell(`[data-minute="${minute}"]`));
-  back();
+  leave();
 }
 const pressed = (group: string) =>
   within(step(group))
@@ -94,7 +95,7 @@ describe('ReminderPanel', () => {
     expect(pressed('Time')[0]).toContain('Afternoon');
     // The morning is behind us today.
     expect(choice('Time', /Morning/)).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(note, {
       startsAt: '2026-10-05T13:00',
       timeZone: zone,
@@ -108,7 +109,7 @@ describe('ReminderPanel', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     fireEvent.click(choice('Day', 'Tomorrow'));
     fireEvent.click(choice('Time', /Morning/));
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({ startsAt: '2026-10-06T08:00' }),
@@ -123,7 +124,7 @@ describe('ReminderPanel', () => {
     expect(pressed('Day')[0]).toContain('Custom');
     pickTime('21:15');
     expect(pressed('Time')[0]).toContain(formatTimeOfDay('21:15'));
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({ startsAt: '2026-11-20T21:15' }),
@@ -140,7 +141,7 @@ describe('ReminderPanel', () => {
     fireEvent.click(choice('Repeat', 'After'));
     fireEvent.click(screen.getByRole('button', { name: 'Ends after: fewer' }));
     back();
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({
@@ -164,7 +165,7 @@ describe('ReminderPanel', () => {
     expect(choice('Repeat', 'Day 6')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(choice('Repeat', 'First Tuesday'));
     back();
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({
@@ -180,12 +181,12 @@ describe('ReminderPanel', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     pickTime('09:00');
     expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
-    expect(screen.getByRole('button', { name: 'Set reminder' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     // A repeating reminder may start in the past: it rings at its next time.
     openRepeat();
     fireEvent.click(choice('Repeat', 'Daily'));
     back();
-    expect(screen.getByRole('button', { name: 'Set reminder' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('opens a saved reminder as it was set, and can pin it to its zone or remove it', () => {
@@ -198,7 +199,7 @@ describe('ReminderPanel', () => {
     expect(tokyo).toHaveTextContent('GMT+9');
     fireEvent.click(tokyo as HTMLElement);
     expect(pressed('Time zone')[0]).toContain('Tokyo, GMT+9');
-    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({ floating: false, timeZone: 'Asia/Tokyo' }),
@@ -221,7 +222,7 @@ describe('ReminderPanel', () => {
       },
     };
     render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(onDone).toHaveBeenCalled();
     expect(setReminder).not.toHaveBeenCalled();
   });
@@ -246,7 +247,7 @@ describe('ReminderPanel', () => {
     expect(screen.getByRole('status', { name: 'Ends after' })).toHaveTextContent('55 times');
     back();
     pickTime('08:45');
-    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({
@@ -266,7 +267,7 @@ describe('ReminderPanel', () => {
     expect(cell('[data-date="2026-10-04"]')).toBeDisabled();
     pickDate('2026-10-28');
     back();
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
       expect.objectContaining({
@@ -278,7 +279,7 @@ describe('ReminderPanel', () => {
   it('checks the time again when saving, in case the panel sat open past it', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     vi.setSystemTime(new Date(2026, 9, 5, 14, 0));
-    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
   });
@@ -296,7 +297,7 @@ describe('ReminderPanel', () => {
     expect(pressed('Time')[0]).toContain(formatTimeOfDay('10:20'));
     expect(screen.getByRole('status')).toHaveTextContent(/^Snoozed until Today, /);
     // Saved as it is, the snooze stands.
-    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(setReminder).not.toHaveBeenCalled();
     expect(onDone).toHaveBeenCalled();
   });
@@ -330,7 +331,7 @@ describe('ReminderPanel', () => {
         onDone={onDone}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Remind me again in an hour' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze (1hr)' }));
     expect(snoozeReminder).toHaveBeenCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
   });
 });
