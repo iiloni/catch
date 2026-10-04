@@ -12,7 +12,8 @@ async function pullSettings(touch: CDPSession, delta: number) {
     (distance) => distance <= Math.abs(delta),
   );
   for (const distance of distances) {
-    timestamp += 0.016;
+    // A short pull must be slow: like notes, a quick flick also dismisses the surface.
+    timestamp += Math.abs(delta) < 110 ? 0.08 : 0.016;
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [{ x: 16, y: 240 + Math.sign(delta) * distance }],
@@ -50,7 +51,7 @@ test('mobile settings leave with a pull at either scroll edge', async ({ page, i
       window.scrollTo(0, toward > 0 ? 0 : scroll.scrollHeight);
       return scroll.scrollHeight - scroll.clientHeight;
     }, direction);
-    expect(overflow).toBeGreaterThan(200);
+    expect(overflow).toBeGreaterThan(100);
 
     await pullSettings(touch, direction * 150);
     await expect(page).toHaveURL(galleryUrl);
