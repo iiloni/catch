@@ -9,7 +9,7 @@ import {
   reminderZone,
 } from '@catch/shared';
 import { Bell, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { DatePicker } from '@/components/DatePicker/DatePicker';
@@ -277,22 +277,19 @@ type Page = 'main' | 'date' | 'time' | 'zone' | 'repeat' | 'until';
 const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, zone: 1, repeat: 1, until: 2 };
 
 /** A deeper page comes in from the right and the one before it returns from the left. */
-/** How long a page takes to fade out, which the next one waits for before fading in. */
-const PAGE_FADE = 0.1;
-
-// Both pages share one box while they swap, so a cross-fade would show one through the
-// other. The old page is gone before the new one appears; the slide and the height carry on.
-const pages = {
-  enter: (direction: number) => ({ x: direction * 32, opacity: 0 }),
+// Both pages share one box, so they take turns rather than cross-fade: the old one leaves
+// where it stands, then the panel settles to the next one's height as that one arrives.
+const pages: Variants = {
+  enter: (direction: number) => ({ x: direction * 24, opacity: 0 }),
   shown: {
     x: 0,
     opacity: 1,
-    transition: { x: springs.smooth, opacity: { duration: 0.2, delay: PAGE_FADE } },
+    transition: { x: springs.smooth, opacity: { duration: 0.3, ease: 'easeOut' } },
   },
   exit: (direction: number) => ({
-    x: direction * -32,
+    x: direction * -24,
     opacity: 0,
-    transition: { x: springs.smooth, opacity: { duration: PAGE_FADE } },
+    transition: { duration: 0.16, ease: 'easeIn' },
   }),
 };
 
@@ -466,7 +463,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     >
       <AnimatedHeight>
         <div className="relative">
-          <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+          <AnimatePresence initial={false} mode="wait" custom={direction}>
             {page === 'main' ? (
               <motion.div key="main" {...motionProps} className={cn(pageClass, className)}>
                 {/* What is being set stays in view above the steps, and the button to set it below. */}
