@@ -21,13 +21,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { useTags } from '@/lib/collections';
+import { useSyncedNotes, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { createTag, deleteTag, updateTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 export function TagSettings({ userId }: { userId: string }) {
   const tags = useTags();
+  // Hierarchy edits also change notes and assignments, even on a direct settings load.
+  useSyncedNotes();
+  useTagReadiness();
   const [editing, setEditing] = useState<{ tag?: Tag; parentId: string | null } | null>(null);
   const [deleting, setDeleting] = useState<Tag | null>(null);
   return (

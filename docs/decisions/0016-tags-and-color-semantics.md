@@ -39,6 +39,8 @@ changing edit timestamps and preserves secondary assignments except the new prim
 Existing primaries remain intact. The client applies this optimistically; only the tag edit
 is queued, and the server applies it atomically against current notes and assignments under
 the tree lock. Replaying a create or saving an unchanged color does not repeat the adoption.
+Tags settings keeps notes and assignments subscribed on direct page loads so these
+optimistic edits use cached relationships and continue receiving the server's changes.
 Cards, editors and color search use derived colors.
 Copies preserve assignments. Icons are a curated, bundled Lucide set that works offline.
 
