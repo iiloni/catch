@@ -216,10 +216,7 @@ function TagForm({
         if (!open) onDone();
       }}
     >
-      <DialogContent
-        className="top-auto bottom-[calc(var(--keyboard)+var(--safe-bottom)+0.75rem)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-1.5rem)] translate-y-0 overflow-y-auto overscroll-contain p-5 sm:max-w-md"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-      >
+      <DialogContent className="top-auto bottom-[calc(var(--keyboard)+var(--safe-bottom)+0.75rem)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-1.5rem)] translate-y-0 overflow-y-auto overscroll-contain p-5 sm:max-w-md">
         <DialogTitle>{initial.tag ? 'Edit tag' : 'New tag'}</DialogTitle>
         <DialogDescription>
           {parentId

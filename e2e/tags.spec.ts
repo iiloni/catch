@@ -264,6 +264,7 @@ test('settings tag tree supports search, branch expansion and direct editing', a
   await settings.getByRole('button', { name: 'Expand Work' }).click();
   await settings.getByRole('button', { name: 'Edit Projects', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Projects');
   await dialog.getByLabel('Name', { exact: true }).fill('Personal projects');
   await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
@@ -297,7 +298,7 @@ test('tag forms follow the overlay keyboard on every animation frame', async ({
     }
     const dialog = page.getByRole('dialog');
     await settledBox(dialog);
-    await dialog.getByLabel('Name', { exact: true }).focus();
+    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
     const frames = await dialog.evaluate(async (dialog) => {
       const { keyboardHeight } = await import('/src/lib/keyboard.ts');
       const frames: { height: number; gap: number; top: number; visibleHeight: number }[] = [];
@@ -342,6 +343,7 @@ test('settings creates roots and children and reserves linked colors', async ({ 
   await page.goto('/settings/tags');
   await page.getByRole('button', { name: 'New tag', exact: true }).click();
   let dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Travel');
   await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
   await dialog.getByRole('button', { name: 'Travel', exact: true }).click();
@@ -349,12 +351,14 @@ test('settings creates roots and children and reserves linked colors', async ({ 
   await page.getByRole('button', { name: 'Manage Travel', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Add child to Travel', exact: true }).click();
   dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Japan');
   await expect(dialog.getByRole('button', { name: 'Teal', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Manage Japan', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New tag', exact: true }).click();
   dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Other');
   await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('already linked');
