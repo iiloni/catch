@@ -38,7 +38,8 @@ The AI request job and cubic's review are not part of the required `validation` 
    - **Require a pull request before merging**.
    - **Require status checks to pass before merging**, with **`validation`** as a required
      check. Choose **GitHub Actions** as its expected source when offered.
-   - **Require branches to be up to date before merging**.
+   Leave **Require branches to be up to date before merging** off (see
+   [What gets merged](#what-gets-merged)).
    - **Do not allow bypassing the above settings**, so the rule also applies to admins.
    Keep force pushes and branch deletion disabled. Save the rule.
 
@@ -73,8 +74,7 @@ using `gh pr create`). After reviewing functionality and design, apply
 `merge on pass` yourself or tell the agent the feature is approved for merging after tests
 pass. The agent then monitors checks for the latest commit, investigates and fixes
 failures, pushes updates and continues until it verifies the authorized PR is merged.
-Opening a PR or enabling auto-merge alone does not finish the task. If `main` advances,
-the agent updates the branch and monitors the new checks before merging under the rules.
+Opening a PR or enabling auto-merge alone does not finish the task.
 
 Agents add existing descriptive labels while opening a draft, using a small set that
 matches the change:
@@ -125,8 +125,8 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    Ordinary changes use targeted local tests
    and rely on the mandatory full suite before merge; do not run full local E2E as a
    routine finishing check. An explicit user request can also justify an early full run.
-2. Once functionality and design are approved for merging after tests pass, update the
-   branch with the latest `main`, mark the PR ready and add `merge on pass`:
+2. Once functionality and design are approved for merging after tests pass, mark the PR
+   ready and add `merge on pass`:
 
    ```bash
    gh pr ready <number>
@@ -141,17 +141,21 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    If fixing a failure changes approved functionality or design, disable pending auto-merge,
    return the PR to draft, remove `merge on pass` and obtain renewed approval before
    reapplying it.
-4. When `validation` passes, merge manually. Alternatively, use the label's authorization
-   to enable auto-merge while validation runs:
+4. When `validation` passes, check what reached `main` since the branch last included
+   it, then merge:
 
    ```bash
-   gh pr merge <number> --auto --squash
+   git fetch origin main
+   git diff --stat HEAD...origin/main
+   gh pr merge <number> --squash
    ```
 
-   Use a Conventional Commit title for a squash merge. Auto-merge waits for branch rules
-   and checks; it does not update an out-of-date branch for you. If `main` advances, merge
-   or rebase it into the PR branch (or use GitHub's **Update branch**) and let validation
-   rerun before merging.
+   A branch behind `main` still merges, and every update reruns the full suite, so leave
+   the branch alone when the new commits touch neither the files nor the behavior the PR
+   changes. When they do, or the branch conflicts, merge `main` into the branch, review
+   how the two changes combine, fix what does not fit, run targeted checks and push, then
+   wait for validation again. Auto-merge skips this look; enable it only when nothing
+   else is close to merging. Use a Conventional Commit title for a squash merge.
 
 To return to feature iteration, disable any pending auto-merge, make the PR a draft and
 remove `merge on pass`. Removing the label withdraws merge authorization and triggers a
@@ -166,8 +170,21 @@ also rerun E2E while either test-requesting label is present.
 ## What gets merged
 
 PR checkout uses GitHub's temporary merge commit, combining the PR branch with its base.
-The strict up-to-date rule prevents using a passing result against an outdated `main`.
 Conflicting PRs need their conflicts resolved and another push before PR CI can run.
+
+A branch does not have to be up to date with `main` to merge. Requiring that made every
+merge invalidate the passing result of every other approved PR, so several ready PRs
+each waited for a rebase and another full suite per merge ahead of them. A PR's result
+therefore covers `main` as it stood when its run started, and two PRs that each pass can
+still break `main` together. The agent's look at what landed since (step 4 above) is
+there for the changes that overlap; the full suite on every `main` push catches the rest
+after the merge, and a release only reuses a verified full pass for its exact commit, so a broken
+combination is not released.
+
+A red `main` only blocks releasing that commit. Agents finish with their own PR merged
+and do not watch `main` afterwards; when `main` needs to be green again, the maintainer
+starts an agent for that. An agent whose PR fails on something that also fails on `main`
+reports it rather than fixing it in that PR.
 
 The workflow also handles `merge_group: checks_requested`: every merge group runs full
 validation without needing a PR label. If the repository later adopts a merge queue,

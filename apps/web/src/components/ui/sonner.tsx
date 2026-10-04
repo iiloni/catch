@@ -21,7 +21,7 @@ function Toaster(props: ToasterProps) {
         unstyled: true,
         classNames: {
           toast:
-            'glass-thick flex min-h-10 cursor-grab select-none items-center font-sans gap-1 rounded-[1.25rem] py-1 pr-1 pl-4 text-foreground text-sm active:cursor-grabbing',
+            'glass flex min-h-10 cursor-grab select-none items-center font-sans gap-1 rounded-[1.25rem] py-1 pr-1 pl-4 text-foreground text-sm active:cursor-grabbing',
           content: 'min-w-0 py-1',
           title: 'font-medium',
           description: 'text-muted-foreground text-xs',
