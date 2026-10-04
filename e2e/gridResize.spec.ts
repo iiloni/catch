@@ -106,16 +106,16 @@ test.describe('on a wide screen', () => {
 
     const samples = await frames(page);
     expect(samples[0]?.page).toBe((SCREEN - PAGE_MAX) / 2);
-    // In every frame the page is centered in what the pane leaves of the screen, as its
-    // header is, rather than jumping to where it will end up.
+    // In every frame the page is as far across its gutter as the pane is across the screen,
+    // rather than jumping to where it will end up or getting there before the pane does.
+    const full = Math.max(...samples.map((sample) => sample.pane));
     for (const sample of samples) {
-      const gutter = Math.max(0, (SCREEN - sample.pane - PAGE_MAX) / 2);
+      const gutter = ((SCREEN - PAGE_MAX) / 2) * (1 - sample.pane / full);
       expect(Math.abs(sample.page - gutter)).toBeLessThan(1);
     }
     // The pane starts its slide once the page is drawn at its new width and advances by
     // frames, so even a busy machine shows it setting off rather than nearly there.
-    const panes = samples.map((sample) => sample.pane);
-    const started = panes.find((pane) => pane > 0) ?? 0;
-    expect(started).toBeLessThan(Math.max(...panes) * 0.4);
+    const started = samples.find((sample) => sample.pane > 0)?.pane ?? 0;
+    expect(started).toBeLessThan(full * 0.4);
   });
 });

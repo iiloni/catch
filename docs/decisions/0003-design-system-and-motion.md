@@ -114,8 +114,12 @@ edge and back out (`paneReveal`), and a note opened while another is showing fad
 The page takes its new width at once, so its cards reshuffle once under the moving pane, while
 fixed UI over the page follows the pane's edge through `--note-pane` (`src/lib/splitView.ts`).
 A page wider than its content is centered between gutters, which a narrower page loses; its
-content keeps its place on screen and crosses with the pane (`usePageGutterShift`), a
-transform that is gone once the pane rests. The page's wrapper spans the screen and clips
+content keeps its place on screen and crosses over the whole of the pane's slide
+(`usePageGutterShift`), a transform that is gone once the pane rests. Centering it in the
+space the pane leaves would use the gutter up while the pane is part of the way in, packing
+the move into the fastest stretch of an opening slide and the slowest of a closing one. The
+header's left corner (brand, title pill, back button) is offset to stay over the page's edge
+(`useHeaderGutterShift`); its centered title and right toolbar keep following the pane. The page's wrapper spans the screen and clips
 there, so cards still on their way to a narrower page reach under the pane, not past it.
 
 **Grid resizes.** When a grid's columns change width (switching the Gallery between masonry

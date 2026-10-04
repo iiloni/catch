@@ -19,7 +19,7 @@ import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
-import { PAGE_MAX, useNotePane, usePageGutterShift } from '@/lib/splitView';
+import { PAGE_MAX, useHeaderGutterShift, useNotePane, usePageGutterShift } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
@@ -166,6 +166,9 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
   const branded = !collapsed && !selection;
+  // What sits in the left corner stays over the page's edge while a note pane slides.
+  const cornerShift = useHeaderGutterShift(PAGE_MAX);
+  const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
 
   useEffect(() => {
     const stop = () => scrollAnimation.current?.stop();
@@ -208,7 +211,10 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
         />
         <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
           {/* Fixed, not in the page: scrolling would carry it under the system status bar. */}
-          <div className="header-fade pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4">
+          <motion.div
+            className="header-fade pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4"
+            style={{ x: cornerShift }}
+          >
             <motion.div
               className="origin-left"
               initial={false}
@@ -221,10 +227,10 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
                 <BrandLockup orientation="horizontal" iconSize={28} />
               </motion.div>
             </motion.div>
-          </div>
+          </motion.div>
           <motion.div
             className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
-            style={{ y: titleScrollY }}
+            style={{ x: titleShift, y: titleScrollY }}
           >
             <motion.div
               className="absolute flex h-full items-center rounded-[var(--dock-radius)]"
@@ -408,6 +414,7 @@ function MorphingPill({
   onWidthChange?: (width: number) => void;
 }) {
   const entry = useHeaderEntry(`header:controls:${side}`);
+  const cornerShift = useHeaderGutterShift(PAGE_MAX);
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
   const measure = useCallback(
@@ -434,7 +441,7 @@ function MorphingPill({
         'absolute top-1 h-[50px] rounded-[var(--dock-radius)]',
         side === 'left' ? 'left-3 origin-left sm:left-4' : 'right-3 origin-right sm:right-4',
       )}
-      style={{ width }}
+      style={{ width, x: side === 'left' ? cornerShift : 0 }}
       // No filter here: it would stop the glass from blurring the page behind it.
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
