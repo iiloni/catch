@@ -114,9 +114,10 @@ server until the server is updated: **update the server first.**
   server. The plan is local alarms scheduled from the synced reminders (which also ring
   offline), with a periodic background sync so reminders set on another device are picked
   up; until then Settings says so.
-- **Backups hold the push keys and subscriptions.** Someone with a backup could send
-  notifications to those browsers until they re-subscribe. They could not read notes with
-  it, and sessions are still left out of backups.
+- **Backups hold the push keys and subscriptions.** A backup already holds every note, so
+  it was always to be kept as carefully as the database. What reminders add is that someone
+  with one could also send notifications to those browsers until they re-subscribe.
+  Sessions are still left out of backups.
 - **The dev server has no service worker**, so push cannot be tried in development; a
   production build is needed.
 

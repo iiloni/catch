@@ -185,7 +185,8 @@ describe('NoteDock', () => {
   it('holds the bell down for a note with a reminder', () => {
     reminders.set(note.id, {});
     renderDock();
-    expect(screen.getByRole('button', { name: 'Reminder' }).className).toContain('bg-foreground');
+    const bell = screen.getByRole('button', { name: 'Reminder' });
+    expect(bell).toHaveAttribute('data-filled');
   });
 
   it('only offers restoring a trashed note', () => {

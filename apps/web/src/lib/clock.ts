@@ -41,7 +41,9 @@ const formats = new Map<string, Intl.DateTimeFormat>();
 
 function format(date: Date, dateStyle?: 'medium') {
   const preference = storedPreference();
-  const key = `${preference}:${dateStyle ?? ''}`;
+  // The zone is part of a formatter, and a phone can change zone while the app stays open.
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const key = `${preference}:${dateStyle ?? ''}:${zone}`;
   let found = formats.get(key);
   if (!found) {
     found = new Intl.DateTimeFormat(undefined, {

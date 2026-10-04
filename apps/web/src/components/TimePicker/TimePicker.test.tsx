@@ -9,7 +9,7 @@ describe('TimePicker', () => {
   it('chooses the hour, then the minute, on a twelve hour clock', () => {
     const onChange = vi.fn();
     const { container } = render(<TimePicker value="13:05" hour12 onChange={onChange} />);
-    expect(screen.getByRole('button', { name: 'Hour' })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /^Hour/ })).toHaveTextContent('1');
     expect(cell(container, '[data-hour="13"]')).toHaveAttribute('aria-pressed', 'true');
     expect(cell(container, '[data-period="PM"]')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(cell(container, '[data-hour="21"]'));
@@ -21,7 +21,7 @@ describe('TimePicker', () => {
     fireEvent.click(cell(container, '[data-period="AM"]'));
     expect(onChange).toHaveBeenLastCalledWith('01:05');
     // And back to the hours from the readout.
-    fireEvent.click(screen.getByRole('button', { name: 'Hour' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Hour/ }));
     expect(screen.getByRole('group', { name: 'Hours' })).toBeInTheDocument();
   });
 
@@ -48,7 +48,7 @@ describe('TimePicker', () => {
   it('follows a drag round the face to any minute', () => {
     const onChange = vi.fn();
     render(<TimePicker value="09:00" hour12 onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Minute' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Minute/ }));
     const face = screen.getByRole('group', { name: 'Minutes' }).firstElementChild as HTMLElement;
     face.getBoundingClientRect = () => new DOMRect(0, 0, 200, 200);
     // Straight to the right of the center is a quarter past; a little below it, 17.

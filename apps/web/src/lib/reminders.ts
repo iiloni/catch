@@ -10,6 +10,7 @@ import {
   reminderTimesSchema,
   reminderZone,
 } from '@catch/shared';
+import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { api } from './api';
 import { getSignedInUser } from './auth';
@@ -69,7 +70,12 @@ export function removeReminder(noteId: string) {
   toast('Reminder removed', {
     action: {
       label: 'Undo',
-      onClick: () => setReminder({ id: noteId, userId: reminder.userId }, reminder),
+      onClick: () => {
+        setReminder({ id: noteId, userId: reminder.userId }, reminder);
+        // Setting one starts it afresh; a snooze still ahead is put back.
+        const snoozed = reminder.snoozedUntil;
+        if (snoozed && snoozed.getTime() > Date.now()) snoozeReminder(noteId, snoozed);
+      },
     },
   });
 }
@@ -82,6 +88,30 @@ export function snoozeReminder(noteId: string, until: Date) {
     }),
   );
 }
+
+const clockListeners = new Set<() => void>();
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+let clockTick = 0;
+function subscribeToClock(listener: () => void) {
+  clockListeners.add(listener);
+  clockTimer ??= setInterval(() => {
+    clockTick += 1;
+    for (const each of clockListeners) each();
+  }, 30_000);
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0) {
+      clearInterval(clockTimer);
+      clockTimer = undefined;
+    }
+  };
+}
+
+/**
+ * Redraws what shows a reminder's time as time passes: "Today" becomes "Yesterday" and a
+ * reminder becomes a past one without any row changing, least of all offline.
+ */
+export const useReminderClock = () => useSyncExternalStore(subscribeToClock, () => clockTick);
 
 /** When a reminder next rings on this device's clock, or null when it has none left. */
 export function reminderTime(reminder: Reminder): Date | null {

@@ -8,11 +8,14 @@ const push = vi.hoisted(() => ({
   enablePush: vi.fn(),
   disablePush: vi.fn(),
   sendTestPush: vi.fn(),
+  refreshPushState: vi.fn(),
 }));
 
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/push', () => ({
   usePushState: () => push.state,
-  refreshPushState: vi.fn().mockResolvedValue(undefined),
+  refreshPushState: push.refreshPushState,
   enablePush: push.enablePush,
   disablePush: push.disablePush,
   sendTestPush: push.sendTestPush,
@@ -33,6 +36,9 @@ beforeEach(() => {
     push.state = 'off';
   });
   push.sendTestPush.mockReset().mockResolvedValue(undefined);
+  push.refreshPushState.mockReset().mockResolvedValue(undefined);
+  toast.mockReset();
+  toast.error.mockReset();
 });
 
 describe('NotificationSettings', () => {
@@ -57,6 +63,38 @@ describe('NotificationSettings', () => {
     await waitFor(() => expect(toggle).not.toBeChecked());
     expect(push.disablePush).toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+  });
+
+  it('reads what the device allows when the page opens', () => {
+    render(<NotificationSettings />);
+    expect(push.refreshPushState).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so and reads the state again when turning them on fails', async () => {
+    push.enablePush.mockRejectedValue(new Error('No push service'));
+    render(<NotificationSettings />);
+    const toggle = screen.getByRole('switch', { name: 'Reminder notifications' });
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Notifications could not be turned on', {
+        description: 'No push service',
+      }),
+    );
+    expect(push.refreshPushState).toHaveBeenCalledTimes(2);
+    expect(toggle).not.toBeChecked();
+  });
+
+  it('says so when the test notification is not sent', async () => {
+    push.state = 'on';
+    push.sendTestPush.mockRejectedValue(new Error('The push service did not take it'));
+    render(<NotificationSettings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('The test notification was not sent', {
+        description: 'The push service did not take it',
+      }),
+    );
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it.each([

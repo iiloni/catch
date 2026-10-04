@@ -17,13 +17,20 @@ type Props = {
 const pad = (value: number) => String(value).padStart(2, '0');
 const iso = (year: number, month: number, day: number) => `${year}-${pad(month + 1)}-${pad(day)}`;
 
-// Dates are calendar dates, apart from any zone, so they are read and written in UTC.
+// Dates are calendar dates, apart from any zone, so they are read and written in UTC. The
+// grid is the Gregorian calendar's, so its names are too, whatever calendar the language
+// defaults to.
 const monthName = new Intl.DateTimeFormat(undefined, {
+  calendar: 'gregory',
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
 });
-const dayName = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' });
+const dayName = new Intl.DateTimeFormat(undefined, {
+  calendar: 'gregory',
+  dateStyle: 'full',
+  timeZone: 'UTC',
+});
 const weekdayName = new Intl.DateTimeFormat(undefined, { weekday: 'narrow', timeZone: 'UTC' });
 // 2023-01-01 was a Sunday.
 const WEEKDAYS = Array.from({ length: 7 }, (_, day) =>

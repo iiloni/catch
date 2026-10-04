@@ -1,7 +1,12 @@
 import type { Reminder } from '@catch/shared';
 import { Bell, Repeat } from 'lucide-react';
 import { useHour12 } from '@/lib/clock';
-import { describeRecurrence, describeReminder, isReminderPast } from '@/lib/reminders';
+import {
+  describeRecurrence,
+  describeReminder,
+  isReminderPast,
+  useReminderClock,
+} from '@/lib/reminders';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -15,6 +20,8 @@ type Props = {
 export function ReminderChip({ reminder, onClick, className }: Props) {
   // Redraws the times below when the clock setting changes.
   useHour12();
+  // And when its time comes, which nothing else here would notice.
+  useReminderClock();
   const past = isReminderPast(reminder);
   const Icon = reminder.recurrence ? Repeat : Bell;
   const label = `${past ? 'Past reminder' : 'Reminder'}: ${describeReminder(reminder)}${
@@ -45,10 +52,13 @@ export function ReminderChip({ reminder, onClick, className }: Props) {
       type="button"
       data-reminder-chip
       aria-label={label}
+      // Keeps the editor's focus, and with it the keyboard, while the panel opens.
+      onPointerDown={(event) => event.preventDefault()}
       onClick={onClick}
       className={cn(
         chip,
-        'min-h-8 px-3 outline-none hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70',
+        // The pill stays small; the area that takes a tap is a full touch target.
+        'relative min-h-8 px-3 outline-none after:absolute after:inset-x-0 after:-inset-y-1.5 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70',
       )}
     >
       {content}

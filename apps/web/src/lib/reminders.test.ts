@@ -1,10 +1,12 @@
-import { DEFAULT_REMINDER_TIMES, recurrenceSchema } from '@catch/shared';
+import { DEFAULT_REMINDER_TIMES, type Reminder, recurrenceSchema } from '@catch/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
   defaultReminderStart,
   describeRecurrence,
+  describeReminder,
   deviceLocalTime,
   formatReminderTime,
+  isReminderPast,
   quickReminderDays,
   quickReminderTimes,
 } from './reminders';
@@ -36,6 +38,49 @@ describe('formatReminderTime', () => {
     expect(formatReminderTime(at(8, 9), now)).toBe(`${weekday}, ${time(at(8, 9))}`);
     expect(formatReminderTime(at(20, 9), now)).toBe(`${day}, ${time(at(20, 9))}`);
     expect(formatReminderTime(new Date(2027, 2, 1, 9), now)).toMatch(/2027/);
+  });
+});
+
+describe('a reminder on a note', () => {
+  const now = at(5, 10);
+  // A fixed zone, so the times below are instants whatever zone the tests run in.
+  const reminder = (changes: Partial<Reminder>): Reminder => ({
+    noteId: '0199a0a0-0000-7000-8000-000000000000',
+    userId: 'user-1',
+    kind: 'time',
+    startsAt: deviceLocalTime(at(5, 9)),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    floating: false,
+    recurrence: null,
+    nextAt: null,
+    snoozedUntil: null,
+    firedAt: null,
+    ...changes,
+  });
+  const local = (date: Date) => deviceLocalTime(date);
+
+  it('is past once its time went by more than a minute ago, or it has none left', () => {
+    const due = (time: Date) => reminder({ nextAt: local(time) });
+    expect(isReminderPast(due(at(5, 10, 1)), now)).toBe(false);
+    // Within the minute of grace.
+    expect(isReminderPast(due(at(5, 10)), now)).toBe(false);
+    expect(isReminderPast(due(at(5, 9, 58)), now)).toBe(true);
+    expect(isReminderPast(reminder({ nextAt: null }), now)).toBe(true);
+    // A snooze still ahead keeps one whose time has gone by.
+    expect(isReminderPast(reminder({ nextAt: null, snoozedUntil: at(5, 11) }), now)).toBe(false);
+  });
+
+  it('shows when it rings next, else when it last rang, else when it was set for', () => {
+    expect(describeReminder(reminder({ nextAt: local(at(5, 18)) }), now)).toBe(
+      formatReminderTime(at(5, 18), now),
+    );
+    expect(
+      describeReminder(reminder({ snoozedUntil: at(5, 11), nextAt: local(at(6, 9)) }), now),
+    ).toBe(formatReminderTime(at(5, 11), now));
+    expect(describeReminder(reminder({ firedAt: at(4, 9) }), now)).toBe(
+      formatReminderTime(at(4, 9), now),
+    );
+    expect(describeReminder(reminder({}), now)).toBe(formatReminderTime(at(5, 9), now));
   });
 });
 

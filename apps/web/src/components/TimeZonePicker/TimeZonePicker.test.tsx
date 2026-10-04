@@ -12,7 +12,9 @@ describe('TimeZonePicker', () => {
     const { container } = render(<TimeZonePicker value="Asia/Tokyo" at={at} onChange={onChange} />);
     expect(zone(container, 'Asia/Tokyo')).toHaveAttribute('aria-pressed', 'true');
     expect(zone(container, 'Asia/Tokyo')).toHaveTextContent('GMT+9');
-    expect(zone(container, 'America/New_York')).toHaveTextContent('America/New YorkGMT-5');
+    expect(zone(container, 'America/New_York')).toHaveTextContent('America/New York');
+    expect(zone(container, 'America/New_York')).toHaveTextContent('GMT-5');
+    expect(zone(container, 'UTC')).toBeInTheDocument();
     fireEvent.click(zone(container, 'America/New_York') as HTMLElement);
     expect(onChange).toHaveBeenCalledWith('America/New_York');
   });

@@ -89,31 +89,32 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
   const readout = (shown: string, of: 'hour' | 'minute', label: string) => (
     <button
       type="button"
-      aria-label={label}
       aria-pressed={mode === of}
       onClick={() => {
         haptics.toggle();
         setMode(of);
       }}
       className={cn(
-        'flex h-12 min-w-14 items-center justify-center rounded-xl px-2 font-medium text-3xl tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
+        'flex h-12 w-14 min-w-10 shrink items-center justify-center rounded-xl px-2 font-medium text-3xl tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
         mode === of ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.06]',
       )}
     >
+      {/* Named with its value, so it is not only "Hour" to someone who cannot see it. */}
+      <span className="sr-only">{label} </span>
       {shown}
     </button>
   );
 
   return (
     <div className={cn('flex flex-col items-center gap-3', className)}>
-      <div className="flex items-center gap-1.5">
+      <div className="flex max-w-full items-center gap-1.5">
         {readout(hour12 ? String(hour % 12 === 0 ? 12 : hour % 12) : pad(hour), 'hour', 'Hour')}
         <span aria-hidden className="font-medium text-2xl text-muted-foreground">
           :
         </span>
         {readout(pad(minute), 'minute', 'Minute')}
         {hour12 && (
-          <div className="ml-1.5 flex h-12 gap-1 rounded-xl bg-foreground/[0.06] p-1">
+          <div className="ml-1.5 flex h-12 shrink-0 gap-1 rounded-xl bg-foreground/[0.06] p-1">
             {(['AM', 'PM'] as const).map((period) => {
               const selected = (period === 'PM') === afternoon;
               return (

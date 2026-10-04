@@ -331,12 +331,23 @@ export function reminderZone(
 }
 
 /** A minute of grace, so a reminder set for the minute now showing still rings. */
-const justBefore = (now: Date, timeZone: string) =>
-  instantToLocal(new Date(now.getTime() - 60_000), timeZone);
+const GRACE_MS = 60_000;
 
-/** The occurrence a newly saved schedule waits for: its first that has not passed. */
+/**
+ * The occurrence a newly saved schedule waits for: its first that has not passed. Passed is
+ * a matter of instants: when clocks go back a wall clock time comes round twice, and one
+ * read as text would still look ahead after it had rung.
+ */
 export function firstPending(schedule: ReminderSchedule, timeZone: string, now: Date) {
-  return nextOccurrence(schedule, justBefore(now, timeZone));
+  const passed = now.getTime() - GRACE_MS;
+  // Text and instants only disagree within a clock change, so everything a day or more
+  // behind is skipped as text, which a long-running repeat has thousands of.
+  const wellBehind = instantToLocal(new Date(passed - DAY_MS), timeZone);
+  for (const occurrence of occurrences(schedule)) {
+    if (occurrence <= wellBehind) continue;
+    if (localToInstant(occurrence, timeZone).getTime() > passed) return occurrence;
+  }
+  return null;
 }
 
 type Timing = Pick<Reminder, 'nextAt' | 'snoozedUntil'>;

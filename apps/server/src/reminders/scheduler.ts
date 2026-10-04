@@ -13,6 +13,8 @@ import { reminderMessage } from './message';
 const LATE_MS = 24 * 60 * 60 * 1000;
 const TICK_MS = 10_000;
 const BATCH = 200;
+/** A stop for a pass that somehow keeps finding the same rows due. */
+const MAX_BATCHES = 500;
 
 /**
  * Rings every reminder that has come due and moves each on to what it waits for next. A
@@ -20,6 +22,14 @@ const BATCH = 200;
  * one ring rather than repeating it on every start.
  */
 export async function fireDueReminders(now = new Date()) {
+  // Everything due is worked through in this pass: left for later ticks, the end of a long
+  // backlog would cross the day after which a reminder no longer rings.
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    if ((await fireBatch(now)) < BATCH) return;
+  }
+}
+
+async function fireBatch(now: Date) {
   const due = await db
     .select({
       reminder: reminders,
@@ -35,25 +45,35 @@ export async function fireDueReminders(now = new Date()) {
     .orderBy(asc(reminders.fireAt))
     .limit(BATCH);
 
-  for (const { reminder, text, userTimeZone } of due) {
-    if (!reminder.fireAt) continue;
-    const zone = reminderZone(reminder, userTimeZone);
-    const next = advanceReminder(reminder, zone, now);
-    let fireAt = reminderFireTime(next, zone);
-    // Around a clock change a later wall clock time can be an earlier instant.
-    if (fireAt && fireAt <= now) fireAt = new Date(now.getTime() + 60_000);
-    const rings = now.getTime() - reminder.fireAt.getTime() <= LATE_MS;
-    const claimed = await db
-      .update(reminders)
-      .set({ ...next, fireAt, ...(rings ? { firedAt: now } : {}) })
-      // Unchanged since it was read: a save in between has already rescheduled it.
-      .where(and(eq(reminders.noteId, reminder.noteId), eq(reminders.fireAt, reminder.fireAt)))
-      .returning({ noteId: reminders.noteId });
-    if (claimed.length === 0 || !rings) continue;
-    await notifyUser(reminder.userId, reminderMessage(reminder.noteId, text)).catch(
-      (error: unknown) => console.error('Could not send a reminder', error),
+  for (const { reminder: read, text, userTimeZone } of due) {
+    const rings = await db.transaction(async (tx) => {
+      // Read again under a lock, and moved on from what is there now: a save since the
+      // batch was read may have changed the schedule and left its time as it was, and
+      // moving on from the old one would write the old schedule's end over the new one.
+      const [reminder] = await tx
+        .select()
+        .from(reminders)
+        .where(and(eq(reminders.noteId, read.noteId), lte(reminders.fireAt, now)))
+        .for('update');
+      if (!reminder?.fireAt) return false;
+      const zone = reminderZone(reminder, userTimeZone);
+      const next = advanceReminder(reminder, zone, now);
+      let fireAt = reminderFireTime(next, zone);
+      // Around a clock change a later wall clock time can be an earlier instant.
+      if (fireAt && fireAt <= now) fireAt = new Date(now.getTime() + 60_000);
+      const rings = now.getTime() - reminder.fireAt.getTime() <= LATE_MS;
+      await tx
+        .update(reminders)
+        .set({ ...next, fireAt, ...(rings ? { firedAt: now } : {}) })
+        .where(eq(reminders.noteId, reminder.noteId));
+      return rings;
+    });
+    if (!rings) continue;
+    await notifyUser(read.userId, reminderMessage(read.noteId, text)).catch((error: unknown) =>
+      console.error('Could not send a reminder', error),
     );
   }
+  return due.length;
 }
 
 /** Checks for due reminders every few seconds while the server runs. */

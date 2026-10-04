@@ -25,4 +25,10 @@ describe('reminderMessage', () => {
     expect(message.title.endsWith('…')).toBe(true);
     expect(message.body).toHaveLength(180);
   });
+
+  it('does not cut an emoji in half', () => {
+    const { title } = reminderMessage(id, '😀'.repeat(100));
+    expect(Array.from(title)).toHaveLength(80);
+    expect(title).toBe(`${'😀'.repeat(79)}…`);
+  });
 });

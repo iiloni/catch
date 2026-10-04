@@ -1,19 +1,27 @@
 import type { Reminder } from '@catch/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReminderChip } from './ReminderChip';
 
-vi.mock('@/lib/reminders', async () => {
-  const shared = await import('@catch/shared');
-  return {
-    describeRecurrence: () => 'Weekly on Mon',
-    describeReminder: () => 'Tomorrow, 9:00',
-    isReminderPast: (reminder: Reminder) =>
-      shared.reminderFireTime(reminder, reminder.timeZone) === null,
-  };
-});
+vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
+vi.mock('@/lib/api', () => ({ api: {} }));
+vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
+// Only the wording is fixed, which depends on the machine's language and zone. Whether a
+// reminder is past is the real rule.
+vi.mock('@/lib/reminders', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/reminders')>()),
+  describeRecurrence: () => 'Weekly on Mon',
+  describeReminder: () => 'Tomorrow, 9:00',
+}));
 
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const reminder: Reminder = {
   noteId: '0199a0a0-0000-7000-8000-000000000000',
@@ -52,6 +60,12 @@ describe('ReminderChip', () => {
     render(<ReminderChip reminder={{ ...reminder, nextAt: null }} />);
     expect(screen.getByLabelText('Past reminder: Tomorrow, 9:00')).toBeInTheDocument();
     expect(screen.getByText('Tomorrow, 9:00')).toHaveClass('line-through');
+  });
+
+  it('strikes through one whose time went by more than a minute ago', () => {
+    vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+    render(<ReminderChip reminder={reminder} />);
+    expect(screen.getByLabelText('Past reminder: Tomorrow, 9:00')).toBeInTheDocument();
   });
 
   it('opens the reminder when it is a button', () => {

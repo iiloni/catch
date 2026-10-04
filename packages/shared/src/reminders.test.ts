@@ -184,6 +184,21 @@ describe('reminder timing', () => {
     ).toBeNull();
   });
 
+  it('counts a time the clocks show twice as passed after its first showing', () => {
+    // 01:30 on 2026-11-01 in New York is 05:30Z and, an hour later, 06:30Z.
+    const schedule = { startsAt: '2026-11-01T01:30', recurrence: null };
+    const zone = 'America/New_York';
+    expect(firstPending(schedule, zone, new Date('2026-11-01T05:29:00Z'))).toBe('2026-11-01T01:30');
+    expect(firstPending(schedule, zone, new Date('2026-11-01T06:30:00Z'))).toBeNull();
+    expect(
+      firstPending(
+        { ...daily, startsAt: '2026-10-01T01:30' },
+        zone,
+        new Date('2026-11-01T06:30:00Z'),
+      ),
+    ).toBe('2026-11-02T01:30');
+  });
+
   it('rings at the snooze before the occurrence', () => {
     const snoozedUntil = new Date('2026-10-05T10:00:00Z');
     expect(reminderFireTime({ nextAt: '2026-10-06T09:00', snoozedUntil }, 'UTC')).toBe(

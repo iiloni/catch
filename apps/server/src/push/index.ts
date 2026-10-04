@@ -1,11 +1,16 @@
 import type { PushMessage, PushSubscriptionInput } from '@catch/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, notInArray } from 'drizzle-orm';
 import { db } from '../db/client';
 import { pushKeys, pushSubscriptions } from '../db/schema';
 import { env } from '../env';
 import { generateVapidKeys, sendPush, type VapidKeys } from './webPush';
 
 const KEY_ID = 'vapid';
+/**
+ * How many browsers one user is notified on. Every reminder is a request to each of them,
+ * so without a limit a user could have the server make any number of requests per ring.
+ */
+export const MAX_SUBSCRIPTIONS = 20;
 let cachedKeys: VapidKeys | null = null;
 
 /** This server's push identity, made the first time it is asked for. */
@@ -48,7 +53,20 @@ export async function saveSubscription(userId: string, subscription: PushSubscri
   await db
     .insert(pushSubscriptions)
     .values(values)
-    .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: values });
+    .onConflictDoUpdate({
+      target: pushSubscriptions.endpoint,
+      set: { ...values, createdAt: new Date() },
+    });
+  // The newest are kept; the oldest is the browser least likely still in use.
+  const kept = db
+    .select({ endpoint: pushSubscriptions.endpoint })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, userId))
+    .orderBy(desc(pushSubscriptions.createdAt), desc(pushSubscriptions.endpoint))
+    .limit(MAX_SUBSCRIPTIONS);
+  await db
+    .delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), notInArray(pushSubscriptions.endpoint, kept)));
 }
 
 export async function removeSubscription(userId: string, endpoint: string) {

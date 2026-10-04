@@ -43,7 +43,9 @@ describe('UserManagement', () => {
     expect(screen.getByRole('columnheader', { name: 'Last login' })).toBeInTheDocument();
     expect(table.querySelector('time[datetime="2026-10-01T12:34:00.000Z"]')).toHaveAttribute(
       'title',
-      new Date(admin.lastLoginAt!).toLocaleString(),
+      new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+        new Date(admin.lastLoginAt!),
+      ),
     );
     expect(screen.getAllByTitle('No recorded login').length).toBeGreaterThan(0);
   });

@@ -2,6 +2,7 @@ import type { Note } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Bell } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
@@ -11,6 +12,7 @@ import { notesCollection, useReminders, useRemindersReady } from '@/lib/collecti
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { isReminderPast, reminderTime } from '@/lib/reminders';
+import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/reminders')({
@@ -42,16 +44,21 @@ function RemindersPage() {
   const soonest = upcoming.sort((a, b) => a.at - b.at).map((item) => item.note);
   const rang = past.sort((a, b) => b.at - a.at).map((item) => item.note);
   const selection = useNoteSelection([...soonest, ...rang]);
+  // Reminders are on notes wherever they are kept. Only when every chosen note is archived
+  // is taking them out of the archive the thing to offer.
+  const place = selection.notes.every((note) => note.isArchived) ? 'archive' : 'gallery';
+  const gutterShift = usePageGutterShift(PAGE_MAX);
 
   return (
     <>
       <PageHeader
         title="Reminders"
         leading={<BackToGallery />}
-        selection={selectionHeader(selection, 'gallery')}
+        selection={selectionHeader(selection, place)}
       />
-      <section
+      <motion.section
         aria-label="Reminders"
+        style={{ x: gutterShift }}
         className="mx-auto flex max-w-7xl flex-col gap-6 px-3 pt-3 sm:px-6"
       >
         {awaitingSync ? null : reminded.length > 0 ? (
@@ -82,7 +89,7 @@ function RemindersPage() {
             Open a note and tap the bell to be reminded of it.
           </EmptyState>
         )}
-      </section>
+      </motion.section>
     </>
   );
 }

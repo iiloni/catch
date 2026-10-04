@@ -442,6 +442,7 @@ function DockAction({ action }: { action: Action }) {
       aria-label={action.label}
       disabled={action.disabled}
       aria-pressed={action.expanded === undefined ? action.active : undefined}
+      data-filled={action.filled ? '' : undefined}
       aria-expanded={action.expanded}
       onPointerDown={(event) => event.preventDefault()}
       onClick={action.onPress}

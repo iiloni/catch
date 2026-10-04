@@ -15,7 +15,8 @@ type Props = {
 
 /** Every zone the device knows, with the chosen one among them. */
 function timeZones(current: string) {
-  const zones = Intl.supportedValuesOf?.('timeZone') ?? [];
+  // The list the device gives leaves UTC out.
+  const zones = ['UTC', ...(Intl.supportedValuesOf?.('timeZone') ?? [])];
   return zones.includes(current) ? zones : [current, ...zones];
 }
 
@@ -26,8 +27,8 @@ export function TimeZonePicker({ value, onChange, at, className }: Props) {
   const [query, setQuery] = useState('');
   const list = useRef<HTMLUListElement>(null);
   // Offsets are asked of a formatter per zone, so once per moment rather than per keystroke.
-  const day = at.toDateString();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: an offset only changes with the day
+  const moment = at.getTime();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the offsets are for the moment, not the Date object
   const zones = useMemo(
     () =>
       timeZones(value).map((zone) => {
@@ -35,7 +36,7 @@ export function TimeZonePicker({ value, onChange, at, className }: Props) {
         const offset = timeZoneOffset(zone, at);
         return { zone, name, offset, search: plain(`${name} ${offset}`) };
       }),
-    [value, day],
+    [value, moment],
   );
   const wanted = plain(query).trim();
   const shown = wanted ? zones.filter((zone) => zone.search.includes(wanted)) : zones;

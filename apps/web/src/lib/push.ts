@@ -122,8 +122,16 @@ export function disablePush() {
     if (subscription) {
       // The server forgets it first, while the endpoint still names it. Offline it cannot,
       // and learns from the push service instead: an unsubscribed endpoint answers "gone".
-      await api.deletePushSubscription(subscription.endpoint).catch(() => {});
-      await subscription.unsubscribe().catch(() => {});
+      const told = await api.deletePushSubscription(subscription.endpoint).then(
+        () => true,
+        () => false,
+      );
+      const dropped = await subscription.unsubscribe().catch(() => false);
+      if (!told && !dropped) {
+        // Neither end let go, so this browser would still be sent the user's reminders.
+        await refreshPushState();
+        throw new Error('Could not turn notifications off.');
+      }
     }
     await refreshPushState();
   });
@@ -154,6 +162,11 @@ export function syncPush() {
         localStorage.getItem(enabledKey()) === 'true'
       ) {
         await subscribe(worker);
+      } else if (worker && supported()) {
+        // A subscription this user never turned on was left by whoever used the browser
+        // before, whose session ended without a sign-out. Dropped, so their reminders stop
+        // arriving here.
+        await (await worker.pushManager.getSubscription())?.unsubscribe();
       }
     } catch {
       // Offline; the next launch tries again.

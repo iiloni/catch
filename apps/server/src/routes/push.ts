@@ -14,7 +14,12 @@ import { isPushEndpoint } from '../push/webPush';
 /** The browsers each user gets notifications on (ADR 0018). */
 export const pushRoutes = new Hono<AppEnv>()
   .use(requireUser)
-  .get('/key', async (c) => c.json({ publicKey: (await vapidKeys()).publicKey } satisfies PushKey))
+  .get('/key', async (c) => {
+    // A restore can change the key; a cached one would keep a browser on a subscription the
+    // push service then refuses.
+    c.header('Cache-Control', 'no-store');
+    return c.json({ publicKey: (await vapidKeys()).publicKey } satisfies PushKey);
+  })
   .post('/subscriptions', zValidator('json', pushSubscriptionSchema), async (c) => {
     const subscription = c.req.valid('json');
     if (!isPushEndpoint(subscription.endpoint)) {

@@ -103,7 +103,7 @@ export function NotificationSettings() {
       </SettingsSection>
       <SettingsSection
         title="Quick times"
-        description="The times the Later today, Tomorrow and Next week choices use on this device."
+        description="The times Morning, Afternoon and Evening stand for when you set a reminder, on all your devices."
       >
         {TIMES.map(({ key, label }) => (
           <SettingsRow key={key} icon={Clock} label={label}>

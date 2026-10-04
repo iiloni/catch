@@ -22,7 +22,6 @@ import { springs } from '@/lib/motion';
 import {
   defaultReminderStart,
   describeRecurrence,
-  deviceLocalTime,
   deviceTimeZone,
   formatReminderTime,
   formatTimeOfDay,
@@ -270,6 +269,9 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Pages under the reminder scroll as a whole: in a popover near the screen's edge there may not be room for a calendar. */
+const subPageClass = 'overflow-y-auto [scrollbar-width:none]';
+
 const pageClass =
   'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.75rem)] flex-col gap-2';
 
@@ -370,7 +372,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const passed =
     form.repeat === 'none' && starts !== null && starts.getTime() < now.getTime() - 60_000;
   const today = days[0]?.date;
-  const nowTime = deviceLocalTime(now).slice(11);
   const rang =
     reminder?.firedAt && now.getTime() - reminder.firedAt.getTime() < 24 * 60 * 60 * 1000;
   const snoozed = snoozedUntil(reminder, now);
@@ -520,8 +521,15 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                           label={preset.label}
                           detail={formatTimeOfDay(preset.time)}
                           selected={form.time === preset.time}
+                          // Passed in the zone the reminder is read in, which a fixed one
+                          // may not share with this device.
                           disabled={
-                            form.repeat === 'none' && form.date === today && preset.time <= nowTime
+                            form.repeat === 'none' &&
+                            firstPending(
+                              { startsAt: `${form.date}T${preset.time}`, recurrence: null },
+                              zone,
+                              now,
+                            ) === null
                           }
                           onSelect={() => update({ time: preset.time })}
                         />
@@ -562,10 +570,9 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                         label="Custom"
                         detail={form.fixed ? zoneLabel : undefined}
                         selected={form.fixed}
-                        onSelect={() => {
-                          update({ fixed: true });
-                          go('zone');
-                        }}
+                        // Fixed once a zone is chosen there: going in and straight back out
+                        // leaves a reminder following the user as it was.
+                        onSelect={() => go('zone')}
                       />
                     </div>
                     <p className="px-1 pt-1.5 text-muted-foreground text-xs">
@@ -577,8 +584,9 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 </div>
 
                 <div className="flex shrink-0 gap-1.5">
-                  {/* One that has just rung can be put off without setting it again. */}
-                  {rang && reminder && (
+                  {/* One that has just rung can be put off without setting it again. Not one
+                      already put off, which this would bring forward. */}
+                  {rang && reminder && !snoozed && (
                     <Button
                       type="button"
                       variant="secondary"
@@ -602,7 +610,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 </div>
               </motion.div>
             ) : page === 'date' ? (
-              <motion.fieldset key="date" {...motionProps} className={cn(pageClass, className)}>
+              <motion.fieldset
+                key="date"
+                {...motionProps}
+                className={cn(pageClass, subPageClass, className)}
+              >
                 {pageHeader('Day', date ? fullDate.format(date) : '', 'main')}
                 <DatePicker
                   value={form.date}
@@ -617,7 +629,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 />
               </motion.fieldset>
             ) : page === 'time' ? (
-              <motion.fieldset key="time" {...motionProps} className={cn(pageClass, className)}>
+              <motion.fieldset
+                key="time"
+                {...motionProps}
+                className={cn(pageClass, subPageClass, className)}
+              >
                 {pageHeader('Time', formatTimeOfDay(form.time), 'main')}
                 <TimePicker
                   value={form.time}
@@ -626,7 +642,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 />
               </motion.fieldset>
             ) : page === 'zone' ? (
-              <motion.fieldset key="zone" {...motionProps} className={cn(pageClass, className)}>
+              <motion.fieldset
+                key="zone"
+                {...motionProps}
+                className={cn(pageClass, subPageClass, className)}
+              >
                 {pageHeader('Time zone', zoneLabel, 'main')}
                 <TimeZonePicker
                   value={form.timeZone}
@@ -638,7 +658,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 />
               </motion.fieldset>
             ) : page === 'until' ? (
-              <motion.fieldset key="until" {...motionProps} className={cn(pageClass, className)}>
+              <motion.fieldset
+                key="until"
+                {...motionProps}
+                className={cn(pageClass, subPageClass, className)}
+              >
                 {pageHeader('Last day', untilLabel, 'repeat')}
                 <DatePicker
                   value={form.until}
@@ -652,7 +676,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 />
               </motion.fieldset>
             ) : (
-              <motion.fieldset key="repeat" {...motionProps} className={cn(pageClass, className)}>
+              <motion.fieldset
+                key="repeat"
+                {...motionProps}
+                className={cn(pageClass, subPageClass, className)}
+              >
                 {pageHeader('Repeat', repeatSummary, 'main')}
                 <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto rounded-xl pb-1 [scrollbar-width:none]">
                   <div className="grid grid-cols-5 gap-1.5">

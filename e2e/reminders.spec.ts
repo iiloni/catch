@@ -53,8 +53,12 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
   const start = new Date(now.getFullYear(), now.getMonth() + 1, 15);
   const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-15`;
   await step(page, 'Day').getByRole('button', { name: 'Custom' }).click();
-  await panel(page).getByRole('button', { name: 'Next month' }).click();
-  await panel(page).locator(`[data-date="${date}"]`).click();
+  // On the last evening of a month the panel opens on tomorrow, and so on next month.
+  const next = panel(page).getByRole('button', { name: 'Next month' });
+  await expect(next).toBeVisible();
+  const day = panel(page).locator(`[data-date="${date}"]`);
+  if ((await day.count()) === 0) await next.click();
+  await day.click();
   await expect(step(page, 'Day').getByRole('button', { name: /^Custom/ })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -245,12 +249,15 @@ async function syncedReminder(
     expect(shape.ok()).toBeTruthy();
     const body = shapeRows.parse(await shape.json());
     for (const row of body) {
-      if (!row.value) continue;
       const operation = row.headers?.operation;
       const index = rows.findIndex((item) => item.key === row.key);
+      // A delete carries its key and no value.
       if (operation === 'delete') {
         if (index >= 0) rows.splice(index, 1);
-      } else if (index >= 0) {
+        continue;
+      }
+      if (!row.value) continue;
+      if (index >= 0) {
         rows[index] = { ...rows[index], ...row.value };
       } else {
         rows.push({ key: row.key, ...row.value });

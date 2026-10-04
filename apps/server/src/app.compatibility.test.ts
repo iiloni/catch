@@ -99,9 +99,13 @@ describe('API compatibility gate', () => {
       [`/api/reminders/${id}`, 'PUT'],
       [`/api/reminders/${id}`, 'DELETE'],
       ['/api/reminders/time-zone', 'PUT'],
+      ['/api/reminders/settings', 'GET'],
+      ['/api/reminders/settings/times', 'PUT'],
       ['/api/shapes/reminders', 'GET'],
       ['/api/push/key', 'GET'],
       ['/api/push/subscriptions', 'POST'],
+      ['/api/push/subscriptions', 'DELETE'],
+      ['/api/push/test', 'POST'],
     ] as const) {
       expect((await app.request(path, { method })).status).toBe(426);
       expect((await app.request(path, { method, headers: supportedHeaders })).status).toBe(401);

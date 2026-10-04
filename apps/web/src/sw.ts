@@ -80,15 +80,17 @@ function pushMessage(event: PushEvent) {
 
 self.addEventListener('push', (event) => {
   const { title, body, noteId } = pushMessage(event);
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: appIcon,
-      // A reminder that rings again replaces its last notification instead of stacking.
-      tag: noteId ?? 'catch',
-      data: { noteId },
-    }),
-  );
+  // `renotify` is in browsers but not yet in TypeScript's types.
+  const options: NotificationOptions & { renotify: boolean } = {
+    body,
+    icon: appIcon,
+    // A reminder that rings again replaces its last notification instead of stacking.
+    tag: noteId ?? 'catch',
+    // And alerts again when it does, which a replaced notification otherwise would not.
+    renotify: true,
+    data: { noteId },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {

@@ -4,6 +4,7 @@ import {
   encryptPush,
   generateVapidKeys,
   isPushEndpoint,
+  MAX_PUSH_PAYLOAD,
   sendPush,
   vapidAuthorization,
 } from './webPush';
@@ -49,12 +50,12 @@ describe('web push', () => {
   it('refuses a message too large for a push service', () => {
     const receiver = createECDH('prime256v1');
     receiver.generateKeys();
-    expect(() =>
-      encryptPush(Buffer.alloc(4000), {
-        p256dh: receiver.getPublicKey().toString('base64url'),
-        auth: Buffer.alloc(16).toString('base64url'),
-      }),
-    ).toThrow('too large');
+    const keys = {
+      p256dh: receiver.getPublicKey().toString('base64url'),
+      auth: Buffer.alloc(16).toString('base64url'),
+    };
+    expect(() => encryptPush(Buffer.alloc(MAX_PUSH_PAYLOAD), keys)).not.toThrow();
+    expect(() => encryptPush(Buffer.alloc(MAX_PUSH_PAYLOAD + 1), keys)).toThrow('too large');
   });
 
   it('signs a token for the push service with the server key', () => {
