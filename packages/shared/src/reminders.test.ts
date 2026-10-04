@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALARM_TIMES,
   advanceReminder,
   firstPending,
   instantToLocal,
@@ -10,7 +11,9 @@ import {
   type Recurrence,
   recurrenceSchema,
   remainingCount,
+  reminderAlarm,
   reminderFireTime,
+  reminderText,
   reminderZone,
 } from './reminders';
 
@@ -291,5 +294,57 @@ describe('what the server accepts', () => {
     expect(accepts({})).toBe(true);
     expect(accepts({ p256dh: 'BPk' })).toBe(false);
     expect(accepts({ auth: `${keys.auth}==` })).toBe(false);
+  });
+});
+
+describe('alarms for the Android app', () => {
+  const noteId = '0199a0a0-0000-7000-8000-000000000000';
+  const base = {
+    noteId,
+    startsAt: '2026-10-01T09:00',
+    recurrence: null,
+    nextAt: '2026-10-01T09:00',
+    snoozedUntil: null,
+    floating: true,
+    timeZone: 'Europe/London',
+  };
+
+  it('gives a one-off its time and leaves the zone to the phone when it follows the user', () => {
+    expect(reminderAlarm(base, 'Call the dentist\nAsk about Friday')).toEqual({
+      noteId,
+      title: 'Call the dentist',
+      body: 'Ask about Friday',
+      times: ['2026-10-01T09:00'],
+      timeZone: null,
+      snoozedUntil: null,
+    });
+    expect(reminderAlarm({ ...base, floating: false }, '')?.timeZone).toBe('Europe/London');
+  });
+
+  it('gives a repeat its coming times from the one it waits for, up to the limit', () => {
+    const daily = {
+      ...base,
+      recurrence: repeat({ frequency: 'daily' }),
+      nextAt: '2026-10-05T09:00',
+    };
+    const alarm = reminderAlarm(daily, 'Water the plants');
+    expect(alarm?.times).toHaveLength(ALARM_TIMES);
+    expect(alarm?.times.slice(0, 2)).toEqual(['2026-10-05T09:00', '2026-10-06T09:00']);
+    const counted = { ...daily, recurrence: repeat({ frequency: 'daily', count: 6 }) };
+    expect(reminderAlarm(counted, '')?.times).toEqual(['2026-10-05T09:00', '2026-10-06T09:00']);
+  });
+
+  it('has none for a reminder with nothing left, unless it is snoozed', () => {
+    expect(reminderAlarm({ ...base, nextAt: null }, '')).toBeNull();
+    const snoozedUntil = new Date('2026-10-01T10:00:00Z');
+    expect(reminderAlarm({ ...base, nextAt: null, snoozedUntil }, '')).toMatchObject({
+      times: [],
+      snoozedUntil: snoozedUntil.getTime(),
+    });
+  });
+
+  it('names a note without text and does not cut an emoji in half', () => {
+    expect(reminderText('  \n')).toEqual({ title: 'Reminder', body: '' });
+    expect(reminderText('😀'.repeat(100)).title).toBe(`${'😀'.repeat(79)}…`);
   });
 });

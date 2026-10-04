@@ -336,6 +336,64 @@ test('reminders belong to their note’s owner and replay safely', { tag: '@api'
   expect(await syncedReminder(alice.context, alice.headers, id)).toBeNull();
 });
 
+test('the Android app is told what to ring, and only for its own user', { tag: '@api' }, async ({
+  playwright,
+  baseURL,
+  extraHTTPHeaders,
+}) => {
+  const alice = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const bob = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const id = noteId();
+  await alice.context.post('/api/notes', {
+    headers: alice.headers,
+    data: {
+      id,
+      content: [
+        { type: 'paragraph', content: 'Water the plants' },
+        { type: 'paragraph', content: 'The fern too' },
+      ],
+    },
+  });
+  const alarms = async (who: typeof alice) =>
+    (await (await who.context.get('/api/reminders/alarms', { headers: who.headers })).json())
+      .alarms;
+  const save = (data: object) =>
+    alice.context.put(`/api/reminders/${id}`, {
+      headers: alice.headers,
+      data: { kind: 'time', startsAt: '2020-01-01T07:15', snoozedUntil: null, ...data },
+    });
+
+  const anonymous = await playwright.request.newContext({ baseURL, extraHTTPHeaders });
+  expect((await anonymous.get('/api/reminders/alarms')).status()).toBe(401);
+  expect(await alarms(alice)).toEqual([]);
+
+  // A reminder that follows the user carries no zone: the phone reads it where it is.
+  const daily = { frequency: 'daily', interval: 1 };
+  expect((await save({ timeZone: 'UTC', floating: true, recurrence: daily })).ok()).toBeTruthy();
+  const [alarm, ...others] = await alarms(alice);
+  expect(others).toEqual([]);
+  expect(alarm).toMatchObject({
+    noteId: id,
+    title: 'Water the plants',
+    body: 'The fern too',
+    timeZone: null,
+    snoozedUntil: null,
+  });
+  expect(alarm.times).toHaveLength(16);
+  expect(alarm.times.every((time: string) => time.endsWith('T07:15'))).toBe(true);
+  expect([...alarm.times].sort()).toEqual(alarm.times);
+  expect(await alarms(bob)).toEqual([]);
+
+  expect(
+    (await save({ timeZone: 'Asia/Tokyo', floating: false, recurrence: daily })).ok(),
+  ).toBeTruthy();
+  expect((await alarms(alice))[0]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+
+  // A one-off whose time has passed has nothing left to ring.
+  expect((await save({ timeZone: 'UTC', floating: false, recurrence: null })).ok()).toBeTruthy();
+  expect(await alarms(alice)).toEqual([]);
+});
+
 test('the server rings a reminder when it comes due and moves it on', { tag: '@api' }, async ({
   playwright,
   baseURL,

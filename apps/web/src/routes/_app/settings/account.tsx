@@ -16,6 +16,7 @@ import {
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
 import { clearLocalData } from '@/lib/collections';
 import { forgetImport } from '@/lib/imports';
+import { nativeReminders } from '@/lib/nativeReminders';
 import { disablePush, dropPushSubscription } from '@/lib/push';
 import { getServerUrl } from '@/lib/serverUrl';
 import { useSyncStatus } from '@/lib/syncStatus';
@@ -35,6 +36,8 @@ async function signOut() {
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
   ]);
   if (!told) await dropPushSubscription().catch(() => undefined);
+  // The phone keeps reminders and a token of its own to ring with the app closed.
+  await nativeReminders.clear().catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();

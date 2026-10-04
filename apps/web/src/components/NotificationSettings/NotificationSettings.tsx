@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import type { ReminderTimes } from '@catch/shared';
 import { Bell, BellRing, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -19,14 +20,17 @@ import { useReminderTimes } from '@/lib/reminders';
 
 /** Why notifications cannot be turned on here, for the states where they cannot. */
 const UNAVAILABLE: Partial<Record<PushState, string>> = {
-  native:
-    'The Android app does not show reminders yet. For now they reach browsers and the installed web app.',
   'needs-install':
     'On iPhone and iPad, add Catch to your Home Screen (Share, then Add to Home Screen) and turn notifications on from there.',
   unsupported: 'This browser cannot receive notifications from Catch.',
-  blocked:
-    'Notifications are blocked for Catch. Allow them in this browser’s site settings, then turn them on here.',
+  blocked: Capacitor.isNativePlatform()
+    ? 'Notifications are blocked for Catch. Allow them in Android’s settings for the app, then turn them on here.'
+    : 'Notifications are blocked for Catch. Allow them in this browser’s site settings, then turn them on here.',
 };
+
+const HOW = Capacitor.isNativePlatform()
+  ? 'This phone rings your reminders itself, so they arrive offline too. One set on another device arrives once the phone has been online. Each device is turned on separately.'
+  : 'Your Catch server sends reminders through this browser’s push service, encrypted so only this device can read them. Each device is turned on separately.';
 
 const TIMES: { key: keyof ReminderTimes; label: string }[] = [
   { key: 'morning', label: 'Morning' },
@@ -78,13 +82,7 @@ export function NotificationSettings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection
-        title="This device"
-        description={
-          unavailable ??
-          'Your Catch server sends reminders through this browser’s push service, encrypted so only this device can read them. Each device is turned on separately.'
-        }
-      >
+      <SettingsSection title="This device" description={unavailable ?? HOW}>
         <SettingsRow icon={Bell} label="Reminder notifications" description="Show reminders here">
           <Switch
             aria-label="Reminder notifications"

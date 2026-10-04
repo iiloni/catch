@@ -1,6 +1,7 @@
 import {
   type Attachment,
   attachmentSchema,
+  blocksToPlainText,
   boardColumnSchema,
   createAttachmentSchema,
   createBoardColumnSchema,
@@ -13,6 +14,8 @@ import {
   noteSchema,
   noteTagsSchema,
   type Reminder,
+  type ReminderAlarm,
+  reminderAlarm,
   reminderSchema,
   saveReminderSchema,
   type Tag,
@@ -675,6 +678,38 @@ export function useRemindersReady() {
 export function useReminders(): ReadonlyMap<string, Reminder> {
   return useSyncExternalStore(subscribeToReminders, () => remindersByNote);
 }
+
+/**
+ * What the Android app should ring (ADR 0018), told again whenever a reminder or a note
+ * changes: a notification shows its note's words as they are now.
+ */
+export function watchReminderAlarms(listener: (alarms: ReminderAlarm[]) => void) {
+  let scheduled: ReturnType<typeof setTimeout> | undefined;
+  const tell = () => {
+    scheduled = undefined;
+    listener(
+      [...remindersCollection.values()].flatMap((reminder) => {
+        const note = notesCollection.get(reminder.noteId);
+        if (!note || note.deletedAt) return [];
+        return reminderAlarm(reminder, blocksToPlainText(note.content)) ?? [];
+      }),
+    );
+  };
+  // Typing in a note changes it on every key; the phone need only hear once it settles.
+  const changed = () => {
+    if (scheduled === undefined) scheduled = setTimeout(tell, 500);
+  };
+  const reminders = remindersCollection.subscribeChanges(changed, { includeInitialState: true });
+  const notes = notesCollection.subscribeChanges(changed);
+  return () => {
+    clearTimeout(scheduled);
+    reminders.unsubscribe();
+    notes.unsubscribe();
+  };
+}
+
+/** Whether a note still has a reminder to put off. */
+export const hasReminder = (noteId: string) => remindersCollection.has(noteId);
 
 let attachmentRows: readonly Attachment[] = [];
 const attachmentListeners = new Set<() => void>();

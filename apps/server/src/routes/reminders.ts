@@ -2,7 +2,9 @@ import {
   DEFAULT_REMINDER_TIMES,
   firstPending,
   type Recurrence,
+  type ReminderAlarms,
   type ReminderSettings,
+  reminderAlarm,
   reminderFireTime,
   reminderZone,
   reportTimeZoneSchema,
@@ -10,7 +12,7 @@ import {
   saveReminderTimesSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
@@ -55,6 +57,17 @@ export const reminderRoutes = new Hono<AppEnv>()
       timeZone: row?.timeZone ?? null,
       times: row?.times ?? DEFAULT_REMINDER_TIMES,
     } satisfies ReminderSettings);
+  })
+  // The Android app's background check: it rings reminders itself, and asks here for the
+  // ones set on other devices while it was closed.
+  .get('/alarms', async (c) => {
+    const rows = await db
+      .select({ reminder: reminders, text: notes.searchText })
+      .from(reminders)
+      .innerJoin(notes, eq(notes.id, reminders.noteId))
+      .where(and(eq(reminders.userId, c.get('user')!.id), isNull(notes.deletedAt)));
+    const alarms = rows.flatMap(({ reminder, text }) => reminderAlarm(reminder, text) ?? []);
+    return c.json({ alarms } satisfies ReminderAlarms);
   })
   .put('/settings/times', zValidator('json', saveReminderTimesSchema), async (c) => {
     const userId = c.get('user')!.id;

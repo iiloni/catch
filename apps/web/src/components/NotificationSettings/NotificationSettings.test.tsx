@@ -98,7 +98,6 @@ describe('NotificationSettings', () => {
   });
 
   it.each([
-    ['native', /Android app does not show reminders yet/],
     ['needs-install', /add Catch to your Home Screen/],
     ['blocked', /Notifications are blocked/],
     ['unsupported', /cannot receive notifications/],
