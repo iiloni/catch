@@ -1,4 +1,11 @@
-import { cancelFrame, cubicBezier, frame, type MotionValue, type Transition } from 'motion/react';
+import {
+  cancelFrame,
+  cubicBezier,
+  frame,
+  type MotionValue,
+  spring,
+  type Transition,
+} from 'motion/react';
 
 /**
  * Spring presets. Springs (rather than eased durations) keep animations
@@ -32,8 +39,6 @@ export const curves = {
   expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
   collapse: { duration: 0.5, ease: EASE_EMPHASIZED },
-  /** The note pane sliding in, which starts while the page beside it is still busy. */
-  pane: { duration: 0.5, ease: EASE_EMPHASIZED },
 } satisfies Record<string, Transition>;
 
 const steady = new WeakMap<MotionValue<number>, () => void>();
@@ -57,10 +62,39 @@ export function animateSteady(
   { duration, ease }: (typeof curves)[keyof typeof curves],
   delayMs = 0,
 ) {
+  const eased = cubicBezier(ease[0], ease[1], ease[2], ease[3]);
+  const length = duration * 1000;
+  const progress = (elapsed: number) => ({
+    value: eased(Math.min(1, elapsed / length)),
+    done: elapsed >= length,
+  });
+  return steadily(value, to, progress, delayMs);
+}
+
+/**
+ * `animateSteady` along one of the `springs` from rest, for a surface that should arrive as
+ * it leaves on a spring but sets off while the page is busy. It cannot be retargeted
+ * mid-flight as a spring can; `stopSteady` it and `animate` from there instead.
+ */
+export function animateSteadySpring(
+  value: MotionValue<number>,
+  to: number,
+  { visualDuration, bounce }: (typeof springs)[keyof typeof springs],
+) {
+  const generator = spring({ keyframes: [0, 1], visualDuration, bounce });
+  return steadily(value, to, (elapsed) => generator.next(elapsed));
+}
+
+/** `progress` maps the time run so far (ms) to how far along the animation is. */
+function steadily(
+  value: MotionValue<number>,
+  to: number,
+  progress: (elapsed: number) => { value: number; done: boolean },
+  delayMs = 0,
+) {
   steady.get(value)?.();
   value.stop();
   const from = value.get();
-  const eased = cubicBezier(ease[0], ease[1], ease[2], ease[3]);
   let elapsed = -delayMs;
   return new Promise<void>((resolve) => {
     const stop = () => {
@@ -71,9 +105,9 @@ export function animateSteady(
     const step = ({ delta }: { delta: number }) => {
       elapsed += delta;
       if (elapsed <= 0) return;
-      const time = Math.min(1, elapsed / (duration * 1000));
-      value.set(from + (to - from) * eased(time));
-      if (time < 1) return;
+      const { value: time, done } = progress(elapsed);
+      value.set(from + (to - from) * (done ? 1 : time));
+      if (!done) return;
       stop();
       resolve();
     };

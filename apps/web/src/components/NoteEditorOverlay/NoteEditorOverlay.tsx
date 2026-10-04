@@ -30,7 +30,14 @@ import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { useNoteLinks } from '@/lib/linkPreviews';
-import { afterPaint, animateSteady, curves, springs, stopSteady } from '@/lib/motion';
+import {
+  afterPaint,
+  animateSteady,
+  animateSteadySpring,
+  curves,
+  springs,
+  stopSteady,
+} from '@/lib/motion';
 import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
 import {
   CARD_FACE_FADE_END,
@@ -305,9 +312,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       }
       // Mounting the note and narrowing the page beside it is one long frame. A spring keeps
       // time, so that frame came out of the slide, which then appeared most of the way in.
-      // The pane waits for it to be painted and then advances by frames, as below.
+      // The pane waits for it to be painted and then follows the spring it leaves on by
+      // frames, as below.
       cancelSlide.current = afterPaint(() => {
-        void animateSteady(paneReveal, 1, curves.pane).then(() => setSettled(true));
+        void animateSteadySpring(paneReveal, 1, springs.pane).then(() => setSettled(true));
       });
       return () => cancelSlide.current();
     }

@@ -129,9 +129,9 @@ is followed exactly instead of sprung behind.
 A resize is a long frame: every card is measured again, and opening a pane mounts a note
 beside the page. A spring keeps time, so one started in that frame lost its first moments to
 it and appeared most of the way there. The cards' springs therefore start once the frame is
-painted, and the pane slides in the same way, advancing by frames (`animateSteady`,
-`curves.pane`) as the container transform does. Closing the pane has no such frame and
-keeps its spring.
+painted, and the pane slides in the same way, following the spring it leaves on but
+advancing by frames (`animateSteadySpring`), as the container transform does. Closing the
+pane has no such frame and keeps its spring.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
 The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered
