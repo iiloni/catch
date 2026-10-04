@@ -267,6 +267,25 @@ test('the server rings a reminder when it comes due and moves it on', { tag: '@a
     .not.toBeNull();
   const next = local(new Date(Date.parse(`${startsAt}:00Z`) + 86_400_000));
   expect(await syncedReminder(context, headers, id)).toMatchObject({ next_at: next });
+
+  // The save sent again after it rang (its answer was lost) must not ring it a second time.
+  const rang = (await syncedReminder(context, headers, id))?.fired_at;
+  const replay = await context.put(`/api/reminders/${id}`, {
+    headers,
+    data: {
+      kind: 'time',
+      startsAt,
+      timeZone: 'UTC',
+      floating: false,
+      recurrence: { frequency: 'daily', interval: 1 },
+      snoozedUntil: null,
+    },
+  });
+  expect(await replay.json()).toEqual({ txid: null });
+  expect(await syncedReminder(context, headers, id)).toMatchObject({
+    next_at: next,
+    fired_at: rang,
+  });
 });
 
 test('floating reminders follow the zone a device reports', { tag: '@api' }, async ({
@@ -344,7 +363,19 @@ test('push subscriptions only go to browser push services', { tag: '@api' }, asy
       .parse(await (await context.get('/api/push/key', { headers })).json()),
   ).toEqual(key);
 
-  const keys = { p256dh: 'BPk', auth: 'c2VjcmV0' };
+  const keys = { p256dh: `B${'A'.repeat(86)}`, auth: 'A'.repeat(22) };
+  // Keys no browser could have made are turned away.
+  expect(
+    (
+      await context.post('/api/push/subscriptions', {
+        headers,
+        data: {
+          endpoint: 'https://fcm.googleapis.com/fcm/send/short',
+          keys: { ...keys, auth: 'c2VjcmV0' },
+        },
+      })
+    ).status(),
+  ).toBe(400);
   const subscribe = (endpoint: string) =>
     context.post('/api/push/subscriptions', { headers, data: { endpoint, keys } });
   // The server posts to a subscription's endpoint, so it must be a push service's.

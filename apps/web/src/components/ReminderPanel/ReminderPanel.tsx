@@ -130,6 +130,8 @@ function toInput(form: Form): ReminderInput | null {
   if (!date || !/^\d{2}:\d{2}$/.test(form.time)) return null;
   let recurrence: Recurrence | null = null;
   if (form.repeat !== 'none') {
+    // An end date left empty is not a reminder that never ends.
+    if (form.ends === 'until' && !calendarDate(form.until)) return null;
     const monthly = form.repeat === 'monthly' ? monthlyChoice(form, date) : 'day';
     recurrence = {
       frequency: form.repeat,
@@ -143,7 +145,7 @@ function toInput(form: Form): ReminderInput | null {
                 monthly === 'last' ? -1 : (Math.ceil(date.getUTCDate() / 7) as 1 | 2 | 3 | 4),
               weekday: date.getUTCDay(),
             },
-      until: form.ends === 'until' && DATE.test(form.until) ? form.until : null,
+      until: form.ends === 'until' ? form.until : null,
       count: form.ends === 'count' ? form.count : null,
     };
   }
@@ -311,8 +313,9 @@ type Props = {
  */
 export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const [times] = useReminderTimes();
-  const [now] = useState(() => new Date());
-  const [form, setForm] = useState(() => initialForm(reminder, defaultReminderStart(now, times)));
+  const [now, setNow] = useState(() => new Date());
+  const [opened] = useState(() => initialForm(reminder, defaultReminderStart(now, times)));
+  const [form, setForm] = useState(opened);
   const days = quickReminderDays(now);
   const presets = quickReminderTimes(times);
   // Until the user asks for a field, a day or time that matches a choice shows as that choice.
@@ -359,6 +362,18 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
       onSubmit={(event) => {
         event.preventDefault();
         if (!input || passed || !rings) return;
+        // A pending reminder opens on its next time, not its first. Saved untouched it stays
+        // as it is, rather than starting its count again from there.
+        if (reminder?.nextAt && JSON.stringify(input) === JSON.stringify(toInput(opened))) {
+          onDone();
+          return;
+        }
+        // The panel may have sat open past the time it shows.
+        const current = new Date();
+        if (firstPending(input, zone, current) === null) {
+          setNow(current);
+          return;
+        }
         haptics.success();
         setReminder(note, input);
         onDone();

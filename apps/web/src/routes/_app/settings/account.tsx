@@ -25,8 +25,12 @@ export const Route = createFileRoute('/_app/settings/account')({
 });
 
 async function signOut() {
-  // While the session still stands: the server must stop sending this browser the user's reminders.
-  await disablePush().catch(() => undefined);
+  // While the session still stands: the server must stop sending this browser the user's
+  // reminders. Not for long, though: a connection that never answers must not hold up leaving.
+  await Promise.race([
+    disablePush().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();

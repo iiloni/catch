@@ -167,6 +167,41 @@ describe('ReminderPanel', () => {
     expect(removeReminder).toHaveBeenCalledWith(note.id);
   });
 
+  it('leaves a reminder saved untouched as it was', () => {
+    const repeating = {
+      ...saved,
+      startsAt: '2026-09-01T07:30',
+      recurrence: {
+        frequency: 'daily' as const,
+        interval: 1,
+        weekdays: [],
+        weekdayOfMonth: null,
+        until: null,
+        count: 60,
+      },
+    };
+    render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    expect(onDone).toHaveBeenCalled();
+    expect(setReminder).not.toHaveBeenCalled();
+  });
+
+  it('needs a last day for a repeat that ends on a date', () => {
+    render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    fireEvent.click(choice('Repeat', 'Daily'));
+    fireEvent.click(choice('Repeat', 'On a date'));
+    fireEvent.change(screen.getByLabelText('Last day'), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: 'Set reminder' })).toBeDisabled();
+  });
+
+  it('checks the time again when saving, in case the panel sat open past it', () => {
+    render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    vi.setSystemTime(new Date(2026, 9, 5, 14, 0));
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    expect(setReminder).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
+  });
+
   it('offers to ring again for a reminder that rang lately', () => {
     render(
       <ReminderPanel

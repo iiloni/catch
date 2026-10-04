@@ -1,5 +1,5 @@
 import { advanceReminder, reminderFireTime, reminderZone } from '@catch/shared';
-import { and, asc, eq, lte } from 'drizzle-orm';
+import { and, asc, eq, isNull, lte } from 'drizzle-orm';
 import { isRestoring } from '../backups/service';
 import { db } from '../db/client';
 import { notes, reminderSettings, reminders } from '../db/schema';
@@ -23,26 +23,26 @@ export async function fireDueReminders(now = new Date()) {
   const due = await db
     .select({
       reminder: reminders,
-      trashedAt: notes.deletedAt,
       text: notes.searchText,
       userTimeZone: reminderSettings.timeZone,
     })
     .from(reminders)
     .innerJoin(notes, eq(notes.id, reminders.noteId))
     .leftJoin(reminderSettings, eq(reminderSettings.userId, reminders.userId))
-    .where(lte(reminders.fireAt, now))
+    // A note in the trash keeps its reminder as it is: restored within a day of the time, it
+    // still rings; later, it moves on silently.
+    .where(and(lte(reminders.fireAt, now), isNull(notes.deletedAt)))
     .orderBy(asc(reminders.fireAt))
     .limit(BATCH);
 
-  for (const { reminder, trashedAt, text, userTimeZone } of due) {
+  for (const { reminder, text, userTimeZone } of due) {
     if (!reminder.fireAt) continue;
     const zone = reminderZone(reminder, userTimeZone);
     const next = advanceReminder(reminder, zone, now);
     let fireAt = reminderFireTime(next, zone);
     // Around a clock change a later wall clock time can be an earlier instant.
     if (fireAt && fireAt <= now) fireAt = new Date(now.getTime() + 60_000);
-    // A note in the trash keeps its reminder for when it is restored, silently.
-    const rings = !trashedAt && now.getTime() - reminder.fireAt.getTime() <= LATE_MS;
+    const rings = now.getTime() - reminder.fireAt.getTime() <= LATE_MS;
     const claimed = await db
       .update(reminders)
       .set({ ...next, fireAt, ...(rings ? { firedAt: now } : {}) })

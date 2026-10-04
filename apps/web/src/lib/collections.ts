@@ -664,6 +664,13 @@ function subscribeToReminders(listener: () => void) {
   return () => reminderListeners.delete(listener);
 }
 
+/** No reminders is only known once the reminders have synced: they trail the notes. */
+export function useRemindersReady() {
+  const [ready, setReady] = useState(() => remindersCollection.isReady());
+  useEffect(() => remindersCollection.onFirstReady(() => setReady(true)), []);
+  return ready;
+}
+
 /** The user's reminders by note id. */
 export function useReminders(): ReadonlyMap<string, Reminder> {
   return useSyncExternalStore(subscribeToReminders, () => remindersByNote);

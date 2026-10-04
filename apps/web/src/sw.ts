@@ -97,12 +97,20 @@ self.addEventListener('notificationclick', (event) => {
   const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}` : '/';
   event.waitUntil(
     (async () => {
-      const [open] = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Only the signed-in app listens for the message; a window at sign-in or setup does not.
+      const outside = (client: WindowClient) =>
+        /^\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
+      const open = windows.find((client) => !outside(client)) ?? windows[0];
       if (!open) {
         await self.clients.openWindow(path);
         return;
       }
       await open.focus();
+      if (outside(open)) {
+        await open.navigate(path).catch(() => self.clients.openWindow(path));
+        return;
+      }
       // Navigating would reload the app; it opens the note itself.
       if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId });
     })(),

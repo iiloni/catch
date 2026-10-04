@@ -58,7 +58,9 @@ afterEach(() => {
   act(() => {
     editorNote.set(null);
     editorControls.set(null);
+    noteReminderRequest.set(0);
   });
+  reminders.clear();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -184,7 +186,6 @@ describe('NoteDock', () => {
     reminders.set(note.id, {});
     renderDock();
     expect(screen.getByRole('button', { name: 'Reminder' }).className).toContain('bg-foreground');
-    reminders.clear();
   });
 
   it('only offers restoring a trashed note', () => {

@@ -55,7 +55,9 @@ export function NotificationSettings() {
       if (on) await enablePush();
       else await disablePush();
     } catch (error) {
-      toast.error('Notifications could not be turned on', { description: message(error) });
+      toast.error(`Notifications could not be turned ${on ? 'on' : 'off'}`, {
+        description: message(error),
+      });
       await refreshPushState();
     } finally {
       setBusy(false);

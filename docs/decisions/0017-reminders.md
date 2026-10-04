@@ -15,8 +15,10 @@ model, and a server that is one household's and has no vendor push account.
 devices that set a reminder for one note offline converge on one row (last write wins)
 instead of colliding. A reminder is saved whole with `PUT /api/reminders/:noteId` and removed
 with `DELETE`; both are safe to replay, and both go through `write()` and the outbox like
-every other change. Deleting a note deletes its reminder; a note in the trash keeps its
-reminder but does not ring.
+every other change. A save that changes nothing leaves the reminder's times alone, so a
+queued write sent again after the reminder rang does not ring it a second time. Deleting a
+note deletes its reminder; a note in the trash keeps its reminder untouched and does not
+ring. Restored within a day of the time it was due, it rings then.
 
 **It is its own table and synced collection, not columns on `notes`**, as a note's tags are
 (`note_tags`). The scheduler rewrites a reminder every time it rings; on the note's row that

@@ -174,13 +174,20 @@ function cachedTimes(): ReminderTimes {
 
 const reminderTimes = createStore<ReminderTimes>(cachedTimes());
 
-async function sendReminderTimes() {
-  try {
-    await api.saveReminderTimes({ times: reminderTimes.get(), timeZone: deviceTimeZone() });
-    localStorage.removeItem(unsentKey());
-  } catch {
-    // Offline: `syncReminderSettings` sends it at the next launch or return to the app.
-  }
+let sending: Promise<void> = Promise.resolve();
+
+/** One after another, so the server ends on the last change, and only it clears the flag. */
+function sendReminderTimes() {
+  sending = sending.then(async () => {
+    const times = reminderTimes.get();
+    try {
+      await api.saveReminderTimes({ times, timeZone: deviceTimeZone() });
+      if (reminderTimes.get() === times) localStorage.removeItem(unsentKey());
+    } catch {
+      // Offline: `syncReminderSettings` sends it at the next launch or return to the app.
+    }
+  });
+  return sending;
 }
 
 /** The quick times belong to the user and follow them to every device. */
@@ -224,7 +231,10 @@ export function quickReminderTimes(times: ReminderTimes) {
 /** The first quick day and time still ahead: what a new reminder starts as. */
 export function defaultReminderStart(now: Date, times: ReminderTimes) {
   const nowTime = deviceLocalTime(now).slice(11);
-  const later = quickReminderTimes(times).find((option) => option.time > nowTime);
+  // Nothing makes Morning come before Evening in a user's settings.
+  const later = quickReminderTimes(times)
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .find((option) => option.time > nowTime);
   const [today, tomorrow] = quickReminderDays(now);
   return later ? `${today?.date}T${later.time}` : `${tomorrow?.date}T${times.morning}`;
 }

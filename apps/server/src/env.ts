@@ -49,11 +49,17 @@ const envSchema = z.object({
     .transform((value) => value === 'true'),
   /**
    * Who push services may contact about this server's notifications: a `mailto:` or
-   * `https:` address. Defaults to the server's own URL.
+   * `https:` address. Defaults to the server's own URL when it is served over HTTPS.
    */
   PUSH_CONTACT: z
     .string()
-    .regex(/^(mailto:|https:\/\/)/)
+    // A push service refuses every message signed with a contact it cannot read.
+    .refine(
+      (value) =>
+        /^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ||
+        (value.startsWith('https://') && URL.canParse(value)),
+      'Use a mailto: address or an https: URL',
+    )
     .optional()
     // Compose passes an unset variable as an empty one.
     .or(z.literal('').transform(() => undefined)),

@@ -6,6 +6,7 @@ import {
   localTimeSchema,
   localToInstant,
   nextOccurrence,
+  pushSubscriptionSchema,
   type Recurrence,
   recurrenceSchema,
   reminderFireTime,
@@ -224,5 +225,25 @@ describe('reminder timing', () => {
     expect(
       advanceReminder({ ...daily, nextAt: '2026-10-06T09:00', snoozedUntil: now }, 'UTC', now),
     ).toEqual({ nextAt: '2026-10-06T09:00', snoozedUntil: null });
+  });
+});
+
+describe('what the server accepts', () => {
+  it('turns away an end date the calendar does not have', () => {
+    const until = (value: string) =>
+      recurrenceSchema.safeParse({ frequency: 'daily', interval: 1, until: value }).success;
+    expect(until('2028-02-29')).toBe(true);
+    expect(until('2026-02-31')).toBe(false);
+    expect(until('2026-13-01')).toBe(false);
+  });
+
+  it('takes only push keys a browser could have made', () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/abc';
+    const keys = { p256dh: `B${'A'.repeat(86)}`, auth: 'A'.repeat(22) };
+    const accepts = (changed: object) =>
+      pushSubscriptionSchema.safeParse({ endpoint, keys: { ...keys, ...changed } }).success;
+    expect(accepts({})).toBe(true);
+    expect(accepts({ p256dh: 'BPk' })).toBe(false);
+    expect(accepts({ auth: `${keys.auth}==` })).toBe(false);
   });
 });

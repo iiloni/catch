@@ -1,6 +1,12 @@
 import { createDecipheriv, createECDH, createPublicKey, hkdfSync, verify } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
-import { encryptPush, generateVapidKeys, isPushEndpoint, vapidAuthorization } from './webPush';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  encryptPush,
+  generateVapidKeys,
+  isPushEndpoint,
+  sendPush,
+  vapidAuthorization,
+} from './webPush';
 
 /** Decrypts as a browser would (RFC 8291), with the subscription's private key. */
 function decrypt(body: Buffer, receiver: ReturnType<typeof createECDH>, auth: Buffer) {
@@ -115,5 +121,58 @@ describe('web push', () => {
     ]) {
       expect(isPushEndpoint(endpoint)).toBe(false);
     }
+  });
+});
+
+describe('sendPush', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const receiver = createECDH('prime256v1');
+  receiver.generateKeys();
+  const target = (endpoint: string) => ({
+    endpoint,
+    p256dh: receiver.getPublicKey().toString('base64url'),
+    auth: Buffer.alloc(16, 7).toString('base64url'),
+  });
+  const send = (endpoint: string) =>
+    sendPush(target(endpoint), Buffer.from('{}'), generateVapidKeys(), 'mailto:me@example.com');
+  const answer = (status: number) => {
+    const fetch = vi.fn().mockResolvedValue(new Response(status === 201 ? null : 'no', { status }));
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  };
+
+  it('posts the encrypted message to the push service', async () => {
+    const fetch = answer(201);
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/abc';
+    expect(await send(endpoint)).toBe('sent');
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(endpoint);
+    expect(init.method).toBe('POST');
+    expect(init.redirect).toBe('manual');
+    expect(init.headers).toMatchObject({
+      Authorization: expect.stringMatching(/^vapid t=.+, k=.+/),
+      'Content-Encoding': 'aes128gcm',
+      TTL: '86400',
+      Urgency: 'high',
+    });
+  });
+
+  it('never posts to an address that is not a push service', async () => {
+    const fetch = answer(201);
+    expect(await send('https://169.254.169.254/latest')).toBe('gone');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reports a subscription the push service has dropped', async () => {
+    for (const status of [404, 410]) {
+      answer(status);
+      expect(await send('https://updates.push.services.mozilla.com/wpush/v2/abc')).toBe('gone');
+    }
+  });
+
+  it('throws when the push service refuses the message', async () => {
+    answer(403);
+    await expect(send('https://web.push.apple.com/abc')).rejects.toThrow('403');
   });
 });

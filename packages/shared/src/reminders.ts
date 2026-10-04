@@ -9,6 +9,13 @@ import { isTimeZone } from './backups';
 
 const LOCAL_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
+function isCalendarDate(value: string) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return false;
+  const [year, month, day] = parts.slice(1).map(Number) as [number, number, number];
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth(year, month);
+}
+
 /** A wall clock date and time to the minute, in no particular zone. */
 export const localTimeSchema = z.string().refine((value) => {
   const parts = LOCAL_TIME.exec(value);
@@ -57,7 +64,7 @@ export const recurrenceSchema = z.object({
   /** The last date (`YYYY-MM-DD`) it may come due on. */
   until: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine(isCalendarDate, 'Use a date on the calendar, as YYYY-MM-DD')
     .nullable()
     .default(null),
   /** How many times it comes due, counted from the start. */
@@ -342,12 +349,16 @@ export function advanceReminder(
   };
 }
 
-/** A push subscription as `PushSubscription.toJSON()` gives it. */
+/**
+ * A push subscription as `PushSubscription.toJSON()` gives it: its keys are unpadded
+ * base64url, an uncompressed P-256 point (65 bytes) and a 16 byte secret. Anything else
+ * could never be encrypted to.
+ */
 export const pushSubscriptionSchema = z.object({
   endpoint: z.url().max(2048),
   keys: z.object({
-    p256dh: z.string().min(1).max(256),
-    auth: z.string().min(1).max(256),
+    p256dh: z.string().regex(/^B[A-Za-z0-9_-]{86}$/),
+    auth: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
   }),
 });
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;

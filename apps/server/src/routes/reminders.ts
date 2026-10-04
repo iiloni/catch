@@ -1,6 +1,7 @@
 import {
   DEFAULT_REMINDER_TIMES,
   firstPending,
+  type Recurrence,
   type ReminderSettings,
   reminderFireTime,
   reminderZone,
@@ -24,6 +25,19 @@ async function currentTxid(tx: Tx): Promise<number> {
     sql`SELECT pg_current_xact_id()::xid::text AS txid`,
   );
   return Number(row?.txid);
+}
+
+function sameRecurrence(a: Recurrence | null, b: Recurrence | null) {
+  if (!a || !b) return a === b;
+  return (
+    a.frequency === b.frequency &&
+    a.interval === b.interval &&
+    a.weekdays.join() === b.weekdays.join() &&
+    a.weekdayOfMonth?.ordinal === b.weekdayOfMonth?.ordinal &&
+    a.weekdayOfMonth?.weekday === b.weekdayOfMonth?.weekday &&
+    a.until === b.until &&
+    a.count === b.count
+  );
 }
 
 const noteParam = zValidator('param', z.object({ noteId: z.uuid() }));
@@ -92,10 +106,27 @@ export const reminderRoutes = new Hono<AppEnv>()
         .from(notes)
         .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
       if (!note) return null;
+      // Locked, so a zone change rescheduling the user's reminders is not overwritten by a
+      // save that read the old zone.
       const [settings] = await tx
         .select({ timeZone: reminderSettings.timeZone })
         .from(reminderSettings)
-        .where(eq(reminderSettings.userId, userId));
+        .where(eq(reminderSettings.userId, userId))
+        .for('update');
+      const [existing] = await tx.select().from(reminders).where(eq(reminders.noteId, noteId));
+      // A queued write sent again after the server took it must not work its times out
+      // afresh: by then the reminder may have rung, and it would ring a second time.
+      if (
+        existing &&
+        existing.kind === body.kind &&
+        existing.startsAt === body.startsAt &&
+        existing.timeZone === body.timeZone &&
+        existing.floating === body.floating &&
+        sameRecurrence(existing.recurrence, body.recurrence) &&
+        (existing.snoozedUntil?.getTime() ?? null) === (body.snoozedUntil?.getTime() ?? null)
+      ) {
+        return undefined;
+      }
       const zone = reminderZone(body, settings?.timeZone);
       const timing = {
         nextAt: firstPending(body, zone, now),
@@ -110,7 +141,7 @@ export const reminderRoutes = new Hono<AppEnv>()
       return currentTxid(tx);
     });
     if (txid === null) return c.json({ error: 'Note not found' }, 404);
-    return c.json({ txid });
+    return c.json({ txid: txid ?? null });
   })
   .delete('/:noteId', noteParam, async (c) => {
     const userId = c.get('user')!.id;

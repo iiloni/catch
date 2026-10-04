@@ -79,7 +79,8 @@ export async function notifyUser(userId: string, message: PushMessage, endpoint?
       try {
         const result = await sendPush(target, payload, keys, contact());
         if (result === 'gone') {
-          await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, target.endpoint));
+          // Only this user's: the browser may have been signed in to by someone else since.
+          await removeSubscription(target.userId, target.endpoint);
         }
         return result === 'sent';
       } catch (error) {

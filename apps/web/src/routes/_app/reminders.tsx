@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
-import { notesCollection, useReminders } from '@/lib/collections';
+import { notesCollection, useReminders, useRemindersReady } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { isReminderPast, reminderTime } from '@/lib/reminders';
@@ -24,7 +24,8 @@ function RemindersPage() {
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
   const reminded = notes.filter((note) => reminders.has(note.id));
-  const awaitingSync = useAwaitingSync(isLoading, reminded.length);
+  const remindersReady = useRemindersReady();
+  const awaitingSync = useAwaitingSync(isLoading || !remindersReady, reminded.length);
 
   const upcoming: { note: Note; at: number }[] = [];
   const past: { note: Note; at: number }[] = [];

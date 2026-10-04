@@ -1,3 +1,5 @@
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
@@ -53,7 +55,16 @@ function AppLayout() {
     };
     report();
     document.addEventListener('visibilitychange', report);
-    return () => document.removeEventListener('visibilitychange', report);
+    // Android does not always tell the page it is visible again when the app resumes.
+    const resumed = Capacitor.isNativePlatform()
+      ? App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) void syncReminderSettings(user.id);
+        })
+      : null;
+    return () => {
+      document.removeEventListener('visibilitychange', report);
+      void resumed?.then((listener) => listener.remove());
+    };
   }, []);
   const { note } = Route.useSearch();
   const pane = useNotePaneLayout();

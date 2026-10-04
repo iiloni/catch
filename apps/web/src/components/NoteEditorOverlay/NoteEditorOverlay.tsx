@@ -480,7 +480,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             <div className="flex justify-center px-4 pt-6">
               <ReminderChip
                 reminder={reminder}
-                onClick={() => noteReminderRequest.set(noteReminderRequest.get() + 1)}
+                onClick={() => {
+                  haptics.toggle();
+                  noteReminderRequest.set(noteReminderRequest.get() + 1);
+                }}
               />
             </div>
           )}

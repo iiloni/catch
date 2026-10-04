@@ -99,7 +99,8 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             aria-label="Reminder"
-            className="w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+            // Beside an open note the page is only as wide as the pane leaves it.
+            className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
           >
             <ReminderPanel

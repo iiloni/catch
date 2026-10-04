@@ -25,7 +25,9 @@ export function ReminderChip({ reminder, onClick, className }: Props) {
   const content = (
     <>
       <Icon className="size-3 shrink-0" aria-hidden />
-      <span className={cn('truncate', past && 'line-through')}>{describeReminder(reminder)}</span>
+      <span className={cn('min-w-0 truncate', past && 'line-through')}>
+        {describeReminder(reminder)}
+      </span>
     </>
   );
   if (!onClick) {

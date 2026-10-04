@@ -28,8 +28,13 @@ describe('formatReminderTime', () => {
   });
 
   it('uses the weekday within a week and the date beyond it', () => {
-    expect(formatReminderTime(at(8, 9), now)).toMatch(/^Thu, /);
-    expect(formatReminderTime(at(20, 9), now)).toMatch(/^Oct 20, /);
+    // In whatever language the machine running the tests speaks.
+    const weekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(at(8, 9));
+    const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+      at(20, 9),
+    );
+    expect(formatReminderTime(at(8, 9), now)).toBe(`${weekday}, ${time(at(8, 9))}`);
+    expect(formatReminderTime(at(20, 9), now)).toBe(`${day}, ${time(at(20, 9))}`);
     expect(formatReminderTime(new Date(2027, 2, 1, 9), now)).toMatch(/2027/);
   });
 });

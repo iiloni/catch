@@ -26,8 +26,12 @@ vi.mock('@/lib/reminders', async () => {
 
 beforeEach(() => {
   push.state = 'off';
-  push.enablePush.mockReset().mockResolvedValue(undefined);
-  push.disablePush.mockReset().mockResolvedValue(undefined);
+  push.enablePush.mockReset().mockImplementation(async () => {
+    push.state = 'on';
+  });
+  push.disablePush.mockReset().mockImplementation(async () => {
+    push.state = 'off';
+  });
   push.sendTestPush.mockReset().mockResolvedValue(undefined);
 });
 
@@ -38,7 +42,9 @@ describe('NotificationSettings', () => {
     expect(toggle).not.toBeChecked();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     fireEvent.click(toggle);
-    await waitFor(() => expect(push.enablePush).toHaveBeenCalled());
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(push.enablePush).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   });
 
   it('turns them off and offers a test while they are on', async () => {

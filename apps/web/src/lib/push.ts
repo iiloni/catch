@@ -42,7 +42,8 @@ const supported = () => 'PushManager' in window && 'Notification' in window;
 
 async function detect(): Promise<PushState> {
   if (Capacitor.isNativePlatform()) return 'native';
-  if (!supported()) return isIos() && !isInstalled() ? 'needs-install' : 'unsupported';
+  if (isIos() && !isInstalled()) return 'needs-install';
+  if (!supported()) return 'unsupported';
   const worker = await registration();
   if (!worker) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
@@ -84,28 +85,48 @@ async function subscribe(worker: ServiceWorkerRegistration) {
   return subscription;
 }
 
-/** Asks for permission and subscribes. Call from a tap: browsers only ask then. */
-export async function enablePush() {
-  const worker = await registration();
-  if (!worker || !supported()) throw new Error('This browser cannot receive notifications.');
-  if ((await Notification.requestPermission()) !== 'granted') {
-    state.set(Notification.permission === 'denied' ? 'blocked' : 'off');
-    return;
-  }
-  await subscribe(worker);
-  localStorage.setItem(enabledKey(), 'true');
-  state.set('on');
+/**
+ * One at a time: a launch's `syncPush` still giving the server the subscription must not
+ * land after the `disablePush` that takes it away.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function inTurn<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task);
+  queue = run.catch(() => {});
+  return run;
 }
 
-export async function disablePush() {
+/** Asks for permission and subscribes. Call from a tap: browsers only ask then. */
+export async function enablePush() {
+  if (!supported()) throw new Error('This browser cannot receive notifications.');
+  // Asked before anything is awaited: Safari only shows the prompt while the tap is live.
+  const asked = Notification.requestPermission();
+  return inTurn(async () => {
+    const permission = await asked;
+    const worker = await registration();
+    if (!worker) throw new Error('This browser cannot receive notifications.');
+    if (permission !== 'granted') {
+      state.set(Notification.permission === 'denied' ? 'blocked' : 'off');
+      return;
+    }
+    await subscribe(worker);
+    localStorage.setItem(enabledKey(), 'true');
+    state.set('on');
+  });
+}
+
+export function disablePush() {
   localStorage.removeItem(enabledKey());
-  const subscription = await (await registration())?.pushManager.getSubscription();
-  if (subscription) {
-    // The server forgets it first, while the endpoint still names it.
-    await api.deletePushSubscription(subscription.endpoint).catch(() => {});
-    await subscription.unsubscribe().catch(() => {});
-  }
-  await refreshPushState();
+  return inTurn(async () => {
+    const subscription = await (await registration())?.pushManager.getSubscription();
+    if (subscription) {
+      // The server forgets it first, while the endpoint still names it. Offline it cannot,
+      // and learns from the push service instead: an unsubscribed endpoint answers "gone".
+      await api.deletePushSubscription(subscription.endpoint).catch(() => {});
+      await subscription.unsubscribe().catch(() => {});
+    }
+    await refreshPushState();
+  });
 }
 
 /**
@@ -113,21 +134,23 @@ export async function disablePush() {
  * Browsers replace subscriptions (iOS drops them now and then), and a restored server
  * backup may not hold this one.
  */
-export async function syncPush() {
-  try {
-    const worker = await registration();
-    if (
-      worker &&
-      supported() &&
-      Notification.permission === 'granted' &&
-      localStorage.getItem(enabledKey()) === 'true'
-    ) {
-      await subscribe(worker);
+export function syncPush() {
+  return inTurn(async () => {
+    try {
+      const worker = await registration();
+      if (
+        worker &&
+        supported() &&
+        Notification.permission === 'granted' &&
+        localStorage.getItem(enabledKey()) === 'true'
+      ) {
+        await subscribe(worker);
+      }
+    } catch {
+      // Offline; the next launch tries again.
     }
-  } catch {
-    // Offline; the next launch tries again.
-  }
-  await refreshPushState();
+    await refreshPushState();
+  });
 }
 
 export async function sendTestPush() {

@@ -152,6 +152,8 @@ export async function sendPush(
     },
     body: new Uint8Array(encryptPush(payload, target)),
   });
+  // Unread, a body holds its connection open.
+  await response.body?.cancel().catch(() => {});
   if (response.status === 404 || response.status === 410) return 'gone';
   if (!response.ok) throw new Error(`Push service answered ${response.status}`);
   return 'sent';
