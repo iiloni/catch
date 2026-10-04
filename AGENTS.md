@@ -101,10 +101,10 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   Continue through the authorized merge and verify the PR is actually merged, then update
   local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
   not complete the task.
-- After merging, watch the `main` CI run for your merge commit and report its result. If
-  it fails, follow "When `main` fails" in `docs/ci.md`: rerun the failed jobs once, and
-  take the failure only if your commit is the first one it appears on and no open issue
-  already claims it. Do not fix a `main` failure from inside an unrelated PR.
+- Your task ends with your PR merged. Do not watch `main` CI afterwards or take on a
+  failure there: a red `main` only blocks releasing that commit, and the user starts an
+  agent for it when needed. Do not fix a failure that comes from `main` inside an
+  unrelated PR; report it instead.
 - Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
   feature, improvement or fix and what it enables or changes. Include motivation or a
   before/after example when useful; a linked issue is optional.

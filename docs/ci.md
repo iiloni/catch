@@ -74,8 +74,7 @@ using `gh pr create`). After reviewing functionality and design, apply
 `merge on pass` yourself or tell the agent the feature is approved for merging after tests
 pass. The agent then monitors checks for the latest commit, investigates and fixes
 failures, pushes updates and continues until it verifies the authorized PR is merged.
-Opening a PR or enabling auto-merge alone does not finish the task. After the merge the
-agent watches the `main` run for its commit (see [When `main` fails](#when-main-fails)).
+Opening a PR or enabling auto-merge alone does not finish the task.
 
 Agents add existing descriptive labels while opening a draft, using a small set that
 matches the change:
@@ -177,40 +176,10 @@ still break `main` together. The full suite on every `main` push catches that af
 merge, and a release only reuses a verified full pass for its exact commit, so a broken
 combination is not released.
 
-## When `main` fails
-
-Each `main` push has a CI run of its own. The agent that merged a PR watches the run for
-its merge commit:
-
-```bash
-sha=$(gh pr view <number> --json mergeCommit --jq .mergeCommit.oid)
-gh run list --workflow ci.yml --branch main --commit "$sha"
-gh run watch <run-id> --exit-status
-```
-
-If it fails:
-
-1. Rerun the failed jobs once (`gh run rerun <run-id> --failed`). A pass on the rerun is
-   a flaky test, not a broken `main`: report the test and the run, and stop there.
-2. Find where the failure starts. Look at the `main` run of the parent commit
-   (`git rev-parse "$sha^"`), waiting for it if it is still running. If the same test or
-   check fails there, the failure was inherited: it belongs to the earliest commit it
-   appears on, not to yours. Report it and leave it to that commit's agent.
-3. If your commit is the first with the failure, claim it before changing anything. Look
-   for an open issue whose title starts with `main CI failing`
-   (`gh issue list --state open --search '"main CI failing" in:title'`). If one covers
-   this failure, add your run link as a comment and stop. Otherwise open one with the
-   `bug` label, naming the commit, the run and the failing tests, then list the issues
-   again: if two agents opened one at once, the lower number keeps the claim and the
-   other is closed as a duplicate.
-4. Fix it with an ordinary PR that closes the issue. Prefer reverting the merged commit
-   unless the fix is small and obvious: a revert stays correct whatever merges after it,
-   while a fix written against one `main` can be undone by the next merge. Either way the
-   PR's own CI tests it against `main` as it is by then. It needs `merge on pass` like any
-   other PR.
-
-An agent whose PR fails on a test that also fails on `main` does not fix it in that PR.
-It adds its run to the open issue, waits for the fix to merge, then updates its branch.
+A red `main` only blocks releasing that commit. Agents finish with their own PR merged
+and do not watch `main` afterwards; when `main` needs to be green again, the maintainer
+starts an agent for that. An agent whose PR fails on something that also fails on `main`
+reports it rather than fixing it in that PR.
 
 The workflow also handles `merge_group: checks_requested`: every merge group runs full
 validation without needing a PR label. If the repository later adopts a merge queue,
