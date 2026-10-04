@@ -64,6 +64,36 @@ function stepValues(
   return values;
 }
 
+// GitHub drops a job output that contains a secret's value, and the documented key alias
+// is "catch", so these names must be built in the jobs that use them.
+test('Release names the image and APK without passing them between jobs', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.doesNotMatch(workflow, /needs\.version\.outputs\.(image|apk)/);
+  assert.match(workflow, /RELEASE_APK: catch-\$\{\{ needs\.version\.outputs\.version \}\}\.apk\n/);
+  assert.match(
+    workflow,
+    /tags: \$\{\{ env\.IMAGE \}\}:\$\{\{ needs\.version\.outputs\.version \}\}\n/,
+  );
+  assert.equal(workflow.split('- name: Name image\n').length - 1, 2);
+
+  const directory = mkdtempSync(join(tmpdir(), 'catch-release-'));
+  try {
+    const GITHUB_ENV = join(directory, 'env');
+    writeFileSync(GITHUB_ENV, '');
+    const result = spawnSync('bash', ['-e', '-c', stepBody('release.yml', 'Name image', 'run')], {
+      env: { PATH: process.env.PATH, GITHUB_ENV, GITHUB_REPOSITORY: 'Iiloni/Catch' },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(GITHUB_ENV, 'utf8'), 'IMAGE=ghcr.io/iiloni/catch\n');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('Release rejects branch refs even when their name looks like a release tag', () => {
   const script = stepBody('release.yml', 'Require a release tag', 'run');
   for (const REF_TYPE of ['branch', '', 'tag']) {
