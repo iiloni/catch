@@ -1,6 +1,7 @@
 import { isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Trash2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useState } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
@@ -20,6 +21,7 @@ import { useNoteSelection } from '@/lib/noteSelection';
 import { deleteNotesForever } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
+import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/trash')({
@@ -36,6 +38,7 @@ function TrashPage() {
   const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
+  const gutterShift = usePageGutterShift(PAGE_MAX);
 
   function emptyTrash() {
     haptics.warning();
@@ -61,7 +64,11 @@ function TrashPage() {
         }
         selection={selectionHeader(selection, 'trash')}
       />
-      <section aria-label="Trash" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
+      <motion.section
+        aria-label="Trash"
+        style={{ x: gutterShift }}
+        className="mx-auto max-w-7xl px-3 pt-3 sm:px-6"
+      >
         {awaitingSync ? null : notes.length > 0 ? (
           <NoteGrid
             notes={sorted}
@@ -74,7 +81,7 @@ function TrashPage() {
             Notes you move to the trash can be restored until you empty it.
           </EmptyState>
         )}
-      </section>
+      </motion.section>
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>
           <DialogTitle>Empty trash?</DialogTitle>

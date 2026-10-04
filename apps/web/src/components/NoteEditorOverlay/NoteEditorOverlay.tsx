@@ -31,7 +31,14 @@ import { editorControls, noteDockPanelOpen, noteReminderRequest, quickNote } fro
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { useNoteLinks } from '@/lib/linkPreviews';
-import { afterPaint, animateSteady, curves, springs } from '@/lib/motion';
+import {
+  afterPaint,
+  animateSteady,
+  animateSteadySpring,
+  curves,
+  springs,
+  stopSteady,
+} from '@/lib/motion';
 import {
   deleteNoteForever,
   discardIfEmpty,
@@ -159,6 +166,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const [, rerender] = useState(0);
   // The back button, Escape and an outside click can all fire for one close.
   const closing = useRef(false);
+  /** Calls off the pane's slide in while it is still waiting to start. */
+  const cancelSlide = useRef(() => {});
   const requestClose = () => {
     if (closing.current) return;
     closing.current = true;
@@ -302,13 +311,21 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (split) {
       for (const leave of leavingPanes) leave();
       progress.set(1);
-      const replacing = paneReveal.get() === 1;
-      if (replacing) swap.set(0);
-      const animation = replacing
-        ? animate(swap, 1, { duration: SWAP_MS / 1000, ease: 'easeOut' })
-        : animate(paneReveal, 1, springs.pane);
-      void animation.then(() => setSettled(true));
-      return;
+      if (paneReveal.get() === 1) {
+        swap.set(0);
+        void animate(swap, 1, { duration: SWAP_MS / 1000, ease: 'easeOut' }).then(() =>
+          setSettled(true),
+        );
+        return;
+      }
+      // Mounting the note and narrowing the page beside it is one long frame. A spring keeps
+      // time, so that frame came out of the slide, which then appeared most of the way in.
+      // The pane waits for it to be painted and then follows the spring it leaves on by
+      // frames, as below.
+      cancelSlide.current = afterPaint(() => {
+        void animateSteadySpring(paneReveal, 1, springs.pane).then(() => setSettled(true));
+      });
+      return () => cancelSlide.current();
     }
     if (origin) hideCard(note.id);
     // Mounting the note (and turning the dock into its toolbar) keeps the page busy for a
@@ -326,7 +343,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   useEffect(() => {
     if (!settled || !split || !isPresent) return;
     showCard(note.id);
-    if (leadSurface === self && paneReveal.get() < 1) animate(paneReveal, 1, springs.pane);
+    if (leadSurface === self && paneReveal.get() < 1) {
+      stopSteady(paneReveal);
+      animate(paneReveal, 1, springs.pane);
+    }
   }, [settled, split, isPresent, note.id, self, target.x, target.width, target.height]);
 
   // Close (from any cause, including the back gesture): save, drop an empty note, then
@@ -352,6 +372,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         return () => window.clearTimeout(timer);
       }
       leavingPanes.add(finish);
+      // Closed before it finished sliding in, or before it began.
+      cancelSlide.current();
+      stopSteady(paneReveal);
       void animate(paneReveal, 0, springs.pane).then(finish);
       return;
     }

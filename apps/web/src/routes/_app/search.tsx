@@ -26,6 +26,7 @@ import { springs } from '@/lib/motion';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
+import { READING_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,7 @@ function SearchPage() {
   const [color, setColor] = useState<NoteColor | null>(null);
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
+  const gutterShift = usePageGutterShift(READING_MAX);
   const { data: notes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
@@ -143,7 +145,7 @@ function SearchPage() {
         )}
       </AnimatePresence>
       <TabPageHeader title="Search" />
-      <div className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+      <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
         <ActiveSearchFilters
           tags={tags}
           filter={filter}
@@ -235,7 +237,7 @@ function SearchPage() {
             </SearchView>
           </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
