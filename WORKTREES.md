@@ -43,6 +43,9 @@ Regular user: user@example.com  / userpassword
 
 `basic` seeds only the admin, `none` seeds nothing. Seeding is idempotent and never
 overwrites existing accounts or notes. Rerun it with `./scripts/dev.sh seed [demo|basic]`.
+The `demo` profile gives the admin sample notes, link previews and a nested tag tree with
+primary and secondary assignments. Tag examples are added only when the admin has no tags,
+including on older dev databases; existing notes and tag trees are left alone.
 
 ## Create a worktree
 

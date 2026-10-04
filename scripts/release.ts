@@ -19,8 +19,8 @@ export function parseReleaseTag(input: unknown) {
 
 export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumber: unknown) {
   const { version, channel } = parseReleaseTag(tag);
-  const repository = z
-    .string()
+  // The workflow names the image from the repository, so a malformed one stops here.
+  z.string()
     .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
     .refine((value) => value === value.trim())
     .parse(repositoryInput);
@@ -39,8 +39,6 @@ export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumbe
     flavor: channel,
     gradle_task: channel === 'preview' ? 'assemblePreviewRelease' : 'assembleStableRelease',
     version_code: versionCode,
-    image: `ghcr.io/${repository.toLowerCase()}`,
-    apk: `catch-${version}.apk`,
   };
 }
 
@@ -54,10 +52,9 @@ export function compareReleaseTags(left: string, right: string) {
   return a.channel === 'stable' ? 1 : -1;
 }
 
-export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput: unknown) {
-  const channel = z.enum(['stable', 'preview']).parse(channelInput);
-  const bump = z.enum(['major', 'minor', 'patch']).parse(bumpInput);
-  const tags = z
+/** The supported release tags in `input`, lowest version first. */
+export function releaseTags(input: unknown) {
+  return z
     .array(z.string())
     .parse(input)
     .filter((tag) => {
@@ -67,8 +64,14 @@ export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput:
       } catch {
         return false;
       }
-    });
-  const base = tags.sort(compareReleaseTags).at(-1) ?? 'v0.0.0';
+    })
+    .sort(compareReleaseTags);
+}
+
+export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput: unknown) {
+  const channel = z.enum(['stable', 'preview']).parse(channelInput);
+  const bump = z.enum(['major', 'minor', 'patch']).parse(bumpInput);
+  const base = releaseTags(input).at(-1) ?? 'v0.0.0';
   const parts = parseReleaseTag(base).parts;
   const index = { major: 0, minor: 1, patch: 2 }[bump];
   parts[index] += 1n;
