@@ -93,7 +93,7 @@ export function TimeZonePicker({ value, onChange, at, className }: Props) {
                 onClick={() => choose(zone)}
                 className={cn(
                   'flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
-                  selected ? 'bg-primary text-primary-foreground' : 'hover:bg-foreground/[0.06]',
+                  selected ? 'glass-chosen' : 'hover:bg-foreground/[0.06]',
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{name}</span>

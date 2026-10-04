@@ -107,7 +107,7 @@ export function DatePicker({ value, min, today, onChange, className }: Props) {
               className={cn(
                 'mx-auto flex size-10 items-center justify-center rounded-full text-sm tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-30',
                 selected
-                  ? 'bg-primary font-medium text-primary-foreground'
+                  ? 'glass-chosen font-medium'
                   : 'hover:bg-foreground/[0.08] aria-[current=date]:bg-foreground/[0.08] aria-[current=date]:font-medium',
               )}
             >

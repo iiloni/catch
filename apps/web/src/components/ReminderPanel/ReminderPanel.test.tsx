@@ -146,6 +146,21 @@ describe('ReminderPanel', () => {
     );
   });
 
+  it('saves from the page a time is picked on, without going back', () => {
+    render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    fireEvent.click(choice('Time', /^Custom/));
+    if (cell('[data-period]')) fireEvent.click(cell('[data-period="PM"]'));
+    fireEvent.click(cell('[data-hour="21"]'));
+    fireEvent.click(cell('[data-minute="45"]'));
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(setReminder).toHaveBeenCalledWith(
+      note,
+      expect.objectContaining({ startsAt: expect.stringMatching(/T21:45$/) }),
+    );
+    expect(onDone).toHaveBeenCalled();
+  });
+
   it('keeps the repeat settings folded away until a repeat is chosen', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     expect(screen.queryByRole('button', { name: 'Weekly' })).toBeNull();
@@ -353,6 +368,11 @@ describe('ReminderPanel', () => {
     localStorage.setItem('catch-snooze', '60');
     fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
     expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
+
+    // Snooze is for the reminder as it stands, so the pages that change it leave it out.
+    openRepeat();
+    expect(screen.queryByRole('button', { name: 'Snooze' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     localStorage.removeItem('catch-snooze');
   });
 });
