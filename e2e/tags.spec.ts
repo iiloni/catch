@@ -264,11 +264,18 @@ test('settings tag tree supports search, branch expansion and direct editing', a
   await settings.getByRole('button', { name: 'Expand Work' }).click();
   await settings.getByRole('button', { name: 'Edit Projects', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
+  await settledBox(dialog);
+  await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Projects');
   await dialog.getByLabel('Name', { exact: true }).fill('Personal projects');
   await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Manage Personal projects' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Manage Personal projects', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Edit Personal projects', exact: true }).click();
+  await settledBox(dialog);
+  await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('tag forms follow the overlay keyboard on every animation frame', async ({
@@ -298,6 +305,10 @@ test('tag forms follow the overlay keyboard on every animation frame', async ({
     }
     const dialog = page.getByRole('dialog');
     await settledBox(dialog);
+    if (form === 'edit') {
+      await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
+      await dialog.getByLabel('Name', { exact: true }).click();
+    }
     await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
     const frames = await dialog.evaluate(async (dialog) => {
       const { keyboardHeight } = await import('/src/lib/keyboard.ts');
