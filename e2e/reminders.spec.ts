@@ -13,7 +13,27 @@ import {
 
 const panel = (page: Page) => page.getByRole('form', { name: 'Reminder' });
 const step = (page: Page, name: string) => panel(page).getByRole('group', { name, exact: true });
-/** The repeat settings stay folded into a summary row until it is tapped. */
+/** The repeat settings are a page of their own, behind the row saying what they are set to. */
+/** Leaves a page under the reminder, and waits for it to slide away. */
+async function done(page: Page) {
+  await panel(page).getByRole('button', { name: 'Done' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Back' })).toBeHidden();
+}
+
+/** Chooses a time on the time page, which follows the browser's twelve hour clock. */
+async function pickTime(page: Page, hour: number, minute: number) {
+  await step(page, 'Time')
+    .getByRole('button', { name: /^Custom/ })
+    .click();
+  await panel(page)
+    .locator(`[data-period="${hour >= 12 ? 'PM' : 'AM'}"]`)
+    .click();
+  await panel(page).locator(`[data-hour="${hour}"]`).click();
+  await panel(page).locator(`[data-minute="${minute}"]`).click();
+  await done(page);
+}
+const pad = (value: number) => String(value).padStart(2, '0');
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const openRepeat = (page: Page) =>
   panel(page)
     .getByRole('button', { name: /^Repeat: / })
@@ -28,24 +48,41 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
   await bell.click();
   // The reminder grows out of the dock, like the palette and the tags.
   await expect(page.locator('[data-note-toolbar]').locator(panel(page))).toBeVisible();
-  await step(page, 'Day').getByRole('button', { name: 'Pick a date' }).click();
-  await panel(page).getByLabel('Date', { exact: true }).fill('2031-03-04');
-  await step(page, 'Time').getByRole('button', { name: 'Custom' }).click();
-  await panel(page).getByLabel('Time', { exact: true }).fill('09:30');
-  await openRepeat(page);
-  await step(page, 'Repeat').getByRole('button', { name: 'Weekly' }).click();
-  // 2031-03-04 is a Tuesday, which a weekly reminder starts on.
-  await expect(panel(page).getByRole('button', { name: 'Tuesday' })).toHaveAttribute(
+  // The 15th of next month, from the calendar that Custom slides in.
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + 1, 15);
+  const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-15`;
+  await step(page, 'Day').getByRole('button', { name: 'Custom' }).click();
+  await panel(page).getByRole('button', { name: 'Next month' }).click();
+  await panel(page).locator(`[data-date="${date}"]`).click();
+  await expect(step(page, 'Day').getByRole('button', { name: /^Custom/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await panel(page).getByRole('button', { name: 'Thursday' }).click();
+  await pickTime(page, 9, 30);
+  await openRepeat(page);
+  await step(page, 'Repeat').getByRole('button', { name: 'Weekly' }).click();
+  // A weekly reminder starts on its date's weekday.
+  const weekday = start.getDay();
+  const other = (weekday + 2) % 7;
+  await expect(panel(page).getByRole('button', { name: WEEKDAYS[weekday] })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await panel(page).getByRole('button', { name: WEEKDAYS[other] }).click();
+  await done(page);
   await panel(page).getByRole('button', { name: 'Set reminder' }).click();
   await expect(panel(page)).toBeHidden();
 
   // Setting a reminder leaves the note open, with the reminder under its text.
-  const chip = editor.getByRole('button', { name: /^Reminder: .*weekly on tue, thu$/i });
-  await expect(chip).toContainText('2031');
+  const on = [weekday, other]
+    .sort((a, b) => a - b)
+    .map((day) => WEEKDAYS[day]?.slice(0, 3))
+    .join(', ');
+  const chip = editor.getByRole('button', {
+    name: new RegExp(`^Reminder: .*weekly on ${on}$`, 'i'),
+  });
+  await expect(chip).toContainText('9:30');
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
   await expect(
@@ -65,14 +102,13 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
     .getByRole('dialog')
     .getByRole('button', { name: /^Reminder: / })
     .click();
-  await expect(
-    panel(page).getByRole('button', { name: /^Repeat: Weekly on Tue, Thu/ }),
-  ).toBeVisible();
+  await expect(panel(page).getByRole('button', { name: `Repeat: Weekly on ${on}` })).toBeVisible();
   await openRepeat(page);
   await expect(
     step(page, 'Repeat').getByRole('button', { name: 'Weekly', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
-  await expect(panel(page).getByLabel('Time', { exact: true })).toHaveValue('09:30');
+  await done(page);
+  await expect(step(page, 'Time').getByRole('button', { name: /^Custom/ })).toContainText('9:30');
   await panel(page).getByRole('button', { name: 'Remove reminder' }).click();
   await expect(page.getByText('Reminder removed')).toBeVisible();
   // While the panel folds away it is still the layer Escape closes.
@@ -106,14 +142,15 @@ test('a reminder for a time that has passed cannot be saved', async ({ page, isM
   await seedNotes(page, ['Water the plants']);
   await openNote(page, 'Water the plants');
   await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
-  await step(page, 'Day').getByRole('button', { name: 'Pick a date' }).click();
-  await panel(page).getByLabel('Date', { exact: true }).fill('2020-01-01');
+  // Midnight today is behind us.
+  await pickTime(page, 0, 0);
   await expect(panel(page).getByRole('status')).toContainText('That time has passed');
   const save = panel(page).getByRole('button', { name: 'Set reminder' });
   await expect(save).toBeDisabled();
   // A repeating reminder may start in the past: it rings at its next time.
   await openRepeat(page);
   await step(page, 'Repeat').getByRole('button', { name: 'Daily' }).click();
+  await done(page);
   await expect(save).toBeEnabled();
 });
 

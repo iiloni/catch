@@ -1,7 +1,8 @@
 import type { Reminder } from '@catch/shared';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { removeReminder, setReminder, snoozeReminder } from '@/lib/reminders';
+import { formatTimeOfDay, removeReminder, setReminder, snoozeReminder } from '@/lib/reminders';
 import { ReminderPanel } from './ReminderPanel';
 
 vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
@@ -31,11 +32,35 @@ const saved: Reminder = {
   firedAt: null,
 };
 
+// Pages swap at once, so a test never acts on the one sliding away.
+vi.mock('motion/react', async (original) => ({
+  ...(await original<typeof import('motion/react')>()),
+  AnimatePresence: ({ children }: { children: ReactNode }) => children,
+}));
+
 const onDone = vi.fn();
 const step = (name: string) => screen.getByRole('group', { name });
 const choice = (group: string, name: string | RegExp) =>
   within(step(group)).getByRole('button', { name });
 const openRepeat = () => fireEvent.click(screen.getByRole('button', { name: /^Repeat: / }));
+const back = () => fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+const cell = (selector: string) => document.querySelector(selector) as HTMLElement;
+/** Chooses a day on the date page, turning to its month first. */
+function pickDate(date: string) {
+  while (!cell(`[data-date="${date}"]`)) {
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+  }
+  fireEvent.click(cell(`[data-date="${date}"]`));
+}
+/** Chooses a time on the time page, on whichever clock the machine running the tests uses. */
+function pickTime(time: string) {
+  fireEvent.click(choice('Time', /^Custom/));
+  const [hour = 0, minute = 0] = time.split(':').map(Number);
+  if (cell('[data-period]')) fireEvent.click(cell(`[data-period="${hour >= 12 ? 'PM' : 'AM'}"]`));
+  fireEvent.click(cell(`[data-hour="${hour}"]`));
+  fireEvent.click(cell(`[data-minute="${minute}"]`));
+  back();
+}
 const pressed = (group: string) =>
   within(step(group))
     .getAllByRole('button', { pressed: true })
@@ -90,13 +115,14 @@ describe('ReminderPanel', () => {
     );
   });
 
-  it('shows fields for a day and a time that are not among the choices', () => {
+  it('picks a day and a time that are not among the choices on pages of their own', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
-    expect(screen.queryByLabelText('Date')).toBeNull();
-    fireEvent.click(choice('Day', 'Pick a date'));
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-11-20' } });
-    fireEvent.click(choice('Time', 'Custom'));
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '21:15' } });
+    fireEvent.click(choice('Day', 'Custom'));
+    // Choosing the day is also going back.
+    pickDate('2026-11-20');
+    expect(pressed('Day')[0]).toContain('Custom');
+    pickTime('21:15');
+    expect(pressed('Time')[0]).toContain(formatTimeOfDay('21:15'));
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
@@ -113,6 +139,7 @@ describe('ReminderPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thursday' }));
     fireEvent.click(choice('Repeat', 'After'));
     fireEvent.click(screen.getByRole('button', { name: 'Ends after: fewer' }));
+    back();
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
@@ -136,6 +163,7 @@ describe('ReminderPanel', () => {
     fireEvent.click(choice('Repeat', 'Monthly'));
     expect(choice('Repeat', 'Day 6')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(choice('Repeat', 'First Tuesday'));
+    back();
     fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
@@ -150,20 +178,20 @@ describe('ReminderPanel', () => {
 
   it('will not save a time that has passed', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
-    fireEvent.click(choice('Time', 'Custom'));
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '09:00' } });
+    pickTime('09:00');
     expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
     expect(screen.getByRole('button', { name: 'Set reminder' })).toBeDisabled();
     // A repeating reminder may start in the past: it rings at its next time.
     openRepeat();
     fireEvent.click(choice('Repeat', 'Daily'));
+    back();
     expect(screen.getByRole('button', { name: 'Set reminder' })).toBeEnabled();
   });
 
   it('opens a saved reminder as it was set, and can pin it to its zone or remove it', () => {
     render(<ReminderPanel note={note} reminder={saved} onDone={onDone} />);
-    expect(screen.getByLabelText('Date')).toHaveValue('2026-10-08');
-    expect(screen.getByLabelText('Time')).toHaveValue('07:30');
+    expect(pressed('Day')[0]).toContain('Custom');
+    expect(pressed('Time')[0]).toContain(formatTimeOfDay('07:30'));
     fireEvent.click(choice('Time zone', /^Custom/));
     fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
     expect(setReminder).toHaveBeenCalledWith(note, expect.objectContaining({ floating: false }));
@@ -208,7 +236,8 @@ describe('ReminderPanel', () => {
     openRepeat();
     // Five of the sixty have gone by.
     expect(screen.getByRole('status', { name: 'Ends after' })).toHaveTextContent('55 times');
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:45' } });
+    back();
+    pickTime('08:45');
     fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
     expect(setReminder).toHaveBeenCalledWith(
       note,
@@ -219,13 +248,23 @@ describe('ReminderPanel', () => {
     );
   });
 
-  it('needs a last day for a repeat that ends on a date', () => {
+  it('ends a repeat on a day chosen on a page of its own', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     openRepeat();
     fireEvent.click(choice('Repeat', 'Daily'));
     fireEvent.click(choice('Repeat', 'On a date'));
-    fireEvent.change(screen.getByLabelText('Last day'), { target: { value: '' } });
-    expect(screen.getByRole('button', { name: 'Set reminder' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /^Last day: / }));
+    // Days before the reminder starts cannot end it.
+    expect(cell('[data-date="2026-10-04"]')).toBeDisabled();
+    pickDate('2026-10-28');
+    back();
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    expect(setReminder).toHaveBeenCalledWith(
+      note,
+      expect.objectContaining({
+        recurrence: expect.objectContaining({ frequency: 'daily', until: '2026-10-28' }),
+      }),
+    );
   });
 
   it('checks the time again when saving, in case the panel sat open past it', () => {
@@ -246,7 +285,7 @@ describe('ReminderPanel', () => {
     };
     render(<ReminderPanel note={note} reminder={rang} onDone={onDone} />);
     expect(pressed('Day')).toEqual(['Today']);
-    expect(screen.getByLabelText('Time')).toHaveValue('10:20');
+    expect(pressed('Time')[0]).toContain(formatTimeOfDay('10:20'));
     expect(screen.getByRole('status')).toHaveTextContent(/^Snoozed until Today, /);
     // Saved as it is, the snooze stands.
     fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
@@ -268,7 +307,7 @@ describe('ReminderPanel', () => {
       snoozedUntil: new Date(2026, 9, 5, 10, 20),
     };
     render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
-    expect(screen.getByLabelText('Time')).toHaveValue('07:30');
+    expect(pressed('Time')[0]).toContain(formatTimeOfDay('07:30'));
     expect(screen.getAllByRole('status')[0]).toHaveTextContent(/^Snoozed until Today, .* · Daily$/);
     // Changing it sets the reminder afresh, and the summary says when that rings.
     fireEvent.click(choice('Time', /Evening/));

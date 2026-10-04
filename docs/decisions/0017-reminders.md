@@ -71,11 +71,14 @@ saving a subscription and again on sending.
 
 **It is set in the note's dock.** The bell in the open note's dock grows a panel out of it,
 like the palette and the tags, rather than a sheet over the note. The panel keeps the common choices one tap
-away and the rest folded: a row of days (today, tomorrow, pick a date) and a row of times
-under plain labels, then the repeat as a single row saying what it is set to, which opens
-its settings (interval, weekdays, end) when tapped, then whether the time follows the user
-or stays in a chosen zone. Numbers are stepped, not typed, so the keyboard does not cover
-the dock, and the panel may grow to the top of the screen before it scrolls. A pending
+away: a row of days (today, tomorrow, custom) and a row of times under plain labels, the
+repeat as a single row saying what it is set to, and whether the time follows the user or
+stays in a chosen zone. Anything with more to it is a page of its own that slides in over
+the panel and back: a calendar for a custom day, a clock face for a custom time, and the
+repeat's settings (interval, weekdays, end). The calendar and the clock are ours
+(`DatePicker`, `TimePicker`) rather than the system's, so they look and move like the rest
+of the app and need no keyboard; numbers are stepped, not typed. The panel may grow to the
+top of the screen before it scrolls. A pending
 reminder opens on its next time rather than its first, and a counted repeat on the times it
 has left, so editing one carries on the count instead of starting it again. To make room
 for the bell, pinning moved to the note's header beside archive and trash. On a card the

@@ -8,12 +8,15 @@ import {
   reminderFireTime,
   reminderZone,
 } from '@catch/shared';
-import { Bell, ChevronDown, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
+import { Bell, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
+import { DatePicker } from '@/components/DatePicker/DatePicker';
+import { TimePicker } from '@/components/TimePicker/TimePicker';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 import {
   defaultReminderStart,
   describeRecurrence,
@@ -273,6 +276,30 @@ function timeZones(current: string) {
   return zones.includes(current) ? zones : [current, ...zones];
 }
 
+const pageClass =
+  'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.75rem)] flex-col gap-2';
+
+type Page = 'main' | 'date' | 'time' | 'repeat' | 'until';
+const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, repeat: 1, until: 2 };
+
+/** A deeper page comes in from the right and the one before it returns from the left. */
+const pages = {
+  enter: (direction: number) => ({ x: direction * 32, opacity: 0 }),
+  shown: { x: 0, opacity: 1 },
+  exit: (direction: number) => ({ x: direction * -32, opacity: 0 }),
+};
+
+const rowClass =
+  'flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70';
+
+const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' });
+const mediumDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
+const shortDate = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
 const REPEATS: { value: RepeatChoice; label: string }[] = [
   { value: 'none', label: 'Never' },
   { value: 'daily', label: 'Daily' },
@@ -305,14 +332,18 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const [now, setNow] = useState(() => new Date());
   const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
   const [form, setForm] = useState(opened);
-  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [page, setPage] = useState<Page>('main');
+  // Which way the pages slide: on to a deeper page, or back from it.
+  const [direction, setDirection] = useState(1);
+  const go = (next: Page) => {
+    haptics.toggle();
+    setDirection(DEPTH[next] > DEPTH[page] ? 1 : -1);
+    setPage(next);
+  };
   const days = quickReminderDays(now);
   const presets = quickReminderTimes(times);
-  // Until the user asks for a field, a day or time that matches a choice shows as that choice.
-  const [pickingDate, setPickingDate] = useState(() => !days.some((day) => day.date === form.date));
-  const [pickingTime, setPickingTime] = useState(
-    () => !presets.some((preset) => preset.time === form.time),
-  );
+  const customDate = !days.some((day) => day.date === form.date);
+  const customTime = !presets.some((preset) => preset.time === form.time);
   const update = (changes: Partial<Form>) => setForm((current) => ({ ...current, ...changes }));
 
   const input = toInput(form);
@@ -352,13 +383,51 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           }${input.recurrence ? ` · ${describeRecurrence(input.recurrence)}` : ''}`
         : 'Nothing left to ring for';
 
+  const untilDate = calendarDate(form.until);
+  const untilLabel = untilDate ? mediumDate.format(untilDate) : 'Choose a day';
+  const motionProps = {
+    custom: direction,
+    variants: pages,
+    initial: 'enter',
+    animate: 'shown',
+    exit: 'exit',
+    transition: springs.smooth,
+  };
+  // A page under the reminder: where it came from, what it sets and what that is set to.
+  const pageHeader = (title: string, value: string, from: Page) => (
+    <>
+      <legend className="sr-only">{title}</legend>
+      <div className="flex min-h-10 shrink-0 items-center gap-1 pr-2">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() => go(from)}
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70"
+        >
+          <ChevronLeft className="size-5" aria-hidden />
+        </button>
+        <p className="text-muted-foreground text-sm">{title}</p>
+        <p role="status" className="ml-auto min-w-0 truncate font-medium text-sm">
+          {value}
+        </p>
+      </div>
+    </>
+  );
+  const doneButton = (from: Page) => (
+    <Button
+      type="button"
+      variant="secondary"
+      className="h-11 shrink-0 rounded-xl"
+      onClick={() => go(from)}
+    >
+      Done
+    </Button>
+  );
+
   return (
     <form
       aria-label="Reminder"
-      className={cn(
-        'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1rem)] flex-col gap-2 px-2 pt-2 pb-1',
-        className,
-      )}
+      className={cn('px-2 pt-2 pb-1')}
       onSubmit={(event) => {
         event.preventDefault();
         if (!input || passed || !rings) return;
@@ -379,297 +448,320 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
         onDone();
       }}
     >
-      {/* What is being set stays in view above the steps, and the button to set it below. */}
-      <div className="flex min-h-10 shrink-0 items-center gap-2 pr-1 pl-2">
-        <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <p
-          role="status"
-          className={cn(
-            'min-w-0 flex-1 truncate font-medium text-sm',
-            passed && 'text-destructive',
-          )}
-        >
-          {summary}
-        </p>
-        {reminder && (
-          <button
-            type="button"
-            aria-label="Remove reminder"
-            onClick={() => {
-              haptics.warning();
-              removeReminder(note.id);
-              onDone();
-            }}
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl text-destructive outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70"
-          >
-            <Trash2 className="size-4" aria-hidden />
-          </button>
-        )}
-      </div>
-
-      <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto rounded-xl [scrollbar-width:none] [&>*]:shrink-0">
-        {rang && reminder && (
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-11 shrink-0 rounded-xl"
-            onClick={() => {
-              haptics.success();
-              snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
-              onDone();
-            }}
-          >
-            Remind me again in an hour
-          </Button>
-        )}
-
-        <Step title="Day">
-          <div className="grid grid-cols-3 gap-1.5">
-            {days.map((day) => (
-              <Choice
-                key={day.label}
-                label={day.label}
-                selected={!pickingDate && form.date === day.date}
-                onSelect={() => {
-                  setPickingDate(false);
-                  update({ date: day.date });
-                }}
-              />
-            ))}
-            <Choice
-              label="Pick a date"
-              selected={pickingDate}
-              onSelect={() => setPickingDate(true)}
-            />
-          </div>
-          <AnimatedHeight anchor="top">
-            {pickingDate && (
-              <Input
-                type="date"
-                aria-label="Date"
-                required
-                value={form.date}
-                onChange={(event) => update({ date: event.target.value })}
-                className={cn(inputClass, 'mt-1.5')}
-              />
-            )}
-          </AnimatedHeight>
-        </Step>
-
-        <Step title="Time">
-          <div className="grid grid-cols-4 gap-1.5">
-            {presets.map((preset) => (
-              <Choice
-                key={preset.label}
-                label={preset.label}
-                detail={formatTimeOfDay(preset.time)}
-                selected={!pickingTime && form.time === preset.time}
-                disabled={form.repeat === 'none' && form.date === today && preset.time <= nowTime}
-                onSelect={() => {
-                  setPickingTime(false);
-                  update({ time: preset.time });
-                }}
-              />
-            ))}
-            <Choice label="Custom" selected={pickingTime} onSelect={() => setPickingTime(true)} />
-          </div>
-          <AnimatedHeight anchor="top">
-            {pickingTime && (
-              <Input
-                type="time"
-                aria-label="Time"
-                required
-                value={form.time}
-                onChange={(event) => update({ time: event.target.value })}
-                className={cn(inputClass, 'mt-1.5')}
-              />
-            )}
-          </AnimatedHeight>
-        </Step>
-
-        {/* The busiest step stays folded into what it is set to until it is asked for. */}
-        <fieldset className="min-w-0">
-          <legend className="sr-only">Repeat</legend>
-          <button
-            type="button"
-            aria-expanded={repeatOpen}
-            aria-label={`Repeat: ${repeatSummary}`}
-            onClick={() => {
-              haptics.toggle();
-              setRepeatOpen(!repeatOpen);
-            }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70"
-          >
-            <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="text-muted-foreground">Repeat</span>
-            <span className="ml-auto min-w-0 truncate font-medium">{repeatSummary}</span>
-            <ChevronDown
-              className={cn(
-                'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                repeatOpen && 'rotate-180',
-              )}
-              aria-hidden
-            />
-          </button>
-          <AnimatedHeight anchor="top">
-            {repeatOpen && (
-              <div className="pt-1.5">
-                <div className="grid grid-cols-5 gap-1.5">
-                  {REPEATS.map((option) => (
-                    <Choice
-                      key={option.value}
-                      label={option.label}
-                      selected={form.repeat === option.value}
-                      onSelect={() => update({ repeat: option.value })}
-                    />
-                  ))}
+      <AnimatedHeight>
+        <div className="relative">
+          <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+            {page === 'main' ? (
+              <motion.div key="main" {...motionProps} className={cn(pageClass, className)}>
+                {/* What is being set stays in view above the steps, and the button to set it below. */}
+                <div className="flex min-h-10 shrink-0 items-center gap-2 pr-1 pl-2">
+                  <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <p
+                    role="status"
+                    className={cn(
+                      'min-w-0 flex-1 truncate font-medium text-sm',
+                      passed && 'text-destructive',
+                    )}
+                  >
+                    {summary}
+                  </p>
+                  {reminder && (
+                    <button
+                      type="button"
+                      aria-label="Remove reminder"
+                      onClick={() => {
+                        haptics.warning();
+                        removeReminder(note.id);
+                        onDone();
+                      }}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-xl text-destructive outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70"
+                    >
+                      <Trash2 className="size-4" aria-hidden />
+                    </button>
+                  )}
                 </div>
-                <AnimatedHeight anchor="top">
-                  {form.repeat !== 'none' && (
-                    <div className="mt-2 flex flex-col gap-2 pl-1">
-                      <Detail label="Every">
-                        <Stepper
-                          label="Repeat every"
-                          value={form.interval}
-                          min={1}
-                          max={99}
-                          unit={form.interval === 1 ? UNITS[form.repeat] : `${UNITS[form.repeat]}s`}
-                          onChange={(interval) => update({ interval })}
+
+                <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto rounded-xl [scrollbar-width:none] [&>*]:shrink-0">
+                  {rang && reminder && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-11 shrink-0 rounded-xl"
+                      onClick={() => {
+                        haptics.success();
+                        snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
+                        onDone();
+                      }}
+                    >
+                      Remind me again in an hour
+                    </Button>
+                  )}
+
+                  <Step title="Day">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {days.map((day) => (
+                        <Choice
+                          key={day.label}
+                          label={day.label}
+                          selected={form.date === day.date}
+                          onSelect={() => update({ date: day.date })}
                         />
-                      </Detail>
-                      {form.repeat === 'weekly' && (
-                        <Detail label="On">
-                          <div className="grid grid-cols-7 gap-1">
-                            {WEEKDAYS.map((name, index) => {
-                              // With none chosen it repeats on the start date's weekday.
-                              const current = form.weekdays.length > 0 ? form.weekdays : [weekday];
-                              const chosen = current.includes(index);
-                              return (
-                                <button
-                                  key={name}
-                                  type="button"
-                                  aria-label={name}
-                                  aria-pressed={chosen}
-                                  onClick={() => {
-                                    haptics.selection();
-                                    update({
-                                      weekdays: chosen
-                                        ? current.filter((item) => item !== index)
-                                        : [...current, index],
-                                    });
-                                  }}
-                                  className={cn(
-                                    'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-                                    chosen
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'bg-foreground/[0.06] text-muted-foreground',
-                                  )}
-                                >
-                                  {name.slice(0, 2)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </Detail>
+                      ))}
+                      <Choice
+                        label="Custom"
+                        detail={customDate && date ? shortDate.format(date) : undefined}
+                        selected={customDate}
+                        onSelect={() => go('date')}
+                      />
+                    </div>
+                  </Step>
+
+                  <Step title="Time">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {presets.map((preset) => (
+                        <Choice
+                          key={preset.label}
+                          label={preset.label}
+                          detail={formatTimeOfDay(preset.time)}
+                          selected={form.time === preset.time}
+                          disabled={
+                            form.repeat === 'none' && form.date === today && preset.time <= nowTime
+                          }
+                          onSelect={() => update({ time: preset.time })}
+                        />
+                      ))}
+                      <Choice
+                        label="Custom"
+                        detail={customTime ? formatTimeOfDay(form.time) : undefined}
+                        selected={customTime}
+                        onSelect={() => go('time')}
+                      />
+                    </div>
+                  </Step>
+
+                  {/* The busiest step has a page of its own, and here only says what it is set to. */}
+                  <button
+                    type="button"
+                    aria-label={`Repeat: ${repeatSummary}`}
+                    onClick={() => go('repeat')}
+                    className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70"
+                  >
+                    <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="text-muted-foreground">Repeat</span>
+                    <span className="ml-auto min-w-0 truncate font-medium">{repeatSummary}</span>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  </button>
+
+                  <Step title="Time zone">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Choice
+                        label="Follow"
+                        selected={!form.fixed}
+                        onSelect={() => update({ fixed: false, timeZone: deviceTimeZone() })}
+                      />
+                      <Choice
+                        label="Custom"
+                        selected={form.fixed}
+                        onSelect={() => update({ fixed: true })}
+                      />
+                    </div>
+                    <p className="px-1 pt-1.5 text-muted-foreground text-xs">
+                      {form.fixed
+                        ? 'Rings when it is this time in the zone below.'
+                        : 'Rings at this time on your clock, wherever you are.'}
+                    </p>
+                    <AnimatedHeight anchor="top">
+                      {form.fixed && (
+                        <select
+                          aria-label="Time zone"
+                          value={form.timeZone}
+                          onChange={(event) => update({ timeZone: event.target.value })}
+                          className={cn(
+                            inputClass,
+                            'mt-1.5 w-full min-w-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                          )}
+                        >
+                          {timeZones(form.timeZone).map((zone) => (
+                            <option key={zone} value={zone}>
+                              {zone.replaceAll('_', ' ')}
+                            </option>
+                          ))}
+                        </select>
                       )}
-                      {form.repeat === 'monthly' && date && (
-                        <Detail label="On">
-                          <div className="grid auto-cols-fr grid-flow-col gap-1.5">
-                            {monthlyOptions(date).map((option) => (
+                    </AnimatedHeight>
+                  </Step>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!input || passed || !rings}
+                  className="h-11 shrink-0 rounded-xl"
+                >
+                  {reminder ? 'Save reminder' : 'Set reminder'}
+                </Button>
+              </motion.div>
+            ) : page === 'date' ? (
+              <motion.fieldset key="date" {...motionProps} className={cn(pageClass, className)}>
+                {pageHeader('Day', date ? fullDate.format(date) : '', 'main')}
+                <DatePicker
+                  value={form.date}
+                  min={today}
+                  today={today ?? form.date}
+                  // One choice to make, so making it is also going back.
+                  onChange={(value) => {
+                    update({ date: value });
+                    go('main');
+                  }}
+                  className="pb-1"
+                />
+              </motion.fieldset>
+            ) : page === 'time' ? (
+              <motion.fieldset key="time" {...motionProps} className={cn(pageClass, className)}>
+                {pageHeader('Time', formatTimeOfDay(form.time), 'main')}
+                <TimePicker value={form.time} onChange={(time) => update({ time })} />
+                {doneButton('main')}
+              </motion.fieldset>
+            ) : page === 'until' ? (
+              <motion.fieldset key="until" {...motionProps} className={cn(pageClass, className)}>
+                {pageHeader('Last day', untilLabel, 'repeat')}
+                <DatePicker
+                  value={form.until}
+                  min={form.date}
+                  today={today ?? form.date}
+                  onChange={(until) => {
+                    update({ until });
+                    go('repeat');
+                  }}
+                  className="pb-1"
+                />
+              </motion.fieldset>
+            ) : (
+              <motion.fieldset key="repeat" {...motionProps} className={cn(pageClass, className)}>
+                {pageHeader('Repeat', repeatSummary, 'main')}
+                <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto rounded-xl [scrollbar-width:none]">
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {REPEATS.map((option) => (
+                      <Choice
+                        key={option.value}
+                        label={option.label}
+                        selected={form.repeat === option.value}
+                        onSelect={() => update({ repeat: option.value })}
+                      />
+                    ))}
+                  </div>
+                  <AnimatedHeight anchor="top">
+                    {form.repeat !== 'none' && (
+                      <div className="mt-2 flex flex-col gap-2 pl-1">
+                        <Detail label="Every">
+                          <Stepper
+                            label="Repeat every"
+                            value={form.interval}
+                            min={1}
+                            max={99}
+                            unit={
+                              form.interval === 1 ? UNITS[form.repeat] : `${UNITS[form.repeat]}s`
+                            }
+                            onChange={(interval) => update({ interval })}
+                          />
+                        </Detail>
+                        {form.repeat === 'weekly' && (
+                          <Detail label="On">
+                            <div className="grid grid-cols-7 gap-1">
+                              {WEEKDAYS.map((name, index) => {
+                                // With none chosen it repeats on the start date's weekday.
+                                const current =
+                                  form.weekdays.length > 0 ? form.weekdays : [weekday];
+                                const chosen = current.includes(index);
+                                return (
+                                  <button
+                                    key={name}
+                                    type="button"
+                                    aria-label={name}
+                                    aria-pressed={chosen}
+                                    onClick={() => {
+                                      haptics.selection();
+                                      update({
+                                        weekdays: chosen
+                                          ? current.filter((item) => item !== index)
+                                          : [...current, index],
+                                      });
+                                    }}
+                                    className={cn(
+                                      'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                                      chosen
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-foreground/[0.06] text-muted-foreground',
+                                    )}
+                                  >
+                                    {name.slice(0, 2)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </Detail>
+                        )}
+                        {form.repeat === 'monthly' && date && (
+                          <Detail label="On">
+                            <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+                              {monthlyOptions(date).map((option) => (
+                                <Choice
+                                  key={option.value}
+                                  label={option.label}
+                                  selected={monthlyChoice(form, date) === option.value}
+                                  onSelect={() => update({ monthlyOn: option.value })}
+                                />
+                              ))}
+                            </div>
+                          </Detail>
+                        )}
+                        <Detail label="Ends">
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {ENDS.map((option) => (
                               <Choice
                                 key={option.value}
                                 label={option.label}
-                                selected={monthlyChoice(form, date) === option.value}
-                                onSelect={() => update({ monthlyOn: option.value })}
+                                selected={form.ends === option.value}
+                                onSelect={() => update({ ends: option.value })}
                               />
                             ))}
                           </div>
-                        </Detail>
-                      )}
-                      <Detail label="Ends">
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {ENDS.map((option) => (
-                            <Choice
-                              key={option.value}
-                              label={option.label}
-                              selected={form.ends === option.value}
-                              onSelect={() => update({ ends: option.value })}
+                          {form.ends === 'until' && (
+                            <button
+                              type="button"
+                              aria-label={`Last day: ${untilLabel}`}
+                              onClick={() => go('until')}
+                              className={rowClass}
+                            >
+                              <span className="min-w-0 flex-1 truncate text-left font-medium">
+                                {untilLabel}
+                              </span>
+                              <ChevronRight
+                                className="size-4 shrink-0 text-muted-foreground"
+                                aria-hidden
+                              />
+                            </button>
+                          )}
+                          {form.ends === 'count' && (
+                            <Stepper
+                              label="Ends after"
+                              value={form.count}
+                              min={1}
+                              max={999}
+                              unit={form.count === 1 ? 'time' : 'times'}
+                              onChange={(count) => update({ count })}
                             />
-                          ))}
-                        </div>
-                        {form.ends === 'until' && (
-                          <Input
-                            type="date"
-                            aria-label="Last day"
-                            min={form.date}
-                            value={form.until}
-                            onChange={(event) => update({ until: event.target.value })}
-                            className={inputClass}
-                          />
-                        )}
-                        {form.ends === 'count' && (
-                          <Stepper
-                            label="Ends after"
-                            value={form.count}
-                            min={1}
-                            max={999}
-                            unit={form.count === 1 ? 'time' : 'times'}
-                            onChange={(count) => update({ count })}
-                          />
-                        )}
-                      </Detail>
-                    </div>
-                  )}
-                </AnimatedHeight>
-              </div>
+                          )}
+                        </Detail>
+                      </div>
+                    )}
+                  </AnimatedHeight>
+                </div>
+                {doneButton('main')}
+              </motion.fieldset>
             )}
-          </AnimatedHeight>
-        </fieldset>
-
-        <Step title="Time zone">
-          <div className="grid grid-cols-2 gap-1.5">
-            <Choice
-              label="Follow"
-              detail="My clock, wherever I am"
-              selected={!form.fixed}
-              onSelect={() => update({ fixed: false, timeZone: deviceTimeZone() })}
-            />
-            <Choice
-              label="Custom"
-              detail={form.fixed ? form.timeZone.replaceAll('_', ' ') : 'This time in one zone'}
-              selected={form.fixed}
-              onSelect={() => update({ fixed: true })}
-            />
-          </div>
-          <AnimatedHeight anchor="top">
-            {form.fixed && (
-              <select
-                aria-label="Time zone"
-                value={form.timeZone}
-                onChange={(event) => update({ timeZone: event.target.value })}
-                className={cn(
-                  inputClass,
-                  'mt-1.5 w-full min-w-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                )}
-              >
-                {timeZones(form.timeZone).map((zone) => (
-                  <option key={zone} value={zone}>
-                    {zone.replaceAll('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            )}
-          </AnimatedHeight>
-        </Step>
-      </div>
-
-      <Button
-        type="submit"
-        disabled={!input || passed || !rings}
-        className="h-11 shrink-0 rounded-xl"
-      >
-        {reminder ? 'Save reminder' : 'Set reminder'}
-      </Button>
+          </AnimatePresence>
+        </div>
+      </AnimatedHeight>
     </form>
   );
 }
