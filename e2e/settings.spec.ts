@@ -1,5 +1,112 @@
-import { expect, type Page, test } from '@playwright/test';
+import { type CDPSession, expect, type Page, test } from '@playwright/test';
 import { createNote, openNote, signUp, waitForPageTransition } from './helpers';
+
+async function pullSettings(touch: CDPSession, delta: number) {
+  let timestamp = Date.now() / 1000;
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: 16, y: 240 }],
+    timestamp,
+  });
+  const distances = [4, 10, 20, 40, 60, 90, 120, 150].filter(
+    (distance) => distance <= Math.abs(delta),
+  );
+  for (const distance of distances) {
+    timestamp += 0.016;
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: 16, y: 240 + Math.sign(delta) * distance }],
+      timestamp,
+    });
+  }
+  // Rest on the page so release is not a fling and the next tap still works.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  timestamp += 0.2;
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: 16, y: 240 + delta }],
+    timestamp,
+  });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+    timestamp: timestamp + 0.016,
+  });
+}
+
+test('mobile settings leave with a pull at either scroll edge', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Settings swipes are available on the narrow layout.');
+  await page.setViewportSize({ width: 393, height: 500 });
+  await signUp(page);
+  const galleryUrl = page.url();
+  const touch = await page.context().newCDPSession(page);
+
+  for (const direction of [1, -1]) {
+    await page.getByRole('button', { name: 'Settings', exact: true }).tap();
+    await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible();
+    await waitForPageTransition(page);
+    const overflow = await page.evaluate((toward) => {
+      const scroll = document.documentElement;
+      window.scrollTo(0, toward > 0 ? 0 : scroll.scrollHeight);
+      return scroll.scrollHeight - scroll.clientHeight;
+    }, direction);
+    expect(overflow).toBeGreaterThan(200);
+
+    await pullSettings(touch, direction * 150);
+    await expect(page).toHaveURL(galleryUrl);
+    await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+    await waitForPageTransition(page);
+  }
+
+  // A directly opened short page has no Settings history entry to return through.
+  await page.goto('/settings/account');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await pullSettings(touch, -150);
+  await expect(page).toHaveURL(galleryUrl);
+});
+
+test('mobile settings scroll normally and keep short pulls open', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Settings swipes are available on the narrow layout.');
+  await page.setViewportSize({ width: 393, height: 500 });
+  await signUp(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).tap();
+  await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  const settingsUrl = page.url();
+  const touch = await page.context().newCDPSession(page);
+
+  await pullSettings(touch, 40);
+  await expect(page).toHaveURL(settingsUrl);
+  await expect(page.locator('[data-settings-swipe] > div').last()).toHaveCSS('transform', 'none');
+
+  // An upward gesture at the top must scroll into the page instead of leaving it.
+  await pullSettings(touch, -150);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(50);
+  await expect(page).toHaveURL(settingsUrl);
+
+  const middle = await page.evaluate(() => {
+    const scroll = document.documentElement;
+    const top = (scroll.scrollHeight - scroll.clientHeight) / 2;
+    window.scrollTo(0, top);
+    return window.scrollY;
+  });
+  await pullSettings(touch, 150);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(middle - 50);
+  await expect(page).toHaveURL(settingsUrl);
+
+  // At the bottom, a downward gesture scrolls back into the page.
+  const bottom = await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return window.scrollY;
+  });
+  await pullSettings(touch, 150);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(bottom - 50);
+  await expect(page).toHaveURL(settingsUrl);
+  await page.getByRole('button', { name: 'Back', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+});
 
 test('settings pages load promptly while all six collections keep syncing over HTTP', async ({
   page,

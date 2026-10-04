@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 
-/** Finger travel past this distance closes the editor on release. */
+/** Finger travel past this distance dismisses the surface on release. */
 const DISMISS_DISTANCE = 110;
 /** The surface stays within this distance of its resting position. */
 export const MAX_DRAG = 180;
@@ -13,10 +13,13 @@ export function useSwipeToDismiss({
   dragY,
   onDismiss,
   enabled,
+  scrollElement,
 }: {
   dragY: MotionValue<number>;
   onDismiss: () => void;
   enabled: boolean;
+  /** When touches are on page content but the document owns its scroll. */
+  scrollElement?: Element;
 }) {
   // Radix mounts the dialog portal after this hook's first effect has run.
   const [element, setElement] = useState<HTMLDivElement | null>(null);
@@ -54,8 +57,9 @@ export function useSwipeToDismiss({
       const delta = touch.clientY - startY;
       if (!dragging) {
         if (Math.abs(delta) < 8) return;
-        const atTop = element.scrollTop <= 1;
-        const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1;
+        const scroll = scrollElement ?? element;
+        const atTop = scroll.scrollTop <= 1;
+        const atBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 1;
         if ((delta > 0 && !atTop) || (delta < 0 && !atBottom)) {
           startY = null;
           return;
@@ -107,7 +111,7 @@ export function useSwipeToDismiss({
       element.removeEventListener('touchend', onEnd);
       element.removeEventListener('touchcancel', onEnd);
     };
-  }, [dragY, element, enabled]);
+  }, [dragY, element, enabled, scrollElement]);
 
   return setElement;
 }

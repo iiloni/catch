@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, useMotionValue, useReducedMotion } from 'motion/react';
 import type { ReactNode } from 'react';
+import { useSwipeToDismiss } from '@/components/NoteEditorOverlay/useSwipeToDismiss';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { haptics } from '@/lib/haptics';
@@ -25,12 +26,27 @@ type Props = {
  * screen under its own title, and the dock turns into its page picker and back button.
  */
 export function SettingsLayout({ current, wide, isAdmin = false, onBack, children }: Props) {
+  const dragY = useMotionValue(0);
+  const reducedMotion = useReducedMotion();
+  const swipeRef = useSwipeToDismiss({
+    dragY,
+    onDismiss: onBack,
+    enabled: !wide,
+    scrollElement: document.scrollingElement ?? document.documentElement,
+  });
+
   if (!wide) {
     return (
-      <>
+      <div ref={swipeRef} className="min-h-[calc(100dvh-var(--dock-space))]" data-settings-swipe>
         <PageHeader title={current?.label ?? 'Settings'} />
-        <div className="mx-auto max-w-2xl px-3 pt-4 sm:px-6">{children}</div>
-      </>
+        {/* Keep the fixed header outside the moving content. */}
+        <motion.div
+          className="mx-auto max-w-2xl px-3 pt-4 sm:px-6"
+          style={{ y: reducedMotion ? 0 : dragY }}
+        >
+          {children}
+        </motion.div>
+      </div>
     );
   }
 
