@@ -52,8 +52,11 @@ describe('NotificationSettings', () => {
     render(<NotificationSettings />);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(push.sendTestPush).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('switch', { name: 'Reminder notifications' }));
-    await waitFor(() => expect(push.disablePush).toHaveBeenCalled());
+    const toggle = screen.getByRole('switch', { name: 'Reminder notifications' });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(push.disablePush).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
   });
 
   it.each([

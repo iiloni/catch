@@ -130,6 +130,15 @@ export function disablePush() {
 }
 
 /**
+ * For a sign-out that could not wait for `disablePush`: the browser drops its subscription
+ * without the server's say, so the push service refuses whatever the server still sends.
+ */
+export async function dropPushSubscription() {
+  const subscription = await (await registration())?.pushManager.getSubscription();
+  await subscription?.unsubscribe().catch(() => {});
+}
+
+/**
  * Run at launch: a device with notifications on gives the server its subscription again.
  * Browsers replace subscriptions (iOS drops them now and then), and a restored server
  * backup may not hold this one.

@@ -113,7 +113,10 @@ export const reminderRoutes = new Hono<AppEnv>()
         .from(reminderSettings)
         .where(eq(reminderSettings.userId, userId))
         .for('update');
-      const [existing] = await tx.select().from(reminders).where(eq(reminders.noteId, noteId));
+      const [existing] = await tx
+        .select()
+        .from(reminders)
+        .where(and(eq(reminders.noteId, noteId), eq(reminders.userId, userId)));
       // A queued write sent again after the server took it must not work its times out
       // afresh: by then the reminder may have rung, and it would ring a second time.
       if (
@@ -137,7 +140,11 @@ export const reminderRoutes = new Hono<AppEnv>()
       await tx
         .insert(reminders)
         .values({ ...values, noteId, userId })
-        .onConflictDoUpdate({ target: reminders.noteId, set: values });
+        .onConflictDoUpdate({
+          target: reminders.noteId,
+          set: values,
+          setWhere: eq(reminders.userId, userId),
+        });
       return currentTxid(tx);
     });
     if (txid === null) return c.json({ error: 'Note not found' }, 404);
