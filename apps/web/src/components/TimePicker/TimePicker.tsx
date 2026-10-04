@@ -96,7 +96,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
         setMode(of);
       }}
       className={cn(
-        'flex h-12 min-w-14 items-center justify-center rounded-xl px-2 font-medium text-3xl tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+        'flex h-12 min-w-14 items-center justify-center rounded-xl px-2 font-medium text-3xl tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
         mode === of ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.06]',
       )}
     >
@@ -126,7 +126,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                     if (!selected) set((hour + 12) % 24, minute);
                   }}
                   className={cn(
-                    'h-full min-w-11 rounded-lg px-2 font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                    'h-full min-w-11 rounded-lg px-2 font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
                     selected ? 'bg-primary text-primary-foreground' : 'text-foreground/80',
                   )}
                 >
@@ -189,7 +189,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                   }}
                   style={{ left: `${option.x}%`, top: `${option.y}%` }}
                   className={cn(
-                    'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+                    'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
                     option.hour === hour
                       ? 'font-medium text-primary-foreground'
                       : 'text-foreground/80',
@@ -210,7 +210,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                   onClick={() => set(hour, option.minute)}
                   style={{ left: `${option.x}%`, top: `${option.y}%` }}
                   className={cn(
-                    'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+                    'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
                     option.minute === minute
                       ? 'font-medium text-primary-foreground'
                       : 'text-foreground/80',

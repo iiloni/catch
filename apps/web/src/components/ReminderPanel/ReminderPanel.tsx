@@ -194,7 +194,7 @@ function Choice({
         onSelect();
       }}
       className={cn(
-        'flex min-h-11 min-w-0 flex-col items-center justify-center rounded-xl px-1 py-1 text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-40',
+        'flex min-h-11 min-w-0 flex-col items-center justify-center rounded-xl px-1 py-1 text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-40',
         selected
           ? 'bg-primary text-primary-foreground'
           : 'bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/[0.1]',
@@ -227,7 +227,7 @@ function Stepper({
   onChange: (value: number) => void;
 }) {
   const button =
-    'flex size-9 items-center justify-center rounded-lg outline-none hover:bg-foreground/[0.08] focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-40';
+    'flex size-9 items-center justify-center rounded-lg outline-none hover:bg-foreground/[0.08] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-40';
   return (
     <div className="flex h-11 items-center gap-1 rounded-xl bg-foreground/[0.06] px-1">
       <button
@@ -284,7 +284,7 @@ const pages = {
 };
 
 const rowClass =
-  'flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70';
+  'flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset';
 
 const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeZone: 'UTC' });
 const mediumDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
@@ -406,7 +406,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           type="button"
           aria-label="Back"
           onClick={() => go(from)}
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70"
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
         >
           <ChevronLeft className="size-5" aria-hidden />
         </button>
@@ -478,7 +478,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                         removeReminder(note.id);
                         onDone();
                       }}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-xl text-destructive outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70"
+                      className="flex size-10 shrink-0 items-center justify-center rounded-xl text-destructive outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
                     >
                       <Trash2 className="size-4" aria-hidden />
                     </button>
@@ -548,7 +548,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                     type="button"
                     aria-label={`Repeat: ${repeatSummary}`}
                     onClick={() => go('repeat')}
-                    className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70"
+                    className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
                   >
                     <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="text-muted-foreground">Repeat</span>
@@ -688,7 +688,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                                       });
                                     }}
                                     className={cn(
-                                      'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                                      'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
                                       chosen
                                         ? 'bg-primary text-primary-foreground'
                                         : 'bg-foreground/[0.06] text-muted-foreground',

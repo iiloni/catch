@@ -58,7 +58,7 @@ export function TimeZonePicker({ value, onChange, at, className }: Props) {
 
   return (
     <div className={cn('flex min-h-0 flex-col gap-2', className)}>
-      <label className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 focus-within:ring-2 focus-within:ring-ring/70">
+      <label className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-inset">
         <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <input
           type="search"

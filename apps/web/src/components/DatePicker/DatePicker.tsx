@@ -48,7 +48,7 @@ export function DatePicker({ value, min, today, onChange, className }: Props) {
   // Nothing in the month before the first date allowed is worth turning back to.
   const atStart = min !== undefined && iso(shown.year, shown.month, 1) <= min;
   const arrow =
-    'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-30';
+    'flex size-10 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-30';
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
@@ -98,7 +98,7 @@ export function DatePicker({ value, min, today, onChange, className }: Props) {
                 onChange(date);
               }}
               className={cn(
-                'mx-auto flex size-10 items-center justify-center rounded-full text-sm tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-30',
+                'mx-auto flex size-10 items-center justify-center rounded-full text-sm tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-30',
                 selected
                   ? 'bg-primary font-medium text-primary-foreground'
                   : 'hover:bg-foreground/[0.08] aria-[current=date]:bg-foreground/[0.08] aria-[current=date]:font-medium',
