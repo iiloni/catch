@@ -692,11 +692,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   >
                     <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
                       <ScrollAreaViewport className="pb-6">
-                        {hasTags && (
-                          <div className="mb-4 rounded-2xl border border-border bg-card p-4">
-                            <NoteTags noteId={note.id} />
-                          </div>
-                        )}
+                        <NoteTags noteId={note.id} className="mb-4" />
                         <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
                         <NoteLinks note={note} variant="side" />
                       </ScrollAreaViewport>
