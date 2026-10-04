@@ -1,3 +1,4 @@
+import type { ReminderTimes } from '@catch/shared';
 import { Bell, BellRing, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -14,7 +15,7 @@ import {
   sendTestPush,
   usePushState,
 } from '@/lib/push';
-import { type ReminderTimes, useReminderTimes } from '@/lib/reminders';
+import { useReminderTimes } from '@/lib/reminders';
 
 /** Why notifications cannot be turned on here, for the states where they cannot. */
 const UNAVAILABLE: Partial<Record<PushState, string>> = {

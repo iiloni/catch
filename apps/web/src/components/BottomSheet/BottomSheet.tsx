@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { useBackHandler } from '@/lib/backButton';
 import { keyboardHeight } from '@/lib/keyboard';
 import { springs } from '@/lib/motion';
-import { cn } from '@/lib/utils';
 
 type Props = {
   open: boolean;
@@ -12,8 +11,6 @@ type Props = {
   title: string;
   children: ReactNode;
   dragHandleOnly?: boolean;
-  /** Opened from an open note, whose dock sits above the editor and so above a sheet. */
-  aboveNote?: boolean;
 };
 
 /** A frosted sheet that slides up from the bottom and is swiped down to dismiss. */
@@ -23,7 +20,6 @@ export function BottomSheet({
   title,
   children,
   dragHandleOnly = false,
-  aboveNote = false,
 }: Props) {
   useBackHandler(open, () => onOpenChange(false));
   const dragControls = useDragControls();
@@ -57,8 +53,7 @@ export function BottomSheet({
           <DialogPrimitive.Portal forceMount>
             <DialogPrimitive.Overlay asChild forceMount>
               <motion.div
-                data-bottom-sheet
-                className={cn('fixed inset-0 bg-black/30', aboveNote ? 'z-[70]' : 'z-50')}
+                className="fixed inset-0 z-50 bg-black/30"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -71,11 +66,7 @@ export function BottomSheet({
               onOpenAutoFocus={(event) => event.preventDefault()}
             >
               <motion.div
-                data-bottom-sheet
-                className={cn(
-                  'glass-thick fixed inset-x-3 bottom-[calc(var(--keyboard)+max(var(--safe-bottom),0.75rem))] mx-auto flex max-h-[min(85dvh,calc(100dvh-var(--keyboard)-var(--safe-top)-max(var(--safe-bottom),0.75rem)-1rem))] w-auto max-w-md flex-col rounded-[28px] pb-4 outline-none sm:inset-x-4 sm:bottom-[calc(var(--keyboard)+1rem)]',
-                  aboveNote ? 'z-[70]' : 'z-50',
-                )}
+                className="glass-thick fixed inset-x-3 bottom-[calc(var(--keyboard)+max(var(--safe-bottom),0.75rem))] z-50 mx-auto flex max-h-[min(85dvh,calc(100dvh-var(--keyboard)-var(--safe-top)-max(var(--safe-bottom),0.75rem)-1rem))] w-auto max-w-md flex-col rounded-[28px] pb-4 outline-none sm:inset-x-4 sm:bottom-[calc(var(--keyboard)+1rem)]"
                 initial={{ y: '110%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '110%' }}

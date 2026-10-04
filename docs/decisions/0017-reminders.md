@@ -1,4 +1,4 @@
-# 0016: Reminders and notifications
+# 0017: Reminders and notifications
 
 Status: accepted (2026-10-03)
 
@@ -15,9 +15,17 @@ model, and a server that is one household's and has no vendor push account.
 devices that set a reminder for one note offline converge on one row (last write wins)
 instead of colliding. A reminder is saved whole with `PUT /api/reminders/:noteId` and removed
 with `DELETE`; both are safe to replay, and both go through `write()` and the outbox like
-every other change. It is its own synced collection rather than columns on `notes`, so
-setting one is not an edit of the note and the notes shape is unchanged. Deleting a note
-deletes its reminder; a note in the trash keeps its reminder but does not ring.
+every other change. Deleting a note deletes its reminder; a note in the trash keeps its
+reminder but does not ring.
+
+**It is its own table and synced collection, not columns on `notes`**, as a note's tags are
+(`note_tags`). The scheduler rewrites a reminder every time it rings; on the note's row that
+would be a server write to the row the user is typing into, resent to every device with the
+note, and would give `notes` server-only columns (`fire_at`) to keep out of its shape.
+Setting a reminder is also not an edit of the note, so it does not touch `updated_at`. The
+cost is one more shape per client. Over HTTP/1.1 a browser has six connections per origin,
+which live shapes would use up; development stacks poll instead (ADR 0007, `shapeFetch`),
+and production is served over HTTP/2.
 
 **Times are wall clock times, not instants.** `starts_at` and `next_at` are
 `YYYY-MM-DDTHH:MM` with no zone. A *floating* reminder (the default) is read in the zone the
@@ -59,14 +67,29 @@ client that the server then posts to, the same risk `safeFetch` guards for link 
 `isPushEndpoint` accepts only HTTPS to Google, Mozilla, Apple and Microsoft push hosts, on
 saving a subscription and again on sending.
 
+**It is set in the note's dock.** The bell in the open note's dock grows a panel out of it,
+like the palette and the tags, rather than a sheet over the note. The panel is three steps
+(day, time, repeat), each a row of choices that shows what it is set to; a date or time
+field, and a repeat's interval, weekdays and end, appear only under the choice that needs
+them. Numbers are stepped, not typed, so the keyboard does not cover the dock. To make room
+for the bell, pinning moved to the note's header beside archive and trash. On a card the
+same panel opens in a popover from the card's toolbar.
+
+**Quick times belong to the user.** The times Morning, Afternoon and Evening stand for are
+kept with the user's zone in `reminder_settings` and read and saved with plain requests
+(`GET /api/reminders/settings`, `PUT /api/reminders/settings/times`), not a shape: they
+change rarely and are small. A device caches them, so the choices are there offline; a
+change made offline is sent at the next launch or return to the app, and the last one sent
+wins.
+
 **Each device opts in.** Settings > Notifications turns notifications on for the browser it
 is open in, and every subscribed device rings. Dismissing on one does not dismiss on the
 others. Signing out removes the device's subscription while the session still stands.
 
-**Protocol 2.** A client with reminders needs the reminders shape and routes, which an older
-server cannot supply, so `API_PROTOCOL_VERSION` is 2 and the server supports 1 to 2 (ADR
-0013's "added required capability" case). Protocol 1 clients keep working against a new
-server and simply have no reminders. A protocol 2 Android app pauses sync against an older
+**Protocol 3.** A client with reminders needs the reminders shape and routes, which an older
+server cannot supply, so `API_PROTOCOL_VERSION` is 3 and the server supports 2 to 3 (ADR
+0013's "added required capability" case). Protocol 2 clients keep working against a new
+server and simply have no reminders. A protocol 3 Android app pauses sync against an older
 server until the server is updated: **update the server first.**
 
 ## Limits

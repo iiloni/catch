@@ -1,18 +1,21 @@
 import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { editorControls, editorNote } from '@/lib/dockState';
+import { editorControls, editorNote, noteReminderRequest } from '@/lib/dockState';
 import { HOLD_MS } from '@/lib/longPress';
-import {
-  moveNoteToDeck,
-  restoreNote,
-  sendNoteToGallery,
-  setNoteColor,
-  setNotePinned,
-} from '@/lib/notes';
+import { moveNoteToDeck, restoreNote, sendNoteToGallery, setNoteColor } from '@/lib/notes';
 import { NoteDock } from './NoteDock';
 
 vi.mock('@/lib/notes');
+vi.mock('@/components/ReminderPanel/ReminderPanel', () => ({
+  ReminderPanel: ({ onDone }: { onDone: () => void }) => (
+    <form aria-label="Reminder">
+      <button type="button" onClick={onDone}>
+        Set reminder
+      </button>
+    </form>
+  ),
+}));
 vi.mock('@/components/AttachmentPicker/AttachmentPicker', () => ({
   AttachmentPicker: () => <section aria-label="Add attachment">Attachment picker</section>,
 }));
@@ -20,7 +23,9 @@ const columns: BoardColumn[] = [
   { id: 'in_progress', userId: 'user-1', name: 'In progress', color: 'blue', position: 'a1' },
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
 ];
+const reminders = vi.hoisted(() => new Map());
 vi.mock('@/lib/collections', () => ({
+  useReminders: () => reminders,
   useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),
@@ -61,9 +66,9 @@ afterEach(() => {
 describe('NoteDock', () => {
   it("shows the open note's actions", () => {
     renderDock();
-    fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
-    expect(setNotePinned).toHaveBeenCalledWith(note.id, true);
     expect(screen.getByRole('button', { name: 'Move note' })).toBeInTheDocument();
+    // Pinning sits in the note's header, beside archive and trash.
+    expect(screen.queryByRole('button', { name: 'Pin' })).toBeNull();
   });
 
   it('grows a palette out of the dock', () => {
@@ -147,15 +152,39 @@ describe('NoteDock', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('orders tags second and pin last, with archive in the header', () => {
+  it('orders tags second and the reminder last, with archive in the header', () => {
     renderDock();
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeEnabled();
     expect(
       screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
-    ).toEqual(['Background color', 'Tags', 'Attach files', 'Move note', 'Pin']);
+    ).toEqual(['Background color', 'Tags', 'Attach files', 'Move note', 'Reminder']);
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
     expect(screen.getByRole('region', { name: 'Add attachment' })).toBeInTheDocument();
+  });
+
+  it('grows the reminder out of the dock and folds it once set', () => {
+    renderDock();
+    const bell = screen.getByRole('button', { name: 'Reminder' });
+    expect(bell).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(bell);
+    expect(bell).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Set reminder' }));
+    expect(bell).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens the reminder when the chip under the note asks for it', () => {
+    renderDock();
+    expect(screen.queryByRole('form', { name: 'Reminder' })).toBeNull();
+    act(() => noteReminderRequest.set(noteReminderRequest.get() + 1));
+    expect(screen.getByRole('form', { name: 'Reminder' })).toBeInTheDocument();
+  });
+
+  it('holds the bell down for a note with a reminder', () => {
+    reminders.set(note.id, {});
+    renderDock();
+    expect(screen.getByRole('button', { name: 'Reminder' }).className).toContain('bg-foreground');
+    reminders.clear();
   });
 
   it('only offers restoring a trashed note', () => {

@@ -1,15 +1,17 @@
-import { recurrenceSchema } from '@catch/shared';
+import { DEFAULT_REMINDER_TIMES, recurrenceSchema } from '@catch/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_REMINDER_TIMES,
+  defaultReminderStart,
   describeRecurrence,
   deviceLocalTime,
   formatReminderTime,
+  quickReminderDays,
   quickReminderTimes,
 } from './reminders';
 
 vi.mock('./collections', () => ({ remindersCollection: {}, write: vi.fn() }));
 vi.mock('./api', () => ({ api: {} }));
+vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 
 /** A time on this device's clock, whatever zone the tests run in. */
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute);
@@ -54,23 +56,27 @@ describe('describeRecurrence', () => {
   });
 });
 
-describe('quickReminderTimes', () => {
-  it('offers later today while a later time is left', () => {
-    expect(quickReminderTimes(at(5, 10), DEFAULT_REMINDER_TIMES)).toEqual([
-      { label: 'Later today', startsAt: '2026-10-05T13:00' },
-      { label: 'Tomorrow', startsAt: '2026-10-06T08:00' },
-      { label: 'Next week', startsAt: '2026-10-12T08:00' },
+describe('quick choices', () => {
+  it('offers today, tomorrow and a week on', () => {
+    expect(quickReminderDays(at(5, 10))).toEqual([
+      { label: 'Today', date: '2026-10-05' },
+      { label: 'Tomorrow', date: '2026-10-06' },
+      { label: 'Next week', date: '2026-10-12' },
     ]);
-    expect(quickReminderTimes(at(5, 14), DEFAULT_REMINDER_TIMES)[0]).toEqual({
-      label: 'Later today',
-      startsAt: '2026-10-05T18:00',
-    });
   });
 
-  it('starts from tomorrow in the evening', () => {
-    expect(quickReminderTimes(at(5, 21), DEFAULT_REMINDER_TIMES).map((item) => item.label)).toEqual(
-      ['Tomorrow', 'Next week'],
-    );
+  it('offers the user’s times in order through the day', () => {
+    expect(quickReminderTimes(DEFAULT_REMINDER_TIMES).map((item) => item.time)).toEqual([
+      '08:00',
+      '13:00',
+      '18:00',
+    ]);
+  });
+
+  it('starts a new reminder at the next quick time still ahead', () => {
+    expect(defaultReminderStart(at(5, 10), DEFAULT_REMINDER_TIMES)).toBe('2026-10-05T13:00');
+    expect(defaultReminderStart(at(5, 14), DEFAULT_REMINDER_TIMES)).toBe('2026-10-05T18:00');
+    expect(defaultReminderStart(at(5, 21), DEFAULT_REMINDER_TIMES)).toBe('2026-10-06T08:00');
   });
 
   it('reads this device’s clock', () => {

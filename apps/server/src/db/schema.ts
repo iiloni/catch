@@ -1,3 +1,4 @@
+import type { Recurrence, ReminderTimes } from '@catch/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -263,3 +264,70 @@ export const noteTags = pgTable(
   },
   (table) => [index().on(table.userId)],
 );
+
+/**
+ * A note's reminder (ADR 0017), at most one, so the note's id is its key. Times are wall
+ * clock times; `fireAt` is the instant the scheduler waits for, worked out from them and the
+ * zone the user is in, and stays on the server.
+ */
+export const reminders = pgTable(
+  'reminders',
+  {
+    noteId: uuid()
+      .primaryKey()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: text({ enum: ['time'] })
+      .notNull()
+      .default('time'),
+    startsAt: text().notNull(),
+    timeZone: text().notNull(),
+    floating: boolean().notNull().default(true),
+    recurrence: jsonb().$type<Recurrence>(),
+    nextAt: text(),
+    snoozedUntil: timestamp({ withTimezone: true }),
+    firedAt: timestamp({ withTimezone: true }),
+    fireAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.userId), index().on(table.fireAt)],
+);
+
+/** Each user's reminder settings: where they were last seen, which is where floating reminders ring. */
+export const reminderSettings = pgTable('reminder_settings', {
+  userId: text()
+    .primaryKey()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  timeZone: text().notNull(),
+  /** The times of day the quick choices use; null until the user changes them. */
+  times: jsonb().$type<ReminderTimes>(),
+  updatedAt: updatedAt(),
+});
+
+/** A browser that asked for notifications. Server state, not synced to devices. */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    endpoint: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    p256dh: text().notNull(),
+    auth: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.userId)],
+);
+
+/**
+ * The key pair that identifies this server to push services (VAPID). Made on first use and
+ * kept here, so a restored backup still reaches the browsers subscribed under it.
+ */
+export const pushKeys = pgTable('push_keys', {
+  id: text().primaryKey(),
+  publicKey: text().notNull(),
+  privateKey: text().notNull(),
+  createdAt: createdAt(),
+});

@@ -19,9 +19,9 @@ sync or export changes before updating a pre-protocol client, and manually insta
 Android app for this release. Future breaking release notes must state the supported protocol
 range and upgrade order. Ordinary releases and pushes do not require a protocol bump.
 
-Protocol 2 adds reminders ([ADR 0016](decisions/0016-reminders.md)). Servers with it support
-protocols 1–2, so older apps keep syncing. Update the server before the Android app: a
-protocol 2 app pauses sync against a protocol 1 server until the server is updated.
+Protocol 3 adds reminders ([ADR 0017](decisions/0017-reminders.md)). Servers with it support
+protocols 2–3, so apps on protocol 2 keep syncing without reminders. Update the server before
+the Android app: a protocol 3 app pauses sync against a protocol 2 server until it is updated.
 
 ## Channels and versions
 

@@ -57,6 +57,13 @@
       "when": 1791056561529,
       "tag": "0007_easy_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791068290003,
+      "tag": "0008_reminders",
+      "breakpoints": true
     }
   ]
 }

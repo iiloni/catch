@@ -290,7 +290,7 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   powers (ADR 0012), so a migration must not need a superuser. `POSTGRES_MAJOR` in the Dockerfile must follow the postgres image's version.
 - `db/migrate` backs up the database before migrating when migrations are pending, so a
   dev stack collects `update` backups too; they live in the `backup_data` volume.
-- A note's reminder is a row in the `reminders` collection keyed by the note's id (ADR 0016).
+- A note's reminder is a row in the `reminders` collection keyed by the note's id (ADR 0017).
   Set and remove it with the actions in `lib/reminders.ts`. Its times are wall clock strings,
   not instants; turn one into an instant with the helpers in `packages/shared/src/reminders.ts`
   (`reminderZone`, `reminderFireTime`), never `new Date(string)`. The server's scheduler rings

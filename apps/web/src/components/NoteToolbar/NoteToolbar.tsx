@@ -2,6 +2,7 @@ import { DEFAULT_BOARD_STATUS, type Note } from '@catch/shared';
 import {
   Archive,
   ArchiveRestore,
+  Bell,
   Columns3,
   LayoutDashboard,
   RotateCcw,
@@ -12,9 +13,10 @@ import { useState } from 'react';
 import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
+import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { useBoardColumns } from '@/lib/collections';
+import { useBoardColumns, useReminders } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import {
   deleteNoteForever,
@@ -38,6 +40,8 @@ type Props = {
 /** Actions for one note. Trashed notes can only be restored or deleted. */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const reminder = useReminders().get(note.id);
   const then = (action: () => unknown) => () => {
     action();
     onDone?.();
@@ -57,7 +61,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   }
 
   return (
-    <div className={cn('flex flex-col', className, moving && 'opacity-100')}>
+    <div className={cn('flex flex-col', className, (moving || reminding) && 'opacity-100')}>
       <div className="flex items-center gap-0.5">
         <NoteColorPicker
           note={note}
@@ -84,6 +88,25 @@ export function NoteToolbar({ note, onDone, className }: Props) {
                 if (status === null) sendNoteToGallery(note.id);
                 else moveNoteToDeck(note.id, status);
               }}
+            />
+          </PopoverContent>
+        </Popover>
+        <Popover open={reminding} onOpenChange={setReminding}>
+          <PopoverTrigger asChild>
+            <IconButton label="Reminder" onClick={() => haptics.toggle()}>
+              <Bell className={cn(reminder && 'fill-current')} />
+            </IconButton>
+          </PopoverTrigger>
+          <PopoverContent
+            aria-label="Reminder"
+            className="w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ReminderPanel
+              note={note}
+              reminder={reminder}
+              onDone={() => setReminding(false)}
+              className="max-h-[min(34rem,calc(var(--radix-popover-content-available-height)-1.5rem))]"
             />
           </PopoverContent>
         </Popover>

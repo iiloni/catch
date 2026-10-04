@@ -30,8 +30,8 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 - [x] Server backup and restore for admins, in Settings > Admin > Backups, with scheduled and pre-update backups (see `docs/decisions/0012-server-backups.md`).
 
 ## Later
-- [x] Reminders on notes, with repeats and time zones, sent to browsers and installed web apps by Web Push (see `docs/decisions/0016-reminders.md`).
-- [ ] Reminders in the Android app: local alarms, notification actions (ADR 0016).
+- [x] Reminders on notes, with repeats and time zones, sent to browsers and installed web apps by Web Push (see `docs/decisions/0017-reminders.md`).
+- [ ] Reminders in the Android app: local alarms, notification actions (ADR 0017).
 - [ ] User-defined board columns.
 - [ ] Labels.
 - [x] Link previews fetched on the server (see `docs/decisions/0006-link-previews.md`).

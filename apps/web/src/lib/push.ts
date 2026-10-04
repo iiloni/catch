@@ -4,7 +4,7 @@ import { getSignedInUser } from './auth';
 import { createStore } from './store';
 
 /**
- * Notifications in a browser or an installed web app come by Web Push (ADR 0016): this
+ * Notifications in a browser or an installed web app come by Web Push (ADR 0017): this
  * device subscribes with its push service and gives the server the subscription.
  *
  * - `native`: the Android app, which will ring reminders itself and has no Web Push.

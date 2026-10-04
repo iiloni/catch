@@ -15,9 +15,11 @@ import type {
   PushSubscriptionInput,
   RefreshLinkPreview,
   ReleasesResponse,
+  ReminderSettings,
   ReportTimeZone,
   ResetUserPasswordResponse,
   SaveReminder,
+  SaveReminderTimes,
   TestPushResponse,
   TxidResponse,
   UpdateAttachment,
@@ -129,6 +131,12 @@ export const api = {
     request<TxidResponse>(`/reminders/${noteId}`, { method: 'DELETE' }),
   reportTimeZone: (body: ReportTimeZone) =>
     request<{ timeZone: string }>('/reminders/time-zone', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  reminderSettings: () => request<ReminderSettings>('/reminders/settings', { method: 'GET' }),
+  saveReminderTimes: (body: SaveReminderTimes) =>
+    request<{ ok: true }>('/reminders/settings/times', {
       method: 'PUT',
       body: JSON.stringify(body),
     }),

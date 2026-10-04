@@ -86,9 +86,9 @@ describe('API compatibility gate', () => {
     expect((await app.request('/api/updates', { method: 'POST' })).status).toBe(426);
   });
 
-  it('still serves protocol 1 clients, which have no reminders (ADR 0016)', async () => {
-    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 1, max: 2 });
-    const older = { [API_PROTOCOL_HEADER]: '1' };
+  it('still serves protocol 2 clients, which have no reminders (ADR 0017)', async () => {
+    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 3 });
+    const older = { [API_PROTOCOL_HEADER]: '2' };
     expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(401);
     expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);
   });

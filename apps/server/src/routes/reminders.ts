@@ -1,9 +1,12 @@
 import {
+  DEFAULT_REMINDER_TIMES,
   firstPending,
+  type ReminderSettings,
   reminderFireTime,
   reminderZone,
   reportTimeZoneSchema,
   saveReminderSchema,
+  saveReminderTimesSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
 import { and, eq, sql } from 'drizzle-orm';
@@ -27,7 +30,28 @@ const noteParam = zValidator('param', z.object({ noteId: z.uuid() }));
 
 export const reminderRoutes = new Hono<AppEnv>()
   .use(requireUser)
-  // Where the user is, which is where their floating reminders ring. Ahead of `/:noteId`.
+  // Settings are per user and rarely change, so they are plain requests rather than one
+  // more synced shape. These routes sit ahead of `/:noteId`.
+  .get('/settings', async (c) => {
+    const [row] = await db
+      .select()
+      .from(reminderSettings)
+      .where(eq(reminderSettings.userId, c.get('user')!.id));
+    return c.json({
+      timeZone: row?.timeZone ?? null,
+      times: row?.times ?? DEFAULT_REMINDER_TIMES,
+    } satisfies ReminderSettings);
+  })
+  .put('/settings/times', zValidator('json', saveReminderTimesSchema), async (c) => {
+    const userId = c.get('user')!.id;
+    const { times, timeZone } = c.req.valid('json');
+    await db
+      .insert(reminderSettings)
+      .values({ userId, timeZone, times })
+      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times } });
+    return c.json({ ok: true });
+  })
+  // Where the user is, which is where their floating reminders ring.
   .put('/time-zone', zValidator('json', reportTimeZoneSchema), async (c) => {
     const userId = c.get('user')!.id;
     const { timeZone, changed } = c.req.valid('json');

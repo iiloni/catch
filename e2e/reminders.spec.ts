@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 import { z } from 'zod';
 import {
   backToGallery,
@@ -11,29 +11,35 @@ import {
   signUp,
 } from './helpers';
 
+const panel = (page: Page) => page.getByRole('form', { name: 'Reminder' });
+const step = (page: Page, name: string) => panel(page).getByRole('group', { name });
+
 test('a note is given a repeating reminder, which is then removed', async ({ page }) => {
   await signUp(page);
   await seedNotes(page, ['Call the dentist']);
 
   const editor = await openNote(page, 'Call the dentist');
-  await noteToolbar(page).getByRole('button', { name: 'Remind me' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Remind me' });
-  await sheet.getByLabel('Date', { exact: true }).fill('2031-03-04');
-  await sheet.getByLabel('Time', { exact: true }).fill('09:30');
-  await sheet.getByLabel('Repeat').selectOption('Weekly');
+  const bell = noteToolbar(page).getByRole('button', { name: 'Reminder' });
+  await bell.click();
+  // The reminder grows out of the dock, like the palette and the tags.
+  await expect(page.locator('[data-note-toolbar]').locator(panel(page))).toBeVisible();
+  await step(page, 'Day').getByRole('button', { name: 'Pick a date' }).click();
+  await panel(page).getByLabel('Date', { exact: true }).fill('2031-03-04');
+  await step(page, 'Time').getByRole('button', { name: 'Custom' }).click();
+  await panel(page).getByLabel('Time', { exact: true }).fill('09:30');
+  await step(page, 'Repeat').getByRole('button', { name: 'Weekly' }).click();
   // 2031-03-04 is a Tuesday, which a weekly reminder starts on.
-  await expect(sheet.getByRole('button', { name: 'Tuesday' })).toHaveAttribute(
+  await expect(panel(page).getByRole('button', { name: 'Tuesday' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await sheet.getByRole('button', { name: 'Thursday' }).click();
-  await sheet.getByRole('button', { name: 'Save' }).click();
-  await expect(sheet).toBeHidden();
+  await panel(page).getByRole('button', { name: 'Thursday' }).click();
+  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await expect(panel(page)).toBeHidden();
 
   // Setting a reminder leaves the note open, with the reminder under its text.
   const chip = editor.getByRole('button', { name: /^Reminder: .*weekly on tue, thu$/i });
   await expect(chip).toContainText('2031');
-  await expect(noteToolbar(page).getByRole('button', { name: 'Change reminder' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
   await expect(
@@ -53,12 +59,15 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
     .getByRole('dialog')
     .getByRole('button', { name: /^Reminder: / })
     .click();
-  await expect(sheet.getByLabel('Repeat')).toHaveValue('weekly');
-  await expect(sheet.getByLabel('Time', { exact: true })).toHaveValue('09:30');
-  await sheet.getByRole('button', { name: 'Remove' }).click();
+  await expect(step(page, 'Repeat').getByRole('button', { name: 'Weekly' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(panel(page).getByLabel('Time', { exact: true })).toHaveValue('09:30');
+  await panel(page).getByRole('button', { name: 'Remove reminder' }).click();
   await expect(page.getByText('Reminder removed')).toBeVisible();
-  // While the sheet slides away it is still the layer Escape closes.
-  await expect(sheet).toBeHidden();
+  // While the panel folds away it is still the layer Escape closes.
+  await expect(panel(page)).toBeHidden();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByText('No reminders')).toBeVisible();
@@ -68,19 +77,34 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
   ).toHaveCount(0);
 });
 
+test('a reminder is set from the quick days and times', async ({ page }) => {
+  await signUp(page);
+  await seedNotes(page, ['Water the plants']);
+  const editor = await openNote(page, 'Water the plants');
+  await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+  await step(page, 'Day').getByRole('button', { name: 'Tomorrow' }).click();
+  await step(page, 'Time')
+    .getByRole('button', { name: /^Evening/ })
+    .click();
+  await expect(panel(page).getByRole('status')).toContainText('Tomorrow');
+  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await expect(editor.getByRole('button', { name: /^Reminder: Tomorrow/ })).toBeVisible();
+});
+
 test('a reminder for a time that has passed cannot be saved', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'The sheet is the same on both layouts; the test above opens it on each.');
+  test.skip(isMobile, 'The panel is the same on both layouts; the tests above open it on each.');
   await signUp(page);
   await seedNotes(page, ['Water the plants']);
   await openNote(page, 'Water the plants');
-  await noteToolbar(page).getByRole('button', { name: 'Remind me' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Remind me' });
-  await sheet.getByLabel('Date', { exact: true }).fill('2020-01-01');
-  await expect(sheet.getByRole('alert')).toContainText('That time has passed');
-  await expect(sheet.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+  await step(page, 'Day').getByRole('button', { name: 'Pick a date' }).click();
+  await panel(page).getByLabel('Date', { exact: true }).fill('2020-01-01');
+  await expect(panel(page).getByRole('status')).toContainText('That time has passed');
+  const save = panel(page).getByRole('button', { name: 'Set reminder' });
+  await expect(save).toBeDisabled();
   // A repeating reminder may start in the past: it rings at its next time.
-  await sheet.getByLabel('Repeat').selectOption('Daily');
-  await expect(sheet.getByRole('button', { name: 'Save' })).toBeEnabled();
+  await step(page, 'Repeat').getByRole('button', { name: 'Daily' }).click();
+  await expect(save).toBeEnabled();
 });
 
 const shapeRows = z.array(
@@ -265,6 +289,40 @@ test('floating reminders follow the zone a device reports', { tag: '@api' }, asy
       })
     ).status(),
   ).toBe(400);
+});
+
+test('quick times are kept per user', { tag: '@api' }, async ({
+  playwright,
+  baseURL,
+  extraHTTPHeaders,
+}) => {
+  const alice = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const bob = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const settings = async (who: typeof alice) =>
+    (await who.context.get('/api/reminders/settings', { headers: who.headers })).json();
+  const defaults = { morning: '08:00', afternoon: '13:00', evening: '18:00' };
+  expect(await settings(alice)).toEqual({ timeZone: null, times: defaults });
+
+  const times = { morning: '06:30', afternoon: '12:00', evening: '20:15' };
+  const save = (data: object) =>
+    alice.context.put('/api/reminders/settings/times', { headers: alice.headers, data });
+  expect((await save({ times: { ...times, evening: '25:00' }, timeZone: 'UTC' })).status()).toBe(
+    400,
+  );
+  expect((await save({ times, timeZone: 'Europe/London' })).ok()).toBeTruthy();
+  expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times });
+  expect(await settings(bob)).toEqual({ timeZone: null, times: defaults });
+
+  // Saving times is not a report of where the user is: the zone a device reported stays.
+  expect((await save({ times: defaults, timeZone: 'Asia/Tokyo' })).ok()).toBeTruthy();
+  expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times: defaults });
+  // And reporting a zone leaves the times alone.
+  expect((await save({ times, timeZone: 'Europe/London' })).ok()).toBeTruthy();
+  await alice.context.put('/api/reminders/time-zone', {
+    headers: alice.headers,
+    data: { timeZone: 'Asia/Tokyo', changed: true },
+  });
+  expect(await settings(alice)).toEqual({ timeZone: 'Asia/Tokyo', times });
 });
 
 test('push subscriptions only go to browser push services', { tag: '@api' }, async ({

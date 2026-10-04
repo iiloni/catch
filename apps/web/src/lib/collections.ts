@@ -12,6 +12,9 @@ import {
   type NoteTags,
   noteSchema,
   noteTagsSchema,
+  type Reminder,
+  reminderSchema,
+  saveReminderSchema,
   type Tag,
   type TxidResponse,
   tagSchema,
@@ -218,12 +221,32 @@ export const noteTagsCollection = createCollection(
   ),
 );
 
+/** Each note's reminder, keyed by the note's id (ADR 0017). */
+export const remindersCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'reminders',
+      schema: reminderSchema,
+      getKey: (reminder) => reminder.noteId,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/reminders`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
   notes: notesCollection,
   tags: tagsCollection,
   noteTags: noteTagsCollection,
   boardColumns: boardColumnsCollection,
   attachments: attachmentsCollection,
+  reminders: remindersCollection,
 };
 
 /** How long to wait for Electric to stream a write back before letting it settle anyway. */
@@ -254,15 +277,8 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
     sent.flatMap(({ collectionId, txid }) => {
       if (txid === null) return [];
       const collection =
-        collectionId === notesCollection.id
-          ? notesCollection
-          : collectionId === tagsCollection.id
-            ? tagsCollection
-            : collectionId === noteTagsCollection.id
-              ? noteTagsCollection
-              : collectionId === attachmentsCollection.id
-                ? attachmentsCollection
-                : boardColumnsCollection;
+        Object.values(writableCollections).find((item) => item.id === collectionId) ??
+        notesCollection;
       // The server has the write; a slow stream only delays the hand-over.
       return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
     }),
@@ -368,6 +384,12 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
       else if (!body.secondaryTagIds?.length) delete body.secondaryTagIds;
     }
     return api.updateNoteTags(key, body);
+  }
+  if (mutation.collection.id === remindersCollection.id) {
+    // A reminder is saved whole, so replaying an insert or an update is the same request.
+    return mutation.type === 'delete'
+      ? api.deleteReminder(key)
+      : api.saveReminder(key, saveReminderSchema.parse(mutation.modified));
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -619,6 +641,32 @@ function subscribeToPreviews(listener: () => void) {
 /** The user's link previews by URL. */
 export function useLinkPreviews(): ReadonlyMap<string, LinkPreview> {
   return useSyncExternalStore(subscribeToPreviews, () => previewsByUrl);
+}
+
+// As with previews: every card reads its note's reminder.
+let remindersByNote: ReadonlyMap<string, Reminder> = new Map();
+const reminderListeners = new Set<() => void>();
+let remindersSubscribed = false;
+
+function subscribeToReminders(listener: () => void) {
+  reminderListeners.add(listener);
+  if (remindersSubscribed) return () => reminderListeners.delete(listener);
+  remindersSubscribed = true;
+  remindersCollection.subscribeChanges(
+    () => {
+      remindersByNote = new Map(
+        [...remindersCollection.values()].map((reminder) => [reminder.noteId, reminder]),
+      );
+      for (const notify of reminderListeners) notify();
+    },
+    { includeInitialState: true },
+  );
+  return () => reminderListeners.delete(listener);
+}
+
+/** The user's reminders by note id. */
+export function useReminders(): ReadonlyMap<string, Reminder> {
+  return useSyncExternalStore(subscribeToReminders, () => remindersByNote);
 }
 
 let attachmentRows: readonly Attachment[] = [];

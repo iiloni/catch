@@ -15,7 +15,9 @@ import { SelectionToolbar } from './SelectionToolbar';
 
 const readiness = { awaitingTags: false, awaitingAssignments: false };
 vi.mock('@/lib/notes');
+const reminders = vi.hoisted(() => new Map());
 vi.mock('@/lib/collections', () => ({
+  useReminders: () => reminders,
   useTagReadiness: () => readiness,
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),

@@ -62,7 +62,7 @@ registerRoute(
   'POST',
 );
 
-// Reminders arrive as Web Push messages from the Catch server (ADR 0016).
+// Reminders arrive as Web Push messages from the Catch server (ADR 0017).
 function pushMessage(event: PushEvent) {
   let data: unknown = null;
   try {

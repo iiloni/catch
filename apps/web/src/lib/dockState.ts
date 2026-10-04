@@ -66,3 +66,6 @@ export const editorControls = createStore<EditorControls | null>(null);
 
 /** The open note's dock has grown upward into its palette or the Deck's columns. */
 export const noteDockPanelOpen = createStore(false);
+
+/** Bumped to ask the open note's dock for its reminder panel, from the reminder under the note. */
+export const noteReminderRequest = createStore(0);

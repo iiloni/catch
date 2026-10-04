@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isTimeZone } from './backups';
 
 /**
- * Reminders (ADR 0016). A note has at most one, keyed by the note's id. Its times are wall
+ * Reminders (ADR 0017). A note has at most one, keyed by the note's id. Its times are wall
  * clock times (`YYYY-MM-DDTHH:MM`) rather than instants: a floating reminder is read in the
  * zone the user is in when it comes due, a fixed one in the zone it was made in.
  */
@@ -110,6 +110,36 @@ export type ReminderSchedule = Pick<Reminder, 'startsAt' | 'recurrence'>;
  */
 export const reportTimeZoneSchema = z.object({ timeZone: timeZoneSchema, changed: z.boolean() });
 export type ReportTimeZone = z.infer<typeof reportTimeZoneSchema>;
+
+const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/** The times of day the quick choices (Morning, Afternoon, Evening) stand for, as `HH:MM`. */
+export const reminderTimesSchema = z.object({
+  morning: timeOfDaySchema,
+  afternoon: timeOfDaySchema,
+  evening: timeOfDaySchema,
+});
+export type ReminderTimes = z.infer<typeof reminderTimesSchema>;
+
+export const DEFAULT_REMINDER_TIMES: ReminderTimes = {
+  morning: '08:00',
+  afternoon: '13:00',
+  evening: '18:00',
+};
+
+/** A user's reminder settings. Server state fetched by plain requests, not a synced shape. */
+export const reminderSettingsSchema = z.object({
+  timeZone: timeZoneSchema.nullable(),
+  times: reminderTimesSchema,
+});
+export type ReminderSettings = z.infer<typeof reminderSettingsSchema>;
+
+/** The device's zone comes along for a user the server has not seen a zone for yet. */
+export const saveReminderTimesSchema = z.object({
+  times: reminderTimesSchema,
+  timeZone: timeZoneSchema,
+});
+export type SaveReminderTimes = z.infer<typeof saveReminderTimesSchema>;
 
 type Parts = { year: number; month: number; day: number; hour: number; minute: number };
 

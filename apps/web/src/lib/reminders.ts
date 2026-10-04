@@ -1,21 +1,20 @@
 import {
+  DEFAULT_REMINDER_TIMES,
   firstPending,
   instantToLocal,
   type Note,
   type Recurrence,
   type Reminder,
+  type ReminderTimes,
   reminderFireTime,
+  reminderTimesSchema,
   reminderZone,
 } from '@catch/shared';
 import { toast } from 'sonner';
-import { z } from 'zod';
 import { api } from './api';
+import { getSignedInUser } from './auth';
 import { remindersCollection, write } from './collections';
-import { usePersistentState } from './storage';
 import { createStore } from './store';
-
-/** The note whose reminder is being set, in the sheet `ReminderSheet` shows. */
-export const reminderSheet = createStore<string | null>(null);
 
 export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -157,53 +156,103 @@ export function describeRecurrence(recurrence: Recurrence) {
   return text;
 }
 
-const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const reminderTimesSchema = z.object({
-  morning: timeOfDay,
-  afternoon: timeOfDay,
-  evening: timeOfDay,
-});
-export type ReminderTimes = z.infer<typeof reminderTimesSchema>;
-export const DEFAULT_REMINDER_TIMES: ReminderTimes = {
-  morning: '08:00',
-  afternoon: '13:00',
-  evening: '18:00',
-};
+const timesKey = () => `catch-reminder-times:${getSignedInUser()?.id ?? ''}`;
+/** Set while a change made on this device has not reached the server. */
+const unsentKey = () => `${timesKey()}:unsent`;
 
-/** The times of day the quick choices use, kept on this device. */
-export function useReminderTimes() {
-  return usePersistentState('catch-reminder-times', reminderTimesSchema, DEFAULT_REMINDER_TIMES);
+function cachedTimes(): ReminderTimes {
+  try {
+    const parsed = reminderTimesSchema.safeParse(
+      JSON.parse(localStorage.getItem(timesKey()) ?? ''),
+    );
+    if (parsed.success) return parsed.data;
+  } catch {
+    // Nothing cached yet.
+  }
+  return DEFAULT_REMINDER_TIMES;
+}
+
+const reminderTimes = createStore<ReminderTimes>(cachedTimes());
+
+async function sendReminderTimes() {
+  try {
+    await api.saveReminderTimes({ times: reminderTimes.get(), timeZone: deviceTimeZone() });
+    localStorage.removeItem(unsentKey());
+  } catch {
+    // Offline: `syncReminderSettings` sends it at the next launch or return to the app.
+  }
+}
+
+/** The quick times belong to the user and follow them to every device. */
+export function setReminderTimes(times: ReminderTimes) {
+  reminderTimes.set(times);
+  localStorage.setItem(timesKey(), JSON.stringify(times));
+  localStorage.setItem(unsentKey(), 'true');
+  void sendReminderTimes();
+}
+
+/**
+ * The times of day the quick choices (Morning, Afternoon, Evening) stand for. They are kept
+ * on the server and cached here, so the choices are there offline.
+ */
+export function useReminderTimes(): [ReminderTimes, (times: ReminderTimes) => void] {
+  return [reminderTimes.use(), setReminderTimes];
 }
 
 const dateOf = (date: Date) => deviceLocalTime(date).slice(0, 10);
 
-/** One-tap times for a new reminder, as Keep offered: later today, tomorrow, next week. */
-export function quickReminderTimes(now: Date, times: ReminderTimes) {
-  const today = dateOf(now);
-  const nowTime = deviceLocalTime(now).slice(11);
+/** The days a reminder is usually for, as dates on this device's calendar. */
+export function quickReminderDays(now: Date) {
   const day = (offset: number) =>
     dateOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 12));
-  const later = [times.afternoon, times.evening].find((time) => time > nowTime);
   return [
-    ...(later ? [{ label: 'Later today', startsAt: `${today}T${later}` }] : []),
-    { label: 'Tomorrow', startsAt: `${day(1)}T${times.morning}` },
-    { label: 'Next week', startsAt: `${day(7)}T${times.morning}` },
+    { label: 'Today', date: day(0) },
+    { label: 'Tomorrow', date: day(1) },
+    { label: 'Next week', date: day(7) },
   ];
 }
 
+/** The user's quick times, in order through the day. */
+export function quickReminderTimes(times: ReminderTimes) {
+  return [
+    { label: 'Morning', time: times.morning },
+    { label: 'Afternoon', time: times.afternoon },
+    { label: 'Evening', time: times.evening },
+  ];
+}
+
+/** The first quick day and time still ahead: what a new reminder starts as. */
+export function defaultReminderStart(now: Date, times: ReminderTimes) {
+  const nowTime = deviceLocalTime(now).slice(11);
+  const later = quickReminderTimes(times).find((option) => option.time > nowTime);
+  const [today, tomorrow] = quickReminderDays(now);
+  return later ? `${today?.date}T${later.time}` : `${tomorrow?.date}T${times.morning}`;
+}
+
 /**
- * Tells the server which zone this device is in, once, and again when it moves, so floating
- * reminders ring by the clock where the user is.
+ * Run at launch and when the app comes back into view. Tells the server which zone this
+ * device is in, once and again when it moves, so floating reminders ring by the clock where
+ * the user is; and brings the quick times in line with the server's.
  */
-export async function reportDeviceTimeZone(userId: string) {
-  const key = `catch-time-zone:${userId}`;
+export async function syncReminderSettings(userId: string) {
+  const zoneKey = `catch-time-zone:${userId}`;
   const timeZone = deviceTimeZone();
-  const reported = localStorage.getItem(key);
-  if (reported === timeZone) return;
+  const reported = localStorage.getItem(zoneKey);
   try {
-    await api.reportTimeZone({ timeZone, changed: reported !== null });
-    localStorage.setItem(key, timeZone);
+    if (reported !== timeZone) {
+      await api.reportTimeZone({ timeZone, changed: reported !== null });
+      localStorage.setItem(zoneKey, timeZone);
+    }
+    if (localStorage.getItem(unsentKey()) === 'true') {
+      await sendReminderTimes();
+      return;
+    }
+    const { times } = await api.reminderSettings();
+    // A change made here while the request was out is newer than its answer.
+    if (localStorage.getItem(unsentKey()) === 'true') return;
+    reminderTimes.set(times);
+    localStorage.setItem(timesKey(), JSON.stringify(times));
   } catch {
-    // Offline, or a server that is restarting: the next launch or return to the app tries again.
+    // Offline, or a server that is restarting: the next launch or return tries again.
   }
 }

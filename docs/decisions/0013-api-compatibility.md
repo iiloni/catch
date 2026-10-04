@@ -91,6 +91,8 @@ Document the compatibility decision in the change even when no counter bump is n
 ## Consequences
 
 - Compatibility maintenance is tied to contract changes, not pushes or release bumps.
+- Protocol 3 adds reminders (ADR 0017) with range 2–3: protocol 2 clients are unaffected, and
+  a protocol 3 client needs a server that has them.
 - Supporting many past protocols needs adapters and tests. The tag feature uses protocol 2 with range 2–2 (ADR 0016); narrowing a range
   deliberately requires affected clients to update.
 - Gating cannot cancel requests already accepted by a running older server. Server upgrades
