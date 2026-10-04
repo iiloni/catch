@@ -192,9 +192,17 @@ describe('ReminderPanel', () => {
     render(<ReminderPanel note={note} reminder={saved} onDone={onDone} />);
     expect(pressed('Day')[0]).toContain('Custom');
     expect(pressed('Time')[0]).toContain(formatTimeOfDay('07:30'));
+    // Custom opens the list of zones, and choosing one comes back.
     fireEvent.click(choice('Time zone', /^Custom/));
+    const tokyo = document.querySelector<HTMLElement>('[data-zone="Asia/Tokyo"]');
+    expect(tokyo).toHaveTextContent('GMT+9');
+    fireEvent.click(tokyo as HTMLElement);
+    expect(pressed('Time zone')[0]).toContain('Tokyo, GMT+9');
     fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
-    expect(setReminder).toHaveBeenCalledWith(note, expect.objectContaining({ floating: false }));
+    expect(setReminder).toHaveBeenCalledWith(
+      note,
+      expect.objectContaining({ floating: false, timeZone: 'Asia/Tokyo' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Remove reminder' }));
     expect(removeReminder).toHaveBeenCalledWith(note.id);
   });

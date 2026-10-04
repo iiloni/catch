@@ -13,12 +13,29 @@ import {
 import { toast } from 'sonner';
 import { api } from './api';
 import { getSignedInUser } from './auth';
+import { formatTime } from './clock';
 import { remindersCollection, write } from './collections';
 import { createStore } from './store';
 
 export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /** The wall clock on this device at an instant, as reminders store times. */
+const offsetFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** A zone's distance from GMT at a moment, as "GMT+2" or "GMT-3:30". Empty for a zone the device does not know. */
+export function timeZoneOffset(timeZone: string, at: Date) {
+  try {
+    let format = offsetFormats.get(timeZone);
+    if (!format) {
+      format = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' });
+      offsetFormats.set(timeZone, format);
+    }
+    return format.formatToParts(at).find((part) => part.type === 'timeZoneName')?.value ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export const deviceLocalTime = (instant: Date) => instantToLocal(instant, deviceTimeZone());
 
 export type ReminderInput = Pick<Reminder, 'startsAt' | 'timeZone' | 'floating' | 'recurrence'>;
@@ -78,7 +95,6 @@ export const isReminderPast = (reminder: Reminder, now = new Date()) => {
 };
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-const timeFormat = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' });
 const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const dayFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const yearFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
@@ -86,7 +102,7 @@ const yearFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 /** A time of day (`HH:MM`) as this device writes times: "8:00 AM" or "08:00". */
 export function formatTimeOfDay(time: string) {
   const [hour = 0, minute = 0] = time.split(':').map(Number);
-  return timeFormat.format(new Date(2000, 0, 1, hour, minute));
+  return formatTime(new Date(2000, 0, 1, hour, minute));
 }
 
 /** "Today, 9:00", "Tomorrow, 9:00", "Fri, 9:00", "Oct 12, 9:00". */
@@ -105,7 +121,7 @@ export function formatReminderTime(time: Date, now = new Date()) {
           : time.getFullYear() === now.getFullYear()
             ? dayFormat.format(time)
             : yearFormat.format(time);
-  return `${day}, ${timeFormat.format(time)}`;
+  return `${day}, ${formatTime(time)}`;
 }
 
 /** The time a reminder shows: when it rings next, or when it last did. */

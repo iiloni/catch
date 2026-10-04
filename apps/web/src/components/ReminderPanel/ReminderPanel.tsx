@@ -14,7 +14,9 @@ import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { DatePicker } from '@/components/DatePicker/DatePicker';
 import { TimePicker } from '@/components/TimePicker/TimePicker';
+import { TimeZonePicker } from '@/components/TimeZonePicker/TimeZonePicker';
 import { Button } from '@/components/ui/button';
+import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import {
@@ -31,6 +33,7 @@ import {
   removeReminder,
   setReminder,
   snoozeReminder,
+  timeZoneOffset,
   useReminderTimes,
   WEEKDAYS,
 } from '@/lib/reminders';
@@ -155,9 +158,6 @@ function toInput(form: Form): ReminderInput | null {
   };
 }
 
-const inputClass =
-  'h-11 rounded-xl border-transparent bg-foreground/[0.06] px-3 text-base shadow-none md:text-base';
-
 /** One step of setting a reminder: a quiet label over its row of choices. */
 function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -270,17 +270,11 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Every zone the device knows, with the reminder's own among them. */
-function timeZones(current: string) {
-  const zones = Intl.supportedValuesOf?.('timeZone') ?? [];
-  return zones.includes(current) ? zones : [current, ...zones];
-}
-
 const pageClass =
   'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.75rem)] flex-col gap-2';
 
-type Page = 'main' | 'date' | 'time' | 'repeat' | 'until';
-const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, repeat: 1, until: 2 };
+type Page = 'main' | 'date' | 'time' | 'zone' | 'repeat' | 'until';
+const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, zone: 1, repeat: 1, until: 2 };
 
 /** A deeper page comes in from the right and the one before it returns from the left. */
 const pages = {
@@ -328,6 +322,8 @@ type Props = {
  * like the palette and the tags.
  */
 export function ReminderPanel({ note, reminder, onDone, className }: Props) {
+  // Redraws the times below when the clock setting changes.
+  useHour12();
   const [times] = useReminderTimes();
   const [now, setNow] = useState(() => new Date());
   const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
@@ -393,6 +389,14 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     exit: 'exit',
     transition: springs.smooth,
   };
+  // A zone's offset is the one it has when the reminder rings, not today's.
+  const zoneAt = rings ?? now;
+  const zoneLabel = [
+    form.timeZone.slice(form.timeZone.lastIndexOf('/') + 1).replaceAll('_', ' '),
+    timeZoneOffset(form.timeZone, zoneAt),
+  ]
+    .filter(Boolean)
+    .join(', ');
   // A page under the reminder: where it came from, what it sets and what that is set to.
   const pageHeader = (title: string, value: string, from: Page) => (
     <>
@@ -561,34 +565,19 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                       />
                       <Choice
                         label="Custom"
+                        detail={form.fixed ? zoneLabel : undefined}
                         selected={form.fixed}
-                        onSelect={() => update({ fixed: true })}
+                        onSelect={() => {
+                          update({ fixed: true });
+                          go('zone');
+                        }}
                       />
                     </div>
                     <p className="px-1 pt-1.5 text-muted-foreground text-xs">
                       {form.fixed
-                        ? 'Rings when it is this time in the zone below.'
+                        ? 'Rings when it is this time there, wherever you are.'
                         : 'Rings at this time on your clock, wherever you are.'}
                     </p>
-                    <AnimatedHeight anchor="top">
-                      {form.fixed && (
-                        <select
-                          aria-label="Time zone"
-                          value={form.timeZone}
-                          onChange={(event) => update({ timeZone: event.target.value })}
-                          className={cn(
-                            inputClass,
-                            'mt-1.5 w-full min-w-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                          )}
-                        >
-                          {timeZones(form.timeZone).map((zone) => (
-                            <option key={zone} value={zone}>
-                              {zone.replaceAll('_', ' ')}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </AnimatedHeight>
                   </Step>
                 </div>
 
@@ -620,6 +609,18 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                 {pageHeader('Time', formatTimeOfDay(form.time), 'main')}
                 <TimePicker value={form.time} onChange={(time) => update({ time })} />
                 {doneButton('main')}
+              </motion.fieldset>
+            ) : page === 'zone' ? (
+              <motion.fieldset key="zone" {...motionProps} className={cn(pageClass, className)}>
+                {pageHeader('Time zone', zoneLabel, 'main')}
+                <TimeZonePicker
+                  value={form.timeZone}
+                  at={zoneAt}
+                  onChange={(timeZone) => {
+                    update({ fixed: true, timeZone });
+                    go('main');
+                  }}
+                />
               </motion.fieldset>
             ) : page === 'until' ? (
               <motion.fieldset key="until" {...motionProps} className={cn(pageClass, className)}>

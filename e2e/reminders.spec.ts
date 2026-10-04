@@ -136,6 +136,48 @@ test('a reminder is set from the quick days and times', async ({ page }) => {
   await expect(editor.getByRole('button', { name: /^Reminder: Tomorrow/ })).toBeVisible();
 });
 
+test('times follow the clock chosen in Settings', async ({ page, isMobile }) => {
+  test.skip(
+    isMobile,
+    'The setting is the same on both layouts; the tests above open the panel on each.',
+  );
+  await signUp(page);
+  await seedNotes(page, ['Call the vet']);
+  await page.goto('/settings/general');
+  await page.getByRole('button', { name: '24 hour' }).click();
+  await page.goto('/');
+  const editor = await openNote(page, 'Call the vet');
+  await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+  await step(page, 'Day').getByRole('button', { name: 'Tomorrow' }).click();
+  await step(page, 'Time')
+    .getByRole('button', { name: /^Custom/ })
+    .click();
+  await expect(panel(page).locator('[data-period]')).toHaveCount(0);
+  await panel(page).locator('[data-hour="18"]').click();
+  await panel(page).locator('[data-minute="30"]').click();
+  await done(page);
+  await panel(page).getByRole('button', { name: 'Set reminder' }).click();
+  await expect(editor.getByRole('button', { name: 'Reminder: Tomorrow, 18:30' })).toBeVisible();
+});
+
+test('a reminder is kept in a zone found by searching', async ({ page }) => {
+  await signUp(page);
+  await seedNotes(page, ['Ring Tokyo']);
+  await openNote(page, 'Ring Tokyo');
+  await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+  await step(page, 'Day').getByRole('button', { name: 'Tomorrow' }).click();
+  await step(page, 'Time zone').getByRole('button', { name: 'Custom' }).click();
+  // The list opens on the zone in use, not at its top.
+  await expect(panel(page).locator('[data-zone][aria-pressed="true"]')).toBeInViewport();
+  await panel(page).getByRole('searchbox', { name: 'Search time zones' }).fill('tokyo');
+  await expect(panel(page).locator('[data-zone]')).toHaveCount(1);
+  await panel(page).locator('[data-zone="Asia/Tokyo"]').click();
+  await expect(panel(page).getByRole('button', { name: 'Back' })).toBeHidden();
+  await expect(
+    step(page, 'Time zone').getByRole('button', { name: /^Custom\s*Tokyo, GMT\+9/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('a reminder for a time that has passed cannot be saved', async ({ page, isMobile }) => {
   test.skip(isMobile, 'The panel is the same on both layouts; the tests above open it on each.');
   await signUp(page);

@@ -1,5 +1,6 @@
 import type { Reminder } from '@catch/shared';
 import { Bell, Repeat } from 'lucide-react';
+import { useHour12 } from '@/lib/clock';
 import { describeRecurrence, describeReminder, isReminderPast } from '@/lib/reminders';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,8 @@ type Props = {
 
 /** When a note's reminder rings. One that has rung and has none left is struck through. */
 export function ReminderChip({ reminder, onClick, className }: Props) {
+  // Redraws the times below when the clock setting changes.
+  useHour12();
   const past = isReminderPast(reminder);
   const Icon = reminder.recurrence ? Repeat : Bell;
   const label = `${past ? 'Past reminder' : 'Reminder'}: ${describeReminder(reminder)}${

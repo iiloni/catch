@@ -14,6 +14,7 @@ import { UserActions } from '@/components/UserActions/UserActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError, api } from '@/lib/api';
+import { formatTime } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 
 const PAGE_SIZE = 25;
@@ -293,9 +294,7 @@ function LastLogin({ value }: { value: AdminUser['lastLoginAt'] }) {
   return (
     <time dateTime={value} title={date.toLocaleString()}>
       {date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}{' '}
-      <span className="@md:block">
-        {date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-      </span>
+      <span className="@md:block">{formatTime(date)}</span>
     </time>
   );
 }

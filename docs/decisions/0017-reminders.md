@@ -74,10 +74,10 @@ like the palette and the tags, rather than a sheet over the note. The panel keep
 away: a row of days (today, tomorrow, custom) and a row of times under plain labels, the
 repeat as a single row saying what it is set to, and whether the time follows the user or
 stays in a chosen zone. Anything with more to it is a page of its own that slides in over
-the panel and back: a calendar for a custom day, a clock face for a custom time, and the
+the panel and back: a calendar for a custom day, a clock face for a custom time, a searchable list of zones with their GMT offsets (opened on the one in use) for a custom time zone, and the
 repeat's settings (interval, weekdays, end). The calendar and the clock are ours
-(`DatePicker`, `TimePicker`) rather than the system's, so they look and move like the rest
-of the app and need no keyboard; numbers are stepped, not typed. The panel may grow to the
+(`DatePicker`, `TimePicker`, `TimeZonePicker`) rather than the system's, so they look and move like the rest
+of the app and need no keyboard; numbers are stepped, not typed. A page cannot read the system's 12 or 24 hour switch, only what the browser's language defaults to, so the clock face and every time shown follow a device setting (Settings > General > Time format: automatic, 12 hour, 24 hour; `lib/clock.ts`). The native app can read the real switch for automatic later. The panel may grow to the
 top of the screen before it scrolls. A pending
 reminder opens on its next time rather than its first, and a counted repeat on the times it
 has left, so editing one carries on the count instead of starting it again. To make room

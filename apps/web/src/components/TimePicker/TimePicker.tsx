@@ -1,4 +1,5 @@
 import { type PointerEvent, useRef, useState } from 'react';
+import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
@@ -6,15 +7,12 @@ type Props = {
   /** The chosen time of day, as `HH:MM`. */
   value: string;
   onChange: (value: string) => void;
-  /** Whether hours run 1 to 12 with AM and PM. Follows the device unless given. */
+  /** Whether hours run 1 to 12 with AM and PM. Follows the clock setting unless given. */
   hour12?: boolean;
   className?: string;
 };
 
 const pad = (value: number) => String(value).padStart(2, '0');
-
-const deviceHour12 = () =>
-  new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 === true;
 
 /** How far from the dial's center its numbers sit, as a share of its width. */
 const OUTER = 39;
@@ -30,7 +28,9 @@ function place(turn: number, radius: number) {
  * A clock face: the hour is tapped or dragged to, then the minute. Dragging the hand
  * reaches every minute; the numbers on the face are the fives.
  */
-export function TimePicker({ value, onChange, hour12 = deviceHour12(), className }: Props) {
+export function TimePicker({ value, onChange, hour12: given, className }: Props) {
+  const setting = useHour12();
+  const hour12 = given ?? setting;
   const [hour = 0, minute = 0] = value.split(':').map(Number);
   const [mode, setMode] = useState<'hour' | 'minute'>('hour');
   const dragging = useRef(false);
@@ -113,7 +113,7 @@ export function TimePicker({ value, onChange, hour12 = deviceHour12(), className
         </span>
         {readout(pad(minute), 'minute', 'Minute')}
         {hour12 && (
-          <div className="ml-1.5 grid gap-0.5 rounded-xl bg-foreground/[0.06] p-0.5">
+          <div className="ml-1.5 flex h-12 gap-1 rounded-xl bg-foreground/[0.06] p-1">
             {(['AM', 'PM'] as const).map((period) => {
               const selected = (period === 'PM') === afternoon;
               return (
@@ -126,7 +126,7 @@ export function TimePicker({ value, onChange, hour12 = deviceHour12(), className
                     if (!selected) set((hour + 12) % 24, minute);
                   }}
                   className={cn(
-                    'h-[1.375rem] rounded-[0.625rem] px-2.5 font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                    'h-full min-w-11 rounded-lg px-2 font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
                     selected ? 'bg-primary text-primary-foreground' : 'text-foreground/80',
                   )}
                 >
