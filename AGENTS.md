@@ -86,17 +86,25 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   pass; require that check in branch protection so testing alone cannot permit merging.
   `merge on pass` means functionality and design are approved and authorizes merging
   once required checks pass.
-- After the user approves functionality and design for merging, update the PR branch with
-  current `main`, mark it ready and add `merge on pass`. Fix failures with the label left in
-  place, then merge or enable auto-merge. If a fix changes the approved functionality or
-  design, disable pending auto-merge, return the PR to draft, remove the label and obtain
-  renewed approval. Keep the branch up to date as required checks rerun.
+- After the user approves functionality and design for merging, mark the PR ready and add
+  `merge on pass`. Fix failures with the label left in place, then merge or enable
+  auto-merge. If a fix changes the approved functionality or design, disable pending
+  auto-merge, return the PR to draft, remove the label and obtain renewed approval.
   The local `./scripts/dev.sh check` requirement still applies.
+- A PR does not have to be up to date with `main` to merge: its checks ran on GitHub's
+  merge of the branch with `main` as it stood then, and a passing result stays valid when
+  other PRs land. Do not update the branch just because `main` advanced, since every
+  update reruns the full suite. Update it only to resolve conflicts, or to pick up a fix
+  for a failure that came from `main`.
 - After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
   investigate failures, fix them and push updates until required validation passes.
   Continue through the authorized merge and verify the PR is actually merged, then update
   local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
-  not complete the task. If `main` advances, update the branch and monitor the new checks.
+  not complete the task.
+- After merging, watch the `main` CI run for your merge commit and report its result. If
+  it fails, follow "When `main` fails" in `docs/ci.md`: rerun the failed jobs once, and
+  take the failure only if your commit is the first one it appears on and no open issue
+  already claims it. Do not fix a `main` failure from inside an unrelated PR.
 - Write PR descriptions for a reviewer who has not seen the conversation. Lead with the
   feature, improvement or fix and what it enables or changes. Include motivation or a
   before/after example when useful; a linked issue is optional.
@@ -169,7 +177,7 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
 - When asked to merge a worktree into `main`, merge through its GitHub PR after required
-  checks pass and the branch is up to date. Then fast-forward the primary checkout's
+  checks pass. Then fast-forward the primary checkout's
   `main` from its configured upstream, after checking its working tree. Never force-push
   `main` or bypass its required PR/check rules.
 - When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
