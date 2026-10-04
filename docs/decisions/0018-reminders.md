@@ -125,7 +125,9 @@ server until the server is updated: **update the server first.**
     was open, is not affected. An older server answers 404 and the phone keeps what it has.
   - The phone and the server ring independently, so a user with notifications on in both a
     browser and the app gets one from each, as with two browsers.
-  - A notification has Snooze (1hr) and Done. Snooze rings again on the phone and is
+  - A notification has Snooze and Done. Snooze puts a reminder off for 15 minutes, 30 (the
+    default) or an hour, a device setting in Settings > Notifications (`lib/snooze.ts`) that
+    the phone is told so it holds with the app closed. It rings again on the phone and is
     written as the reminder's snooze the next time the app runs, which is when the server
     and the other devices learn of it. Done only dismisses the notification.
   - Signing out clears the phone's alarms and its copy of the token.

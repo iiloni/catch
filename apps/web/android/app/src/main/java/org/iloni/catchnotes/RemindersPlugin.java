@@ -102,6 +102,17 @@ public class RemindersPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void configure(PluginCall call) {
+        Integer minutes = call.getInt("snoozeMinutes");
+        if (minutes == null || minutes <= 0) {
+            call.reject("The snooze length could not be read.");
+            return;
+        }
+        ReminderAlarms.preferences(getContext()).edit().putInt("snoozeMinutes", minutes).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
     public void takeSnoozes(PluginCall call) {
         call.resolve(new JSObject().put("snoozes", ReminderAlarms.takeSnoozes(getContext())));
     }

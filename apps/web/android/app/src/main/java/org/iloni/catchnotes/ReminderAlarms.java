@@ -38,7 +38,7 @@ final class ReminderAlarms {
 
     private static final String PREFERENCES = "reminders";
     private static final String CHANNEL = "reminders";
-    private static final long SNOOZE_MS = 60L * 60 * 1000;
+    private static final int SNOOZE_MINUTES = 30;
     private static final int REFRESH_JOB = 0x0ca7c4;
     private static final long REFRESH_MS = 60L * 60 * 1000;
     private static final int TEST_NOTIFICATION = 1;
@@ -245,7 +245,7 @@ final class ReminderAlarms {
                 .putExtra("body", body);
         post(context, noteId.hashCode(), notification(context, title, body)
                 .setContentIntent(open(context, noteId))
-                .addAction(0, "Snooze (1hr)", PendingIntent.getBroadcast(context, 0, snooze, flags | PendingIntent.FLAG_IMMUTABLE))
+                .addAction(0, "Snooze", PendingIntent.getBroadcast(context, 0, snooze, flags | PendingIntent.FLAG_IMMUTABLE))
                 .addAction(0, "Done", broadcast(context, ACTION_DONE, noteId, flags)));
     }
 
@@ -262,7 +262,8 @@ final class ReminderAlarms {
      * is told when it next runs, and passes it on to the server and the user's other devices.
      */
     static synchronized void snooze(Context context, String noteId, String title, String body) {
-        long until = System.currentTimeMillis() + SNOOZE_MS;
+        // The length is the one chosen in Settings, as the web app last told it.
+        long until = System.currentTimeMillis() + preferences(context).getInt("snoozeMinutes", SNOOZE_MINUTES) * 60_000L;
         try {
             JSONArray snoozes = new JSONArray();
             JSONArray before = array(context, "snoozes");

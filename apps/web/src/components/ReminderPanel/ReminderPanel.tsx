@@ -47,6 +47,7 @@ import {
   WEEKDAYS,
 } from '@/lib/reminders';
 import { useSettingsNavigation } from '@/lib/settings';
+import { snoozeUntil } from '@/lib/snooze';
 import { cn } from '@/lib/utils';
 
 type RepeatChoice = 'none' | Recurrence['frequency'];
@@ -627,11 +628,11 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                       className="h-11 min-w-0 flex-1 rounded-xl"
                       onClick={() => {
                         haptics.success();
-                        snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
+                        snoozeReminder(note.id, snoozeUntil());
                         onDone();
                       }}
                     >
-                      Snooze (1hr)
+                      Snooze
                     </Button>
                   )}
                   <Button

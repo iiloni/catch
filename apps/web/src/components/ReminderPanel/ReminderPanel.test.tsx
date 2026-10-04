@@ -346,7 +346,13 @@ describe('ReminderPanel', () => {
         onDone={onDone}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Snooze (1hr)' }));
-    expect(snoozeReminder).toHaveBeenCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
+    expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 10, 30));
+
+    // The length is the device's, from Settings > Notifications.
+    localStorage.setItem('catch-snooze', '60');
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
+    expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
+    localStorage.removeItem('catch-snooze');
   });
 });

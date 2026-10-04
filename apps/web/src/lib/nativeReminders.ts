@@ -7,6 +7,7 @@ import { setSystemHour12 } from './clock';
 import { hasReminder, watchReminderAlarms } from './collections';
 import { snoozeReminder } from './reminders';
 import { getServerUrl } from './serverUrl';
+import { onSnoozeChange, snoozeMinutes } from './snooze';
 
 const statusSchema = z.object({
   enabled: z.boolean(),
@@ -28,6 +29,7 @@ const Reminders = registerPlugin<{
     token: string;
     protocol: string;
   }): Promise<void>;
+  configure(options: { snoozeMinutes: number }): Promise<void>;
   takeSnoozes(): Promise<unknown>;
   test(): Promise<void>;
   clear(): Promise<void>;
@@ -115,12 +117,18 @@ export function watchNativeReminders() {
       });
     });
   void status().catch(failed);
+  // A notification's Snooze works with the app closed, so the phone keeps the length itself.
+  const configure = (minutes: number) =>
+    void Reminders.configure({ snoozeMinutes: minutes }).catch(failed);
+  configure(snoozeMinutes());
+  const stopFollowing = onSnoozeChange(configure);
   const resumed = App.addListener('appStateChange', ({ isActive }) => {
     if (isActive) returned();
   });
   return () => {
     stopped = true;
     stopWatching();
+    stopFollowing();
     void resumed.then((listener) => listener.remove());
   };
 }

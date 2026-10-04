@@ -10,6 +10,8 @@ const native = vi.hoisted(() => ({
   disable: vi.fn(async () => ({})),
   sync: vi.fn(async () => {}),
   takeSnoozes: vi.fn(),
+  configure: vi.fn(async () => {}),
+  snoozeChanged: vi.fn(),
   test: vi.fn(async () => {}),
   clear: vi.fn(async () => {}),
   listen: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock('@capacitor/core', () => ({
     disable: native.disable,
     sync: native.sync,
     takeSnoozes: native.takeSnoozes,
+    configure: native.configure,
     test: native.test,
     clear: native.clear,
     addListener: native.listen,
@@ -42,6 +45,7 @@ vi.mock('./collections', () => ({
   watchReminderAlarms: native.watch,
 }));
 vi.mock('./reminders', () => ({ snoozeReminder: native.snooze }));
+vi.mock('./snooze', () => ({ snoozeMinutes: () => 30, onSnoozeChange: native.snoozeChanged }));
 vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
 
 import { API_PROTOCOL_VERSION } from '@catch/shared';
@@ -64,6 +68,7 @@ beforeEach(() => {
   native.listen.mockResolvedValue({ remove: native.remove });
   native.resume.mockResolvedValue({ remove: native.remove });
   native.watch.mockReturnValue(native.stopWatching);
+  native.snoozeChanged.mockReturnValue(() => {});
 });
 
 describe('native reminders', () => {
@@ -130,6 +135,13 @@ describe('native reminders', () => {
     expect(native.takeSnoozes).toHaveBeenCalledTimes(1);
     native.resume.mock.calls[0]?.[1]({ isActive: true });
     await vi.waitFor(() => expect(native.takeSnoozes).toHaveBeenCalledTimes(2));
+  });
+
+  it('tells the phone how long its notifications snooze for, and again when that changes', () => {
+    watchNativeReminders();
+    expect(native.configure).toHaveBeenCalledWith({ snoozeMinutes: 30 });
+    native.snoozeChanged.mock.calls[0]?.[0](15);
+    expect(native.configure).toHaveBeenLastCalledWith({ snoozeMinutes: 15 });
   });
 
   it('opens the note of a tapped notification', async () => {

@@ -4,6 +4,7 @@ import { Bell, BellRing, Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
+import { SnoozePicker } from '@/components/SnoozePicker/SnoozePicker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -17,6 +18,7 @@ import {
   usePushState,
 } from '@/lib/push';
 import { useReminderTimes } from '@/lib/reminders';
+import { useSnoozeMinutes } from '@/lib/snooze';
 
 /** Why notifications cannot be turned on here, for the states where they cannot. */
 const UNAVAILABLE: Partial<Record<PushState, string>> = {
@@ -46,6 +48,7 @@ export function NotificationSettings() {
   const state = usePushState();
   const [busy, setBusy] = useState(false);
   const [times, setTimes] = useReminderTimes();
+  const [snooze, setSnooze] = useSnoozeMinutes();
   useEffect(() => {
     void refreshPushState();
   }, []);
@@ -98,6 +101,12 @@ export function NotificationSettings() {
             </Button>
           </SettingsRow>
         )}
+      </SettingsSection>
+      <SettingsSection
+        title="Snooze"
+        description="How long Snooze puts a reminder off, on this device."
+      >
+        <SnoozePicker value={snooze} onChange={setSnooze} />
       </SettingsSection>
       <SettingsSection
         title="Quick times"

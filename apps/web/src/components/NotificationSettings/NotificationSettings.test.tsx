@@ -108,6 +108,15 @@ describe('NotificationSettings', () => {
     expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
+  it('changes how long Snooze puts a reminder off, from half an hour', () => {
+    render(<NotificationSettings />);
+    expect(screen.getByRole('button', { name: '30 min' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '15 min' }));
+    expect(screen.getByRole('button', { name: '15 min' })).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('catch-snooze')).toBe('15');
+    localStorage.clear();
+  });
+
   it('changes a quick time', () => {
     render(<NotificationSettings />);
     const morning = screen.getByLabelText('Morning time');
