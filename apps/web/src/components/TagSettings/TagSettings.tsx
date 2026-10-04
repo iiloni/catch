@@ -21,13 +21,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { useTags } from '@/lib/collections';
+import { useSyncedNotes, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { createTag, deleteTag, updateTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 export function TagSettings({ userId }: { userId: string }) {
   const tags = useTags();
+  // Hierarchy edits also change notes and assignments, even on a direct settings load.
+  useSyncedNotes();
+  useTagReadiness();
   const [editing, setEditing] = useState<{ tag?: Tag; parentId: string | null } | null>(null);
   const [deleting, setDeleting] = useState<Tag | null>(null);
   return (
@@ -226,7 +229,7 @@ function TagForm({
         <DialogDescription>
           {parentId
             ? 'This tag inherits its branch’s icon and color.'
-            : 'Link a color to give it a meaning across your notes.'}
+            : 'Link a color to tag existing notes of that color that have no primary tag.'}
         </DialogDescription>
         <form onSubmit={save} className="flex flex-col gap-4">
           <label htmlFor={nameId} className="flex flex-col gap-1.5 text-sm font-medium">

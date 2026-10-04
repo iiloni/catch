@@ -7,7 +7,7 @@ import {
   updateTagSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, notExists, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
@@ -54,6 +54,70 @@ function validateTag(candidate: Tag, rows: readonly Tag[]) {
   }
 }
 
+async function tagPlainColorNotes(tx: Tx, userId: string, tag: Tag) {
+  if (!tag.color) return;
+  // Lock matching notes before reading their assignments; color edits and assignment
+  // writes share the tree lock, while content edits can proceed independently.
+  const matching = await tx
+    .update(notes)
+    .set({ color: 'default', updatedAt: sql`${notes.updatedAt}` })
+    .where(
+      and(
+        eq(notes.userId, userId),
+        eq(notes.color, tag.color),
+        notExists(
+          tx
+            .select({ id: noteTags.id })
+            .from(noteTags)
+            .where(
+              and(
+                eq(noteTags.id, notes.id),
+                eq(noteTags.userId, userId),
+                isNotNull(noteTags.primaryTagId),
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ id: notes.id });
+  if (!matching.length) return;
+  // Bound both the IN list and the four parameters per assignment below Postgres's limit.
+  for (let offset = 0; offset < matching.length; offset += 1000) {
+    const batch = matching.slice(offset, offset + 1000);
+    const assignments = await tx
+      .select()
+      .from(noteTags)
+      .where(
+        and(
+          eq(noteTags.userId, userId),
+          inArray(
+            noteTags.id,
+            batch.map(({ id }) => id),
+          ),
+        ),
+      );
+    const byId = new Map(assignments.map((assignment) => [assignment.id, assignment]));
+    await tx
+      .insert(noteTags)
+      .values(
+        batch.map(({ id }) => ({
+          id,
+          userId,
+          primaryTagId: tag.id,
+          secondaryTagIds: (byId.get(id)?.secondaryTagIds ?? []).filter((id) => id !== tag.id),
+        })),
+      )
+      .onConflictDoUpdate({
+        target: noteTags.id,
+        set: {
+          primaryTagId: tag.id,
+          secondaryTagIds: sql`excluded.secondary_tag_ids`,
+        },
+        setWhere: eq(noteTags.userId, userId),
+      });
+  }
+}
+
 export const tagRoutes = new Hono<AppEnv>()
   .use(requireUser)
   .onError((error, c) => {
@@ -74,6 +138,7 @@ export const tagRoutes = new Hono<AppEnv>()
         .onConflictDoNothing()
         .returning();
       if (!inserted.length) throw new TagError('Tag id is taken');
+      await tagPlainColorNotes(tx, userId, { ...body, userId });
       return txid(tx);
     });
     return c.json({ txid: result });
@@ -106,6 +171,8 @@ export const tagRoutes = new Hono<AppEnv>()
             .where(and(eq(noteTags.id, assignment.id), eq(noteTags.userId, userId)));
         }
       }
+      if (candidate.color && candidate.color !== current.color)
+        await tagPlainColorNotes(tx, userId, candidate);
       return txid(tx);
     });
     return c.json({ txid: result });

@@ -284,13 +284,28 @@ function requestsFor(mutations: readonly PendingMutation[]) {
       (mutation.type === 'delete' ||
         (mutation.type === 'update' && mutation.changes.parentId !== undefined)),
   );
+  const colorLink = mutations.some(
+    (mutation) =>
+      mutation.collection.id === tagsCollection.id &&
+      mutation.modified.color &&
+      (mutation.type === 'insert' ||
+        (mutation.type === 'update' &&
+          mutation.modified.color !==
+            ('color' in mutation.original ? mutation.original.color : undefined))),
+  );
   // Derived optimistic cleanup is handled against the server's current assignments.
   // Sending local arrays here would overwrite assignments added on another device.
   const requests = mutations
     .filter(
       (mutation) =>
         !batched.has(mutation) &&
-        !(treeCleanup && mutation.collection.id === noteTagsCollection.id),
+        !((treeCleanup || colorLink) && mutation.collection.id === noteTagsCollection.id) &&
+        !(
+          colorLink &&
+          mutation.collection.id === notesCollection.id &&
+          mutation.type === 'update' &&
+          Object.keys(mutation.changes).every((key) => key === 'color')
+        ),
     )
     .map((mutation) => ({ collectionId: mutation.collection.id, request: () => send(mutation) }));
   for (let start = 0; start < batched.size; start += MAX_NOTES_PER_REQUEST) {
