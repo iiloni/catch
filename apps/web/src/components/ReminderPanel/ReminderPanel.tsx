@@ -418,15 +418,16 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     <>
       <legend className="sr-only">{title}</legend>
       <div className="flex min-h-10 shrink-0 items-center gap-1 pr-2">
+        {/* The title is part of the way back, which makes it a target a thumb can find. */}
         <button
           type="button"
           aria-label="Back"
           onClick={() => go(from)}
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
+          className="-mr-1 flex h-10 shrink-0 items-center gap-1 rounded-xl pr-3 pl-2.5 text-muted-foreground text-sm outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
         >
-          <ChevronLeft className="size-5" aria-hidden />
+          <ChevronLeft className="size-5 text-foreground" aria-hidden />
+          {title}
         </button>
-        <p className="text-muted-foreground text-sm">{title}</p>
         <p role="status" className="ml-auto min-w-0 truncate font-medium text-sm">
           {value}
         </p>
