@@ -270,6 +270,73 @@ test('settings tag tree supports search, branch expansion and direct editing', a
   await expect(settings.getByRole('button', { name: 'Manage Personal projects' })).toBeVisible();
 });
 
+test('tag forms follow the overlay keyboard on every animation frame', async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'An overlay keyboard needs a touch device.');
+  await page.setViewportSize({ width: 412, height: 839 });
+  await signUp(page);
+  await addTag(request, await auth(page), 'Work');
+  await page.goto('/settings/tags');
+  await expect(page.getByRole('button', { name: 'Manage Work', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-area-inset-top', '24px');
+    document.documentElement.style.setProperty('--safe-area-inset-bottom', '16px');
+  });
+
+  for (const form of ['root', 'child', 'edit'] as const) {
+    if (form === 'root') {
+      await page.getByRole('button', { name: 'New tag', exact: true }).click();
+    } else if (form === 'child') {
+      await page.getByRole('button', { name: 'Manage Work', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Add child to Work', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'Edit Work', exact: true }).click();
+    }
+    const dialog = page.getByRole('dialog');
+    await settledBox(dialog);
+    await dialog.getByLabel('Name', { exact: true }).focus();
+    const frames = await dialog.evaluate(async (dialog) => {
+      const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+      const frames: { height: number; gap: number; top: number; visibleHeight: number }[] = [];
+      // Include a reversal before fully opening, a height change while open, and dismissal.
+      for (const target of [180, 60, 300, 340, 0]) {
+        const from = keyboardHeight.get();
+        for (let step = 1; step <= 12; step++) {
+          const height = from + ((target - from) * step) / 12;
+          keyboardHeight.set(height);
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          const rect = dialog.getBoundingClientRect();
+          frames.push({
+            height,
+            gap: innerHeight - height - rect.bottom,
+            top: rect.top,
+            visibleHeight: rect.height,
+          });
+        }
+      }
+      return frames;
+    });
+    for (const frame of frames) {
+      expect(frame.gap, `${form}: gap at keyboard height ${frame.height}`).toBeCloseTo(28, 0);
+      expect(frame.top, `${form}: top at keyboard height ${frame.height}`).toBeGreaterThanOrEqual(
+        35.5,
+      );
+    }
+    // Root forms need to shrink as well as move; a short child form keeps its natural height.
+    const heights = frames.map((frame) => frame.visibleHeight);
+    if (form === 'child') expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1);
+    else expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(40);
+    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  }
+});
+
 test('settings creates roots and children and reserves linked colors', async ({ page }) => {
   await signUp(page);
   await page.goto('/settings/tags');
