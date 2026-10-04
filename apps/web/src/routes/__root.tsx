@@ -40,6 +40,8 @@ function RootError({ error, reset }: ErrorComponentProps) {
 
 // Toasts drop in at the top, clear of the dock and the controls that float above it.
 const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
+// A phone's header has no free middle, so there they sit below it instead of over its controls.
+const mobileToastOffset = { top: 'calc(var(--safe-top) + var(--header-height) + 0.25rem)' };
 
 function Root() {
   const navigate = useNavigate();
@@ -113,7 +115,7 @@ function Root() {
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
         <Outlet />
-        <Toaster position="top-center" offset={toastOffset} mobileOffset={toastOffset} />
+        <Toaster position="top-center" offset={toastOffset} mobileOffset={mobileToastOffset} />
       </TooltipProvider>
     </MotionConfig>
   );
