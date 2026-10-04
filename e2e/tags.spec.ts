@@ -264,10 +264,89 @@ test('settings tag tree supports search, branch expansion and direct editing', a
   await settings.getByRole('button', { name: 'Expand Work' }).click();
   await settings.getByRole('button', { name: 'Edit Projects', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await settledBox(dialog);
+  await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Projects');
   await dialog.getByLabel('Name', { exact: true }).fill('Personal projects');
   await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Manage Personal projects' })).toBeVisible();
+  await settings.getByRole('button', { name: 'Manage Personal projects', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Edit Personal projects', exact: true }).click();
+  await settledBox(dialog);
+  await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
+test('tag forms follow the overlay keyboard on every animation frame', async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'An overlay keyboard needs a touch device.');
+  await page.setViewportSize({ width: 412, height: 839 });
+  await signUp(page);
+  await addTag(request, await auth(page), 'Work');
+  await page.goto('/settings/tags');
+  await expect(page.getByRole('button', { name: 'Manage Work', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-area-inset-top', '24px');
+    document.documentElement.style.setProperty('--safe-area-inset-bottom', '16px');
+  });
+
+  for (const form of ['root', 'child', 'edit'] as const) {
+    if (form === 'root') {
+      await page.getByRole('button', { name: 'New tag', exact: true }).click();
+    } else if (form === 'child') {
+      await page.getByRole('button', { name: 'Manage Work', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Add child to Work', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'Edit Work', exact: true }).click();
+    }
+    const dialog = page.getByRole('dialog');
+    await settledBox(dialog);
+    if (form === 'edit') {
+      await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
+      await dialog.getByLabel('Name', { exact: true }).click();
+    }
+    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
+    const frames = await dialog.evaluate(async (dialog) => {
+      const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+      const frames: { height: number; gap: number; top: number; visibleHeight: number }[] = [];
+      // Include a reversal before fully opening, a height change while open, and dismissal.
+      for (const target of [180, 60, 300, 340, 0]) {
+        const from = keyboardHeight.get();
+        for (let step = 1; step <= 12; step++) {
+          const height = from + ((target - from) * step) / 12;
+          keyboardHeight.set(height);
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          const rect = dialog.getBoundingClientRect();
+          frames.push({
+            height,
+            gap: innerHeight - height - rect.bottom,
+            top: rect.top,
+            visibleHeight: rect.height,
+          });
+        }
+      }
+      return frames;
+    });
+    for (const frame of frames) {
+      expect(frame.gap, `${form}: gap at keyboard height ${frame.height}`).toBeCloseTo(28, 0);
+      expect(frame.top, `${form}: top at keyboard height ${frame.height}`).toBeGreaterThanOrEqual(
+        35.5,
+      );
+    }
+    // Root forms need to shrink as well as move; a short child form keeps its natural height.
+    const heights = frames.map((frame) => frame.visibleHeight);
+    if (form === 'child') expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1);
+    else expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(40);
+    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  }
 });
 
 test('settings creates roots and children and reserves linked colors', async ({ page }) => {
@@ -275,6 +354,7 @@ test('settings creates roots and children and reserves linked colors', async ({ 
   await page.goto('/settings/tags');
   await page.getByRole('button', { name: 'New tag', exact: true }).click();
   let dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Travel');
   await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
   await dialog.getByRole('button', { name: 'Travel', exact: true }).click();
@@ -282,12 +362,14 @@ test('settings creates roots and children and reserves linked colors', async ({ 
   await page.getByRole('button', { name: 'Manage Travel', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Add child to Travel', exact: true }).click();
   dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Japan');
   await expect(dialog.getByRole('button', { name: 'Teal', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Manage Japan', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New tag', exact: true }).click();
   dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Other');
   await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('already linked');
@@ -1226,4 +1308,349 @@ test('offline subtree deletion preserves a sibling assigned by another device', 
   await page.context().setOffline(false);
   await expect(noteCard.getByRole('button', { name: 'Other device', exact: true })).toBeVisible();
   expect(assignmentWrites).toEqual([]);
+});
+
+async function linkedNoteState(page: Page, noteId: string) {
+  return page.evaluate(async (noteId) => {
+    const { notesCollection, noteTagsCollection } = await import('/src/lib/collections.ts');
+    const note = notesCollection.get(noteId);
+    const assignment = noteTagsCollection.get(noteId);
+    return {
+      color: note?.color,
+      updatedAt: note?.updatedAt.toISOString(),
+      primaryTagId: assignment?.primaryTagId ?? null,
+      secondaryTagIds: assignment?.secondaryTagIds ?? [],
+    };
+  }, noteId);
+}
+
+test('linking and changing a tag color adopts existing notes without losing assignments', async ({
+  page,
+  request,
+  browser,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work');
+  const child = await addTag(request, headers, 'Projects', work);
+  const other = await addTag(request, headers, 'Other', null, 'amber');
+  const updatedAt = '2026-01-01T00:00:00.000Z';
+  const blueNotes = [id(), id(), id()];
+  const green = id();
+  for (const [index, noteId] of [...blueNotes, green].entries()) {
+    expect(
+      (
+        await request.post('/api/notes', {
+          headers,
+          data: {
+            id: noteId,
+            content: [{ type: 'heading', props: { level: 3 }, content: `Color note ${index}` }],
+            color: index === 3 ? 'green' : 'blue',
+            updatedAt,
+            isArchived: index === 1,
+            deletedAt: index === 2 ? updatedAt : null,
+          },
+        })
+      ).status(),
+    ).toBe(201);
+  }
+  expect(
+    (
+      await request.patch(`/api/note-tags/${blueNotes[0]}`, {
+        headers,
+        data: { secondaryTagIds: [work, other] },
+      })
+    ).status(),
+  ).toBe(200);
+  // A descendant primary already belongs to the branch and must remain the primary.
+  const tagged = id();
+  expect(
+    (
+      await request.post('/api/notes', {
+        headers,
+        data: { id: tagged, content: [], color: 'blue', updatedAt },
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await request.patch(`/api/note-tags/${tagged}`, {
+        headers,
+        data: { primaryTagId: child, secondaryTagIds: [other] },
+      })
+    ).status(),
+  ).toBe(200);
+
+  const foreignContext = await browser.newContext();
+  const foreign = await foreignContext.newPage();
+  try {
+    await signUp(foreign);
+    const foreignHeaders = await auth(foreign);
+    const foreignNote = id();
+    expect(
+      (
+        await request.post('/api/notes', {
+          headers: foreignHeaders,
+          data: { id: foreignNote, content: [], color: 'blue' },
+        })
+      ).status(),
+    ).toBe(201);
+    await expect
+      .poll(() => linkedNoteState(page, blueNotes[0]!))
+      .toMatchObject({
+        color: 'blue',
+        secondaryTagIds: [work, other],
+      });
+    await page.goto('/settings/tags');
+    await page.getByRole('button', { name: 'Edit Work', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Blue', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
+    for (const noteId of blueNotes) {
+      await expect
+        .poll(() => linkedNoteState(page, noteId))
+        .toEqual({
+          color: 'default',
+          updatedAt,
+          primaryTagId: work,
+          secondaryTagIds: noteId === blueNotes[0] ? [other] : [],
+        });
+    }
+    await expect
+      .poll(() => linkedNoteState(page, tagged))
+      .toMatchObject({
+        primaryTagId: child,
+        secondaryTagIds: [other],
+      });
+    await expect
+      .poll(() => linkedNoteState(foreign, foreignNote))
+      .toMatchObject({
+        color: 'blue',
+        primaryTagId: null,
+      });
+
+    expect(
+      (
+        await request.patch(`/api/tags/${work}`, {
+          headers,
+          data: { color: 'green' },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect
+      .poll(() => linkedNoteState(page, green))
+      .toEqual({
+        color: 'default',
+        updatedAt,
+        primaryTagId: work,
+        secondaryTagIds: [],
+      });
+    await page.goto('/');
+    await expect(card(page, 'Color note 0')).toHaveAttribute('data-note-color', 'green');
+    // A queued plain-color choice keeps its intent even if that color is linked.
+    expect(
+      (
+        await request.patch(`/api/notes/${green}`, {
+          headers,
+          data: { color: 'green' },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect
+      .poll(() => linkedNoteState(page, green))
+      .toMatchObject({
+        color: 'green',
+        primaryTagId: null,
+      });
+    const editedAt = (await linkedNoteState(page, green)).updatedAt;
+    expect(
+      (
+        await request.patch(`/api/tags/${work}`, {
+          headers,
+          data: { color: 'green', name: 'Work renamed' },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect
+      .poll(() => linkedNoteState(page, green))
+      .toEqual({
+        color: 'green',
+        updatedAt: editedAt,
+        primaryTagId: null,
+        secondaryTagIds: [],
+      });
+    expect(
+      (
+        await request.patch(`/api/tags/${work}`, {
+          headers,
+          data: { color: null },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect(card(page, 'Color note 0')).toHaveAttribute('data-note-color', 'default');
+    await expect
+      .poll(() => linkedNoteState(page, green))
+      .toMatchObject({
+        color: 'green',
+        primaryTagId: null,
+      });
+  } finally {
+    await foreignContext.close();
+  }
+});
+
+test('creating a color-linked tag offline adopts notes and preserves other-device edits on replay', async ({
+  page,
+  request,
+  browser,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Offline replay is independent of layout; linking is covered on both.');
+  const email = await signUp(page);
+  const headers = await auth(page);
+  const other = await addTag(request, headers, 'Other device');
+  const changed = await addTag(request, headers, 'New primary');
+  await seedNotes(page, ['Adopt offline', 'Changed elsewhere']);
+  const noteId = (await card(page, 'Adopt offline').getAttribute('data-note-card'))!;
+  const changedId = (await card(page, 'Changed elsewhere').getAttribute('data-note-card'))!;
+  for (const id of [noteId, changedId]) {
+    expect(
+      (
+        await request.patch(`/api/notes/${id}`, {
+          headers,
+          data: { color: 'blue' },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect.poll(() => linkedNoteState(page, id)).toMatchObject({ color: 'blue' });
+  }
+  await page.goto('/settings/tags');
+  await expect(page.getByRole('button', { name: 'Edit New primary' })).toBeVisible();
+  for (const id of [noteId, changedId]) {
+    await expect
+      .poll(() => linkedNoteState(page, id))
+      .toMatchObject({
+        color: 'blue',
+        primaryTagId: null,
+        secondaryTagIds: [],
+      });
+  }
+  await page.context().setOffline(true);
+  // The request context represents another device while this browser is offline.
+  expect(
+    (
+      await request.patch(`/api/note-tags/${noteId}`, {
+        headers,
+        data: { secondaryTagIds: [other] },
+      })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await request.patch(`/api/note-tags/${changedId}`, {
+        headers,
+        data: { primaryTagId: changed },
+      })
+    ).status(),
+  ).toBe(200);
+  const unseen = id();
+  expect(
+    (
+      await request.post('/api/notes', {
+        headers,
+        data: { id: unseen, content: [], color: 'blue' },
+      })
+    ).status(),
+  ).toBe(201);
+  await page.getByRole('button', { name: 'New tag', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name', { exact: true }).fill('Offline work');
+  await dialog.getByRole('button', { name: 'Blue', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save tag', exact: true }).click();
+  const root = await page.evaluate(async () => {
+    const { tagsCollection, waitForPendingWritesStored } = await import('/src/lib/collections.ts');
+    await waitForPendingWritesStored();
+    return [...tagsCollection.values()].find((tag) => tag.name === 'Offline work')!.id;
+  });
+  await expect
+    .poll(() => linkedNoteState(page, noteId))
+    .toMatchObject({
+      color: 'default',
+      primaryTagId: root,
+    });
+  await expect.poll(() => linkedNoteState(page, changedId)).toMatchObject({ primaryTagId: root });
+  // Disconnect existing shape polls first; Vite must remain reachable for the reload.
+  await page.route('**/api/**', (route) => route.abort());
+  await page.context().setOffline(false);
+  await page.reload();
+  await expect
+    .poll(() => linkedNoteState(page, noteId))
+    .toMatchObject({
+      color: 'default',
+      primaryTagId: root,
+    });
+  const derivedRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && /\/api\/(notes|note-tags)\//.test(request.url()))
+      derivedRequests.push(request.url());
+  });
+  const replayed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/tags' &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON().id === root &&
+      response.ok(),
+  );
+  await page.unroute('**/api/**');
+  // This phase blocks only the API, so notify the outbox after restoring those requests.
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await replayed;
+  const device = await browser.newContext();
+  try {
+    const fresh = await device.newPage();
+    await signIn(fresh, email);
+    await expect(
+      card(fresh, 'Adopt offline').getByRole('button', { name: 'Offline work', exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(() => linkedNoteState(fresh, noteId))
+      .toMatchObject({
+        color: 'default',
+        primaryTagId: root,
+        secondaryTagIds: [other],
+      });
+    await expect
+      .poll(() => linkedNoteState(fresh, changedId))
+      .toMatchObject({
+        primaryTagId: changed,
+      });
+    await expect.poll(() => linkedNoteState(fresh, unseen)).toMatchObject({ primaryTagId: root });
+    expect(derivedRequests).toEqual([]);
+    // A create replay cannot re-adopt a later explicit plain-color edit.
+    expect(
+      (
+        await request.patch(`/api/notes/${noteId}`, {
+          headers,
+          data: { color: 'blue' },
+        })
+      ).status(),
+    ).toBe(200);
+    expect(
+      await (
+        await request.post('/api/tags', {
+          headers,
+          data: { id: root, name: 'Offline work', parentId: null, icon: null, color: 'blue' },
+        })
+      ).json(),
+    ).toEqual({ txid: null });
+    await expect
+      .poll(() => linkedNoteState(fresh, noteId))
+      .toMatchObject({
+        color: 'blue',
+        primaryTagId: null,
+        secondaryTagIds: [other],
+      });
+  } finally {
+    await device.close();
+  }
 });

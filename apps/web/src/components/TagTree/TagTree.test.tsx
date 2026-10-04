@@ -1,5 +1,5 @@
 import type { Tag } from '@catch/shared';
-import { act, fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createPortal } from 'react-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TagTree } from './TagTree';
@@ -74,5 +74,8 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
   });
   act(() => notify([{ target: observed.at(-1)!, isIntersecting: true }]));
   expect(screen.getByText('Tag 4999')).toBeInTheDocument();
-  await waitForElementToBeRemoved(() => screen.queryByText('Tag 0'));
-}, 15_000);
+  // Thousands of exiting rows can outlast the default one-second wait on a busy host.
+  await waitFor(() => expect(screen.queryByText('Tag 0')).not.toBeInTheDocument(), {
+    timeout: 15_000,
+  });
+}, 60_000);

@@ -1,8 +1,11 @@
+import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
+import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 
 /** Fades the page into the dock only while there is more content below the viewport. */
 export function PageBottomBlur() {
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
+  const swipeY = useSettingsSwipeY();
 
   useEffect(() => {
     let frame = 0;
@@ -31,10 +34,11 @@ export function PageBottomBlur() {
 
   return (
     // Match the top blur across the note pane so the split boundary has no seam.
-    <div
+    <motion.div
+      data-page-bottom-blur
       aria-hidden
       className="page-bottom-blur pointer-events-none fixed right-0 bottom-[var(--keyboard)] left-0 z-30 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
-      style={{ opacity: hasMoreBelow ? 1 : 0 }}
+      style={{ opacity: hasMoreBelow ? 1 : 0, y: swipeY }}
     />
   );
 }

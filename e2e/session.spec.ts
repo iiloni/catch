@@ -28,11 +28,12 @@ test('a refused session keeps cached notes editable and queued writes survive si
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(card(page, 'Saved note edited')).toBeVisible();
 
-  await page.unroute('**/api/**');
+  // Background sync must not recover and dismiss the prompt before reauthentication.
   await page.getByRole('button', { name: /^Signed out/ }).click();
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
+  await page.unroute('**/api/**');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(card(page, 'Saved note edited')).toBeVisible({ timeout: 15_000 });
   await expect(card(page, 'Queued note')).toBeVisible();

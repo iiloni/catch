@@ -19,14 +19,19 @@ import {
 
 export function createTag(userId: string, input: Omit<Tag, 'id' | 'userId'>) {
   const id = uuidv7();
-  const transaction = write(() => tagsCollection.insert({ id, userId, ...input }));
+  const transaction = write(() => {
+    tagsCollection.insert({ id, userId, ...input });
+    if (input.color) tagPlainColorNotes(id, input.color);
+  });
   return { id, transaction };
 }
 export function updateTag(id: string, changes: UpdateTag) {
+  const previousColor = tagsCollection.get(id)?.color;
   return write(() => {
     tagsCollection.update(id, (draft) => {
       Object.assign(draft, changes);
     });
+    if (changes.color && changes.color !== previousColor) tagPlainColorNotes(id, changes.color);
     if (changes.parentId !== undefined) {
       const tags = [...tagsCollection.values()];
       for (const assignment of noteTagsCollection.values()) {
@@ -38,6 +43,16 @@ export function updateTag(id: string, changes: UpdateTag) {
       }
     }
   });
+}
+
+function tagPlainColorNotes(tagId: string, color: NonNullable<Tag['color']>) {
+  for (const note of notesCollection.values()) {
+    if (note.color !== color || noteTagsCollection.get(note.id)?.primaryTagId) continue;
+    notesCollection.update(note.id, (draft) => {
+      draft.color = 'default';
+    });
+    assignPrimaryTag(note.id, tagId);
+  }
 }
 export function deleteTag(id: string) {
   const removed = tagSubtreeIds([...tagsCollection.values()], id);

@@ -114,3 +114,7 @@ default) or `preview` to regenerate one. Check preview derivation with
 `python3 branding/preview/derive-preview-icons.py --check`.
 See [Brand assets](docs/branding.md) for sizes, shared Android layers, integrity checks,
 and channel selection. UI colors and theme colors stay the same in both channels.
+
+## License
+
+[MIT](LICENSE)

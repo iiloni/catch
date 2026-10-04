@@ -50,6 +50,7 @@ import {
   useSettingsNavigation,
   useWideSettings,
 } from '@/lib/settings';
+import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
@@ -95,6 +96,8 @@ export function Dock() {
         : tab === '/search'
           ? 'search'
           : 'tabs';
+  const settingsY = useSettingsSwipeY();
+  const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
   const inputRef = useRef<HTMLInputElement>(null);
   // Above the editor while it is open or animating. Motion keeps writing this value inline,
   // so the quick note overrides it in CSS to keep its close button above the scrim.
@@ -153,7 +156,7 @@ export function Dock() {
         ref={dockRef}
         data-dock
         // Translate the dock without fading its glass's ancestor.
-        style={{ zIndex, y: entry.y }}
+        style={{ zIndex, y: dockY }}
         // Spans the whole width and pads the pane away rather than ending at it: a page
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.

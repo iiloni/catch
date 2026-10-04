@@ -32,8 +32,16 @@ when a branch is reparented. It never rejects or clears a queued write for this 
 root, so changing a root's color or moving a branch recolors every assigned note without
 fan-out writes. The note's existing `color` remains its plain-color fallback. Assigning a
 primary clears that fallback to `default`. Selecting any unlinked color, including No
-color, clears the primary while preserving secondary tags. Linking a color does not
-retroactively tag old plain-color notes. Cards, editors and color search use derived colors.
+color, clears the primary while preserving secondary tags. Linking a color, on creation or
+when changing a root's color, assigns that root as the primary of every existing plain-color
+note of that color, including archived and trashed notes. It clears their fallback without
+changing edit timestamps and preserves secondary assignments except the new primary itself.
+Existing primaries remain intact. The client applies this optimistically; only the tag edit
+is queued, and the server applies it atomically against current notes and assignments under
+the tree lock. Replaying a create or saving an unchanged color does not repeat the adoption.
+Tags settings keeps notes and assignments subscribed on direct page loads so these
+optimistic edits use cached relationships and continue receiving the server's changes.
+Cards, editors and color search use derived colors.
 Copies preserve assignments. Icons are a curated, bundled Lucide set that works offline.
 
 **Deletion removes a branch and its assignments, never notes.** The server cleans secondary
@@ -113,3 +121,8 @@ This server adapter preserves their intent without changing or resetting device 
 The assignment normalization and search refinements are part of this unpublished
 protocol-2 feature; they require no additional protocol or shape-version bump. Existing
 queued assignment arrays retain their format and are normalized on replay.
+Color linking uses the existing tag requests and synced columns, so no protocol or
+schema-version bump is needed. Old protocol-2 clients receive the server's adopted
+assignments through sync. Updated clients against an older protocol-2 server still save
+the tag link, but existing notes are adopted only after the server is updated and a color
+is newly linked. Existing queued plain-color writes retain their explicit color intent.
