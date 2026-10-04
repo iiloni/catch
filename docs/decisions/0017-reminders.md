@@ -70,10 +70,12 @@ client that the server then posts to, the same risk `safeFetch` guards for link 
 saving a subscription and again on sending.
 
 **It is set in the note's dock.** The bell in the open note's dock grows a panel out of it,
-like the palette and the tags, rather than a sheet over the note. The panel is three steps
-(day, time, repeat), each a row of choices that shows what it is set to; a date or time
-field, and a repeat's interval, weekdays and end, appear only under the choice that needs
-them. Numbers are stepped, not typed, so the keyboard does not cover the dock. A pending
+like the palette and the tags, rather than a sheet over the note. The panel keeps the common choices one tap
+away and the rest folded: a row of days (today, tomorrow, pick a date) and a row of times
+under plain labels, then the repeat as a single row saying what it is set to, which opens
+its settings (interval, weekdays, end) when tapped, then whether the time follows the user
+or stays in a chosen zone. Numbers are stepped, not typed, so the keyboard does not cover
+the dock, and the panel may grow to the top of the screen before it scrolls. A pending
 reminder opens on its next time rather than its first, and a counted repeat on the times it
 has left, so editing one carries on the count instead of starting it again. To make room
 for the bell, pinning moved to the note's header beside archive and trash. On a card the

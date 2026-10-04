@@ -62,11 +62,10 @@ describe('describeRecurrence', () => {
 });
 
 describe('quick choices', () => {
-  it('offers today, tomorrow and a week on', () => {
+  it('offers today and tomorrow', () => {
     expect(quickReminderDays(at(5, 10))).toEqual([
       { label: 'Today', date: '2026-10-05' },
       { label: 'Tomorrow', date: '2026-10-06' },
-      { label: 'Next week', date: '2026-10-12' },
     ]);
   });
 

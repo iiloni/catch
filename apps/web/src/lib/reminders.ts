@@ -215,7 +215,6 @@ export function quickReminderDays(now: Date) {
   return [
     { label: 'Today', date: day(0) },
     { label: 'Tomorrow', date: day(1) },
-    { label: 'Next week', date: day(7) },
   ];
 }
 

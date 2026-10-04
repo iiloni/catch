@@ -12,7 +12,12 @@ import {
 } from './helpers';
 
 const panel = (page: Page) => page.getByRole('form', { name: 'Reminder' });
-const step = (page: Page, name: string) => panel(page).getByRole('group', { name });
+const step = (page: Page, name: string) => panel(page).getByRole('group', { name, exact: true });
+/** The repeat settings stay folded into a summary row until it is tapped. */
+const openRepeat = (page: Page) =>
+  panel(page)
+    .getByRole('button', { name: /^Repeat: / })
+    .click();
 
 test('a note is given a repeating reminder, which is then removed', async ({ page }) => {
   await signUp(page);
@@ -27,6 +32,7 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
   await panel(page).getByLabel('Date', { exact: true }).fill('2031-03-04');
   await step(page, 'Time').getByRole('button', { name: 'Custom' }).click();
   await panel(page).getByLabel('Time', { exact: true }).fill('09:30');
+  await openRepeat(page);
   await step(page, 'Repeat').getByRole('button', { name: 'Weekly' }).click();
   // 2031-03-04 is a Tuesday, which a weekly reminder starts on.
   await expect(panel(page).getByRole('button', { name: 'Tuesday' })).toHaveAttribute(
@@ -59,10 +65,13 @@ test('a note is given a repeating reminder, which is then removed', async ({ pag
     .getByRole('dialog')
     .getByRole('button', { name: /^Reminder: / })
     .click();
-  await expect(step(page, 'Repeat').getByRole('button', { name: 'Weekly' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    panel(page).getByRole('button', { name: /^Repeat: Weekly on Tue, Thu/ }),
+  ).toBeVisible();
+  await openRepeat(page);
+  await expect(
+    step(page, 'Repeat').getByRole('button', { name: 'Weekly', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(panel(page).getByLabel('Time', { exact: true })).toHaveValue('09:30');
   await panel(page).getByRole('button', { name: 'Remove reminder' }).click();
   await expect(page.getByText('Reminder removed')).toBeVisible();
@@ -103,6 +112,7 @@ test('a reminder for a time that has passed cannot be saved', async ({ page, isM
   const save = panel(page).getByRole('button', { name: 'Set reminder' });
   await expect(save).toBeDisabled();
   // A repeating reminder may start in the past: it rings at its next time.
+  await openRepeat(page);
   await step(page, 'Repeat').getByRole('button', { name: 'Daily' }).click();
   await expect(save).toBeEnabled();
 });

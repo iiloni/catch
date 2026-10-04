@@ -8,22 +8,11 @@ import {
   reminderFireTime,
   reminderZone,
 } from '@catch/shared';
-import {
-  Bell,
-  CalendarDays,
-  Clock,
-  Globe,
-  type LucideIcon,
-  Minus,
-  Plus,
-  Repeat,
-  Trash2,
-} from 'lucide-react';
+import { Bell, ChevronDown, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
 import {
   defaultReminderStart,
@@ -75,13 +64,6 @@ function calendarDate(date: string) {
 
 const daysIn = (date: Date) =>
   new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
-
-const shortDate = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
 
 /** When a reminder that was put off rings again, while that is still ahead. */
 const snoozedUntil = (reminder: Reminder | undefined, now: Date) =>
@@ -173,26 +155,14 @@ function toInput(form: Form): ReminderInput | null {
 const inputClass =
   'h-11 rounded-xl border-transparent bg-foreground/[0.06] px-3 text-base shadow-none md:text-base';
 
-/** One step of setting a reminder, with what it is set to shown beside its name. */
-function Step({
-  icon: Icon,
-  title,
-  value,
-  children,
-}: {
-  icon: LucideIcon;
-  title: string;
-  value?: string;
-  children: ReactNode;
-}) {
+/** One step of setting a reminder: a quiet label over its row of choices. */
+function Step({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <fieldset className="min-w-0 rounded-2xl bg-foreground/[0.04] p-2">
+    <fieldset className="min-w-0">
       <legend className="sr-only">{title}</legend>
-      <div aria-hidden className="flex items-center gap-1.5 px-1 pb-2 text-xs">
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="font-medium text-muted-foreground">{title}</span>
-        <span className="ml-auto min-w-0 truncate font-medium">{value}</span>
-      </div>
+      <p aria-hidden className="px-1 pb-1.5 font-medium text-muted-foreground text-xs">
+        {title}
+      </p>
       {children}
     </fieldset>
   );
@@ -290,11 +260,17 @@ function Stepper({
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="px-1 text-[0.6875rem] text-muted-foreground">{label}</p>
-      {children}
+    <div className="flex items-start gap-2">
+      <p className="w-10 shrink-0 pt-3.5 text-muted-foreground text-xs">{label}</p>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">{children}</div>
     </div>
   );
+}
+
+/** Every zone the device knows, with the reminder's own among them. */
+function timeZones(current: string) {
+  const zones = Intl.supportedValuesOf?.('timeZone') ?? [];
+  return zones.includes(current) ? zones : [current, ...zones];
 }
 
 const REPEATS: { value: RepeatChoice; label: string }[] = [
@@ -329,6 +305,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const [now, setNow] = useState(() => new Date());
   const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
   const [form, setForm] = useState(opened);
+  const [repeatOpen, setRepeatOpen] = useState(false);
   const days = quickReminderDays(now);
   const presets = quickReminderTimes(times);
   // Until the user asks for a field, a day or time that matches a choice shows as that choice.
@@ -360,6 +337,9 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const untouched =
     Boolean(reminder?.nextAt || snoozed) &&
     JSON.stringify(input) === JSON.stringify(toInput(opened));
+  const repeatSummary = input?.recurrence
+    ? describeRecurrence(input.recurrence)
+    : 'Does not repeat';
   const summary = !input
     ? 'Choose a day and a time'
     : passed
@@ -376,7 +356,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     <form
       aria-label="Reminder"
       className={cn(
-        'flex max-h-[min(34rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-5rem))] flex-col gap-1.5 px-2 pt-2 pb-1',
+        'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1rem)] flex-col gap-2 px-2 pt-2 pb-1',
         className,
       )}
       onSubmit={(event) => {
@@ -427,7 +407,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-1.5 overflow-y-auto rounded-2xl [scrollbar-width:none] [&>*]:shrink-0">
+      <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto rounded-xl [scrollbar-width:none] [&>*]:shrink-0">
         {rang && reminder && (
           <Button
             type="button"
@@ -443,8 +423,8 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           </Button>
         )}
 
-        <Step icon={CalendarDays} title="Day" value={date ? shortDate.format(date) : undefined}>
-          <div className="grid grid-cols-4 gap-1.5">
+        <Step title="Day">
+          <div className="grid grid-cols-3 gap-1.5">
             {days.map((day) => (
               <Choice
                 key={day.label}
@@ -476,7 +456,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           </AnimatedHeight>
         </Step>
 
-        <Step icon={Clock} title="Time" value={input ? formatTimeOfDay(form.time) : undefined}>
+        <Step title="Time">
           <div className="grid grid-cols-4 gap-1.5">
             {presets.map((preset) => (
               <Choice
@@ -507,140 +487,180 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           </AnimatedHeight>
         </Step>
 
-        <Step
-          icon={Repeat}
-          title="Repeat"
-          value={input?.recurrence ? describeRecurrence(input.recurrence) : 'Does not repeat'}
-        >
-          <div className="grid grid-cols-5 gap-1.5">
-            {REPEATS.map((option) => (
-              <Choice
-                key={option.value}
-                label={option.label}
-                selected={form.repeat === option.value}
-                onSelect={() => update({ repeat: option.value })}
-              />
-            ))}
-          </div>
+        {/* The busiest step stays folded into what it is set to until it is asked for. */}
+        <fieldset className="min-w-0">
+          <legend className="sr-only">Repeat</legend>
+          <button
+            type="button"
+            aria-expanded={repeatOpen}
+            aria-label={`Repeat: ${repeatSummary}`}
+            onClick={() => {
+              haptics.toggle();
+              setRepeatOpen(!repeatOpen);
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded-xl bg-foreground/[0.06] px-3 text-sm outline-none transition-colors duration-200 hover:bg-foreground/[0.1] focus-visible:ring-2 focus-visible:ring-ring/70"
+          >
+            <Repeat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="text-muted-foreground">Repeat</span>
+            <span className="ml-auto min-w-0 truncate font-medium">{repeatSummary}</span>
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                repeatOpen && 'rotate-180',
+              )}
+              aria-hidden
+            />
+          </button>
           <AnimatedHeight anchor="top">
-            {form.repeat !== 'none' && (
-              // The rail marks these as belonging to the repeat chosen above.
-              <div className="mt-2 ml-1.5 flex flex-col gap-2.5 border-foreground/10 border-l-2 pl-2.5">
-                <Detail label="Every">
-                  <Stepper
-                    label="Repeat every"
-                    value={form.interval}
-                    min={1}
-                    max={99}
-                    unit={form.interval === 1 ? UNITS[form.repeat] : `${UNITS[form.repeat]}s`}
-                    onChange={(interval) => update({ interval })}
-                  />
-                </Detail>
-                {form.repeat === 'weekly' && (
-                  <Detail label="On">
-                    <div className="grid grid-cols-7 gap-1">
-                      {WEEKDAYS.map((name, index) => {
-                        // With none chosen it repeats on the start date's weekday.
-                        const current = form.weekdays.length > 0 ? form.weekdays : [weekday];
-                        const chosen = current.includes(index);
-                        return (
-                          <button
-                            key={name}
-                            type="button"
-                            aria-label={name}
-                            aria-pressed={chosen}
-                            onClick={() => {
-                              haptics.selection();
-                              update({
-                                weekdays: chosen
-                                  ? current.filter((item) => item !== index)
-                                  : [...current, index],
-                              });
-                            }}
-                            className={cn(
-                              'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-                              chosen
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-foreground/[0.06] text-muted-foreground',
-                            )}
-                          >
-                            {name.slice(0, 2)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </Detail>
-                )}
-                {form.repeat === 'monthly' && date && (
-                  <Detail label="On">
-                    <div className="grid auto-cols-fr grid-flow-col gap-1.5">
-                      {monthlyOptions(date).map((option) => (
-                        <Choice
-                          key={option.value}
-                          label={option.label}
-                          selected={monthlyChoice(form, date) === option.value}
-                          onSelect={() => update({ monthlyOn: option.value })}
+            {repeatOpen && (
+              <div className="pt-1.5">
+                <div className="grid grid-cols-5 gap-1.5">
+                  {REPEATS.map((option) => (
+                    <Choice
+                      key={option.value}
+                      label={option.label}
+                      selected={form.repeat === option.value}
+                      onSelect={() => update({ repeat: option.value })}
+                    />
+                  ))}
+                </div>
+                <AnimatedHeight anchor="top">
+                  {form.repeat !== 'none' && (
+                    <div className="mt-2 flex flex-col gap-2 pl-1">
+                      <Detail label="Every">
+                        <Stepper
+                          label="Repeat every"
+                          value={form.interval}
+                          min={1}
+                          max={99}
+                          unit={form.interval === 1 ? UNITS[form.repeat] : `${UNITS[form.repeat]}s`}
+                          onChange={(interval) => update({ interval })}
                         />
-                      ))}
+                      </Detail>
+                      {form.repeat === 'weekly' && (
+                        <Detail label="On">
+                          <div className="grid grid-cols-7 gap-1">
+                            {WEEKDAYS.map((name, index) => {
+                              // With none chosen it repeats on the start date's weekday.
+                              const current = form.weekdays.length > 0 ? form.weekdays : [weekday];
+                              const chosen = current.includes(index);
+                              return (
+                                <button
+                                  key={name}
+                                  type="button"
+                                  aria-label={name}
+                                  aria-pressed={chosen}
+                                  onClick={() => {
+                                    haptics.selection();
+                                    update({
+                                      weekdays: chosen
+                                        ? current.filter((item) => item !== index)
+                                        : [...current, index],
+                                    });
+                                  }}
+                                  className={cn(
+                                    'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                                    chosen
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-foreground/[0.06] text-muted-foreground',
+                                  )}
+                                >
+                                  {name.slice(0, 2)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </Detail>
+                      )}
+                      {form.repeat === 'monthly' && date && (
+                        <Detail label="On">
+                          <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+                            {monthlyOptions(date).map((option) => (
+                              <Choice
+                                key={option.value}
+                                label={option.label}
+                                selected={monthlyChoice(form, date) === option.value}
+                                onSelect={() => update({ monthlyOn: option.value })}
+                              />
+                            ))}
+                          </div>
+                        </Detail>
+                      )}
+                      <Detail label="Ends">
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {ENDS.map((option) => (
+                            <Choice
+                              key={option.value}
+                              label={option.label}
+                              selected={form.ends === option.value}
+                              onSelect={() => update({ ends: option.value })}
+                            />
+                          ))}
+                        </div>
+                        {form.ends === 'until' && (
+                          <Input
+                            type="date"
+                            aria-label="Last day"
+                            min={form.date}
+                            value={form.until}
+                            onChange={(event) => update({ until: event.target.value })}
+                            className={inputClass}
+                          />
+                        )}
+                        {form.ends === 'count' && (
+                          <Stepper
+                            label="Ends after"
+                            value={form.count}
+                            min={1}
+                            max={999}
+                            unit={form.count === 1 ? 'time' : 'times'}
+                            onChange={(count) => update({ count })}
+                          />
+                        )}
+                      </Detail>
                     </div>
-                  </Detail>
-                )}
-                <Detail label="Ends">
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {ENDS.map((option) => (
-                      <Choice
-                        key={option.value}
-                        label={option.label}
-                        selected={form.ends === option.value}
-                        onSelect={() => update({ ends: option.value })}
-                      />
-                    ))}
-                  </div>
-                  {form.ends === 'until' && (
-                    <Input
-                      type="date"
-                      aria-label="Last day"
-                      min={form.date}
-                      value={form.until}
-                      onChange={(event) => update({ until: event.target.value })}
-                      className={inputClass}
-                    />
                   )}
-                  {form.ends === 'count' && (
-                    <Stepper
-                      label="Ends after"
-                      value={form.count}
-                      min={1}
-                      max={999}
-                      unit={form.count === 1 ? 'time' : 'times'}
-                      onChange={(count) => update({ count })}
-                    />
-                  )}
-                </Detail>
+                </AnimatedHeight>
               </div>
             )}
           </AnimatedHeight>
-        </Step>
+        </fieldset>
 
-        <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-2xl bg-foreground/[0.04] py-1.5 pr-2 pl-3">
-          <Globe className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium text-xs">
-              Keep in {form.timeZone.replaceAll('_', ' ')} time
-            </p>
-            <p className="truncate text-[0.6875rem] text-muted-foreground">
-              {form.fixed ? 'Rings at this time there' : 'Off: follows your clock when you travel'}
-            </p>
+        <Step title="Time zone">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Choice
+              label="Follow"
+              detail="My clock, wherever I am"
+              selected={!form.fixed}
+              onSelect={() => update({ fixed: false, timeZone: deviceTimeZone() })}
+            />
+            <Choice
+              label="Custom"
+              detail={form.fixed ? form.timeZone.replaceAll('_', ' ') : 'This time in one zone'}
+              selected={form.fixed}
+              onSelect={() => update({ fixed: true })}
+            />
           </div>
-          <Switch
-            aria-label="Keep in this time zone"
-            checked={form.fixed}
-            onCheckedChange={(fixed) => {
-              haptics.toggle();
-              update({ fixed });
-            }}
-          />
-        </div>
+          <AnimatedHeight anchor="top">
+            {form.fixed && (
+              <select
+                aria-label="Time zone"
+                value={form.timeZone}
+                onChange={(event) => update({ timeZone: event.target.value })}
+                className={cn(
+                  inputClass,
+                  'mt-1.5 w-full min-w-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                )}
+              >
+                {timeZones(form.timeZone).map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone.replaceAll('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </AnimatedHeight>
+        </Step>
       </div>
 
       <Button

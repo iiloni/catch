@@ -35,6 +35,7 @@ const onDone = vi.fn();
 const step = (name: string) => screen.getByRole('group', { name });
 const choice = (group: string, name: string | RegExp) =>
   within(step(group)).getByRole('button', { name });
+const openRepeat = () => fireEvent.click(screen.getByRole('button', { name: /^Repeat: / }));
 const pressed = (group: string) =>
   within(step(group))
     .getAllByRole('button', { pressed: true })
@@ -105,7 +106,8 @@ describe('ReminderPanel', () => {
 
   it('keeps the repeat settings folded away until a repeat is chosen', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
-    expect(screen.queryByRole('status', { name: 'Repeat every' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Weekly' })).toBeNull();
+    openRepeat();
     fireEvent.click(choice('Repeat', 'Weekly'));
     fireEvent.click(screen.getByRole('button', { name: 'Repeat every: more' }));
     fireEvent.click(screen.getByRole('button', { name: 'Thursday' }));
@@ -130,6 +132,7 @@ describe('ReminderPanel', () => {
   it('offers the nth weekday of the month the date falls on', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     fireEvent.click(choice('Day', 'Tomorrow'));
+    openRepeat();
     fireEvent.click(choice('Repeat', 'Monthly'));
     expect(choice('Repeat', 'Day 6')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(choice('Repeat', 'First Tuesday'));
@@ -152,6 +155,7 @@ describe('ReminderPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
     expect(screen.getByRole('button', { name: 'Set reminder' })).toBeDisabled();
     // A repeating reminder may start in the past: it rings at its next time.
+    openRepeat();
     fireEvent.click(choice('Repeat', 'Daily'));
     expect(screen.getByRole('button', { name: 'Set reminder' })).toBeEnabled();
   });
@@ -160,7 +164,7 @@ describe('ReminderPanel', () => {
     render(<ReminderPanel note={note} reminder={saved} onDone={onDone} />);
     expect(screen.getByLabelText('Date')).toHaveValue('2026-10-08');
     expect(screen.getByLabelText('Time')).toHaveValue('07:30');
-    fireEvent.click(screen.getByRole('switch', { name: 'Keep in this time zone' }));
+    fireEvent.click(choice('Time zone', /^Custom/));
     fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
     expect(setReminder).toHaveBeenCalledWith(note, expect.objectContaining({ floating: false }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove reminder' }));
@@ -201,6 +205,7 @@ describe('ReminderPanel', () => {
       },
     };
     render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
+    openRepeat();
     // Five of the sixty have gone by.
     expect(screen.getByRole('status', { name: 'Ends after' })).toHaveTextContent('55 times');
     fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:45' } });
@@ -216,6 +221,7 @@ describe('ReminderPanel', () => {
 
   it('needs a last day for a repeat that ends on a date', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    openRepeat();
     fireEvent.click(choice('Repeat', 'Daily'));
     fireEvent.click(choice('Repeat', 'On a date'));
     fireEvent.change(screen.getByLabelText('Last day'), { target: { value: '' } });
