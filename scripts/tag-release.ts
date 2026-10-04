@@ -7,6 +7,7 @@ import { compareReleaseTags, nextReleaseTag, promotePreviewTag } from './release
 const usage = `Usage:
   ./scripts/release.sh <stable|preview> <major|minor|patch> [--dry-run]
   ./scripts/release.sh stable promote [vMAJOR.MINOR.PATCH-preview] [--dry-run]
+  ./scripts/release.sh changelog --help
 
 Bumps use the highest stable or preview tag reachable from HEAD (initially v0.0.0).
 Promotion uses the preview tag's existing version and commit; omit the tag to use

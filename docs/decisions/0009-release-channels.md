@@ -131,7 +131,8 @@ and preview must advance independently, including preview versions ahead of stab
 
 - A public GHCR package requires a one-time visibility change after its first publication.
 - Conventional Commits describe changes, but do not automatically choose or push version
-  tags. Releasing remains an explicit action by a maintainer.
+  tags. Releasing remains an explicit action by a maintainer. Release notes are generated
+  from those commits ([ADR 0017](0017-derived-changelog.md)).
 - APK distribution and the Android updater use GitHub Releases. Android installation needs
   user confirmation; channel image aliases still require an explicit pull and recreate.
 - See [the release guide](../releases.md) for signing setup and deployment instructions.

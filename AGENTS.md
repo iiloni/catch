@@ -27,6 +27,9 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/release.sh <stable|preview> <major|minor|patch> [--dry-run]`: tag HEAD locally.
   Use `stable promote [preview-tag]` to preserve a tested preview's version and commit.
   See `docs/releases.md`; pushing a tag explicitly can trigger release builds.
+- `./scripts/release.sh changelog [tag] [--all] [--json]`: release notes derived from tags and
+  commits (ADR 0017); no tag means the unreleased commits on HEAD. Commit subjects and
+  `BREAKING CHANGE:` footers are published in them.
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
