@@ -277,10 +277,23 @@ type Page = 'main' | 'date' | 'time' | 'zone' | 'repeat' | 'until';
 const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, zone: 1, repeat: 1, until: 2 };
 
 /** A deeper page comes in from the right and the one before it returns from the left. */
+/** How long a page takes to fade out, which the next one waits for before fading in. */
+const PAGE_FADE = 0.1;
+
+// Both pages share one box while they swap, so a cross-fade would show one through the
+// other. The old page is gone before the new one appears; the slide and the height carry on.
 const pages = {
   enter: (direction: number) => ({ x: direction * 32, opacity: 0 }),
-  shown: { x: 0, opacity: 1 },
-  exit: (direction: number) => ({ x: direction * -32, opacity: 0 }),
+  shown: {
+    x: 0,
+    opacity: 1,
+    transition: { x: springs.smooth, opacity: { duration: 0.2, delay: PAGE_FADE } },
+  },
+  exit: (direction: number) => ({
+    x: direction * -32,
+    opacity: 0,
+    transition: { x: springs.smooth, opacity: { duration: PAGE_FADE } },
+  }),
 };
 
 const rowClass =
@@ -387,7 +400,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     initial: 'enter',
     animate: 'shown',
     exit: 'exit',
-    transition: springs.smooth,
   };
   // A zone's offset is the one it has when the reminder rings, not today's.
   const zoneAt = rings ?? now;
