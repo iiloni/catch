@@ -190,7 +190,9 @@ test('a reminder for a time that has passed cannot be saved', async ({ page, isM
   await seedNotes(page, ['Water the plants']);
   await openNote(page, 'Water the plants');
   await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
-  // Midnight today is behind us.
+  // Late in the day the panel opens on tomorrow, so the day is chosen too. Midnight today
+  // is behind us.
+  await step(page, 'Day').getByRole('button', { name: 'Today' }).click();
   await pickTime(page, 0, 0);
   await expect(panel(page).getByRole('status')).toContainText('That time has passed');
   const save = panel(page).getByRole('button', { name: 'Save' });
