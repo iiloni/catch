@@ -625,7 +625,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                     <Button
                       type="button"
                       variant="ghost"
-                      className="h-11 min-w-0 flex-1 rounded-xl bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/[0.1] hover:text-foreground/80"
+                      className="h-11 min-w-0 flex-1 rounded-xl hover:bg-foreground/[0.06] hover:text-foreground"
                       onClick={() => {
                         haptics.success();
                         snoozeReminder(note.id, snoozeUntil());
