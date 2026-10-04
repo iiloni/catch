@@ -61,7 +61,11 @@ finish before sliding away; save failures remain visible. Its measured width fol
 same spring as the header toolbars while its icon and text crossfade. The edited timestamp
 follows the note content, centered in the scroll area.
 The pill's slide is clipped at the header's safe top edge, so it never draws over Android's
-status bar. Motion uses pixel translations within that clip instead of resolving a
+status bar. The sides stay open and the clip extends below the header so the resting shadow
+can fade out. Header toolbars clip their changing controls separately from the glass surface;
+gallery cards clip only while swiping, and the quick-note popup uses a clip path only during
+its flight into a card. Resting surfaces keep their outer shadows.
+Motion uses pixel translations within the sync pill's clip instead of resolving a
 percentage/calc transform against changing native insets.
 
 **Header toolbars.** Page controls sit in toolbars in the header's top corners (the

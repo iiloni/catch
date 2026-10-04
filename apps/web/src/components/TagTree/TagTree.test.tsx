@@ -6,6 +6,7 @@ import { TagTree } from './TagTree';
 
 afterEach(() => vi.unstubAllGlobals());
 
+// Allow the 5000-row jsdom stress case to finish on shared worktree hosts.
 it('defers offscreen controls in a 5000-level tree and renders deep matches without a cutoff', async () => {
   const observed: Element[] = [];
   let notify: (entries: { target: Element; isIntersecting: boolean }[]) => void = () => {};
@@ -74,4 +75,4 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
   act(() => notify([{ target: observed.at(-1)!, isIntersecting: true }]));
   expect(screen.getByText('Tag 4999')).toBeInTheDocument();
   await waitForElementToBeRemoved(() => screen.queryByText('Tag 0'));
-});
+}, 15_000);

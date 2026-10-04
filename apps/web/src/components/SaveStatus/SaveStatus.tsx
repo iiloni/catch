@@ -28,7 +28,8 @@ export function SaveStatus({ state, compact = false }: { state: SaveState; compa
   return (
     <div
       role="status"
-      className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 flex items-center justify-center overflow-hidden py-2"
+      // Clip the slide at the safe top edge, leaving the sides and the resting shadow room.
+      className="pointer-events-none absolute inset-x-0 -top-2 -bottom-10 flex items-center justify-center overflow-x-visible overflow-y-clip pt-2 pb-10"
     >
       <AnimatePresence>
         {visible && <StatusPill key="pill" mode={mode} compact={compact} />}
