@@ -1,5 +1,5 @@
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
-import { createNote, openNote, signUp, waitForPageTransition } from './helpers';
+import { createNote, openNote, settledBox, signUp, waitForPageTransition } from './helpers';
 
 async function pullSettings(touch: CDPSession, delta: number) {
   let timestamp = Date.now() / 1000;
@@ -233,14 +233,12 @@ test('on phones the dock picks settings pages, also by holding and sliding', asy
   await expect(picker).toBeHidden();
 
   // Hold the selector, slide onto General and let go.
-  const box = await page.getByRole('button', { name: 'Settings page: Account' }).boundingBox();
-  if (!box) throw new Error('Missing settings selector');
+  const box = await settledBox(page.getByRole('button', { name: 'Settings page: Account' }));
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const session = await context.newCDPSession(page);
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
   await expect(picker).toBeVisible();
-  const target = await picker.getByRole('button', { name: 'General' }).boundingBox();
-  if (!target) throw new Error('Missing General in the picker');
+  const target = await settledBox(picker.getByRole('button', { name: 'General' }));
   const end = target.y + target.height / 2;
   for (let step = 1; step <= 6; step++) {
     await session.send('Input.dispatchTouchEvent', {
