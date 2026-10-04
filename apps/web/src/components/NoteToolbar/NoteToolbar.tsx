@@ -5,6 +5,7 @@ import {
   Columns3,
   LayoutDashboard,
   RotateCcw,
+  Tags,
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
@@ -12,6 +13,7 @@ import { useState } from 'react';
 import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
+import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns } from '@/lib/collections';
@@ -38,6 +40,7 @@ type Props = {
 /** Actions for one note. Trashed notes can only be restored or deleted. */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
+  const [tagging, setTagging] = useState(false);
   const then = (action: () => unknown) => () => {
     action();
     onDone?.();
@@ -57,13 +60,27 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   }
 
   return (
-    <div className={cn('flex flex-col', className, moving && 'opacity-100')}>
+    <div className={cn('flex flex-col', className, (moving || tagging) && 'opacity-100')}>
       <div className="flex items-center gap-0.5">
         <NoteColorPicker
           note={note}
           onChange={(color) => setNoteColor(note.id, color)}
           onTagChange={(id) => setPrimaryTag(note.id, id)}
         />
+        <Popover open={tagging} onOpenChange={setTagging}>
+          <PopoverTrigger asChild>
+            <IconButton label="Tags" onClick={haptics.toggle}>
+              <Tags />
+            </IconButton>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <TagPicker noteId={note.id} />
+          </PopoverContent>
+        </Popover>
         <Popover open={moving} onOpenChange={setMoving}>
           <PopoverTrigger asChild>
             <IconButton label="Move note" onClick={() => haptics.toggle()}>

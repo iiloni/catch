@@ -7,6 +7,7 @@ import {
   duplicateNotes,
   restoreNotes,
   sendNotesToGallery,
+  setNotePinned,
   setNotesColor,
   trashNotes,
   unarchiveNotes,
@@ -57,6 +58,39 @@ describe('SelectionToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: label }));
     expect(action).toHaveBeenCalledWith(argument);
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it('pins a mixed selection, then unpins all, without ending selection', () => {
+    const onDone = vi.fn();
+    const mixed = [makeNote('one', { isPinned: true }), makeNote('two')];
+    const { rerender } = render(<SelectionToolbar notes={mixed} place="gallery" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
+    expect(setNotePinned).toHaveBeenCalledExactlyOnceWith('two', true);
+    vi.clearAllMocks();
+    rerender(
+      <SelectionToolbar
+        notes={mixed.map((note) => ({ ...note, isPinned: true }))}
+        place="gallery"
+        onDone={onDone}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
+    expect(setNotePinned).toHaveBeenCalledWith('one', false);
+    expect(setNotePinned).toHaveBeenCalledWith('two', false);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it.each(['archive', 'trash'] as const)('keeps pinning unavailable in %s', (place) => {
+    render(<SelectionToolbar notes={notes} place={place} onDone={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Pin' })).not.toBeInTheDocument();
+  });
+
+  it('opens secondary tags without ending selection', () => {
+    const onDone = vi.fn();
+    render(<SelectionToolbar notes={notes} place="gallery" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Tags' }));
+    expect(screen.getByRole('region', { name: 'Secondary tags' })).toBeVisible();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('recolors the selection and keeps it', () => {

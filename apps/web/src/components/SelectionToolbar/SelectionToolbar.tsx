@@ -6,7 +6,10 @@ import {
   LayoutGrid,
   type LucideIcon,
   Palette,
+  Pin,
+  PinOff,
   RotateCcw,
+  Tags,
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
@@ -14,6 +17,7 @@ import { motion } from 'motion/react';
 import { type ComponentProps, useState } from 'react';
 import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import type { HeaderSelection } from '@/components/PageHeader/PageHeader';
+import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,6 +37,7 @@ import {
   duplicateNotes,
   restoreNotes,
   sendNotesToGallery,
+  setNotePinned,
   setNotesColor,
   trashNotes,
   unarchiveNotes,
@@ -67,6 +72,7 @@ export function selectionHeader(
 export function SelectionToolbar({ notes, place, onDone }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ids = notes.map((note) => note.id);
+  const allPinned = notes.every((note) => note.isPinned);
   const tags = useTags();
   const assignments = useNoteTagAssignments();
   const { awaitingAssignments } = useTagReadiness();
@@ -90,6 +96,18 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
 
   return (
     <div role="toolbar" aria-label="Selected notes" className="flex items-center">
+      {(place === 'gallery' || place === 'deck') && (
+        <ToolbarButton
+          label={allPinned ? 'Unpin' : 'Pin'}
+          icon={allPinned ? PinOff : Pin}
+          onClick={() => {
+            haptics.toggle();
+            for (const note of notes) {
+              if (note.isPinned !== !allPinned) setNotePinned(note.id, !allPinned);
+            }
+          }}
+        />
+      )}
       {place === 'trash' && (
         <ToolbarButton
           label="Restore"
@@ -112,6 +130,18 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
             onChange={(color) => setNotesColor(ids, color)}
             onTagChange={(id) => setPrimaryTags(ids, id)}
           />
+        </PopoverContent>
+      </Popover>
+      <Popover>
+        <PopoverTrigger asChild>
+          <ToolbarButton label="Tags" icon={Tags} onClick={haptics.toggle} />
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={10}
+          className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+        >
+          <TagPicker noteIds={ids} />
         </PopoverContent>
       </Popover>
       {place === 'deck' && (
@@ -214,7 +244,7 @@ function ToolbarButton({ label, icon: Icon, ...props }: ToolbarButtonProps) {
       aria-label={label}
       whileTap={{ scale: 0.88 }}
       transition={springs.snappy}
-      className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="flex h-10 w-9 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50 max-[375px]:w-8 sm:w-10"
       {...props}
     >
       <Icon className="size-5" aria-hidden />

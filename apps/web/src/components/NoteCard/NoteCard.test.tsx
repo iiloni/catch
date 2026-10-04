@@ -4,10 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { linkOverlay } from '@/lib/linkPreviews';
 import { moveNoteToDeck, sendNoteToGallery, setNotePinned, trashNote } from '@/lib/notes';
+import { setSecondaryTag } from '@/lib/tags';
 import { link, makePreview, paragraph } from '@/test/links';
 import { NoteCard, NoteCardFace } from './NoteCard';
 
 vi.mock('@/lib/notes');
+vi.mock('@/lib/tags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tags')>()),
+  setSecondaryTag: vi.fn(),
+}));
 const previews = new Map([
   ['https://a.example/', makePreview('https://a.example/', { title: 'Page A', siteName: 'A' })],
 ]);
@@ -114,6 +119,33 @@ describe('NoteCard', () => {
     expect(moveNoteToDeck).toHaveBeenCalledWith(note.id, 'doing');
     expect(move).toHaveAttribute('aria-expanded', 'false');
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('assigns tags from the card toolbar without opening the note', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    tags.push({
+      id: 'work',
+      userId: note.userId,
+      name: 'Work',
+      parentId: null,
+      color: null,
+      icon: null,
+    });
+    const onOpen = vi.fn();
+    renderCard({ onOpen });
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    fireEvent.click(screen.getByRole('button', { name: 'Tags' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Work' }));
+    expect(setSecondaryTag).toHaveBeenCalledWith(note.id, 'work', true);
+    expect(onOpen).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('offers Gallery from a deck card and keeps its move button consistent', () => {
