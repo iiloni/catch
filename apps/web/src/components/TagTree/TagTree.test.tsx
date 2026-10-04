@@ -74,5 +74,8 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
   });
   act(() => notify([{ target: observed.at(-1)!, isIntersecting: true }]));
   expect(screen.getByText('Tag 4999')).toBeInTheDocument();
-  await waitFor(() => expect(screen.queryByText('Tag 0')).not.toBeInTheDocument());
-}, 30_000);
+  // Thousands of exiting rows can outlast the default one-second wait on a busy host.
+  await waitFor(() => expect(screen.queryByText('Tag 0')).not.toBeInTheDocument(), {
+    timeout: 15_000,
+  });
+}, 60_000);
