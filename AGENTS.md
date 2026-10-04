@@ -87,15 +87,20 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   `merge on pass` means functionality and design are approved and authorizes merging
   once required checks pass.
 - After the user approves functionality and design for merging, mark the PR ready and add
-  `merge on pass`. Fix failures with the label left in place, then merge or enable
-  auto-merge. If a fix changes the approved functionality or design, disable pending
+  `merge on pass`. Fix failures with the label left in place, then merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.
   The local `./scripts/dev.sh check` requirement still applies.
 - A PR does not have to be up to date with `main` to merge: its checks ran on GitHub's
   merge of the branch with `main` as it stood then, and a passing result stays valid when
   other PRs land. Do not update the branch just because `main` advanced, since every
-  update reruns the full suite. Update it only to resolve conflicts, or to pick up a fix
-  for a failure that came from `main`.
+  update reruns the full suite.
+- When validation passes, look at what reached `main` since the branch last included it
+  (`git fetch origin main`, then `git diff --stat HEAD...origin/main`) before merging. If
+  none of it touches the files or the behavior your PR changes, merge as it is. If it
+  does, or the branch conflicts, merge `main` into the branch yourself, read how the two
+  changes combine, fix what does not fit, run targeted checks and push; that update is
+  worth the rerun. Merge by hand after this look rather than enabling auto-merge ahead
+  of it. Also update to pick up a fix for a failure that came from `main`.
 - After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
   investigate failures, fix them and push updates until required validation passes.
   Continue through the authorized merge and verify the PR is actually merged, then update

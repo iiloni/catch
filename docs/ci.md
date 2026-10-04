@@ -141,17 +141,21 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    If fixing a failure changes approved functionality or design, disable pending auto-merge,
    return the PR to draft, remove `merge on pass` and obtain renewed approval before
    reapplying it.
-4. When `validation` passes, merge manually. Alternatively, use the label's authorization
-   to enable auto-merge while validation runs:
+4. When `validation` passes, check what reached `main` since the branch last included
+   it, then merge:
 
    ```bash
-   gh pr merge <number> --auto --squash
+   git fetch origin main
+   git diff --stat HEAD...origin/main
+   gh pr merge <number> --squash
    ```
 
-   Use a Conventional Commit title for a squash merge. Auto-merge waits for branch rules
-   and checks. A branch behind `main` still merges; update it only to resolve conflicts
-   or to pick up a fix for a failure that came from `main`, because every update reruns
-   the full suite.
+   A branch behind `main` still merges, and every update reruns the full suite, so leave
+   the branch alone when the new commits touch neither the files nor the behavior the PR
+   changes. When they do, or the branch conflicts, merge `main` into the branch, review
+   how the two changes combine, fix what does not fit, run targeted checks and push, then
+   wait for validation again. Auto-merge skips this look; enable it only when nothing
+   else is close to merging. Use a Conventional Commit title for a squash merge.
 
 To return to feature iteration, disable any pending auto-merge, make the PR a draft and
 remove `merge on pass`. Removing the label withdraws merge authorization and triggers a
@@ -172,8 +176,9 @@ A branch does not have to be up to date with `main` to merge. Requiring that mad
 merge invalidate the passing result of every other approved PR, so several ready PRs
 each waited for a rebase and another full suite per merge ahead of them. A PR's result
 therefore covers `main` as it stood when its run started, and two PRs that each pass can
-still break `main` together. The full suite on every `main` push catches that after the
-merge, and a release only reuses a verified full pass for its exact commit, so a broken
+still break `main` together. The agent's look at what landed since (step 4 above) is
+there for the changes that overlap; the full suite on every `main` push catches the rest
+after the merge, and a release only reuses a verified full pass for its exact commit, so a broken
 combination is not released.
 
 A red `main` only blocks releasing that commit. Agents finish with their own PR merged
