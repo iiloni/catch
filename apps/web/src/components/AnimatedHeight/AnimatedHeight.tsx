@@ -6,9 +6,15 @@ import { cn } from '@/lib/utils';
 export function AnimatedHeight({
   children,
   anchor = 'bottom',
+  follow = false,
 }: {
   children: ReactNode;
   anchor?: 'top' | 'bottom';
+  /**
+   * Takes the content's height as it is rather than springing to it, for while something
+   * inside is animating its own height: two springs chasing each other fall out of step.
+   */
+  follow?: boolean;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number>();
@@ -30,8 +36,8 @@ export function AnimatedHeight({
         anchor === 'bottom' ? 'justify-end' : 'justify-start',
       )}
       initial={false}
-      animate={{ height: height ?? 'auto' }}
-      transition={reducedMotion ? { duration: 0 } : springs.smooth}
+      animate={{ height: follow ? 'auto' : (height ?? 'auto') }}
+      transition={reducedMotion || follow ? { duration: 0 } : springs.smooth}
     >
       <div ref={contentRef} className="shrink-0">
         {children}

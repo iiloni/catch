@@ -341,8 +341,12 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const [page, setPage] = useState<Page>('main');
   // Which way the pages slide: on to a deeper page, or back from it.
   const [direction, setDirection] = useState(1);
+  // From leaving one page until the next has arrived, when the panel's height is the one
+  // thing moving. On the repeat page afterwards its sections open themselves.
+  const [swapping, setSwapping] = useState(false);
   const go = (next: Page) => {
     haptics.toggle();
+    setSwapping(true);
     setDirection(DEPTH[next] > DEPTH[page] ? 1 : -1);
     setPage(next);
   };
@@ -397,6 +401,9 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
     initial: 'enter',
     animate: 'shown',
     exit: 'exit',
+    onAnimationComplete: (definition: unknown) => {
+      if (definition === 'shown') setSwapping(false);
+    },
   };
   // A zone's offset is the one it has when the reminder rings, not today's.
   const zoneAt = rings ?? now;
@@ -426,16 +433,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
       </div>
     </>
   );
-  const doneButton = (from: Page) => (
-    <Button
-      type="button"
-      variant="secondary"
-      className="h-11 shrink-0 rounded-xl"
-      onClick={() => go(from)}
-    >
-      Done
-    </Button>
-  );
 
   return (
     <form
@@ -461,7 +458,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
         onDone();
       }}
     >
-      <AnimatedHeight>
+      <AnimatedHeight follow={page === 'repeat' && !swapping}>
         <div className="relative">
           <AnimatePresence initial={false} mode="wait" custom={direction}>
             {page === 'main' ? (
@@ -656,7 +653,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
             ) : (
               <motion.fieldset key="repeat" {...motionProps} className={cn(pageClass, className)}>
                 {pageHeader('Repeat', repeatSummary, 'main')}
-                <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto rounded-xl [scrollbar-width:none]">
+                <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto rounded-xl pb-1 [scrollbar-width:none]">
                   <div className="grid grid-cols-5 gap-1.5">
                     {REPEATS.map((option) => (
                       <Choice
@@ -774,7 +771,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                     )}
                   </AnimatedHeight>
                 </div>
-                {doneButton('main')}
               </motion.fieldset>
             )}
           </AnimatePresence>

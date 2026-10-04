@@ -43,8 +43,7 @@ const step = (name: string) => screen.getByRole('group', { name });
 const choice = (group: string, name: string | RegExp) =>
   within(step(group)).getByRole('button', { name });
 const openRepeat = () => fireEvent.click(screen.getByRole('button', { name: /^Repeat: / }));
-const back = () => fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-const leave = () => fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+const back = () => fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 const cell = (selector: string) => document.querySelector(selector) as HTMLElement;
 /** Chooses a day on the date page, turning to its month first. */
 function pickDate(date: string) {
@@ -60,7 +59,7 @@ function pickTime(time: string) {
   if (cell('[data-period]')) fireEvent.click(cell(`[data-period="${hour >= 12 ? 'PM' : 'AM'}"]`));
   fireEvent.click(cell(`[data-hour="${hour}"]`));
   fireEvent.click(cell(`[data-minute="${minute}"]`));
-  leave();
+  back();
 }
 const pressed = (group: string) =>
   within(step(group))
