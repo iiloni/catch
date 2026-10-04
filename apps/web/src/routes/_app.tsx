@@ -46,9 +46,14 @@ function AppLayout() {
     <>
       {/* No transform or filter here: either would break the pages' fixed headers. */}
       {/* Inert under an open note: the editor is not a modal dialog (the dock stays usable). */}
+      {/*
+        Padded for the pane rather than given a margin, so it spans the screen and clips there:
+        a card still moving to a narrower page reaches under the pane, and anything wider than
+        the screen would widen the layout viewport on Android, and the fixed headers with it.
+      */}
       <div
-        className="min-h-dvh pb-[var(--dock-space)]"
-        style={{ marginRight: pane.shown ? pane.noteWidth : 0 }}
+        className="min-h-dvh overflow-x-clip pb-[var(--dock-space)]"
+        style={{ paddingRight: pane.shown ? pane.noteWidth : 0 }}
         inert={
           (Boolean(note) && !pane.split) ||
           noteState === 'open' ||

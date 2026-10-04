@@ -1,6 +1,7 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Archive } from 'lucide-react';
+import { motion } from 'motion/react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
@@ -9,6 +10,7 @@ import { notesCollection } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
+import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
 
 export const Route = createFileRoute('/_app/archive')({
@@ -26,6 +28,7 @@ function ArchivePage() {
   const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
+  const gutterShift = usePageGutterShift(PAGE_MAX);
 
   return (
     <>
@@ -34,7 +37,11 @@ function ArchivePage() {
         leading={<BackToGallery />}
         selection={selectionHeader(selection, 'archive')}
       />
-      <section aria-label="Archive" className="mx-auto max-w-7xl px-3 pt-3 sm:px-6">
+      <motion.section
+        aria-label="Archive"
+        style={{ x: gutterShift }}
+        className="mx-auto max-w-7xl px-3 pt-3 sm:px-6"
+      >
         {awaitingSync ? null : notes.length > 0 ? (
           <NoteGrid
             notes={sorted}
@@ -47,7 +54,7 @@ function ArchivePage() {
             Archive a note to keep it out of the gallery without deleting it.
           </EmptyState>
         )}
-      </section>
+      </motion.section>
     </>
   );
 }

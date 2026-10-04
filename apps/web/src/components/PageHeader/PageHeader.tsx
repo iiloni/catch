@@ -19,7 +19,7 @@ import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
-import { useNotePane } from '@/lib/splitView';
+import { PAGE_MAX, useNotePane, usePageGutterShift } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
@@ -76,6 +76,7 @@ function useHeaderTransition() {
 export function PageHeader({ title, leading, trailing, selection }: Props) {
   const entry = useEntryMotion('header:title', true, 20);
   const transition = useHeaderTransition();
+  const gutterShift = usePageGutterShift(PAGE_MAX);
   const { scrollY } = useScroll();
   const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
   const smallTitleOpacity = useTransform(scrollY, [36, 56], [0, 1]);
@@ -112,7 +113,7 @@ export function PageHeader({ title, leading, trailing, selection }: Props) {
       </motion.header>
       <motion.div
         className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
-        style={{ opacity: largeTitleOpacity }}
+        style={{ opacity: largeTitleOpacity, x: gutterShift }}
       >
         <motion.h1
           style={entry}

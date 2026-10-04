@@ -113,6 +113,18 @@ target and two morphs cross when switching notes. Instead the pane slides in fro
 edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.
 The page takes its new width at once, so its cards reshuffle once under the moving pane, while
 fixed UI over the page follows the pane's edge through `--note-pane` (`src/lib/splitView.ts`).
+A page wider than its content is centered between gutters, which a narrower page loses; its
+content keeps its place on screen and crosses with the pane (`usePageGutterShift`), a
+transform that is gone once the pane rests. The page's wrapper spans the screen and clips
+there, so cards still on their way to a narrower page reach under the pane, not past it.
+
+**Grid resizes.** When a grid's columns change width (switching the Gallery between masonry
+and a single column, or a note pane opening or closing), cards on screen spring to their new
+width along with their new slots; the rest jump. The width itself is animated rather than
+scaled, so text reflows and stays crisp. A card is measured once at its new width before it
+starts, and not again until it arrives, so the layout is settled from the first frame and
+nothing is laid out twice. A continuous resize (the window or the split handle being dragged)
+is followed exactly instead of sprung behind.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
 The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered

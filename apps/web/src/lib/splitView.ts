@@ -1,5 +1,5 @@
 import { useRouterState } from '@tanstack/react-router';
-import { motionValue } from 'motion/react';
+import { type MotionValue, motionValue, useTransform } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { createStore } from './store';
 
@@ -12,6 +12,9 @@ const MIN_HEIGHT = 480;
 /** The page keeps room for a column of cards, the note for comfortable lines. */
 export const LIST_MIN = 280;
 export const NOTE_MIN = 340;
+/** The widest a page of cards gets (`max-w-7xl`), and a page of results (`max-w-2xl`). */
+export const PAGE_MAX = 1280;
+export const READING_MAX = 672;
 /** Space between the page and the note, which holds the resize handle. */
 export const GUTTER = 24;
 const DEFAULT_RATIO = 0.42;
@@ -129,4 +132,24 @@ export function useNotePaneLayout(): NotePane {
     document.documentElement.toggleAttribute('data-note-pane', pane.shown);
   }, [pane.shown]);
   return pane;
+}
+
+/**
+ * A page narrower than the screen is centered, with gutters either side. It takes its new
+ * width at once when the pane opens or closes, which would move it to its new gutter in one
+ * step, or to none at all. This is the offset that keeps it where the gutter was and brings
+ * it across with the pane, as the header above it moves. `maxWidth` is the page's, in pixels.
+ *
+ * Put it on the page's content, never around a fixed header: it is a transform while the
+ * pane slides (and none at rest, so a held card still rides above the header).
+ */
+export function usePageGutterShift(maxWidth: number): MotionValue<number> {
+  const pane = useNotePane();
+  const covered = pane.split ? pane.noteWidth : 0;
+  const rest = pane.shown ? pane.noteWidth : 0;
+  const screen = pane.viewport.width;
+  return useTransform(() => {
+    const gutter = (pane: number) => Math.max(0, (screen - pane - maxWidth) / 2);
+    return gutter(covered * paneReveal.get()) - gutter(rest);
+  });
 }

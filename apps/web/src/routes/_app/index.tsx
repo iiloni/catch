@@ -26,6 +26,7 @@ import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
+import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 
@@ -47,6 +48,7 @@ function GalleryPage() {
   const { open } = useOpenNote();
   const [layout, setLayout] = usePersistentState('catch-gallery-layout', layoutSchema, 'masonry');
   const [narrow, setNarrow] = useState(false);
+  const gutterShift = usePageGutterShift(PAGE_MAX);
   const measureGallery = useCallback((element: HTMLElement | null) => {
     if (!element) return;
     // The page can be phone-sized even on desktop when a note pane is open.
@@ -115,9 +117,10 @@ function GalleryPage() {
           </>
         }
       />
-      <section
+      <motion.section
         ref={measureGallery}
         aria-label="Gallery"
+        style={{ x: gutterShift }}
         className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
         {awaitingSync ? null : notes.length === 0 ? (
@@ -154,7 +157,7 @@ function GalleryPage() {
             )}
           </>
         )}
-      </section>
+      </motion.section>
     </>
   );
 }
