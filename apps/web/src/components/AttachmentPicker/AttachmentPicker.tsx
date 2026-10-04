@@ -1,8 +1,10 @@
 import { Capacitor } from '@capacitor/core';
 import type { Attachment } from '@catch/shared';
 import { Camera, FilePlus2, Images, Mic, Square, Video, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import { type ComponentProps, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { captureAttachmentInsertion } from '@/lib/attachmentInsertion';
 import { attachFiles } from '@/lib/attachments';
@@ -23,6 +25,8 @@ export function AttachmentPicker({
   const fileInput = useRef<HTMLInputElement>(null);
   const [capture, setCapture] = useState<'audio' | 'camera' | null>(null);
   const [busy, setBusy] = useState(false);
+  const [direction, setDirection] = useState(1);
+  const reducedMotion = useReducedMotion();
   const insert = useRef<Promise<((files: Attachment[]) => void) | null> | null>(null);
 
   const active = useRef(true);
@@ -33,6 +37,11 @@ export function AttachmentPicker({
     };
   }, []);
 
+  function showCapture(kind: 'audio' | 'camera' | null) {
+    setDirection(kind ? 1 : -1);
+    setCapture(kind);
+  }
+
   function rememberPosition() {
     insert.current = controls
       ? Promise.resolve(controls.attachmentInserter())
@@ -41,7 +50,7 @@ export function AttachmentPicker({
   async function receive(files: readonly File[]) {
     const insertion = insert.current;
     setBusy(true);
-    setCapture(null);
+    showCapture(null);
     try {
       await attachFiles(noteId, files, (added) => {
         // A system picker can outlive the dock panel. Its captured insertion point still
@@ -66,9 +75,15 @@ export function AttachmentPicker({
         toast.error(error instanceof Error ? error.message : 'Could not open the picker');
         setBusy(false);
       }
-    } else if (kind === 'camera') setCapture('camera');
+    } else if (kind === 'camera') showCapture('camera');
     else (kind === 'media' ? mediaInput : fileInput).current?.click();
   }
+
+  const slideVariants = {
+    enter: (travel: number) => ({ x: reducedMotion ? 0 : travel * 32, opacity: 0 }),
+    visible: { x: 0, opacity: 1 },
+    leave: (travel: number) => ({ x: reducedMotion ? 0 : -travel * 32, opacity: 0 }),
+  };
 
   return (
     <section
@@ -101,77 +116,96 @@ export function AttachmentPicker({
           if (files.length) void receive(files);
         }}
       />
-      {capture ? (
-        native && capture === 'camera' ? (
-          <div className="grid grid-cols-2 gap-2">
-            <PickerOption
-              label="Take photo"
-              icon={Camera}
-              onClick={() => void pick('camera')}
-              disabled={busy}
-            />
-            <PickerOption
-              label="Record video"
-              icon={Video}
-              onClick={() => void pick('camera', true)}
-              disabled={busy}
-            />
-            <button
-              type="button"
-              onClick={() => setCapture(null)}
-              className="col-span-2 py-2 text-sm text-muted-foreground"
-            >
-              Back
-            </button>
-          </div>
-        ) : (
-          <CaptureMedia
-            kind={capture}
-            onSave={(file) => void receive([file])}
-            onCancel={() => setCapture(null)}
-          />
-        )
-      ) : (
-        <div className="grid grid-cols-2 gap-2" data-attachment-grid>
-          <PickerOption
-            label="Photos & videos"
-            icon={Images}
-            disabled={busy}
-            onClick={() => void pick('media')}
-          />
-          <PickerOption
-            label="Camera"
-            icon={Camera}
-            disabled={busy}
-            onClick={() => {
-              rememberPosition();
-              setCapture('camera');
-            }}
-          />
-          <PickerOption
-            label="Record audio"
-            icon={Mic}
-            disabled={busy}
-            onClick={() => {
-              rememberPosition();
-              setCapture('audio');
-            }}
-          />
-          <PickerOption
-            label="Files"
-            icon={FilePlus2}
-            disabled={busy}
-            onClick={() => void pick('files')}
-          />
-        </div>
-      )}
-      {busy && (
-        <p role="status" className="pt-2 text-center text-xs text-muted-foreground">
-          Saving on this device…
-        </p>
-      )}
+      <AnimatedHeight>
+        <AnimatePresence initial={false} mode="wait" custom={direction}>
+          <PickerView
+            key={capture ?? 'options'}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="visible"
+            exit="leave"
+            transition={{ duration: reducedMotion ? 0 : 0.16 }}
+          >
+            {capture ? (
+              native && capture === 'camera' ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <PickerOption
+                    label="Take photo"
+                    icon={Camera}
+                    onClick={() => void pick('camera')}
+                    disabled={busy}
+                  />
+                  <PickerOption
+                    label="Record video"
+                    icon={Video}
+                    onClick={() => void pick('camera', true)}
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => showCapture(null)}
+                    className="col-span-2 py-2 text-sm text-muted-foreground"
+                  >
+                    Back
+                  </button>
+                </div>
+              ) : (
+                <CaptureMedia
+                  kind={capture}
+                  onSave={(file) => void receive([file])}
+                  onCancel={() => showCapture(null)}
+                />
+              )
+            ) : (
+              <div className="grid grid-cols-2 gap-2" data-attachment-grid>
+                <PickerOption
+                  label="Photos & videos"
+                  icon={Images}
+                  disabled={busy}
+                  onClick={() => void pick('media')}
+                />
+                <PickerOption
+                  label="Camera"
+                  icon={Camera}
+                  disabled={busy}
+                  onClick={() => {
+                    rememberPosition();
+                    showCapture('camera');
+                  }}
+                />
+                <PickerOption
+                  label="Record audio"
+                  icon={Mic}
+                  disabled={busy}
+                  onClick={() => {
+                    rememberPosition();
+                    showCapture('audio');
+                  }}
+                />
+                <PickerOption
+                  label="Files"
+                  icon={FilePlus2}
+                  disabled={busy}
+                  onClick={() => void pick('files')}
+                />
+              </div>
+            )}
+            {busy && (
+              <p role="status" className="pt-2 text-center text-xs text-muted-foreground">
+                Saving on this device…
+              </p>
+            )}
+          </PickerView>
+        </AnimatePresence>
+      </AnimatedHeight>
     </section>
   );
+}
+
+function PickerView(props: ComponentProps<typeof motion.div>) {
+  const isPresent = useIsPresent();
+  return <motion.div {...props} inert={!isPresent} aria-hidden={!isPresent} />;
 }
 
 function PickerOption({
