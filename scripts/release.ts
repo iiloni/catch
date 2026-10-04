@@ -52,10 +52,9 @@ export function compareReleaseTags(left: string, right: string) {
   return a.channel === 'stable' ? 1 : -1;
 }
 
-export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput: unknown) {
-  const channel = z.enum(['stable', 'preview']).parse(channelInput);
-  const bump = z.enum(['major', 'minor', 'patch']).parse(bumpInput);
-  const tags = z
+/** The supported release tags in `input`, lowest version first. */
+export function releaseTags(input: unknown) {
+  return z
     .array(z.string())
     .parse(input)
     .filter((tag) => {
@@ -65,8 +64,14 @@ export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput:
       } catch {
         return false;
       }
-    });
-  const base = tags.sort(compareReleaseTags).at(-1) ?? 'v0.0.0';
+    })
+    .sort(compareReleaseTags);
+}
+
+export function nextReleaseTag(input: unknown, channelInput: unknown, bumpInput: unknown) {
+  const channel = z.enum(['stable', 'preview']).parse(channelInput);
+  const bump = z.enum(['major', 'minor', 'patch']).parse(bumpInput);
+  const base = releaseTags(input).at(-1) ?? 'v0.0.0';
   const parts = parseReleaseTag(base).parts;
   const index = { major: 0, minor: 1, patch: 2 }[bump];
   parts[index] += 1n;

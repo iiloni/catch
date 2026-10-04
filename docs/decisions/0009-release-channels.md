@@ -31,9 +31,17 @@ and preview must advance independently, including preview versions ahead of stab
 - Ordinary CI runs checks on every pull request update; the `merge on pass` label records
   approval of functionality and design, authorizes merging once required checks pass and
   opts a PR into full Docker-backed E2E, including later pushes while the label remains.
+  The `run e2e` label also requests the full suite on drafts and later pushes, without
+  approving functionality or design or authorizing merging. Agents use targeted local E2E
+  and request early full runs on GitHub only for sweeping changes that benefit from broad
+  coverage or an explicit user request; otherwise the pre-merge suite provides that guard.
+  After the requested E2E jobs finish and their results are reviewed, agents remove
+  `run e2e` unless upcoming fixes or sweeping changes still warrant another full run.
+  They reapply it when needed; removing it during a run would cancel that run.
   Fixes that change approved functionality or design require renewed approval. The always-running
-  `validation` gate fails when E2E is unrequested, skipped, cancelled or unsuccessful; it
-  is the required branch check (see [CI setup](../ci.md)). PRs test GitHub's temporary merge
+  `validation` gate fails when a PR lacks `merge on pass`, or E2E is unrequested, skipped,
+  cancelled or unsuccessful; it is the required branch check (see [CI setup](../ci.md)).
+  PRs test GitHub's temporary merge
   commit and require an up-to-date branch before merging. New PR runs cancel superseded
   PR runs. Main pushes, manual CI requests and merge groups request checks and full E2E
   without a label. PRs and merge groups always test their combined code rather than reusing
@@ -126,7 +134,8 @@ and preview must advance independently, including preview versions ahead of stab
 
 - A public GHCR package requires a one-time visibility change after its first publication.
 - Conventional Commits describe changes, but do not automatically choose or push version
-  tags. Releasing remains an explicit action by a maintainer.
+  tags. Releasing remains an explicit action by a maintainer. Release notes are generated
+  from those commits ([ADR 0017](0017-derived-changelog.md)).
 - APK distribution and the Android updater use GitHub Releases. Android installation needs
   user confirmation; channel image aliases still require an explicit pull and recreate.
 - See [the release guide](../releases.md) for signing setup and deployment instructions.

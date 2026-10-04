@@ -2,13 +2,16 @@
 
 Catch's [CI workflow](../.github/workflows/ci.yml) separates PR iteration from full
 validation. Every PR update targeting `main` runs lint, type checks, unit tests and builds.
-The `merge on pass` label means functionality and design are approved and the agent may
-merge once all required checks pass. It requests the Docker-backed test suite: two desktop
+The `run e2e` label requests the full suite on a draft without merge approval. The
+`merge on pass` label means functionality and design are approved and the agent may
+merge once all required checks pass. Either label requests the Docker-backed test suite: two desktop
 shards, two mobile shards, API tests and the unit tests that require FFmpeg and Postgres tools. Mobile E2E
 emulates Android in Chromium; it does not test a native APK.
 
-The required check is **`validation`**. It fails until checks and both E2E projects succeed
-in the same run. An unlabeled PR deliberately has a failing `validation` check; its ordinary
+The required check is **`validation`**. For a PR, it fails until `merge on pass` is present
+and checks and both E2E projects succeed in the same run. A PR with only `run e2e` still
+has a failing `validation` check after successful E2E, with a message that approval is
+required. A PR with neither label also has a failing `validation` check; its ordinary
 `check` job still reports whether development checks passed. Skipped E2E jobs do not satisfy
 the gate. Main pushes and manual CI requests always request the full suite. Release CI
 continues to reuse only a verified full pass for the exact main/tag commit.
@@ -27,6 +30,7 @@ The AI request job and cubic's review are not part of the required `validation` 
 
    ```bash
    gh label create "merge on pass" --color 1D76DB --description "Functionality and design approved; merge when required checks pass"
+   gh label create "run e2e" --color FBCA04 --description "Run full E2E on GitHub; does not authorize merging"
    ```
 
 2. Open **Settings → Branches → Add classic branch protection rule** for `main` (or edit
@@ -83,13 +87,44 @@ matches the change:
 | `accessibility` | Accessibility improvements or fixes |
 | `maintenance` | CI, build tooling, dependencies, refactoring or test infrastructure |
 
-These labels describe scope. `merge on pass` records approval and merge authorization.
+These labels describe scope. `run e2e` requests tests; `merge on pass` records approval
+and merge authorization and also requests tests.
 Set descriptive labels before requesting full validation, since later label edits also
 trigger CI. Ordinary PR work does not require inventing new labels or adding unrelated
 labels such as `duplicate`, `invalid` or `wontfix`.
 
 1. Work on a branch and open a draft PR targeting `main`. Push iterations while reviewing
-   functionality and design. Leave `merge on pass` absent; no Docker E2E runners start.
+   functionality and design. Use targeted local E2E for affected specs or cases, with
+   `--workers=1` to reduce contention across worktrees:
+
+   ```bash
+   ./scripts/dev.sh e2e e2e/notes.spec.ts --grep 'create' --workers=1
+   ```
+
+   Leave `merge on pass` absent. For sweeping changes that benefit from broad regression
+   coverage (shared navigation, sync or test infrastructure, for example), agents may
+   request the full GitHub suite before approval:
+
+   ```bash
+   gh pr edit <number> --add-label 'run e2e'
+   ```
+
+   Keep the PR a draft. This label grants no permission to merge or enable auto-merge.
+   Adding it starts full E2E; later pushes rerun the suite while it remains. After the
+   requested E2E jobs finish, inspect their results and remove the label if upcoming
+   commits do not need another full run:
+
+   ```bash
+   gh pr edit <number> --remove-label 'run e2e'
+   ```
+
+   Keep it while fixing E2E failures or iterating on sweeping changes that still warrant
+   full coverage. Reapply it when another full run is justified. Wait until the run
+   finishes before removing it, since label changes cancel superseded CI runs. Removing
+   it triggers ordinary checks and skips E2E when `merge on pass` is absent.
+   Ordinary changes use targeted local tests
+   and rely on the mandatory full suite before merge; do not run full local E2E as a
+   routine finishing check. An explicit user request can also justify an early full run.
 2. Once functionality and design are approved for merging after tests pass, update the
    branch with the latest `main`, mark the PR ready and add `merge on pass`:
 
@@ -120,11 +155,13 @@ labels such as `duplicate`, `invalid` or `wontfix`.
 
 To return to feature iteration, disable any pending auto-merge, make the PR a draft and
 remove `merge on pass`. Removing the label withdraws merge authorization and triggers a
-new run that skips E2E and fails the gate.
-To rerun full validation for the same commit, use **Re-run all jobs** on a labeled PR's
-latest CI run, or remove and reapply the label. Rerunning an older unlabeled event uses
+new run that fails the gate. E2E continues if `run e2e` remains; remove both labels to
+stop requesting the full suite.
+To rerun full E2E for the same commit, use **Re-run all jobs** on the latest CI run that
+requested E2E, or remove and reapply `run e2e`. Full merge validation also requires
+`merge on pass`. Rerunning an older unlabeled event uses
 that event's original label state. Label changes trigger CI, so unrelated label edits can
-also rerun validation while `merge on pass` is present.
+also rerun E2E while either test-requesting label is present.
 
 ## What gets merged
 
@@ -138,5 +175,6 @@ enable it in GitHub's branch settings; queue availability depends on the reposit
 GitHub plan. The queue tests the proposed combination with current `main` and preceding
 queued PRs. See [merge queues](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue).
 
-Local work still must pass `./scripts/dev.sh check` before finishing. Targeted local E2E
-runs remain useful; the full suite can run on GitHub before merging.
+Local work still must pass `./scripts/dev.sh check` before finishing. Local E2E should be
+targeted; full E2E runs on GitHub through `run e2e` when early coverage is justified,
+or through `merge on pass` before merging.
