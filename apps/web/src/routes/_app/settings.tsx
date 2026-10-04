@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useChildMatches } from '@tanstack/react-router';
 import { SettingsLayout } from '@/components/SettingsLayout/SettingsLayout';
 import { useAdminAccess } from '@/lib/admin';
 import { settingsTabFor, useSettingsNavigation, useWideSettings } from '@/lib/settings';
@@ -8,12 +8,15 @@ export const Route = createFileRoute('/_app/settings')({
 });
 
 function SettingsPage() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // The destination URL changes before the outgoing page's snapshot is captured.
+  const current = useChildMatches({
+    select: (matches) => settingsTabFor(matches.at(-1)?.pathname ?? ''),
+  });
   const { leave } = useSettingsNavigation();
 
   return (
     <SettingsLayout
-      current={settingsTabFor(pathname)}
+      current={current}
       wide={useWideSettings()}
       isAdmin={useAdminAccess()}
       onBack={leave}

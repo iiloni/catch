@@ -56,6 +56,30 @@ async function settingsPositions(page: Page) {
   });
 }
 
+async function watchSettingsTitle(page: Page) {
+  await page.evaluate(() => {
+    const title = document.querySelector('[data-settings-swipe] h1');
+    if (!title) throw new Error('Settings title is missing');
+    const titles: string[] = [];
+    const record = () => {
+      const text = title.textContent ?? '';
+      if (titles.at(-1) !== text) titles.push(text);
+      document.documentElement.dataset.settingsTitleHistory = JSON.stringify(titles);
+    };
+    record();
+    // A final URL assertion misses changes to the outgoing view-transition snapshot.
+    const observer = new MutationObserver(record);
+    observer.observe(title, { childList: true, characterData: true, subtree: true });
+  });
+}
+
+async function expectSettingsTitleUnchanged(page: Page, title: string) {
+  const titles = await page.evaluate(() =>
+    JSON.parse(document.documentElement.dataset.settingsTitleHistory ?? '[]'),
+  );
+  expect(titles).toEqual([title]);
+}
+
 test('mobile settings leave with a pull at either scroll edge', async ({
   page,
   isMobile,
@@ -80,6 +104,7 @@ test('mobile settings leave with a pull at either scroll edge', async ({
     expect(overflow).toBeGreaterThan(100);
 
     // Observe the held gesture: every part of the page must travel the same distance.
+    await watchSettingsTitle(page);
     const before = await settingsPositions(page);
     await pullSettings(touch, direction * 150, async () => {
       await expect
@@ -102,6 +127,7 @@ test('mobile settings leave with a pull at either scroll edge', async ({
     await expect(page).toHaveURL(galleryUrl);
     await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
     await waitForPageTransition(page);
+    await expectSettingsTitleUnchanged(page, 'General');
     await expect(page.locator('[data-dock]')).toHaveCSS('transform', 'none');
   }
 
@@ -110,8 +136,31 @@ test('mobile settings leave with a pull at either scroll edge', async ({
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   await waitForPageTransition(page);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await watchSettingsTitle(page);
   await pullSettings(touch, -150);
   await expect(page).toHaveURL(galleryUrl);
+  await waitForPageTransition(page);
+  await expectSettingsTitleUnchanged(page, 'Account');
+});
+
+test('mobile settings retain the page title while navigating back', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'The narrow settings header names the open page.');
+  await signUp(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  await page.getByRole('button', { name: 'Settings page: General' }).tap();
+  await page
+    .getByRole('navigation', { name: 'Settings pages' })
+    .getByRole('button', { name: 'Account', exact: true })
+    .tap();
+  await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  await watchSettingsTitle(page);
+  await page.getByRole('button', { name: 'Back', exact: true }).tap();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  await expectSettingsTitleUnchanged(page, 'Account');
 });
 
 test('mobile settings scroll normally and keep short pulls open', async ({ page, isMobile }) => {
