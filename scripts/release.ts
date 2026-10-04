@@ -19,8 +19,8 @@ export function parseReleaseTag(input: unknown) {
 
 export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumber: unknown) {
   const { version, channel } = parseReleaseTag(tag);
-  const repository = z
-    .string()
+  // The workflow names the image from the repository, so a malformed one stops here.
+  z.string()
     .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
     .refine((value) => value === value.trim())
     .parse(repositoryInput);
@@ -39,8 +39,6 @@ export function releaseMetadata(tag: unknown, repositoryInput: unknown, runNumbe
     flavor: channel,
     gradle_task: channel === 'preview' ? 'assemblePreviewRelease' : 'assembleStableRelease',
     version_code: versionCode,
-    image: `ghcr.io/${repository.toLowerCase()}`,
-    apk: `catch-${version}.apk`,
   };
 }
 
