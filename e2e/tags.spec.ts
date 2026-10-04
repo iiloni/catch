@@ -1526,7 +1526,16 @@ test('creating a color-linked tag offline adopts notes and preserves other-devic
   }
   await page.goto('/settings/tags');
   await expect(page.getByRole('button', { name: 'Edit New primary' })).toBeVisible();
-  await page.route('**/api/**', (route) => route.abort());
+  for (const id of [noteId, changedId]) {
+    await expect
+      .poll(() => linkedNoteState(page, id))
+      .toMatchObject({
+        color: 'blue',
+        primaryTagId: null,
+        secondaryTagIds: [],
+      });
+  }
+  await page.context().setOffline(true);
   // The request context represents another device while this browser is offline.
   expect(
     (
@@ -1570,6 +1579,9 @@ test('creating a color-linked tag offline adopts notes and preserves other-devic
       primaryTagId: root,
     });
   await expect.poll(() => linkedNoteState(page, changedId)).toMatchObject({ primaryTagId: root });
+  // Disconnect existing shape polls first; Vite must remain reachable for the reload.
+  await page.route('**/api/**', (route) => route.abort());
+  await page.context().setOffline(false);
   await page.reload();
   await expect
     .poll(() => linkedNoteState(page, noteId))
@@ -1582,8 +1594,17 @@ test('creating a color-linked tag offline adopts notes and preserves other-devic
     if (request.method() === 'PATCH' && /\/api\/(notes|note-tags)\//.test(request.url()))
       derivedRequests.push(request.url());
   });
+  const replayed = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/tags' &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON().id === root &&
+      response.ok(),
+  );
   await page.unroute('**/api/**');
+  // This phase blocks only the API, so notify the outbox after restoring those requests.
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await replayed;
   const device = await browser.newContext();
   try {
     const fresh = await device.newPage();

@@ -229,7 +229,7 @@ function TagForm({
         <DialogDescription>
           {parentId
             ? 'This tag inherits its branch’s icon and color.'
-            : 'Link a color to tag all existing notes of that color.'}
+            : 'Link a color to tag existing notes of that color that have no primary tag.'}
         </DialogDescription>
         <form onSubmit={save} className="flex flex-col gap-4">
           <label htmlFor={nameId} className="flex flex-col gap-1.5 text-sm font-medium">

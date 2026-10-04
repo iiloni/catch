@@ -81,37 +81,41 @@ async function tagPlainColorNotes(tx: Tx, userId: string, tag: Tag) {
     )
     .returning({ id: notes.id });
   if (!matching.length) return;
-  const assignments = await tx
-    .select()
-    .from(noteTags)
-    .where(
-      and(
-        eq(noteTags.userId, userId),
-        inArray(
-          noteTags.id,
-          matching.map(({ id }) => id),
+  // Bound both the IN list and the four parameters per assignment below Postgres's limit.
+  for (let offset = 0; offset < matching.length; offset += 1000) {
+    const batch = matching.slice(offset, offset + 1000);
+    const assignments = await tx
+      .select()
+      .from(noteTags)
+      .where(
+        and(
+          eq(noteTags.userId, userId),
+          inArray(
+            noteTags.id,
+            batch.map(({ id }) => id),
+          ),
         ),
-      ),
-    );
-  const byId = new Map(assignments.map((assignment) => [assignment.id, assignment]));
-  await tx
-    .insert(noteTags)
-    .values(
-      matching.map(({ id }) => ({
-        id,
-        userId,
-        primaryTagId: tag.id,
-        secondaryTagIds: (byId.get(id)?.secondaryTagIds ?? []).filter((id) => id !== tag.id),
-      })),
-    )
-    .onConflictDoUpdate({
-      target: noteTags.id,
-      set: {
-        primaryTagId: tag.id,
-        secondaryTagIds: sql`excluded.secondary_tag_ids`,
-      },
-      setWhere: eq(noteTags.userId, userId),
-    });
+      );
+    const byId = new Map(assignments.map((assignment) => [assignment.id, assignment]));
+    await tx
+      .insert(noteTags)
+      .values(
+        batch.map(({ id }) => ({
+          id,
+          userId,
+          primaryTagId: tag.id,
+          secondaryTagIds: (byId.get(id)?.secondaryTagIds ?? []).filter((id) => id !== tag.id),
+        })),
+      )
+      .onConflictDoUpdate({
+        target: noteTags.id,
+        set: {
+          primaryTagId: tag.id,
+          secondaryTagIds: sql`excluded.secondary_tag_ids`,
+        },
+        setWhere: eq(noteTags.userId, userId),
+      });
+  }
 }
 
 export const tagRoutes = new Hono<AppEnv>()
