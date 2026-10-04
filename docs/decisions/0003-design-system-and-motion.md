@@ -42,7 +42,9 @@ holds the back button. Opening Settings pushes a history entry and switching pag
 it, so back leaves Settings in one step. On phones a capped vertical pull also leaves
 Settings: down at the page's top or up at its bottom, using the note editor's release
 threshold and haptic tick. Scrolling between the edges stays native, and short pulls spring
-back. Only the page content moves, so its fixed header and dock keep their positioning.
+back. The title, content, fixed header, dock and bottom blur share one vertical offset, so
+the entire page moves together. The fixed layers apply it themselves rather than inheriting
+a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.

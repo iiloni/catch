@@ -36,6 +36,8 @@ type Props = {
   /** Controls in a glass toolbar at the top right. */
   trailing?: ReactNode;
   selection?: HeaderSelection | null;
+  /** Moves both the fixed bar and the scrolling title with a dismissible page. */
+  offsetY?: MotionValue<number>;
 };
 
 type HeaderLayerStyle = MotionStyle & { '--header-layer-opacity': MotionValue<number> };
@@ -73,7 +75,7 @@ function useHeaderTransition() {
  * iOS-style large title. The bar above it starts transparent and turns to frosted glass,
  * with a small centered title, once the large title scrolls under it.
  */
-export function PageHeader({ title, leading, trailing, selection }: Props) {
+export function PageHeader({ title, leading, trailing, selection, offsetY }: Props) {
   const entry = useEntryMotion('header:title', true, 20);
   const transition = useHeaderTransition();
   const gutterShift = usePageGutterShift(PAGE_MAX);
@@ -93,7 +95,7 @@ export function PageHeader({ title, leading, trailing, selection }: Props) {
       <motion.header
         data-page-header
         className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
-        style={transition}
+        style={{ ...transition, y: offsetY }}
       >
         <motion.div
           aria-hidden
@@ -113,7 +115,7 @@ export function PageHeader({ title, leading, trailing, selection }: Props) {
       </motion.header>
       <motion.div
         className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
-        style={{ opacity: largeTitleOpacity, x: gutterShift }}
+        style={{ opacity: largeTitleOpacity, x: gutterShift, y: offsetY }}
       >
         <motion.h1
           style={entry}

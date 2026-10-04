@@ -1,13 +1,14 @@
 import { Link } from '@tanstack/react-router';
 import { ChevronLeft } from 'lucide-react';
-import { motion, useMotionValue, useReducedMotion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { type ReactNode, useLayoutEffect } from 'react';
 import { useSwipeToDismiss } from '@/components/NoteEditorOverlay/useSwipeToDismiss';
 import { PageHeader } from '@/components/PageHeader/PageHeader';
 import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { type SettingsTab, settingsSectionsFor } from '@/lib/settings';
+import { settingsDragY, useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -26,23 +27,33 @@ type Props = {
  * screen under its own title, and the dock turns into its page picker and back button.
  */
 export function SettingsLayout({ current, wide, isAdmin = false, onBack, children }: Props) {
-  const dragY = useMotionValue(0);
-  const reducedMotion = useReducedMotion();
+  const swipeY = useSettingsSwipeY();
   const swipeRef = useSwipeToDismiss({
-    dragY,
+    dragY: settingsDragY,
     onDismiss: onBack,
     enabled: !wide,
     scrollElement: document.scrollingElement ?? document.documentElement,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Switching pages or layout cancels the shared pull as well as unmounting.
+  useLayoutEffect(() => {
+    const reset = () => {
+      settingsDragY.stop();
+      settingsDragY.set(0);
+    };
+    reset();
+    return reset;
+  }, [wide, current?.path]);
+
   if (!wide) {
     return (
       <div ref={swipeRef} className="min-h-[calc(100dvh-var(--dock-space))]" data-settings-swipe>
-        <PageHeader title={current?.label ?? 'Settings'} />
-        {/* Keep the fixed header outside the moving content. */}
+        <PageHeader title={current?.label ?? 'Settings'} offsetY={swipeY} />
+        {/* A shared offset keeps fixed chrome aligned without transforming its ancestor. */}
         <motion.div
+          data-settings-content
           className="mx-auto max-w-2xl px-3 pt-4 sm:px-6"
-          style={{ y: reducedMotion ? 0 : dragY }}
+          style={{ y: swipeY }}
         >
           {children}
         </motion.div>

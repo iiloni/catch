@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { haptics } from '@/lib/haptics';
 import { SETTINGS_TABS } from '@/lib/settings';
+import { settingsDragY } from '@/lib/settingsSwipe';
 import { SettingsLayout } from './SettingsLayout';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -133,5 +134,19 @@ describe('SettingsLayout', () => {
     pull(screen.getByText('Account page'), 150);
     expect(onBack).not.toHaveBeenCalled();
     expect(haptics.threshold).not.toHaveBeenCalled();
+  });
+
+  it('clears the shared offset when leaving settings during a pull', () => {
+    const { unmount } = render(
+      <SettingsLayout current={account} wide={false} onBack={vi.fn()}>
+        <p>Account page</p>
+      </SettingsLayout>,
+    );
+    const page = screen.getByText('Account page');
+    fireEvent.touchStart(page, { touches: [{ clientY: 200 }] });
+    fireEvent.touchMove(page, { touches: [{ clientY: 350 }] });
+    expect(settingsDragY.get()).toBeGreaterThan(0);
+    unmount();
+    expect(settingsDragY.get()).toBe(0);
   });
 });

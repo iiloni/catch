@@ -1,7 +1,7 @@
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
 import { createNote, openNote, settledBox, signUp, waitForPageTransition } from './helpers';
 
-async function pullSettings(touch: CDPSession, delta: number) {
+async function pullSettings(touch: CDPSession, delta: number, whileHeld?: () => Promise<void>) {
   let timestamp = Date.now() / 1000;
   await touch.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
@@ -28,6 +28,7 @@ async function pullSettings(touch: CDPSession, delta: number) {
     touchPoints: [{ x: 16, y: 240 + delta }],
     timestamp,
   });
+  await whileHeld?.();
   await touch.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
@@ -35,7 +36,30 @@ async function pullSettings(touch: CDPSession, delta: number) {
   });
 }
 
-test('mobile settings leave with a pull at either scroll edge', async ({ page, isMobile }) => {
+async function settingsPositions(page: Page) {
+  return page.evaluate(() => {
+    const selectors = [
+      '[data-settings-swipe] h1',
+      '[data-settings-content]',
+      '[data-page-header]',
+      '[data-dock]',
+      '[data-page-bottom-blur]',
+    ];
+    return {
+      scroll: window.scrollY,
+      layers: selectors.map((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing settings layer: ${selector}`);
+        return { selector, top: element.getBoundingClientRect().top };
+      }),
+    };
+  });
+}
+
+test('mobile settings leave with a pull at either scroll edge', async ({
+  page,
+  isMobile,
+}, testInfo) => {
   test.skip(!isMobile, 'Settings swipes are available on the narrow layout.');
   await page.setViewportSize({ width: 393, height: 500 });
   await signUp(page);
@@ -55,10 +79,30 @@ test('mobile settings leave with a pull at either scroll edge', async ({ page, i
     }, direction);
     expect(overflow).toBeGreaterThan(100);
 
-    await pullSettings(touch, direction * 150);
+    // Observe the held gesture: every part of the page must travel the same distance.
+    const before = await settingsPositions(page);
+    await pullSettings(touch, direction * 150, async () => {
+      await expect
+        .poll(async () => {
+          const held = await settingsPositions(page);
+          return (held.layers[1].top - before.layers[1].top) * direction;
+        })
+        .toBeGreaterThan(60);
+      const held = await settingsPositions(page);
+      const distance = held.layers[1].top - before.layers[1].top;
+      expect(held.scroll).toBe(before.scroll);
+      for (const [index, layer] of held.layers.entries()) {
+        expect(layer.top - before.layers[index].top, layer.selector).toBeCloseTo(distance, 0);
+      }
+      await testInfo.attach(`settings-pull-${direction > 0 ? 'down' : 'up'}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+    });
     await expect(page).toHaveURL(galleryUrl);
     await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
     await waitForPageTransition(page);
+    await expect(page.locator('[data-dock]')).toHaveCSS('transform', 'none');
   }
 
   // A directly opened short page has no Settings history entry to return through.
@@ -84,7 +128,14 @@ test('mobile settings scroll normally and keep short pulls open', async ({ page,
 
   await pullSettings(touch, 40);
   await expect(page).toHaveURL(settingsUrl);
-  await expect(page.locator('[data-settings-swipe] > div').last()).toHaveCSS('transform', 'none');
+  for (const selector of [
+    '[data-settings-content]',
+    '[data-page-header]',
+    '[data-dock]',
+    '[data-page-bottom-blur]',
+  ]) {
+    await expect(page.locator(selector)).toHaveCSS('transform', 'none');
+  }
 
   // An upward gesture at the top must scroll into the page instead of leaving it.
   await pullSettings(touch, -150);
