@@ -336,6 +336,64 @@ test('reminders belong to their note’s owner and replay safely', { tag: '@api'
   expect(await syncedReminder(alice.context, alice.headers, id)).toBeNull();
 });
 
+test('the Android app is told what to ring, and only for its own user', { tag: '@api' }, async ({
+  playwright,
+  baseURL,
+  extraHTTPHeaders,
+}) => {
+  const alice = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const bob = await account(playwright.request, { baseURL, extraHTTPHeaders });
+  const id = noteId();
+  await alice.context.post('/api/notes', {
+    headers: alice.headers,
+    data: {
+      id,
+      content: [
+        { type: 'paragraph', content: 'Water the plants' },
+        { type: 'paragraph', content: 'The fern too' },
+      ],
+    },
+  });
+  const alarms = async (who: typeof alice) =>
+    (await (await who.context.get('/api/reminders/alarms', { headers: who.headers })).json())
+      .alarms;
+  const save = (data: object) =>
+    alice.context.put(`/api/reminders/${id}`, {
+      headers: alice.headers,
+      data: { kind: 'time', startsAt: '2020-01-01T07:15', snoozedUntil: null, ...data },
+    });
+
+  const anonymous = await playwright.request.newContext({ baseURL, extraHTTPHeaders });
+  expect((await anonymous.get('/api/reminders/alarms')).status()).toBe(401);
+  expect(await alarms(alice)).toEqual([]);
+
+  // A reminder that follows the user carries no zone: the phone reads it where it is.
+  const daily = { frequency: 'daily', interval: 1 };
+  expect((await save({ timeZone: 'UTC', floating: true, recurrence: daily })).ok()).toBeTruthy();
+  const [alarm, ...others] = await alarms(alice);
+  expect(others).toEqual([]);
+  expect(alarm).toMatchObject({
+    noteId: id,
+    title: 'Water the plants',
+    body: 'The fern too',
+    timeZone: null,
+    snoozedUntil: null,
+  });
+  expect(alarm.times).toHaveLength(16);
+  expect(alarm.times.every((time: string) => time.endsWith('T07:15'))).toBe(true);
+  expect([...alarm.times].sort()).toEqual(alarm.times);
+  expect(await alarms(bob)).toEqual([]);
+
+  expect(
+    (await save({ timeZone: 'Asia/Tokyo', floating: false, recurrence: daily })).ok(),
+  ).toBeTruthy();
+  expect((await alarms(alice))[0]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+
+  // A one-off whose time has passed has nothing left to ring.
+  expect((await save({ timeZone: 'UTC', floating: false, recurrence: null })).ok()).toBeTruthy();
+  expect(await alarms(alice)).toEqual([]);
+});
+
 test('the server rings a reminder when it comes due and moves it on', { tag: '@api' }, async ({
   playwright,
   baseURL,
@@ -408,7 +466,7 @@ test('floating reminders follow the zone a device reports', { tag: '@api' }, asy
   ).toBe(400);
 });
 
-test('quick times are kept per user', { tag: '@api' }, async ({
+test('quick times and the snooze length are kept per user', { tag: '@api' }, async ({
   playwright,
   baseURL,
   extraHTTPHeaders,
@@ -418,28 +476,36 @@ test('quick times are kept per user', { tag: '@api' }, async ({
   const settings = async (who: typeof alice) =>
     (await who.context.get('/api/reminders/settings', { headers: who.headers })).json();
   const defaults = { morning: '08:00', afternoon: '13:00', evening: '18:00' };
-  expect(await settings(alice)).toEqual({ timeZone: null, times: defaults });
+  expect(await settings(alice)).toEqual({ timeZone: null, times: defaults, snoozeMinutes: 30 });
 
   const times = { morning: '06:30', afternoon: '12:00', evening: '20:15' };
   const save = (data: object) =>
-    alice.context.put('/api/reminders/settings/times', { headers: alice.headers, data });
+    alice.context.put('/api/reminders/settings', {
+      headers: alice.headers,
+      data: { snoozeMinutes: 30, ...data },
+    });
   expect((await save({ times: { ...times, evening: '25:00' }, timeZone: 'UTC' })).status()).toBe(
     400,
   );
-  expect((await save({ times, timeZone: 'Europe/London' })).ok()).toBeTruthy();
-  expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times });
-  expect(await settings(bob)).toEqual({ timeZone: null, times: defaults });
+  expect((await save({ times, snoozeMinutes: 45, timeZone: 'UTC' })).status()).toBe(400);
+  expect((await save({ times, snoozeMinutes: 15, timeZone: 'Europe/London' })).ok()).toBeTruthy();
+  expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times, snoozeMinutes: 15 });
+  expect(await settings(bob)).toEqual({ timeZone: null, times: defaults, snoozeMinutes: 30 });
 
-  // Saving times is not a report of where the user is: the zone a device reported stays.
+  // Saving settings is not a report of where the user is: the zone a device reported stays.
   expect((await save({ times: defaults, timeZone: 'Asia/Tokyo' })).ok()).toBeTruthy();
-  expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times: defaults });
-  // And reporting a zone leaves the times alone.
-  expect((await save({ times, timeZone: 'Europe/London' })).ok()).toBeTruthy();
+  expect(await settings(alice)).toEqual({
+    timeZone: 'Europe/London',
+    times: defaults,
+    snoozeMinutes: 30,
+  });
+  // And reporting a zone leaves them alone.
+  expect((await save({ times, snoozeMinutes: 60, timeZone: 'Europe/London' })).ok()).toBeTruthy();
   await alice.context.put('/api/reminders/time-zone', {
     headers: alice.headers,
     data: { timeZone: 'Asia/Tokyo', changed: true },
   });
-  expect(await settings(alice)).toEqual({ timeZone: 'Asia/Tokyo', times });
+  expect(await settings(alice)).toEqual({ timeZone: 'Asia/Tokyo', times, snoozeMinutes: 60 });
 });
 
 test('push subscriptions only go to browser push services', { tag: '@api' }, async ({

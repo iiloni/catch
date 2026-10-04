@@ -1,0 +1,1 @@
+ALTER TABLE "reminder_settings" ADD COLUMN "snooze_minutes" integer;

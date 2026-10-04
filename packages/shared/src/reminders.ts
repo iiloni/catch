@@ -134,19 +134,26 @@ export const DEFAULT_REMINDER_TIMES: ReminderTimes = {
   evening: '18:00',
 };
 
+/** How long Snooze puts a reminder off, in minutes. */
+export const snoozeMinutesSchema = z.union([z.literal(15), z.literal(30), z.literal(60)]);
+export type SnoozeMinutes = z.infer<typeof snoozeMinutesSchema>;
+export const DEFAULT_SNOOZE_MINUTES: SnoozeMinutes = 30;
+
 /** A user's reminder settings. Server state fetched by plain requests, not a synced shape. */
 export const reminderSettingsSchema = z.object({
   timeZone: timeZoneSchema.nullable(),
   times: reminderTimesSchema,
+  snoozeMinutes: snoozeMinutesSchema,
 });
 export type ReminderSettings = z.infer<typeof reminderSettingsSchema>;
 
 /** The device's zone comes along for a user the server has not seen a zone for yet. */
-export const saveReminderTimesSchema = z.object({
+export const saveReminderSettingsSchema = z.object({
   times: reminderTimesSchema,
+  snoozeMinutes: snoozeMinutesSchema,
   timeZone: timeZoneSchema,
 });
-export type SaveReminderTimes = z.infer<typeof saveReminderTimesSchema>;
+export type SaveReminderSettings = z.infer<typeof saveReminderSettingsSchema>;
 
 type Parts = { year: number; month: number; day: number; hour: number; minute: number };
 
@@ -392,6 +399,85 @@ export const pushSubscriptionSchema = z.object({
 export type PushSubscriptionInput = z.infer<typeof pushSubscriptionSchema>;
 
 export const removePushSubscriptionSchema = pushSubscriptionSchema.pick({ endpoint: true });
+
+/**
+ * How many of a reminder's coming times a phone is told of. It rings them without the app
+ * or the server, so a repeat nobody opens the app for stops after this many.
+ */
+export const ALARM_TIMES = 16;
+
+/**
+ * A reminder as the Android app's alarms need it: what to say and the wall clock times
+ * still to ring. The phone turns those into instants itself, so a floating reminder follows
+ * it to another zone with no app running.
+ */
+export const reminderAlarmSchema = z.object({
+  noteId: z.uuid(),
+  title: z.string(),
+  body: z.string(),
+  /** Soonest first. */
+  times: z.array(localTimeSchema).max(ALARM_TIMES),
+  /** The zone the times are read in, or null for whichever zone the phone is in. */
+  timeZone: z.string().nullable(),
+  /** A snooze still to ring, in milliseconds since the epoch. */
+  snoozedUntil: z.number().nullable(),
+});
+export type ReminderAlarm = z.infer<typeof reminderAlarmSchema>;
+
+export const reminderAlarmsSchema = z.object({ alarms: z.array(reminderAlarmSchema) });
+export type ReminderAlarms = z.infer<typeof reminderAlarmsSchema>;
+
+const TITLE_LENGTH = 80;
+const BODY_LENGTH = 180;
+
+// By code point: cutting between the two halves of an emoji leaves a broken character.
+function clip(text: string, length: number) {
+  const points = Array.from(text);
+  if (points.length <= length) return text;
+  return `${points
+    .slice(0, length - 1)
+    .join('')
+    .trimEnd()}…`;
+}
+
+/** What a reminder's notification says: the note's first line, and the rest under it. */
+export function reminderText(plainText: string) {
+  const [first = '', ...rest] = plainText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return {
+    title: first ? clip(first, TITLE_LENGTH) : 'Reminder',
+    body: clip(rest.join(' '), BODY_LENGTH),
+  };
+}
+
+/** The alarm for a reminder, or null when it has nothing left to ring for. */
+export function reminderAlarm(
+  reminder: Pick<
+    Reminder,
+    'noteId' | 'startsAt' | 'recurrence' | 'nextAt' | 'snoozedUntil' | 'floating' | 'timeZone'
+  >,
+  plainText: string,
+): ReminderAlarm | null {
+  const times: string[] = [];
+  if (reminder.nextAt) {
+    for (const occurrence of occurrences(reminder)) {
+      if (occurrence < reminder.nextAt) continue;
+      times.push(occurrence);
+      if (times.length === ALARM_TIMES) break;
+    }
+  }
+  const snoozedUntil = reminder.snoozedUntil?.getTime() ?? null;
+  if (times.length === 0 && snoozedUntil === null) return null;
+  return {
+    noteId: reminder.noteId,
+    ...reminderText(plainText),
+    times,
+    timeZone: reminder.floating ? null : reminder.timeZone,
+    snoozedUntil,
+  };
+}
 
 export const pushKeySchema = z.object({ publicKey: z.string() });
 export type PushKey = z.infer<typeof pushKeySchema>;

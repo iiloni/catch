@@ -16,6 +16,7 @@ import { api } from './api';
 import { getSignedInUser } from './auth';
 import { formatTime } from './clock';
 import { remindersCollection, write } from './collections';
+import { applySnoozeMinutes, onSnoozeChange, snoozeMinutes } from './snooze';
 import { createStore } from './store';
 
 export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -223,12 +224,19 @@ const reminderTimes = createStore<ReminderTimes>(cachedTimes());
 let sending: Promise<void> = Promise.resolve();
 
 /** One after another, so the server ends on the last change, and only it clears the flag. */
-function sendReminderTimes() {
+function sendReminderSettings() {
   sending = sending.then(async () => {
     const times = reminderTimes.get();
+    const snooze = snoozeMinutes();
     try {
-      await api.saveReminderTimes({ times, timeZone: deviceTimeZone() });
-      if (reminderTimes.get() === times) localStorage.removeItem(unsentKey());
+      await api.saveReminderSettings({
+        times,
+        snoozeMinutes: snooze,
+        timeZone: deviceTimeZone(),
+      });
+      if (reminderTimes.get() === times && snoozeMinutes() === snooze) {
+        localStorage.removeItem(unsentKey());
+      }
     } catch {
       // Offline: `syncReminderSettings` sends it at the next launch or return to the app.
     }
@@ -241,8 +249,15 @@ export function setReminderTimes(times: ReminderTimes) {
   reminderTimes.set(times);
   localStorage.setItem(timesKey(), JSON.stringify(times));
   localStorage.setItem(unsentKey(), 'true');
-  void sendReminderTimes();
+  void sendReminderSettings();
 }
+
+// The snooze length follows the user too, and is sent with the times.
+onSnoozeChange((_minutes, from) => {
+  if (from !== 'device') return;
+  localStorage.setItem(unsentKey(), 'true');
+  void sendReminderSettings();
+});
 
 /**
  * The times of day the quick choices (Morning, Afternoon, Evening) stand for. They are kept
@@ -287,7 +302,7 @@ export function defaultReminderStart(now: Date, times: ReminderTimes) {
 /**
  * Run at launch and when the app comes back into view. Tells the server which zone this
  * device is in, once and again when it moves, so floating reminders ring by the clock where
- * the user is; and brings the quick times in line with the server's.
+ * the user is; and brings the quick times and the snooze length in line with the server's.
  */
 export async function syncReminderSettings(userId: string) {
   const zoneKey = `catch-time-zone:${userId}`;
@@ -299,14 +314,15 @@ export async function syncReminderSettings(userId: string) {
       localStorage.setItem(zoneKey, timeZone);
     }
     if (localStorage.getItem(unsentKey()) === 'true') {
-      await sendReminderTimes();
+      await sendReminderSettings();
       return;
     }
-    const { times } = await api.reminderSettings();
+    const { times, snoozeMinutes: snooze } = await api.reminderSettings();
     // A change made here while the request was out is newer than its answer.
     if (localStorage.getItem(unsentKey()) === 'true') return;
     reminderTimes.set(times);
     localStorage.setItem(timesKey(), JSON.stringify(times));
+    applySnoozeMinutes(snooze);
   } catch {
     // Offline, or a server that is restarting: the next launch or return tries again.
   }

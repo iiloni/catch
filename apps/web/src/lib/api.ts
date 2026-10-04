@@ -19,7 +19,7 @@ import type {
   ReportTimeZone,
   ResetUserPasswordResponse,
   SaveReminder,
-  SaveReminderTimes,
+  SaveReminderSettings,
   TestPushResponse,
   TxidResponse,
   UpdateAttachment,
@@ -135,8 +135,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
   reminderSettings: () => request<ReminderSettings>('/reminders/settings', { method: 'GET' }),
-  saveReminderTimes: (body: SaveReminderTimes) =>
-    request<{ ok: true }>('/reminders/settings/times', {
+  saveReminderSettings: (body: SaveReminderSettings) =>
+    request<{ ok: true }>('/reminders/settings', {
       method: 'PUT',
       body: JSON.stringify(body),
     }),

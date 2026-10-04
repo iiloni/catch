@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushState } from '@/lib/push';
+import { setSnoozeMinutes, snoozeMinutes } from '@/lib/snooze';
 import { NotificationSettings } from './NotificationSettings';
 
 const push = vi.hoisted(() => ({
@@ -20,10 +21,21 @@ vi.mock('@/lib/push', () => ({
   disablePush: push.disablePush,
   sendTestPush: push.sendTestPush,
 }));
+const reminders = vi.hoisted(() => ({ setTimes: vi.fn() }));
 vi.mock('@/lib/reminders', async () => {
   const { useState } = await import('react');
   return {
-    useReminderTimes: () => useState({ morning: '08:00', afternoon: '13:00', evening: '18:00' }),
+    formatTimeOfDay: (time: string) => time,
+    useReminderTimes: () => {
+      const [times, set] = useState({ morning: '08:00', afternoon: '13:00', evening: '18:00' });
+      return [
+        times,
+        (next: typeof times) => {
+          reminders.setTimes(next);
+          set(next);
+        },
+      ];
+    },
   };
 });
 
@@ -39,6 +51,7 @@ beforeEach(() => {
   push.refreshPushState.mockReset().mockResolvedValue(undefined);
   toast.mockReset();
   toast.error.mockReset();
+  reminders.setTimes.mockReset();
 });
 
 describe('NotificationSettings', () => {
@@ -98,7 +111,6 @@ describe('NotificationSettings', () => {
   });
 
   it.each([
-    ['native', /Android app does not show reminders yet/],
     ['needs-install', /add Catch to your Home Screen/],
     ['blocked', /Notifications are blocked/],
     ['unsupported', /cannot receive notifications/],
@@ -109,10 +121,30 @@ describe('NotificationSettings', () => {
     expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
-  it('changes a quick time', () => {
+  it('changes how long Snooze puts a reminder off, from half an hour', () => {
     render(<NotificationSettings />);
-    const morning = screen.getByLabelText('Morning time');
-    fireEvent.change(morning, { target: { value: '07:30' } });
-    expect(morning).toHaveValue('07:30');
+    expect(screen.getByRole('button', { name: '30 min' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '15 min' }));
+    expect(screen.getByRole('button', { name: '15 min' })).toHaveAttribute('aria-pressed', 'true');
+    expect(snoozeMinutes()).toBe(15);
+    setSnoozeMinutes(30);
+  });
+
+  it('changes a quick time on the dial, saving it once the dial closes', () => {
+    render(<NotificationSettings />);
+    fireEvent.click(screen.getByRole('button', { name: 'Morning time: 08:00' }));
+    const dial = screen.getByRole('dialog', { name: 'Morning time' });
+    const cell = (selector: string) => dial.querySelector(selector) as HTMLElement;
+    if (cell('[data-period]')) fireEvent.click(cell('[data-period="AM"]'));
+    fireEvent.click(cell('[data-hour="7"]'));
+    fireEvent.click(cell('[data-minute="30"]'));
+    expect(reminders.setTimes).not.toHaveBeenCalled();
+    fireEvent.keyDown(dial, { key: 'Escape' });
+    expect(reminders.setTimes).toHaveBeenCalledWith({
+      morning: '07:30',
+      afternoon: '13:00',
+      evening: '18:00',
+    });
+    expect(screen.getByRole('button', { name: 'Morning time: 07:30' })).toBeInTheDocument();
   });
 });

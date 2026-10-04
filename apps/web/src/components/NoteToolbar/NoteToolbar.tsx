@@ -27,7 +27,7 @@ import {
   setNoteColor,
   trashNote,
 } from '@/lib/notes';
-import { setPrimaryTag } from '@/lib/tags';
+import { setPrimaryTag, useNoteColor } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -42,6 +42,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
   const [reminding, setReminding] = useState(false);
   const reminder = useReminders().get(note.id);
+  const color = useNoteColor(note);
   const then = (action: () => unknown) => () => {
     action();
     onDone?.();
@@ -105,9 +106,11 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           >
             <ReminderPanel
               note={note}
+              color={color}
               reminder={reminder}
               onDone={() => setReminding(false)}
-              className="max-h-[min(34rem,calc(var(--radix-popover-content-available-height)-1.5rem))]"
+              // Less the panel's action row, which sits under this.
+              className="max-h-[min(30rem,calc(var(--radix-popover-content-available-height)-5.25rem))]"
             />
           </PopoverContent>
         </Popover>

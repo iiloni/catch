@@ -17,6 +17,7 @@ import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
+import { watchNativeReminders } from '@/lib/nativeReminders';
 import { useOpenNote } from '@/lib/openNote';
 import { onNotificationOpen, syncPush } from '@/lib/push';
 import { syncReminderSettings } from '@/lib/reminders';
@@ -44,6 +45,7 @@ function AppLayout() {
   useEffect(watchUpdates, []);
   const { open } = useOpenNote();
   useEffect(() => onNotificationOpen(open), [open]);
+  useEffect(watchNativeReminders, []);
   useEffect(() => {
     void syncPush();
     const user = getSignedInUser();

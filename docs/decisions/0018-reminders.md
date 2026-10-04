@@ -41,7 +41,7 @@ user whose other device has travelled. The server keeps the instant it is waitin
 weekly, monthly, yearly), an interval, weekdays for weekly, an optional "nth weekday of the
 month" (first to fourth, or last), and an end by date or count. `nextOccurrence` in
 `packages/shared/src/reminders.ts` is the one implementation, used by the server, the web
-app's optimistic state and, later, the Android scheduler. The awkward cases are decided
+app's optimistic state and what the Android app is told to ring. The awkward cases are decided
 there and tested:
 
 - A monthly reminder on the 29th to 31st falls on the last day of shorter months.
@@ -77,7 +77,7 @@ stays in a chosen zone. Anything with more to it is a page of its own that slide
 the panel and back: a calendar for a custom day, a clock face for a custom time, a searchable list of zones with their GMT offsets (opened on the one in use) for a custom time zone, and the
 repeat's settings (interval, weekdays, end). The calendar and the clock are ours
 (`DatePicker`, `TimePicker`, `TimeZonePicker`) rather than the system's, so they look and move like the rest
-of the app and need no keyboard; numbers are stepped, not typed. A page cannot read the system's 12 or 24 hour switch, only what the browser's language defaults to, so the clock face and every time shown follow a device setting (Settings > General > Time format: automatic, 12 hour, 24 hour; `lib/clock.ts`). The native app can read the real switch for automatic later. The panel may grow to the
+of the app and need no keyboard; numbers are stepped, not typed. A page cannot read the system's 12 or 24 hour switch, only what the browser's language defaults to, so the clock face and every time shown follow a device setting (Settings > General > Time format: automatic, 12 hour, 24 hour; `lib/clock.ts`). The Android app can read the real switch, and automatic follows it there. The panel may grow to the
 top of the screen before it scrolls. A pending
 reminder opens on its next time rather than its first, and a counted repeat on the times it
 has left, so editing one carries on the count instead of starting it again. To make room
@@ -86,7 +86,7 @@ same panel opens in a popover from the card's toolbar.
 
 **Quick times belong to the user.** The times Morning, Afternoon and Evening stand for are
 kept with the user's zone in `reminder_settings` and read and saved with plain requests
-(`GET /api/reminders/settings`, `PUT /api/reminders/settings/times`), not a shape: they
+(`GET /api/reminders/settings`, `PUT /api/reminders/settings`), not a shape: they
 change rarely and are small. A device caches them, so the choices are there offline; a
 change made offline is sent at the next launch or return to the app, and the last one sent
 wins.
@@ -109,11 +109,29 @@ server until the server is updated: **update the server first.**
 - **iOS** delivers Web Push only to a web app added to the Home Screen (iOS 16.4 or later),
   asks permission only from a tap, and shows no action buttons. It can drop a subscription;
   the app re-registers it on launch.
-- **The native Android app does not ring yet.** A WebView has no Web Push, and FCM would need
-  a Firebase project compiled into the APK with matching credentials on every self-hosted
-  server. The plan is local alarms scheduled from the synced reminders (which also ring
-  offline), with a periodic background sync so reminders set on another device are picked
-  up; until then Settings says so.
+- **The native Android app rings reminders itself.** A WebView has no Web Push, and FCM
+  would need a Firebase project compiled into the APK with matching credentials on every
+  self-hosted server. Instead the web app hands the phone each reminder's next sixteen wall
+  clock times with its zone (`reminderAlarm` in `packages/shared`, `lib/nativeReminders.ts`),
+  and the phone sets an exact alarm for the soonest of each (`ReminderAlarms.java`). So a
+  reminder rings offline and with the app closed, a floating one follows the phone's own
+  zone, and the alarms are set again after a restart, an update or a change of clock. The
+  phone reads a wall clock time as the server does (`ReminderTimes.java`, with unit tests
+  for skipped and repeated hours). A reminder missed by more than a day is not rung late.
+  - A reminder set on another device reaches a phone whose app stays closed through an
+    hourly background job that asks `GET /api/reminders/alarms` with the session's token.
+    Android runs such jobs when it sees fit, so that reminder can be late or, under battery
+    saving, missed until the app is opened; one set on the phone, or synced while the app
+    was open, is not affected. An older server answers 404 and the phone keeps what it has.
+  - The phone and the server ring independently, so a user with notifications on in both a
+    browser and the app gets one from each, as with two browsers.
+  - A notification has Snooze and Done. Snooze puts a reminder off for 15 minutes, 30 (the
+    default) or an hour, chosen in Settings > Notifications and kept with the user's other
+    reminder settings on the server (`lib/snooze.ts` caches it). The phone is told the
+    length so it holds with the app closed. It rings again on the phone and is
+    written as the reminder's snooze the next time the app runs, which is when the server
+    and the other devices learn of it. Done only dismisses the notification.
+  - Signing out clears the phone's alarms and its copy of the token.
 - **Backups hold the push keys and subscriptions.** A backup already holds every note, so
   it was always to be kept as carefully as the database. What reminders add is that someone
   with one could also send notifications to those browsers until they re-subscribe.
@@ -130,5 +148,6 @@ set to "Allow all the time", lag by minutes, are unreliable under about 100 m, a
 reboot, and need a place picker Catch has no self-hosted source for. `reminders.kind` is
 `time` today so a `place` kind can be added without reshaping the table.
 
-Notification actions (Done, Snooze) and dismissing across devices are also left for later;
-snoozing is in the app.
+Notification actions in browsers and dismissing a reminder across devices are left for
+later; the Android app's notifications have Snooze and Done, and snoozing is in the app
+everywhere.

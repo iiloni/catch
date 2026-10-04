@@ -368,6 +368,9 @@ export function NoteDock() {
             <ReminderPanel
               key={note.id}
               note={note}
+              color={
+                assignment?.primaryTagId ? tagColor(tags, assignment.primaryTagId) : note.color
+              }
               reminder={reminder}
               onDone={() => setPanel(null)}
             />

@@ -31,7 +31,7 @@ Carried over from `catch-old`, plus what Keep has that the old app lacked.
 
 ## Later
 - [x] Reminders on notes, with repeats and time zones, sent to browsers and installed web apps by Web Push (see `docs/decisions/0018-reminders.md`).
-- [ ] Reminders in the Android app: local alarms, notification actions (ADR 0018).
+- [x] Reminders in the Android app: local alarms that ring offline, with Snooze and Done on the notification (ADR 0018).
 - [ ] User-defined board columns.
 - [ ] Labels.
 - [x] Link previews fetched on the server (see `docs/decisions/0006-link-previews.md`).

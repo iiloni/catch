@@ -64,6 +64,13 @@
       "when": 1791068290003,
       "tag": "0008_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791157170914,
+      "tag": "0009_snooze_minutes",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLOCK_KEY, formatDateTime, formatTime, useHour12 } from './clock';
+import { CLOCK_KEY, formatDateTime, formatTime, setSystemHour12, useHour12 } from './clock';
 
 const at = new Date(2026, 9, 5, 13, 5);
 
@@ -26,5 +26,18 @@ describe('clock', () => {
     expect(formatTime(at)).toBe(fromLanguage);
     localStorage.setItem(CLOCK_KEY, 'nonsense');
     expect(formatTime(at)).toBe(fromLanguage);
+  });
+
+  // Last: the system's switch is remembered for as long as the module lives.
+  it("follows the system's switch on automatic where the Android app reports one", () => {
+    setSystemHour12(false);
+    expect(formatTime(at)).toContain('13');
+    expect(renderHook(() => useHour12()).result.current).toBe(false);
+    setSystemHour12(true);
+    expect(formatTime(at)).not.toContain('13');
+    expect(renderHook(() => useHour12()).result.current).toBe(true);
+
+    localStorage.setItem(CLOCK_KEY, JSON.stringify('24'));
+    expect(formatTime(at)).toContain('13');
   });
 });

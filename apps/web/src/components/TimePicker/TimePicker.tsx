@@ -96,7 +96,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
       }}
       className={cn(
         'flex h-12 w-14 min-w-10 shrink items-center justify-center rounded-xl px-2 font-medium text-3xl tabular-nums outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
-        mode === of ? 'bg-primary text-primary-foreground' : 'bg-foreground/[0.06]',
+        mode === of ? 'glass-chosen' : 'bg-foreground/[0.06]',
       )}
     >
       {/* Named with its value, so it is not only "Hour" to someone who cannot see it. */}
@@ -128,7 +128,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                   }}
                   className={cn(
                     'h-full min-w-11 rounded-lg px-2 font-medium text-sm outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
-                    selected ? 'bg-primary text-primary-foreground' : 'text-foreground/80',
+                    selected ? 'glass-chosen' : 'text-foreground/80',
                   )}
                 >
                   {period}
@@ -172,10 +172,20 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
               x2={hand.x}
               y2={hand.y}
               strokeWidth="0.8"
-              className="stroke-primary"
+              className="stroke-[var(--note-accent,var(--foreground))]"
             />
-            <circle cx="50" cy="50" r="1.5" className="fill-primary" />
-            <circle cx={hand.x} cy={hand.y} r="7.5" className="fill-primary" />
+            <circle
+              cx="50"
+              cy="50"
+              r="1.5"
+              className="fill-[var(--note-accent,var(--foreground))]"
+            />
+            <circle
+              cx={hand.x}
+              cy={hand.y}
+              r="7.5"
+              className="fill-[var(--note-accent,var(--foreground))]"
+            />
           </svg>
           {mode === 'hour'
             ? hours.map((option) => (
@@ -191,9 +201,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                   style={{ left: `${option.x}%`, top: `${option.y}%` }}
                   className={cn(
                     'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
-                    option.hour === hour
-                      ? 'font-medium text-primary-foreground'
-                      : 'text-foreground/80',
+                    option.hour === hour ? 'font-medium text-background' : 'text-foreground/80',
                     !hour12 && option.hour !== 12 && (option.hour === 0 || option.hour > 12)
                       ? 'text-xs'
                       : 'text-sm',
@@ -212,9 +220,7 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
                   style={{ left: `${option.x}%`, top: `${option.y}%` }}
                   className={cn(
                     'absolute flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
-                    option.minute === minute
-                      ? 'font-medium text-primary-foreground'
-                      : 'text-foreground/80',
+                    option.minute === minute ? 'font-medium text-background' : 'text-foreground/80',
                   )}
                 >
                   {option.shown}

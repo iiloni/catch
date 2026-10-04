@@ -1,18 +1,21 @@
 import { Capacitor } from '@capacitor/core';
+import { useEffect } from 'react';
 import { api } from './api';
 import { getSignedInUser } from './auth';
+import { nativeReminders } from './nativeReminders';
 import { createStore } from './store';
 
 /**
  * Notifications in a browser or an installed web app come by Web Push (ADR 0018): this
- * device subscribes with its push service and gives the server the subscription.
+ * device subscribes with its push service and gives the server the subscription. The
+ * Android app has no Web Push and rings reminders itself (`nativeReminders.ts`); the same
+ * states and actions stand for both, so Settings need not know which it is on.
  *
- * - `native`: the Android app, which will ring reminders itself and has no Web Push.
  * - `needs-install`: iOS only allows push to a web app added to the Home Screen.
  * - `unsupported`: no push in this browser, or no service worker (the dev server has none).
- * - `blocked`: the user turned notifications down in the browser.
+ * - `blocked`: the user turned notifications down in the browser or for the app.
  */
-export type PushState = 'native' | 'needs-install' | 'unsupported' | 'blocked' | 'off' | 'on';
+export type PushState = 'needs-install' | 'unsupported' | 'blocked' | 'off' | 'on';
 
 const state = createStore<PushState | null>(null);
 export const usePushState = state.use;
@@ -41,7 +44,8 @@ async function registration() {
 const supported = () => 'PushManager' in window && 'Notification' in window;
 
 async function detect(): Promise<PushState> {
-  if (Capacitor.isNativePlatform()) return 'native';
+  if (nativeReminders.available) return nativeReminders.state();
+  if (Capacitor.isNativePlatform()) return 'unsupported';
   if (isIos() && !isInstalled()) return 'needs-install';
   if (!supported()) return 'unsupported';
   const worker = await registration();
@@ -53,6 +57,18 @@ async function detect(): Promise<PushState> {
 
 export async function refreshPushState() {
   state.set(await detect());
+}
+
+/**
+ * Whether the Android app is not allowed to show reminders. A browser may well be left
+ * off, since another device can ring; a phone with the app is where they are expected.
+ */
+export function useAppNotificationsOff() {
+  const current = state.use();
+  useEffect(() => {
+    if (nativeReminders.available) void refreshPushState();
+  }, []);
+  return nativeReminders.available && (current === 'off' || current === 'blocked');
 }
 
 const sameKey = (a: ArrayBuffer | null, b: Uint8Array) => {
@@ -98,6 +114,10 @@ function inTurn<T>(task: () => Promise<T>): Promise<T> {
 
 /** Asks for permission and subscribes. Call from a tap: browsers only ask then. */
 export async function enablePush() {
+  if (nativeReminders.available) {
+    await nativeReminders.enable();
+    return refreshPushState();
+  }
   if (!supported()) throw new Error('This browser cannot receive notifications.');
   // Asked before anything is awaited: Safari only shows the prompt while the tap is live.
   const asked = Notification.requestPermission();
@@ -116,6 +136,7 @@ export async function enablePush() {
 }
 
 export function disablePush() {
+  if (nativeReminders.available) return nativeReminders.disable().then(refreshPushState);
   localStorage.removeItem(enabledKey());
   return inTurn(async () => {
     const subscription = await (await registration())?.pushManager.getSubscription();
@@ -152,6 +173,7 @@ export async function dropPushSubscription() {
  * backup may not hold this one.
  */
 export function syncPush() {
+  if (nativeReminders.available) return refreshPushState();
   return inTurn(async () => {
     try {
       const worker = await registration();
@@ -176,6 +198,7 @@ export function syncPush() {
 }
 
 export async function sendTestPush() {
+  if (nativeReminders.available) return nativeReminders.test();
   const subscription = await (await registration())?.pushManager.getSubscription();
   if (!subscription) throw new Error('Notifications are not on for this device.');
   const { sent } = await api.testPush(subscription.endpoint);
@@ -184,6 +207,7 @@ export async function sendTestPush() {
 
 /** A notification that was tapped asks the open app to show its note. */
 export function onNotificationOpen(open: (noteId: string) => void) {
+  if (nativeReminders.available) return nativeReminders.onOpen(open);
   if (!('serviceWorker' in navigator)) return () => {};
   const listener = (event: MessageEvent) => {
     const data: unknown = event.data;

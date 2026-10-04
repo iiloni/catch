@@ -3,10 +3,14 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatTimeOfDay, removeReminder, setReminder, snoozeReminder } from '@/lib/reminders';
+import { setSnoozeMinutes } from '@/lib/snooze';
 import { ReminderPanel } from './ReminderPanel';
 
 vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: {} }));
+const app = vi.hoisted(() => ({ notificationsOff: false, openSettings: vi.fn() }));
+vi.mock('@/lib/push', () => ({ useAppNotificationsOff: () => app.notificationsOff }));
+vi.mock('@/lib/settings', () => ({ useSettingsNavigation: () => ({ open: app.openSettings }) }));
 vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('@/lib/reminders', async (original) => ({
   ...(await original<typeof import('@/lib/reminders')>()),
@@ -104,6 +108,19 @@ describe('ReminderPanel', () => {
     expect(onDone).toHaveBeenCalled();
   });
 
+  it('says when the Android app may not show reminders, and leads to the setting', () => {
+    const { rerender } = render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    app.notificationsOff = true;
+    rerender(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Notifications are off on this phone');
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Turn on' }));
+    expect(app.openSettings).toHaveBeenCalledWith('/settings/notifications');
+    expect(onDone).toHaveBeenCalled();
+    app.notificationsOff = false;
+  });
+
   it('lets the day and the time be chosen apart', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     fireEvent.click(choice('Day', 'Tomorrow'));
@@ -128,6 +145,21 @@ describe('ReminderPanel', () => {
       note,
       expect.objectContaining({ startsAt: '2026-11-20T21:15' }),
     );
+  });
+
+  it('saves from the page a time is picked on, without going back', () => {
+    render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    fireEvent.click(choice('Time', /^Custom/));
+    if (cell('[data-period]')) fireEvent.click(cell('[data-period="PM"]'));
+    fireEvent.click(cell('[data-hour="21"]'));
+    fireEvent.click(cell('[data-minute="45"]'));
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(setReminder).toHaveBeenCalledWith(
+      note,
+      expect.objectContaining({ startsAt: expect.stringMatching(/T21:45$/) }),
+    );
+    expect(onDone).toHaveBeenCalled();
   });
 
   it('keeps the repeat settings folded away until a repeat is chosen', () => {
@@ -330,7 +362,18 @@ describe('ReminderPanel', () => {
         onDone={onDone}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Snooze (1hr)' }));
-    expect(snoozeReminder).toHaveBeenCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
+    expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 10, 30));
+
+    // The length is the device's, from Settings > Notifications.
+    setSnoozeMinutes(60);
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
+    expect(snoozeReminder).toHaveBeenLastCalledWith(note.id, new Date(2026, 9, 5, 11, 0));
+
+    // Snooze is for the reminder as it stands, so the pages that change it leave it out.
+    openRepeat();
+    expect(screen.queryByRole('button', { name: 'Snooze' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    setSnoozeMinutes(30);
   });
 });

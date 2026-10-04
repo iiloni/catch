@@ -1,16 +1,20 @@
 import {
   DEFAULT_REMINDER_TIMES,
+  DEFAULT_SNOOZE_MINUTES,
   firstPending,
   type Recurrence,
+  type ReminderAlarms,
   type ReminderSettings,
+  reminderAlarm,
   reminderFireTime,
   reminderZone,
   reportTimeZoneSchema,
   saveReminderSchema,
-  saveReminderTimesSchema,
+  saveReminderSettingsSchema,
+  snoozeMinutesSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
@@ -54,15 +58,28 @@ export const reminderRoutes = new Hono<AppEnv>()
     return c.json({
       timeZone: row?.timeZone ?? null,
       times: row?.times ?? DEFAULT_REMINDER_TIMES,
+      snoozeMinutes:
+        snoozeMinutesSchema.safeParse(row?.snoozeMinutes).data ?? DEFAULT_SNOOZE_MINUTES,
     } satisfies ReminderSettings);
   })
-  .put('/settings/times', zValidator('json', saveReminderTimesSchema), async (c) => {
+  // The Android app's background check: it rings reminders itself, and asks here for the
+  // ones set on other devices while it was closed.
+  .get('/alarms', async (c) => {
+    const rows = await db
+      .select({ reminder: reminders, text: notes.searchText })
+      .from(reminders)
+      .innerJoin(notes, eq(notes.id, reminders.noteId))
+      .where(and(eq(reminders.userId, c.get('user')!.id), isNull(notes.deletedAt)));
+    const alarms = rows.flatMap(({ reminder, text }) => reminderAlarm(reminder, text) ?? []);
+    return c.json({ alarms } satisfies ReminderAlarms);
+  })
+  .put('/settings', zValidator('json', saveReminderSettingsSchema), async (c) => {
     const userId = c.get('user')!.id;
-    const { times, timeZone } = c.req.valid('json');
+    const { times, snoozeMinutes, timeZone } = c.req.valid('json');
     await db
       .insert(reminderSettings)
-      .values({ userId, timeZone, times })
-      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times } });
+      .values({ userId, timeZone, times, snoozeMinutes })
+      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times, snoozeMinutes } });
     return c.json({ ok: true });
   })
   // Where the user is, which is where their floating reminders ring.

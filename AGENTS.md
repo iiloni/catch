@@ -313,7 +313,10 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   not instants; turn one into an instant with the helpers in `packages/shared/src/reminders.ts`
   (`reminderZone`, `reminderFireTime`), never `new Date(string)`. The server's scheduler rings
   due reminders over Web Push (`apps/server/src/push`); `fire_at` is the server's and is not
-  synced. Push needs a service worker, which the dev server lacks, and a subscription's
+  synced. The Android app has no Web Push and rings them itself: `lib/nativeReminders.ts`
+  hands the phone each reminder's coming times and `ReminderAlarms.java` sets alarms for
+  them, so `lib/push.ts` answers for both and callers need not know which they are on.
+  `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it

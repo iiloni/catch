@@ -2,13 +2,25 @@ import {
   firstPending,
   instantToLocal,
   type Note,
+  type NoteColor,
   type Recurrence,
   type Reminder,
   remainingCount,
   reminderFireTime,
   reminderZone,
 } from '@catch/shared';
-import { Bell, ChevronLeft, ChevronRight, Minus, Plus, Repeat, Trash2 } from 'lucide-react';
+import {
+  AlarmClock,
+  Bell,
+  BellOff,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  Repeat,
+  Trash2,
+} from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { type ReactNode, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
@@ -19,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { useAppNotificationsOff } from '@/lib/push';
 import {
   defaultReminderStart,
   describeRecurrence,
@@ -36,6 +49,8 @@ import {
   useReminderTimes,
   WEEKDAYS,
 } from '@/lib/reminders';
+import { useSettingsNavigation } from '@/lib/settings';
+import { snoozeUntil } from '@/lib/snooze';
 import { cn } from '@/lib/utils';
 
 type RepeatChoice = 'none' | Recurrence['frequency'];
@@ -195,7 +210,7 @@ function Choice({
       className={cn(
         'flex min-h-11 min-w-0 flex-col items-center justify-center rounded-xl px-1 py-1 text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset disabled:opacity-40',
         selected
-          ? 'bg-primary text-primary-foreground'
+          ? 'glass-chosen'
           : 'bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/[0.1]',
       )}
     >
@@ -272,8 +287,9 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 /** Pages under the reminder scroll as a whole: in a popover near the screen's edge there may not be room for a calendar. */
 const subPageClass = 'overflow-y-auto [scrollbar-width:none]';
 
+// The action row under the pages is taken out of the room a page may fill.
 const pageClass =
-  'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-1.75rem)] flex-col gap-2';
+  'flex max-h-[calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-5.5rem)] flex-col gap-2';
 
 type Page = 'main' | 'date' | 'time' | 'zone' | 'repeat' | 'until';
 const DEPTH: Record<Page, number> = { main: 0, date: 1, time: 1, zone: 1, repeat: 1, until: 2 };
@@ -322,6 +338,8 @@ const ENDS: { value: Ends; label: string }[] = [
 
 type Props = {
   note: Pick<Note, 'id' | 'userId'>;
+  /** The color the note shows in, which tints the chosen options. */
+  color?: NoteColor;
   reminder: Reminder | undefined;
   /** Called once the reminder is saved, removed or put off. */
   onDone: () => void;
@@ -333,10 +351,12 @@ type Props = {
  * rarer settings folded under the choice that needs them. It grows out of the note's dock
  * like the palette and the tags.
  */
-export function ReminderPanel({ note, reminder, onDone, className }: Props) {
+export function ReminderPanel({ note, color = 'default', reminder, onDone, className }: Props) {
   // Redraws the times below when the clock setting changes.
   useHour12();
   const [times] = useReminderTimes();
+  const notificationsOff = useAppNotificationsOff();
+  const settings = useSettingsNavigation();
   const [now, setNow] = useState(() => new Date());
   const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
   const [form, setForm] = useState(opened);
@@ -439,7 +459,8 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   return (
     <form
       aria-label="Reminder"
-      className={cn('px-2 pt-2 pb-1')}
+      data-note-color={color}
+      className="px-2 pt-2 pb-1"
       onSubmit={(event) => {
         event.preventDefault();
         if (!input || passed || !rings) return;
@@ -465,7 +486,28 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           <AnimatePresence initial={false} mode="wait" custom={direction}>
             {page === 'main' ? (
               <motion.div key="main" {...motionProps} className={cn(pageClass, className)}>
-                {/* What is being set stays in view above the steps, and the button to set it below. */}
+                {notificationsOff && (
+                  <div
+                    role="alert"
+                    className="flex shrink-0 items-center gap-2 rounded-xl bg-destructive/10 py-1 pr-1 pl-3"
+                  >
+                    <BellOff className="size-4 shrink-0 text-destructive" aria-hidden />
+                    <p className="min-w-0 flex-1 text-sm">Notifications are off on this phone</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-10 shrink-0"
+                      onClick={() => {
+                        onDone();
+                        settings.open('/settings/notifications');
+                      }}
+                    >
+                      Turn on
+                    </Button>
+                  </div>
+                )}
+                {/* What is being set stays in view above the steps. */}
                 <div className="flex min-h-10 shrink-0 items-center gap-2 pr-1 pl-2">
                   <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <p
@@ -581,32 +623,6 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                         : 'Rings at this time on your clock, wherever you are.'}
                     </p>
                   </Step>
-                </div>
-
-                <div className="flex shrink-0 gap-1.5">
-                  {/* One that has just rung can be put off without setting it again. Not one
-                      already put off, which this would bring forward. */}
-                  {rang && reminder && !snoozed && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-11 min-w-0 flex-1 rounded-xl"
-                      onClick={() => {
-                        haptics.success();
-                        snoozeReminder(note.id, new Date(Date.now() + 60 * 60 * 1000));
-                        onDone();
-                      }}
-                    >
-                      Snooze (1hr)
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    disabled={!input || passed || !rings}
-                    className="h-11 min-w-0 flex-1 rounded-xl"
-                  >
-                    Save
-                  </Button>
                 </div>
               </motion.div>
             ) : page === 'date' ? (
@@ -733,7 +749,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
                                     className={cn(
                                       'flex h-11 items-center justify-center rounded-full font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset',
                                       chosen
-                                        ? 'bg-primary text-primary-foreground'
+                                        ? 'glass-chosen'
                                         : 'bg-foreground/[0.06] text-muted-foreground',
                                     )}
                                   >
@@ -805,6 +821,46 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
           </AnimatePresence>
         </div>
       </AnimatedHeight>
+      {/* The action row stays under every page, so a time picked on one can be saved from it. */}
+      <div className="mt-2 flex border-foreground/10 border-t pt-2">
+        <AnimatePresence initial={false}>
+          {/* One that has just rung can be put off without setting it again. Not one already
+              put off, which this would bring forward. It belongs to the reminder as it
+              stands, so it gives its room to Save on the pages that change it. */}
+          {page === 'main' && rang && reminder && !snoozed && (
+            <motion.div
+              key="snooze"
+              className="min-w-0 basis-0 overflow-hidden"
+              initial={{ flexGrow: 0, opacity: 0, marginRight: 0 }}
+              animate={{ flexGrow: 1, opacity: 1, marginRight: 6 }}
+              exit={{ flexGrow: 0, opacity: 0, marginRight: 0 }}
+              transition={springs.smooth}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-full rounded-xl hover:bg-foreground/[0.06] hover:text-foreground"
+                onClick={() => {
+                  haptics.success();
+                  snoozeReminder(note.id, snoozeUntil());
+                  onDone();
+                }}
+              >
+                <AlarmClock aria-hidden />
+                Snooze
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <Button
+          type="submit"
+          disabled={!input || passed || !rings}
+          className="h-11 min-w-0 flex-1 basis-0 rounded-xl"
+        >
+          <Check aria-hidden />
+          Save
+        </Button>
+      </div>
     </form>
   );
 }
