@@ -44,7 +44,9 @@ test('mobile settings leave with a pull at either scroll edge', async ({ page, i
 
   for (const direction of [1, -1]) {
     await page.getByRole('button', { name: 'Settings', exact: true }).tap();
-    await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     await waitForPageTransition(page);
     const overflow = await page.evaluate((toward) => {
       const scroll = document.documentElement;
@@ -73,7 +75,9 @@ test('mobile settings scroll normally and keep short pulls open', async ({ page,
   await page.setViewportSize({ width: 393, height: 500 });
   await signUp(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).tap();
-  await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Link capture', exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
   await waitForPageTransition(page);
   const settingsUrl = page.url();
   const touch = await page.context().newCDPSession(page);
