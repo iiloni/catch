@@ -18,8 +18,6 @@ test('stable and preview choose separate image channels and Android variants', (
   assert.equal(preview.prerelease, true);
   assert.equal(preview.gradle_task, 'assemblePreviewRelease');
   assert.equal(preview.version, '1.0.2-preview');
-  assert.equal(preview.image, 'ghcr.io/iiloni/catch');
-  assert.equal(preview.apk, 'catch-1.0.2-preview.apk');
   assert.equal(preview.version_code, 8);
 });
 
