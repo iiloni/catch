@@ -1452,10 +1452,17 @@ test('linking and changing a tag color adopts existing notes without losing assi
       (
         await request.patch(`/api/notes/${green}`, {
           headers,
-          data: { color: 'green', updatedAt },
+          data: { color: 'green' },
         })
       ).status(),
     ).toBe(200);
+    await expect
+      .poll(() => linkedNoteState(page, green))
+      .toMatchObject({
+        color: 'green',
+        primaryTagId: null,
+      });
+    const editedAt = (await linkedNoteState(page, green)).updatedAt;
     expect(
       (
         await request.patch(`/api/tags/${work}`, {
@@ -1468,7 +1475,7 @@ test('linking and changing a tag color adopts existing notes without losing assi
       .poll(() => linkedNoteState(page, green))
       .toEqual({
         color: 'green',
-        updatedAt,
+        updatedAt: editedAt,
         primaryTagId: null,
         secondaryTagIds: [],
       });
@@ -1581,6 +1588,9 @@ test('creating a color-linked tag offline adopts notes and preserves other-devic
   try {
     const fresh = await device.newPage();
     await signIn(fresh, email);
+    await expect(
+      card(fresh, 'Adopt offline').getByRole('button', { name: 'Offline work', exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
     await expect
       .poll(() => linkedNoteState(fresh, noteId))
       .toMatchObject({
