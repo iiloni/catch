@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { Archive } from 'lucide-react';
-import { animate, motion, useMotionValue } from 'motion/react';
+import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { type PointerEvent, useEffect, useRef } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
@@ -47,6 +47,8 @@ export function SwipeArchiveCard({
 }: Props) {
   const swipeable = !lifted && selected === undefined;
   const x = useMotionValue(0);
+  // Clip the moving card to its slot, but let resting shadows and focus rings extend outside it.
+  const overflow = useTransform(x, (offset) => (offset === 0 ? 'visible' : 'hidden'));
   const cueOpacity = useMotionValue(0);
   const swipe = useRef<Swipe | null>(null);
   const suppressClick = useRef(false);
@@ -136,9 +138,10 @@ export function SwipeArchiveCard({
   }
 
   return (
-    <div
+    <motion.div
       data-swipe-archive
-      className="group/swipe relative overflow-hidden rounded-2xl touch-pan-y"
+      className="group/swipe relative rounded-2xl touch-pan-y"
+      style={{ overflow }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -182,6 +185,6 @@ export function SwipeArchiveCard({
           onSelect={onSelect}
         />
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

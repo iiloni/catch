@@ -84,7 +84,8 @@ test('the sync pill slides from above and changes width without moving the heade
   const dialog = await openNote(page, 'A quiet afternoon');
   const status = dialog.getByRole('status');
   await expect(status).toBeEmpty();
-  await expect(status).toHaveCSS('overflow-y', 'hidden');
+  await expect(status).toHaveCSS('overflow-y', 'clip');
+  await expect(status).toHaveCSS('overflow-x', 'visible');
   expect((await status.boundingBox())?.y).toBe(40);
   const close = dialog.getByRole('button', { name: 'Close', exact: true });
   const closeBefore = await close.boundingBox();
@@ -135,6 +136,10 @@ test('the sync pill slides from above and changes width without moving the heade
   const pill = dialog.locator('[data-sync-pill]');
   const restingPill = await pill.boundingBox();
   expect(restingPill).not.toBeNull();
+  // The shadow must fade out below the pill instead of stopping at the header's edge.
+  expect(
+    statusBefore.y + statusBefore.height - ((restingPill?.y ?? 0) + (restingPill?.height ?? 0)),
+  ).toBeGreaterThan(40);
   expect(
     Math.abs(
       (restingPill?.y ?? 0) +

@@ -430,7 +430,7 @@ function MorphingPill({
   return (
     <motion.div
       className={cn(
-        'absolute top-1 h-[50px] overflow-hidden rounded-[var(--dock-radius)]',
+        'absolute top-1 h-[50px] rounded-[var(--dock-radius)]',
         side === 'left' ? 'left-3 origin-left sm:left-4' : 'right-3 origin-right sm:right-4',
       )}
       style={{ width }}
@@ -447,28 +447,31 @@ function MorphingPill({
         animate={{ '--header-layer-opacity': glass ? 1 : 0 }}
         transition={{ ...springs.smooth, visualDuration: 0.3 }}
       />
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={mode}
-          ref={measure}
-          style={entry}
-          className={cn(
-            'header-fade absolute inset-y-0 flex items-center p-1',
-            side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',
-          )}
-          initial={{ '--header-layer-opacity': 0, scale: 0.85, filter: 'blur(4px)' }}
-          animate={{ '--header-layer-opacity': 1, scale: 1, filter: 'blur(0px)' }}
-          exit={{
-            '--header-layer-opacity': 0,
-            scale: 0.85,
-            filter: 'blur(4px)',
-            transition: { duration: 0.14 },
-          }}
-          transition={springs.smooth}
-        >
-          {children}
-        </motion.div>
-      </AnimatePresence>
+      {/* Clip changing controls separately so the glass surface keeps its outer shadow. */}
+      <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={mode}
+            ref={measure}
+            style={entry}
+            className={cn(
+              'header-fade absolute inset-y-0 flex items-center p-1',
+              side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',
+            )}
+            initial={{ '--header-layer-opacity': 0, scale: 0.85, filter: 'blur(4px)' }}
+            animate={{ '--header-layer-opacity': 1, scale: 1, filter: 'blur(0px)' }}
+            exit={{
+              '--header-layer-opacity': 0,
+              scale: 0.85,
+              filter: 'blur(4px)',
+              transition: { duration: 0.14 },
+            }}
+            transition={springs.smooth}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
