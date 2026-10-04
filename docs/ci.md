@@ -110,8 +110,19 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    ```
 
    Keep the PR a draft. This label grants no permission to merge or enable auto-merge.
-   Adding it starts full E2E; later pushes rerun the suite while it remains. Remove it
-   when early full runs are no longer useful. Ordinary changes use targeted local tests
+   Adding it starts full E2E; later pushes rerun the suite while it remains. After the
+   requested E2E jobs finish, inspect their results and remove the label if upcoming
+   commits do not need another full run:
+
+   ```bash
+   gh pr edit <number> --remove-label 'run e2e'
+   ```
+
+   Keep it while fixing E2E failures or iterating on sweeping changes that still warrant
+   full coverage. Reapply it when another full run is justified. Wait until the run
+   finishes before removing it, since label changes cancel superseded CI runs. Removing
+   it triggers ordinary checks and skips E2E when `merge on pass` is absent.
+   Ordinary changes use targeted local tests
    and rely on the mandatory full suite before merge; do not run full local E2E as a
    routine finishing check. An explicit user request can also justify an early full run.
 2. Once functionality and design are approved for merging after tests pass, update the

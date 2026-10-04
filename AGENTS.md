@@ -72,6 +72,11 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   with `gh pr edit <number> --add-label 'run e2e'`; agents may do this without merge approval.
   For other changes, rely on the full E2E guard before merge. The full Docker E2E suite
   starts with either `run e2e` or `merge on pass` and on later pushes while either remains.
+  After the requested E2E jobs finish, inspect their results and remove `run e2e` with
+  `gh pr edit <number> --remove-label 'run e2e'` if upcoming commits do not need another
+  full run. Keep it while fixing E2E failures or iterating on sweeping changes that still
+  warrant full coverage, and reapply it later when another full run is justified.
+  Wait until the run finishes before removing it: label changes cancel superseded CI runs.
   `run e2e` requests tests only: keep the PR a draft and do not enable auto-merge or merge
   without separate approval. See `docs/ci.md` for repository setup and commands.
 - Use the AI review process below when the user requests a review, has applied

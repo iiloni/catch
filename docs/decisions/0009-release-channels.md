@@ -35,6 +35,9 @@ and preview must advance independently, including preview versions ahead of stab
   approving functionality or design or authorizing merging. Agents use targeted local E2E
   and request early full runs on GitHub only for sweeping changes that benefit from broad
   coverage or an explicit user request; otherwise the pre-merge suite provides that guard.
+  After the requested E2E jobs finish and their results are reviewed, agents remove
+  `run e2e` unless upcoming fixes or sweeping changes still warrant another full run.
+  They reapply it when needed; removing it during a run would cancel that run.
   Fixes that change approved functionality or design require renewed approval. The always-running
   `validation` gate fails when a PR lacks `merge on pass`, or E2E is unrequested, skipped,
   cancelled or unsuccessful; it is the required branch check (see [CI setup](../ci.md)).
