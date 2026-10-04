@@ -186,6 +186,34 @@ describe('ReminderPanel', () => {
     expect(setReminder).not.toHaveBeenCalled();
   });
 
+  it('carries on a counted repeat from the times it has left', () => {
+    const repeating = {
+      ...saved,
+      startsAt: '2026-10-01T07:30',
+      nextAt: '2026-10-06T07:30',
+      recurrence: {
+        frequency: 'daily' as const,
+        interval: 1,
+        weekdays: [],
+        weekdayOfMonth: null,
+        until: null,
+        count: 60,
+      },
+    };
+    render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
+    // Five of the sixty have gone by.
+    expect(screen.getByRole('status', { name: 'Ends after' })).toHaveTextContent('55 times');
+    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '08:45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    expect(setReminder).toHaveBeenCalledWith(
+      note,
+      expect.objectContaining({
+        startsAt: '2026-10-06T08:45',
+        recurrence: expect.objectContaining({ count: 55 }),
+      }),
+    );
+  });
+
   it('needs a last day for a repeat that ends on a date', () => {
     render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
     fireEvent.click(choice('Repeat', 'Daily'));

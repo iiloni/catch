@@ -305,6 +305,23 @@ export function nextOccurrence(schedule: ReminderSchedule, after: string | null)
   return null;
 }
 
+/**
+ * How many of a counted repeat's times are still to come, the one it waits for included,
+ * or null for a reminder that is not counted. A schedule edited to start at its next time
+ * carries this on as its count, so the edit does not start the count again.
+ */
+export function remainingCount(reminder: ReminderSchedule & Pick<Reminder, 'nextAt'>) {
+  const count = reminder.recurrence?.count ?? null;
+  if (count === null) return null;
+  if (!reminder.nextAt) return 0;
+  let past = 0;
+  for (const occurrence of occurrences(reminder)) {
+    if (occurrence >= reminder.nextAt) break;
+    past += 1;
+  }
+  return count - past;
+}
+
 /** The zone a reminder is read in, given the zone its user was last seen in. */
 export function reminderZone(
   reminder: Pick<Reminder, 'floating' | 'timeZone'>,

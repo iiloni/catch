@@ -9,6 +9,7 @@ import {
   pushSubscriptionSchema,
   type Recurrence,
   recurrenceSchema,
+  remainingCount,
   reminderFireTime,
   reminderZone,
 } from './reminders';
@@ -225,6 +226,36 @@ describe('reminder timing', () => {
     expect(
       advanceReminder({ ...daily, nextAt: '2026-10-06T09:00', snoozedUntil: now }, 'UTC', now),
     ).toEqual({ nextAt: '2026-10-06T09:00', snoozedUntil: null });
+  });
+});
+
+describe('remainingCount', () => {
+  const daily = {
+    startsAt: '2026-10-01T09:00',
+    recurrence: repeat({ frequency: 'daily', count: 10 }),
+  };
+
+  it('counts the times still to come, the next one included', () => {
+    expect(remainingCount({ ...daily, nextAt: '2026-10-01T09:00' })).toBe(10);
+    expect(remainingCount({ ...daily, nextAt: '2026-10-04T09:00' })).toBe(7);
+    expect(remainingCount({ ...daily, nextAt: '2026-10-10T09:00' })).toBe(1);
+    expect(remainingCount({ ...daily, nextAt: null })).toBe(0);
+  });
+
+  it('counts the days of a week apart', () => {
+    // Thursdays and Mondays from Thursday the 1st: the 1st, 5th, 8th, 12th...
+    const weekly = {
+      startsAt: '2026-10-01T09:00',
+      recurrence: repeat({ frequency: 'weekly', weekdays: [1, 4], count: 6 }),
+    };
+    expect(remainingCount({ ...weekly, nextAt: '2026-10-12T09:00' })).toBe(3);
+  });
+
+  it('is null for a repeat that is not counted', () => {
+    expect(
+      remainingCount({ ...daily, recurrence: repeat({ frequency: 'daily' }), nextAt: null }),
+    ).toBeNull();
+    expect(remainingCount({ startsAt: daily.startsAt, recurrence: null, nextAt: null })).toBeNull();
   });
 });
 

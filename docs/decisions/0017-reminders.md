@@ -73,7 +73,9 @@ saving a subscription and again on sending.
 like the palette and the tags, rather than a sheet over the note. The panel is three steps
 (day, time, repeat), each a row of choices that shows what it is set to; a date or time
 field, and a repeat's interval, weekdays and end, appear only under the choice that needs
-them. Numbers are stepped, not typed, so the keyboard does not cover the dock. To make room
+them. Numbers are stepped, not typed, so the keyboard does not cover the dock. A pending
+reminder opens on its next time rather than its first, and a counted repeat on the times it
+has left, so editing one carries on the count instead of starting it again. To make room
 for the bell, pinning moved to the note's header beside archive and trash. On a card the
 same panel opens in a popover from the card's toolbar.
 

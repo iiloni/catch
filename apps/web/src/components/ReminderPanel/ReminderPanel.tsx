@@ -3,6 +3,7 @@ import {
   type Note,
   type Recurrence,
   type Reminder,
+  remainingCount,
   reminderFireTime,
   reminderZone,
 } from '@catch/shared';
@@ -94,7 +95,8 @@ function initialForm(reminder: Reminder | undefined, fallback: string): Form {
     monthlyOn: nth ? (nth.ordinal === -1 ? 'last' : 'nth') : 'day',
     ends: recurrence?.until ? 'until' : recurrence?.count ? 'count' : 'never',
     until: recurrence?.until ?? startsAt.slice(0, 10),
-    count: recurrence?.count ?? 10,
+    // A pending reminder opens on its next time, so its count is what is left from there.
+    count: (reminder?.nextAt ? remainingCount(reminder) : recurrence?.count) || 10,
     fixed: reminder ? !reminder.floating : false,
     timeZone: reminder && !reminder.floating ? reminder.timeZone : deviceTimeZone(),
   };
@@ -363,7 +365,7 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
         event.preventDefault();
         if (!input || passed || !rings) return;
         // A pending reminder opens on its next time, not its first. Saved untouched it stays
-        // as it is, rather than starting its count again from there.
+        // as it is.
         if (reminder?.nextAt && JSON.stringify(input) === JSON.stringify(toInput(opened))) {
           onDone();
           return;
