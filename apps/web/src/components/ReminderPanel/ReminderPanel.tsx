@@ -1,5 +1,6 @@
 import {
   firstPending,
+  instantToLocal,
   type Note,
   type Recurrence,
   type Reminder,
@@ -82,8 +83,18 @@ const shortDate = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
 });
 
-function initialForm(reminder: Reminder | undefined, fallback: string): Form {
-  const startsAt = reminder?.nextAt ?? fallback;
+/** When a reminder that was put off rings again, while that is still ahead. */
+const snoozedUntil = (reminder: Reminder | undefined, now: Date) =>
+  reminder?.snoozedUntil && reminder.snoozedUntil > now ? reminder.snoozedUntil : null;
+
+function initialForm(reminder: Reminder | undefined, now: Date, fallback: string): Form {
+  const snoozed = snoozedUntil(reminder, now);
+  // A one-off that rang and was put off has only the snooze left to show.
+  const startsAt =
+    reminder?.nextAt ??
+    (reminder && snoozed
+      ? instantToLocal(snoozed, reminderZone(reminder, deviceTimeZone()))
+      : fallback);
   const recurrence = reminder?.recurrence ?? null;
   const nth = recurrence?.weekdayOfMonth ?? null;
   return {
@@ -316,7 +327,7 @@ type Props = {
 export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const [times] = useReminderTimes();
   const [now, setNow] = useState(() => new Date());
-  const [opened] = useState(() => initialForm(reminder, defaultReminderStart(now, times)));
+  const [opened] = useState(() => initialForm(reminder, now, defaultReminderStart(now, times)));
   const [form, setForm] = useState(opened);
   const days = quickReminderDays(now);
   const presets = quickReminderTimes(times);
@@ -344,14 +355,21 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
   const nowTime = deviceLocalTime(now).slice(11);
   const rang =
     reminder?.firedAt && now.getTime() - reminder.firedAt.getTime() < 24 * 60 * 60 * 1000;
+  const snoozed = snoozedUntil(reminder, now);
+  // Saved as it was opened, a reminder still waiting for something is left alone.
+  const untouched =
+    Boolean(reminder?.nextAt || snoozed) &&
+    JSON.stringify(input) === JSON.stringify(toInput(opened));
   const summary = !input
     ? 'Choose a day and a time'
     : passed
       ? 'That time has passed'
       : rings
-        ? `${formatReminderTime(rings, now)}${
-            input.recurrence ? ` · ${describeRecurrence(input.recurrence)}` : ''
-          }`
+        ? `${
+            untouched && snoozed
+              ? `Snoozed until ${formatReminderTime(snoozed, now)}`
+              : formatReminderTime(rings, now)
+          }${input.recurrence ? ` · ${describeRecurrence(input.recurrence)}` : ''}`
         : 'Nothing left to ring for';
 
   return (
@@ -364,9 +382,9 @@ export function ReminderPanel({ note, reminder, onDone, className }: Props) {
       onSubmit={(event) => {
         event.preventDefault();
         if (!input || passed || !rings) return;
-        // A pending reminder opens on its next time, not its first. Saved untouched it stays
-        // as it is.
-        if (reminder?.nextAt && JSON.stringify(input) === JSON.stringify(toInput(opened))) {
+        // A pending reminder opens on its next time, not its first, so saving it untouched
+        // would move its start and drop its snooze.
+        if (untouched) {
           onDone();
           return;
         }

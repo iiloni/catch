@@ -230,6 +230,45 @@ describe('ReminderPanel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('That time has passed');
   });
 
+  it('opens a snoozed one-off on the time it was put off to', () => {
+    const rang = {
+      ...saved,
+      startsAt: '2026-10-05T09:00',
+      nextAt: null,
+      firedAt: new Date(2026, 9, 5, 9, 0),
+      snoozedUntil: new Date(2026, 9, 5, 10, 20, 30),
+    };
+    render(<ReminderPanel note={note} reminder={rang} onDone={onDone} />);
+    expect(pressed('Day')).toEqual(['Today']);
+    expect(screen.getByLabelText('Time')).toHaveValue('10:20');
+    expect(screen.getByRole('status')).toHaveTextContent(/^Snoozed until Today, /);
+    // Saved as it is, the snooze stands.
+    fireEvent.click(screen.getByRole('button', { name: 'Save reminder' }));
+    expect(setReminder).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it('says a repeating reminder is snoozed while showing its schedule', () => {
+    const repeating = {
+      ...saved,
+      recurrence: {
+        frequency: 'daily' as const,
+        interval: 1,
+        weekdays: [],
+        weekdayOfMonth: null,
+        until: null,
+        count: null,
+      },
+      snoozedUntil: new Date(2026, 9, 5, 10, 20),
+    };
+    render(<ReminderPanel note={note} reminder={repeating} onDone={onDone} />);
+    expect(screen.getByLabelText('Time')).toHaveValue('07:30');
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent(/^Snoozed until Today, .* · Daily$/);
+    // Changing it sets the reminder afresh, and the summary says when that rings.
+    fireEvent.click(choice('Time', /Evening/));
+    expect(screen.getAllByRole('status')[0]).not.toHaveTextContent('Snoozed');
+  });
+
   it('offers to ring again for a reminder that rang lately', () => {
     render(
       <ReminderPanel
