@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openNote, seedNotes, signUp } from './helpers';
+import { openNote, seedNotes, settledBox, signUp } from './helpers';
 
 test('mobile notes scroll behind the controls and keep their timestamp below the content', async ({
   page,
@@ -51,18 +51,23 @@ test('mobile notes scroll behind the controls and keep their timestamp below the
     keyboardHeight.jump(300);
   });
   await expect(bottomBlur).toHaveCSS('bottom', '300px');
-  await area.evaluate((area) => {
-    area.scrollTop = area.scrollHeight;
-  });
+  // The jump to the end mirrors undo and redo: above the dock, at its other end.
+  const toBottom = page.getByRole('button', { name: 'Scroll to bottom', exact: true });
+  const toBottomBounds = await settledBox(toBottom);
+  const dockBounds = await page.locator('[data-note-toolbar]').last().boundingBox();
+  if (!dockBounds) throw new Error('Missing note dock');
+  expect(toBottomBounds.y + toBottomBounds.height).toBeLessThan(dockBounds.y);
+  expect(toBottomBounds.x - dockBounds.x).toBeLessThan(8);
+  await toBottom.click();
   await expect(bottomBlur).toHaveCSS('opacity', '0');
+  await expect(toBottom).toBeHidden();
   const timestamp = dialog.getByText(/^Edited/);
   await expect(timestamp).toBeVisible();
   const timestampBounds = await timestamp.boundingBox();
   const lastLine = await dialog.getByText(/^Stop 24:/).boundingBox();
   expect(timestampBounds?.y).toBeGreaterThan((lastLine?.y ?? 0) + (lastLine?.height ?? 0));
   await expect(timestamp).toHaveCSS('text-align', 'center');
-  const dock = await page.locator('[data-note-toolbar]').boundingBox();
-  expect((timestampBounds?.y ?? 0) + (timestampBounds?.height ?? 0)).toBeLessThan(dock?.y ?? 0);
+  expect((timestampBounds?.y ?? 0) + (timestampBounds?.height ?? 0)).toBeLessThan(dockBounds.y);
 
   await page.evaluate(async () => {
     const { keyboardHeight } = await import('/src/lib/keyboard.ts');

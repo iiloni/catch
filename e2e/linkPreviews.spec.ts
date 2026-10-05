@@ -179,3 +179,46 @@ test('the dock tray fades away and its overlay gathers media above links', async
   await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   await expect(tray).toBeVisible();
 });
+
+test('the buttons floating above the dock clear the link tray', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Only the full-screen mobile editor floats buttons above the dock.');
+  await signUp(page);
+  await page.evaluate(async () => {
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
+    const { transaction } = createNote({
+      userId: getSignedInUser().id,
+      content: [
+        { type: 'heading', props: { level: 3 }, content: 'Raised buttons' },
+        ...Array.from({ length: 24 }, (_, index) => ({
+          type: 'paragraph',
+          content: `Paragraph ${index + 1}: enough note content to keep the links below the fold.`,
+        })),
+        { type: 'paragraph', content: 'https://example.com' },
+      ],
+    });
+    await transaction.isPersisted.promise;
+  });
+  const dialog = await openNote(page, 'Raised buttons');
+  const tray = page.locator('button[data-link-underlay].glass-thick');
+  await expect(tray).toBeVisible();
+  // An edit brings undo and redo in beside the jump to the note's end.
+  await dialog.getByText(/^Paragraph 1:/).click();
+  await page.keyboard.insertText('!');
+  const trayBounds = await settledBox(tray);
+  for (const floating of [
+    page.getByRole('button', { name: 'Scroll to bottom', exact: true }),
+    page.getByRole('toolbar', { name: 'Undo and redo' }),
+  ]) {
+    const bounds = await settledBox(floating);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(trayBounds.y);
+  }
+
+  // At the end the links are in view, so the tray leaves and undo and redo come back down.
+  await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click();
+  await expect(tray).toBeHidden();
+  const history = await settledBox(page.getByRole('toolbar', { name: 'Undo and redo' }));
+  const dock = await page.locator('[data-note-toolbar]').last().boundingBox();
+  if (!dock) throw new Error('Missing note dock');
+  expect(dock.y - history.y - history.height).toBeLessThan(16);
+});

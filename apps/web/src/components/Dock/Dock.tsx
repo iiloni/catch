@@ -16,7 +16,8 @@ import { type PointerEvent, type RefObject, useEffect, useRef, useState } from '
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
-import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
+import { NoteLinkTray, useNoteLinkTrayShown } from '@/components/NoteLinkTray/NoteLinkTray';
+import { ScrollToBottom } from '@/components/ScrollToBottom/ScrollToBottom';
 import {
   SettingsTabPicker,
   SettingsTabSelector,
@@ -202,7 +203,7 @@ export function Dock() {
                 {/* Isolated so the link tray can tuck behind the dock's glass. */}
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && <NoteLinkTray />}
-                  {mode === 'note' && <FloatingHistoryToolbar className="sm:hidden" />}
+                  {mode === 'note' && <FloatingNoteToolbars />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField inputRef={inputRef} active={mode === 'search'} />
                     <AnimatePresence initial={false}>
@@ -256,17 +257,23 @@ export function Dock() {
   );
 }
 
-function FloatingHistoryToolbar({ className }: { className?: string }) {
+/** Undo and redo at the dock's right end and the jump to the note's end at its left. */
+function FloatingNoteToolbars() {
   const note = editorNote.use();
   const controls = editorControls.use();
-  if (!note || note.deletedAt) return null;
+  // The link tray peeks 2.75rem above the dock; float above it rather than over its text.
+  const place = cn(
+    'absolute bottom-full mb-3 transition-transform duration-300 ease-out motion-reduce:transition-none sm:hidden',
+    useNoteLinkTrayShown() && '-translate-y-11',
+  );
 
   return (
-    <HistoryToolbar
-      controls={controls}
-      floating
-      className={cn('absolute right-0 bottom-full mb-3', className)}
-    />
+    <>
+      {note && !note.deletedAt && (
+        <HistoryToolbar controls={controls} floating className={cn(place, 'right-0')} />
+      )}
+      <ScrollToBottom className={cn(place, 'left-0')} />
+    </>
   );
 }
 
