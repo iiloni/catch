@@ -36,8 +36,15 @@ function respond(path: string, token: string | null, data: unknown) {
 const signIn = (token: string, signedInUser = user) =>
   respond('sign-in/email', token, { user: signedInUser });
 
+/** Another tab: it shares the device's storage and has a session of its own. */
+async function openTab() {
+  sessionStorage.clear();
+  await load();
+}
+
 beforeEach(async () => {
   localStorage.clear();
+  sessionStorage.clear();
   mocks.native.mockReturnValue(true);
   mocks.server.mockReturnValue('http://llm:24085');
   vi.stubEnv('CATCH_DEV_SERVER_URL', 'http://llm:24085');
@@ -151,17 +158,47 @@ describe('several accounts on one device', () => {
     ]);
   });
 
-  it('keeps using the account the page loaded for after the device switches', async () => {
+  it('keeps using the account the page loaded for until it loads again', async () => {
     await signInBoth();
-    // As another tab would: the page itself has not loaded again.
     expect(auth.activateAccount(user.id)).toBe(true);
     expect(localStorage.getItem('catch-auth-token')).toBe('first-token');
     expect(auth.getAuthToken()).toBe('second-token');
     expect(auth.getSignedInUser()).toEqual(other);
-    expect(auth.deviceLeftPageAccount()).toBe(true);
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
-    expect(auth.deviceLeftPageAccount()).toBe(false);
+  });
+
+  it('keeps a tab on its account, across reloads, while another tab switches', async () => {
+    await signInBoth();
+    const tab = sessionStorage.getItem('catch-tab-account');
+    // The other tab starts as the account last used, then switches to the first.
+    await openTab();
+    expect(auth.getSignedInUser()).toEqual(other);
+    auth.activateAccount(user.id);
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    // Back in the first tab, which reloads.
+    sessionStorage.clear();
+    sessionStorage.setItem('catch-tab-account', tab ?? '');
+    await load();
+    expect(auth.getSignedInUser()).toEqual(other);
+    expect(auth.getAuthToken()).toBe('second-token');
+    expect(auth.pageAccountGone()).toBe(false);
+  });
+
+  it('knows when its account was signed out in another tab, and starts over after', async () => {
+    await signInBoth();
+    // As the other tab would, with this page still open.
+    const accounts = auth.getAccounts().filter((account) => account.user.id !== other.id);
+    localStorage.setItem('catch-accounts', JSON.stringify(accounts));
+    localStorage.setItem('catch-auth-token', 'first-token');
+    localStorage.setItem('catch-user', JSON.stringify(user));
+    localStorage.setItem('catch-active-account', user.id);
+    expect(auth.pageAccountGone()).toBe(true);
+    expect(auth.getAuthToken()).toBeNull();
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(auth.pageAccountGone()).toBe(false);
   });
 
   it('gives a new token to the account the page uses, not the one the device switched to', async () => {

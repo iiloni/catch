@@ -312,7 +312,8 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
 - A device can hold several signed-in accounts (ADR 0019, `lib/auth.ts`, `lib/accounts.ts`).
   `getAuthToken` and `getSignedInUser` answer for the account the page loaded for; changing
-  it is a full page load (`switchAccount`). Anything kept on the device for a user is named
+  it is a full page load (`switchAccount`). Each tab keeps its own account, so two tabs can
+  show different ones: never read the device's active session to decide whose data this is. Anything kept on the device for a user is named
   after the user id, and `signOutAccount` must delete it for an account that is not in use.
   Reminders ring for every signed-in account: `lib/push.ts` saves the browser's one
   subscription for each of them, and the phone keeps alarms and a token per account. A

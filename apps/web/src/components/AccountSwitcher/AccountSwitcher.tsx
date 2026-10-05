@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Check, LogOut, Plus } from 'lucide-react';
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
-import { type PointerEvent, useRef, useState } from 'react';
+import { type PointerEvent, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountAvatar } from '@/components/AccountSummary/AccountSummary';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,14 @@ type Swipe = { axis: 'x' | 'y'; target: Account | null; from: 1 | -1 };
  */
 export function AccountSwitcher() {
   const [accounts, setAccounts] = useState(getAccounts);
+  useEffect(() => {
+    // Another tab may add an account or sign one out.
+    const refresh = (event: StorageEvent) => {
+      if (event.storageArea === localStorage) setAccounts(getAccounts());
+    };
+    window.addEventListener('storage', refresh);
+    return () => window.removeEventListener('storage', refresh);
+  }, []);
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<{ account: Account; pending: number } | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);

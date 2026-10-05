@@ -332,6 +332,11 @@ export function onNotificationOpen(open: (noteId: string, userId?: string) => vo
   if (!('serviceWorker' in navigator)) return () => {};
   const listener = (event: MessageEvent) => {
     const data: unknown = event.data;
+    // The service worker is looking for the tab that shows a reminder's account.
+    if (data && typeof data === 'object' && 'type' in data && data.type === 'WHICH_ACCOUNT') {
+      event.ports[0]?.postMessage(getSignedInUser()?.id ?? null);
+      return;
+    }
     if (
       data &&
       typeof data === 'object' &&

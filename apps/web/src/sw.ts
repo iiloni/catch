@@ -99,6 +99,29 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+/**
+ * The window showing an account, when several are open: tabs can show different accounts
+ * (ADR 0019), and a reminder is best opened where its account already is.
+ */
+async function windowShowing(windows: WindowClient[], userId: string) {
+  const answers = await Promise.all(
+    windows.map(
+      (client) =>
+        new Promise<WindowClient | null>((resolve) => {
+          const channel = new MessageChannel();
+          // A page that is still loading, or from before it could answer, says nothing.
+          const timer = setTimeout(() => resolve(null), 300);
+          channel.port1.onmessage = (message) => {
+            clearTimeout(timer);
+            resolve(message.data === userId ? client : null);
+          };
+          client.postMessage({ type: 'WHICH_ACCOUNT' }, [channel.port2]);
+        }),
+    ),
+  );
+  return answers.find((client) => client !== null) ?? null;
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const noteId: unknown = event.notification.data?.noteId;
@@ -112,7 +135,12 @@ self.addEventListener('notificationclick', (event) => {
       // Only the signed-in app listens for the message; a window at sign-in or setup does not.
       const outside = (client: WindowClient) =>
         /^\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
-      const open = windows.find((client) => !outside(client)) ?? windows[0];
+      const inside = windows.filter((client) => !outside(client));
+      const showing =
+        typeof userId === 'string' && inside.length > 1
+          ? await windowShowing(inside, userId).catch(() => null)
+          : null;
+      const open = showing ?? inside[0] ?? windows[0];
       if (!open) {
         await self.clients.openWindow(path);
         return;

@@ -10,7 +10,7 @@ account's copy of its notes and any change that has not synced (ADR 0007).
 
 ## Decisions
 
-**The device keeps a list of sessions; one is in use.** `lib/auth.ts` stores every signed-in
+**The device keeps a list of sessions.** `lib/auth.ts` stores every signed-in
 account's user and bearer token under `catch-accounts`. The session in use stays under the
 keys it always had (`catch-auth-token`, `catch-user`), so a session from an older build is
 simply the list's first entry, and an older build still finds its session after a downgrade.
@@ -23,21 +23,30 @@ loads (ADR 0007), so `switchAccount` changes the session in use and loads the ap
 signing in does. Each account already had its own database, outbox, attachment files and
 per-user settings; the other accounts' stay on the device untouched.
 
+**A tab shows one account, and tabs can show different ones.** A tab remembers its account
+in `sessionStorage` (`catch-tab-account`), so it keeps it across reloads while another tab
+switches. The session in use on the device is only where a new tab starts: the account last
+switched to or signed in. Each account already has its own database, outbox leader lock and
+files, so two tabs on two accounts sync side by side, and two tabs on one account share its
+database as before (ADR 0007). The Android app is one tab.
+
 **A page belongs to the account it loaded for.** `getAuthToken` and `getSignedInUser` answer
-for that account until the page loads again, not for whichever the device has since moved
-to: another signing in from "Add account", a switch in another tab, or the next account
-after a sign-out. Otherwise a page would send one account's queued writes with another's
-token in the moment before it reloads. A page whose account has signed out has no session
-at all. A tab that sees the device switch, or its account signed out, loads again to
-follow (`followAccountChanges`), waiting first for an open note or composer to close.
+for that account until the page loads again, whatever the tab or the device has since
+moved to: another signing in from "Add account", a switch, or the next account after a
+sign-out. Otherwise a page would send one account's queued writes with another's token in
+the moment before it reloads. A page whose account has signed out has no session at all. A
+tab that sees its account signed out in another tab leaves for another account or the
+sign-in page (`followAccountChanges`), waiting first for an open note or composer to close.
+It also deletes the account's database if the tab that signed it out could not, because
+this one had it open.
 
 **An older build's sign-out is noticed.** A build from before the list changes only the
 session keys. `catch-active-account` records whose session this build last put in use; when
 the keys no longer hold it, that account is dropped from the list rather than left there
 with a session that has ended.
 
-**Only the account in use syncs.** Its outbox sends and its shapes stream. Another account's
-queued changes wait on the device until it is switched to.
+**Only accounts open in a tab sync.** Their outboxes send and their shapes stream. An account
+open in no tab keeps its queued changes on the device until it is switched to.
 
 **Every signed-in account's reminders ring.** Notifications are turned on for the device,
 not for an account: on for one is on for all, including one added later.
@@ -57,7 +66,8 @@ not for an account: on for one is on for all, including one added later.
   kept by note, since note ids are unique across accounts.
 - *A notification says whose note it is.* The server adds the user's id to the push
   message, and the phone to its intent. Tapped, the app switches to that account and opens
-  the note: an open app is told and calls `switchAccount`; a cold start loads
+  the note: an open app is told and calls `switchAccount`; with several tabs open the
+  service worker first asks which of them shows that account; a cold start loads
   `/?note=<id>&account=<user id>`, and `lib/auth.ts` makes that account the one in use
   before anything reads it. On Android the notification also shows the account's name when
   the phone rings for more than one. A snooze taken from a notification is written to the

@@ -5,10 +5,10 @@ import {
   activateAccount,
   authClient,
   clearAuthToken,
-  deviceLeftPageAccount,
   forgetAccount,
   getAccounts,
   getSignedInUser,
+  pageAccountGone,
   SWITCHED_KEY,
 } from './auth';
 import { clearLocalData } from './collections';
@@ -24,14 +24,24 @@ import { getSyncStatus } from './syncStatus';
 import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
 
 /**
- * Several accounts can be signed in on one device (ADR 0019). One is in use at a time: its
- * notes are the ones open and its outbox the one sending. The others keep their session and
- * their copy of their notes until they are switched to, and their reminders still ring.
+ * Several accounts can be signed in on one device (ADR 0019). A tab shows one of them: its
+ * notes are the ones open and its outbox the one sending, and tabs can show different
+ * accounts side by side. An account open in no tab keeps its session and its copy of its
+ * notes until it is switched to. Every account's reminders ring.
  */
 
+// Left for a tab that still has a signed-out account's database open, where the tab that
+// signed it out could not delete it: that tab deletes it on its way out. Not set by "sign in
+// again", which keeps the device's notes for the session that follows.
+const removedKey = (userId: string) => `catch-account-removed:${userId}`;
+{
+  const user = getSignedInUser();
+  if (user) localStorage.removeItem(removedKey(user.id));
+}
+
 /**
- * Changes the account in use, opening one of its notes if asked. A full load, so the
- * collections open that account's notes.
+ * Changes the account this tab shows, opening one of its notes if asked. A full load, so
+ * the collections open that account's notes.
  */
 export function switchAccount(userId: string, noteId?: string) {
   if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
@@ -40,6 +50,8 @@ export function switchAccount(userId: string, noteId?: string) {
 }
 
 const openStores = [editorNote, quickNote, linkCaptureOpen];
+// Who this page was loaded for, still known after the account has been signed out.
+const pageUser = getSignedInUser();
 
 /**
  * Opens a note from its reminder's notification, which rings for every account on the
@@ -83,22 +95,28 @@ async function stopRinging(account: Account) {
 }
 
 /**
- * Follows a switch or sign-out made in another tab. This page holds the old account's notes
- * and outbox, so it loads again for whichever account the device now uses, once it holds no
- * open note or composer whose text the load would drop. Until then it stays on its account.
+ * Leaves an account that was signed out in another tab. This page holds its notes and
+ * outbox, so it loads again as another account, or at sign-in, once it holds no open note
+ * or composer whose text the load would drop. A switch in another tab changes nothing here.
  */
 export function followAccountChanges() {
   let waiting: (() => void)[] = [];
+  let leaving = false;
   const follow = () => {
-    if (!deviceLeftPageAccount()) return;
+    if (leaving || !pageAccountGone()) return;
     if (isUpdateReloadBlocked()) {
-      if (waiting.length === 0) {
-        waiting = openStores.map((store) => store.subscribe(follow));
-      }
+      if (waiting.length === 0) waiting = openStores.map((store) => store.subscribe(follow));
       return;
     }
-    // Not a reload: the address may name a note that the other account does not have.
-    window.location.assign('/');
+    leaving = true;
+    const user = pageUser;
+    // The tab that signed it out could not delete a database this one had open.
+    const cleared =
+      user && localStorage.getItem(removedKey(user.id)) === 'true'
+        ? clearLocalData().catch(() => undefined)
+        : Promise.resolve();
+    // Not a reload: the address may name a note that the next account does not have.
+    void cleared.then(() => window.location.assign('/'));
   };
   const onStorage = (event: StorageEvent) => {
     if (event.storageArea === localStorage) follow();
@@ -127,6 +145,7 @@ export async function unsyncedChanges(account: Account) {
 /** Signs an account out of this device and deletes its data here. */
 export async function signOutAccount(account: Account) {
   if (account.user.id === getSignedInUser()?.id) return signOutCurrentAccount();
+  localStorage.setItem(removedKey(account.user.id), 'true');
   await stopRinging(account);
   await nativeReminders.clear(account.user.id).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
@@ -173,6 +192,7 @@ export async function signOutAccount(account: Account) {
 export async function signOutCurrentAccount() {
   const user = getSignedInUser();
   const account = getAccounts().find((other) => other.user.id === user?.id);
+  if (user) localStorage.setItem(removedKey(user.id), 'true');
   // The accounts that stay signed in go on ringing.
   if (account) await stopRinging(account);
   else await dropPushSubscription().catch(() => undefined);

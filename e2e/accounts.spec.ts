@@ -83,7 +83,7 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
 });
 
-test('other tabs follow a switch, and signing out one account leaves the rest', async ({
+test('tabs show different accounts side by side, and signing one out leaves the rest', async ({
   page,
   isMobile,
 }) => {
@@ -91,7 +91,9 @@ test('other tabs follow a switch, and signing out one account leaves the rest', 
   const first = await signUp(page);
   await seedNotes(page, ['First account note']);
   const second = await addAccount(page, first);
+  await seedNotes(page, ['Second account note']);
 
+  // A new tab starts as the account last used.
   const tab = await page.context().newPage();
   await tab.goto('/');
   await expect(avatar(tab, second)).toBeVisible({ timeout: 30_000 });
@@ -99,10 +101,18 @@ test('other tabs follow a switch, and signing out one account leaves the rest', 
   const accounts = page.getByRole('list', { name: 'Accounts' });
   await accounts.getByRole('button', { name: first, exact: true }).click();
   await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
-  // The other tab held the second account's notes; it loads again as the first.
-  await expect(avatar(tab, first)).toBeVisible({ timeout: 30_000 });
-  await expect(card(tab, 'First account note')).toBeVisible();
-  await tab.close();
+  await expect(card(page, 'First account note')).toBeVisible();
+
+  // The other tab keeps the second account, through a reload and while writing.
+  await tab.reload();
+  await expect(avatar(tab, second)).toBeVisible({ timeout: 30_000 });
+  await expect(card(tab, 'Second account note')).toBeVisible();
+  await seedNotes(tab, ['Written in the second tab']);
+  await seedNotes(page, ['Written in the first tab']);
+  await expect(card(tab, 'Written in the second tab')).toBeVisible();
+  await expect(card(tab, 'Written in the first tab')).toBeHidden();
+  await expect(card(page, 'Written in the first tab')).toBeVisible();
+  await expect(card(page, 'Written in the second tab')).toBeHidden();
 
   await avatar(page, first).click();
   await page.getByRole('button', { name: `Sign out ${second}`, exact: true }).click();
@@ -112,6 +122,10 @@ test('other tabs follow a switch, and signing out one account leaves the rest', 
   await avatar(page, first).click();
   await expect(accounts.getByRole('listitem')).toHaveCount(1);
   await page.keyboard.press('Escape');
+  // The tab that was showing the signed-out account moves to the one that is left.
+  await expect(avatar(tab, first)).toBeVisible({ timeout: 30_000 });
+  await expect(card(tab, 'Written in the first tab')).toBeVisible();
+  await tab.close();
 
   // Signing out the account in use goes to sign-in only when no other is left.
   await addAccount(page, first);

@@ -41,8 +41,20 @@ const activeToken = () => localStorage.getItem(sessionKey(TOKEN_KEY));
 const activeUser = () => read(USER_KEY, signedInUserSchema);
 
 /**
- * A notification says whose note it opens (`?account=<id>`), and the app may have last been
- * used as someone else. That account becomes the one in use before anything reads it.
+ * Each tab shows one account and keeps it across reloads, so tabs can show different ones
+ * side by side (ADR 0019). The session in use on the device is only where a new tab starts.
+ */
+const TAB_KEY = 'catch-tab-account';
+
+function tabUserId() {
+  const userId = sessionStorage.getItem(sessionKey(TAB_KEY));
+  // Signed out since, in this tab or another.
+  return userId && getAccounts().some(({ user }) => user.id === userId) ? userId : null;
+}
+
+/**
+ * A notification says whose note it opens (`?account=<id>`), and the tab may be showing
+ * someone else. That account becomes the tab's before anything reads it.
  */
 function followAccountLink() {
   const url = new URL(window.location.href);
@@ -50,7 +62,7 @@ function followAccountLink() {
   if (userId === null) return;
   url.searchParams.delete('account');
   window.history.replaceState(window.history.state, '', url);
-  if (activeUser()?.id === userId) return;
+  if ((tabUserId() ?? activeUser()?.id) === userId) return;
   if (activateAccount(userId)) {
     // Said once the app is up: a link, not the user, chose the account.
     sessionStorage.setItem(SWITCHED_KEY, 'true');
@@ -63,12 +75,14 @@ function followAccountLink() {
 followAccountLink();
 
 /**
- * The account this page was loaded for. Collections open that user's database when the app
- * starts (ADR 0007), so the page keeps sending that account's token even after the device
- * has switched to a different one, here or in another tab, until it loads again. Once set it
- * never changes: a page whose account signed out has no session, not somebody else's.
+ * The account this page was loaded for: the tab's, or for a new tab the one last used on
+ * the device. Collections open that user's database when the app starts (ADR 0007), so the
+ * page keeps sending that account's token whatever another tab switches to, and after this
+ * tab has chosen another, until it loads again. Once set it never changes: a page whose
+ * account signed out has no session, not somebody else's.
  */
-let pageUserId = activeUser()?.id ?? null;
+let pageUserId = tabUserId() ?? activeUser()?.id ?? null;
+if (pageUserId) sessionStorage.setItem(sessionKey(TAB_KEY), pageUserId);
 
 /** Every account signed in on this device (ADR 0019), in the order they were added. */
 export function getAccounts(): Account[] {
@@ -135,19 +149,23 @@ export function getSignedInUser(): SignedInUser | null {
   return pageUserId ? (pageAccount()?.user ?? null) : activeUser();
 }
 
-/** Makes a signed-in account the one the device uses. The page must load again afterwards. */
+/**
+ * Makes a signed-in account this tab's, and the one a new tab starts with. The page must
+ * load again afterwards. Other tabs keep the accounts they show.
+ */
 export function activateAccount(userId: string): boolean {
   const account = getAccounts().find(({ user }) => user.id === userId);
   if (!account) return false;
+  sessionStorage.setItem(sessionKey(TAB_KEY), userId);
   // Written to the list first: making it the session in use must not drop the one it replaces.
   writeAccounts(getAccounts());
   writeActive(account);
   return true;
 }
 
-/** Whether the device now uses another account than the one this page was loaded for. */
-export function deviceLeftPageAccount() {
-  return pageUserId !== null && activeUser()?.id !== pageUserId;
+/** Whether the account this page was loaded for has been signed out, here or in another tab. */
+export function pageAccountGone() {
+  return pageUserId !== null && pageAccount() === null;
 }
 
 /** Forgets an account's session on this device. Its data here is the caller's to remove. */
@@ -196,6 +214,8 @@ export const authClient = createAuthClient({
         const user = userOf(context.data);
         if (user) {
           saveAccount({ user, token }, true);
+          // The load that follows is this tab's, as the account that just signed in.
+          sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
           pageUserId ??= user.id;
         } else {
           // Kept in the list first, since the keys below are about to name someone else.
