@@ -11,9 +11,10 @@ a server you control, and they keep working on your phone or laptop when you are
 It runs in any modern browser, installs as an app from the browser (PWA), and has a native
 Android app.
 
-![The gallery on a desktop, with a note open beside it](docs/screenshots/desktop-gallery.png)
-
-![The deck on a desktop, with notes in three columns](docs/screenshots/desktop-deck.png)
+<p align="center">
+  <img src="docs/screenshots/desktop-gallery.png" alt="The gallery on a desktop, with a note open beside it" width="400" />
+  <img src="docs/screenshots/desktop-deck.png" alt="The deck on a desktop, with notes in three columns" width="400" />
+</p>
 
 <p align="center">
   <img src="docs/screenshots/mobile-gallery.png" alt="The gallery on a phone" width="30%" />
