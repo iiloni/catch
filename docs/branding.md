@@ -63,6 +63,12 @@ Settings > Update shows the installed app's channel icon on Android and the serv
 icon on the web, falling back to development while channel metadata is unavailable.
 Splash images and other application styling remain unchanged.
 
+Notifications show the monochrome mark in Android's status bar, which draws it from alpha
+alone. The app's reminders use `res/drawable/ic_stat_catch.xml`, a hand-kept vector of
+`catch-mark-mono-light.svg` scaled to fill the 24 dp box; web push uses
+`apps/web/public/notification-badge.png`, which the generator trims from the same SVG. Both
+are shared by every channel.
+
 ## Wordmark lockups
 
 `branding/wordmark/` adds the shared outlined Catch lettering, its layout tokens,

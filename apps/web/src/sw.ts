@@ -20,10 +20,11 @@ self.addEventListener('message', (event) => {
 clientsClaim();
 cleanupOutdatedCaches();
 const precached = self.__WB_MANIFEST;
+const precachedUrls = precached.map((entry) => (typeof entry === 'string' ? entry : entry.url));
 // Release channels have icons of their own; the precache list names this build's.
-const appIcon = precached
-  .map((entry) => (typeof entry === 'string' ? entry : entry.url))
-  .find((url) => url.endsWith('pwa-192x192.png'));
+const appIcon = precachedUrls.find((url) => url.endsWith('pwa-192x192.png'));
+// Android's status bar shows this in place of the browser's own icon, drawn from its alpha alone.
+const badge = precachedUrls.find((url) => url.endsWith('notification-badge.png'));
 precacheAndRoute(precached);
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//] }),
@@ -84,6 +85,7 @@ self.addEventListener('push', (event) => {
   const options: NotificationOptions & { renotify: boolean } = {
     body,
     icon: appIcon,
+    badge,
     // A reminder that rings again replaces its last notification instead of stacking.
     tag: noteId ?? 'catch',
     // And alerts again when it does, which a replaced notification otherwise would not.
