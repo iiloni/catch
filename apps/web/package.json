@@ -38,6 +38,7 @@
     "@tanstack/offline-transactions": "^1.0.56",
     "@tanstack/react-db": "^0.4.1",
     "@tanstack/react-router": "^1.170.40",
+    "@tiptap/pm": "^3.31.3",
     "better-auth": "^1.7.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

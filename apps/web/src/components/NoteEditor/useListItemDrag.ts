@@ -1,4 +1,6 @@
 import type { BlockNoteEditor } from '@blocknote/core';
+import { SideMenuExtension } from '@blocknote/core/extensions';
+import { closeHistory } from '@tiptap/pm/history';
 import { useEffect, useState } from 'react';
 import { haptics } from '@/lib/haptics';
 import { keyboardHeight } from '@/lib/keyboard';
@@ -7,8 +9,9 @@ const LIST_ITEM =
   '[data-content-type="checkListItem"], [data-content-type="bulletListItem"], [data-content-type="numberedListItem"]';
 const HOLD_DELAY = 350;
 const MOVE_TOLERANCE = 8;
+const INDENT_DISTANCE = 32;
 
-/** Touch dragging stays within the item's sibling group, preserving its nesting. */
+/** Lists share a projected drop destination for touch holds and mouse drag handles. */
 export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -18,7 +21,8 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
     let frame = 0;
     let source: HTMLElement | null = null;
     let target: HTMLElement | null = null;
-    let placement: 'before' | 'after' = 'before';
+    let placement: 'before' | 'after' | 'nested' = 'before';
+    let mousePending = false;
     let touchId = 0;
     let startX = 0;
     let startY = 0;
@@ -50,6 +54,7 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       source = null;
       target = null;
       dragging = false;
+      mousePending = false;
       if (suppressClick) {
         clearTimeout(clickTimer);
         clickTimer = setTimeout(() => {
@@ -72,23 +77,27 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
     function updateTarget() {
       if (!refreshSource()) return clear();
       if (!source || !root) return;
-      if (preview) preview.style.top = `${y - grabOffset - root.getBoundingClientRect().top}px`;
+      if (preview) {
+        preview.style.top = `${y - grabOffset - root.getBoundingClientRect().top}px`;
+        preview.style.transform = `translateX(${x - startX}px)`;
+      }
       if (marker) marker.hidden = true;
       target = null;
       const bounds = root.getBoundingClientRect();
       const scrollBounds = scrollArea?.getBoundingClientRect() ?? bounds;
       if (
-        x < bounds.left ||
+        x < bounds.left - (mousePending ? INDENT_DISTANCE : 0) ||
         x > bounds.right ||
         y < Math.max(0, scrollBounds.top) ||
         y > Math.min(window.innerHeight - keyboardHeight.get(), scrollBounds.bottom)
       )
         return;
 
+      const siblings = Array.from(source.parentElement?.children ?? []).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement && !!element.dataset.id,
+      );
       let nearest = Number.POSITIVE_INFINITY;
-      for (const sibling of Array.from(source.parentElement?.children ?? [])) {
-        if (!(sibling instanceof HTMLElement) || sibling === source || !sibling.dataset.id)
-          continue;
+      for (const sibling of siblings) {
         const rect = sibling.getBoundingClientRect();
         const after = y > rect.top + rect.height / 2;
         const distance = Math.abs(y - (after ? rect.bottom : rect.top));
@@ -97,13 +106,46 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
         target = sibling;
         placement = after ? 'after' : 'before';
       }
-      if (target && marker) {
+      if (!target) return;
+      const offset = x - startX;
+      if (offset >= INDENT_DISTANCE) {
+        const slot = siblings.indexOf(target) + (placement === 'after' ? 1 : 0);
+        const previous = siblings.slice(0, slot).findLast((sibling) => sibling !== source);
+        const previousBlock = previous?.dataset.id
+          ? editor.getBlock(previous.dataset.id)
+          : undefined;
+        if (
+          previous &&
+          previousBlock &&
+          ['checkListItem', 'bulletListItem', 'numberedListItem'].includes(previousBlock.type)
+        ) {
+          target = previous;
+          placement = 'nested';
+        }
+      } else if (offset <= -INDENT_DISTANCE) {
+        let parent = source.parentElement?.closest<HTMLElement>('[data-node-type="blockOuter"]');
+        const levels = Math.floor(-offset / INDENT_DISTANCE);
+        for (let level = 1; parent && level < levels; level++) {
+          const ancestor = parent.parentElement?.closest<HTMLElement>(
+            '[data-node-type="blockOuter"]',
+          );
+          if (!ancestor) break;
+          parent = ancestor;
+        }
+        if (parent) {
+          target = parent;
+          placement = 'after';
+        }
+      }
+      if (target === source) return;
+      if (marker) {
         const rect = target.getBoundingClientRect();
+        const indent = placement === 'nested' ? INDENT_DISTANCE : 0;
         marker.hidden = false;
         marker.dataset.listDrop = placement;
-        marker.style.left = `${rect.left - bounds.left}px`;
+        marker.style.left = `${rect.left - bounds.left + indent}px`;
         marker.style.top = `${(placement === 'before' ? rect.top : rect.bottom) - bounds.top - 2}px`;
-        marker.style.width = `${rect.width}px`;
+        marker.style.width = `${Math.max(0, rect.width - indent)}px`;
       }
     }
 
@@ -143,46 +185,50 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       startX = x = touch.clientX;
       startY = y = touch.clientY;
       root?.setAttribute('data-list-holding', '');
-      timer = setTimeout(() => {
-        if (!root || !refreshSource() || !source) return clear();
-        dragging = true;
-        suppressClick = true;
-        window.getSelection()?.removeAllRanges();
-        const bounds = root.getBoundingClientRect();
-        const rect = source.getBoundingClientRect();
-        grabOffset = y - rect.top;
-        // ProseMirror restores attributes changed inside its DOM. Keep the drag visuals
-        // outside its contenteditable instead, and leave the document alone until drop.
-        const clone = source.cloneNode(true) as HTMLElement;
-        for (const element of [clone, ...clone.querySelectorAll('[id], [data-id]')]) {
-          element.removeAttribute('id');
-          element.removeAttribute('data-id');
-        }
-        preview = document.createElement('div');
-        preview.classList.add('bn-block-group', 'bn-default-styles');
-        preview.append(clone);
-        preview.setAttribute('data-list-dragging', '');
-        preview.setAttribute('aria-hidden', 'true');
-        preview.inert = true;
-        preview.contentEditable = 'false';
-        preview.style.left = `${rect.left - bounds.left}px`;
-        preview.style.top = `${rect.top - bounds.top}px`;
-        preview.style.width = `${rect.width}px`;
-        marker = document.createElement('div');
-        marker.setAttribute('aria-hidden', 'true');
-        marker.hidden = true;
-        dimStyle = document.createElement('style');
-        const id = CSS.escape(source.dataset.id ?? '');
-        root.setAttribute('data-list-holding', source.dataset.id ?? '');
-        dimStyle.textContent = `.note-editor[data-list-holding="${id}"] .bn-editor [data-node-type="blockOuter"][data-id="${id}"] { opacity: 0.35; }`;
-        root.append(preview, marker, dimStyle);
-        scrollArea = root?.parentElement ?? null;
-        while (scrollArea && !/(auto|scroll)/.test(getComputedStyle(scrollArea).overflowY)) {
-          scrollArea = scrollArea.parentElement;
-        }
-        haptics.longPress();
-        frame = requestAnimationFrame(autoScroll);
-      }, HOLD_DELAY);
+      timer = setTimeout(beginDrag, HOLD_DELAY);
+    }
+
+    function beginDrag() {
+      if (!root || !refreshSource() || !source) return clear();
+      dragging = true;
+      // A move replaces the block's DOM; detach the handle from its old reference first.
+      editor.getExtension(SideMenuExtension)?.hideMenuIfNotFrozen();
+      suppressClick = true;
+      window.getSelection()?.removeAllRanges();
+      const bounds = root.getBoundingClientRect();
+      const rect = source.getBoundingClientRect();
+      grabOffset = y - rect.top;
+      // ProseMirror restores attributes changed inside its DOM. Keep the drag visuals
+      // outside its contenteditable instead, and leave the document alone until drop.
+      const clone = source.cloneNode(true) as HTMLElement;
+      for (const element of [clone, ...clone.querySelectorAll('[id], [data-id]')]) {
+        element.removeAttribute('id');
+        element.removeAttribute('data-id');
+      }
+      preview = document.createElement('div');
+      preview.classList.add('bn-block-group', 'bn-default-styles');
+      preview.append(clone);
+      preview.setAttribute('data-list-dragging', '');
+      preview.setAttribute('aria-hidden', 'true');
+      preview.inert = true;
+      preview.contentEditable = 'false';
+      preview.style.left = `${rect.left - bounds.left}px`;
+      preview.style.top = `${rect.top - bounds.top}px`;
+      preview.style.width = `${rect.width}px`;
+      marker = document.createElement('div');
+      marker.setAttribute('aria-hidden', 'true');
+      marker.hidden = true;
+      dimStyle = document.createElement('style');
+      const id = CSS.escape(source.dataset.id ?? '');
+      root.setAttribute('data-list-holding', source.dataset.id ?? '');
+      dimStyle.textContent = `.note-editor[data-list-holding="${id}"] .bn-editor [data-node-type="blockOuter"][data-id="${id}"] { opacity: 0.35; }`;
+      root.append(preview, marker, dimStyle);
+      scrollArea = root?.parentElement ?? null;
+      while (scrollArea && !/(auto|scroll)/.test(getComputedStyle(scrollArea).overflowY)) {
+        scrollArea = scrollArea.parentElement;
+      }
+      haptics.longPress();
+      frame = requestAnimationFrame(autoScroll);
     }
 
     function onMove(event: TouchEvent) {
@@ -205,30 +251,110 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       if (!dragging) return clear();
       event.preventDefault();
       event.stopPropagation();
+      finishDrop(event.type === 'touchcancel' || event.touches.length !== 0);
+    }
+
+    function finishDrop(cancelled: boolean) {
       const id = source?.dataset.id;
       const targetId = target?.dataset.id;
       const block = id ? editor.getBlock(id) : undefined;
       const destination = targetId ? editor.getBlock(targetId) : undefined;
       const dropPlacement = placement;
-      const cancelled = event.type === 'touchcancel' || event.touches.length !== 0;
-      // Remove the drag visuals before BlockNote replaces the moved DOM.
       clear();
-      if (cancelled || !block || !destination) return;
-      const siblings = editor.getParentBlock(block)?.children ?? editor.document;
-      const index = siblings.findIndex((sibling) => sibling.id === block.id);
-      const targetIndex = siblings.findIndex((sibling) => sibling.id === destination.id);
-      if (
-        targetIndex < 0 ||
-        targetIndex + (dropPlacement === 'after' ? 1 : 0) === index ||
-        targetIndex + (dropPlacement === 'after' ? 1 : 0) === index + 1
-      )
-        return;
-      // One transaction makes a move one undo step and keeps IDs, marks and children.
-      editor.transact(() => {
+      editor.getExtension(SideMenuExtension)?.hideMenuIfNotFrozen();
+      if (cancelled || !block || !destination || block.id === destination.id) return;
+      const parent = editor.getParentBlock(block);
+      const destinationParent = editor.getParentBlock(destination);
+      if (dropPlacement !== 'nested' && parent?.id === destinationParent?.id) {
+        const siblings = parent?.children ?? editor.document;
+        const index = siblings.findIndex((sibling) => sibling.id === block.id);
+        const targetIndex = siblings.findIndex((sibling) => sibling.id === destination.id);
+        const slot = targetIndex + (dropPlacement === 'after' ? 1 : 0);
+        if (targetIndex < 0 || slot === index || slot === index + 1) return;
+      }
+      // One transaction preserves IDs, marks, check state and children in one undo step.
+      editor.transact((tr) => {
+        closeHistory(tr);
         editor.removeBlocks([block]);
-        editor.insertBlocks([block], destination, dropPlacement);
+        if (dropPlacement === 'nested') {
+          const current = editor.getBlock(destination.id);
+          if (current) editor.updateBlock(current, { children: [...current.children, block] });
+        } else {
+          editor.insertBlocks([block], destination, dropPlacement);
+        }
+        editor.setTextCursorPosition(block, 'end');
       });
+      editor.transact((tr) => closeHistory(tr));
       haptics.success();
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      if (event.pointerType !== 'mouse' || event.button !== 0 || !(event.target instanceof Element))
+        return;
+      if (!event.target.closest('.bn-side-menu [draggable="true"]')) return;
+      const block = editor.getExtension(SideMenuExtension)?.store.state?.block;
+      if (!block || !['checkListItem', 'bulletListItem', 'numberedListItem'].includes(block.type))
+        return;
+      const selection = editor.getSelection();
+      if (selection && (selection.blocks.length !== 1 || selection.blocks[0]?.id !== block.id))
+        return;
+      // Delay the menu until click and keep native drag from competing with this gesture.
+      event.preventDefault();
+      clear();
+      source =
+        root?.querySelector<HTMLElement>(
+          `.bn-editor [data-node-type="blockOuter"][data-id="${CSS.escape(block.id)}"]`,
+        ) ?? null;
+      if (!source) return;
+      clearTimeout(clickTimer);
+      suppressClick = false;
+      mousePending = true;
+      startX = x = event.clientX;
+      startY = y = event.clientY;
+    }
+
+    function onNativeDragStart(event: DragEvent) {
+      if (!mousePending) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      if (!mousePending || event.pointerType !== 'mouse') return;
+      x = event.clientX;
+      y = event.clientY;
+      if (!dragging) {
+        if (Math.hypot(x - startX, y - startY) <= MOVE_TOLERANCE) return;
+        beginDrag();
+        if (!dragging) return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      updateTarget();
+    }
+
+    function onMouseMove(event: MouseEvent) {
+      // A phone's long press sends a mousemove too. The block handle would follow it to the
+      // row being dragged, and the drop replaces that row's DOM out from under it.
+      if (dragging) event.stopPropagation();
+    }
+
+    function onPointerUp(event: PointerEvent) {
+      if (!mousePending || event.pointerType !== 'mouse') return;
+      if (!dragging) return clear();
+      event.preventDefault();
+      event.stopPropagation();
+      x = event.clientX;
+      y = event.clientY;
+      updateTarget();
+      finishDrop(event.type === 'pointercancel');
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (!source || event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      clear();
     }
 
     function onClick(event: MouseEvent) {
@@ -242,6 +368,15 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       if (source) event.preventDefault();
     }
 
+    window.addEventListener('blur', clear);
+    document.addEventListener('keydown', onKeyDown, true);
+    root.addEventListener('pointerdown', onPointerDown, true);
+    root.addEventListener('dragstart', onNativeDragStart, true);
+    document.addEventListener('pointermove', onPointerMove, true);
+    // The window comes before the document, where BlockNote listens for the same event.
+    window.addEventListener('mousemove', onMouseMove, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerUp, true);
     root.addEventListener('touchstart', onStart, { passive: true, capture: true });
     root.addEventListener('touchmove', onMove, { passive: false, capture: true });
     root.addEventListener('touchend', onEnd, { passive: false, capture: true });
@@ -251,6 +386,14 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
     return () => {
       clear();
       clearTimeout(clickTimer);
+      window.removeEventListener('blur', clear);
+      document.removeEventListener('keydown', onKeyDown, true);
+      root.removeEventListener('pointerdown', onPointerDown, true);
+      root.removeEventListener('dragstart', onNativeDragStart, true);
+      document.removeEventListener('pointermove', onPointerMove, true);
+      window.removeEventListener('mousemove', onMouseMove, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+      document.removeEventListener('pointercancel', onPointerUp, true);
       root.removeEventListener('touchstart', onStart, true);
       root.removeEventListener('touchmove', onMove, true);
       root.removeEventListener('touchend', onEnd, true);
