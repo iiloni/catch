@@ -130,9 +130,13 @@ export function PageHeader({ title, leading, trailing, selection, offsetY }: Pro
 
 type TabPageHeaderProps = {
   title: string;
+  /** Controls at the top left; the collapsed title sits beside them. */
+  leading?: ReactNode;
   /** Controls at the top right, which turn into a glass toolbar along with the title. */
   trailing?: ReactNode;
   selection?: HeaderSelection | null;
+  /** Moves the fixed title, controls and edge blur with a dismissible page. */
+  offsetY?: MotionValue<number>;
 };
 
 /** How far below the header's row the large title rests. */
@@ -148,7 +152,13 @@ const TITLE_COLLAPSE_AT = 16;
  * The header of the pages in the dock. The large title moves into the top left corner as a
  * glass pill once the page starts to scroll, taking the place of the brand there.
  */
-export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps) {
+export function TabPageHeader({
+  title,
+  leading,
+  trailing,
+  selection,
+  offsetY,
+}: TabPageHeaderProps) {
   const entry = useHeaderEntry('header:title', 20);
   const brandEntry = useEntryMotion('header:brand');
   const transition = useHeaderTransition();
@@ -156,6 +166,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
   const reducedMotion = useReducedMotion();
   const scrollAnimation = useRef<ReturnType<typeof animate> | null>(null);
   const [trailingWidth, setTrailingWidth] = useState(0);
+  const [leadingWidth, setLeadingWidth] = useState(0);
   // Not `window.scrollY`: on mount it still holds the previous page's scroll until the router
   // resets it, and `scrollY` would never report a change to correct it.
   const [collapsed, setCollapsed] = useState(() => scrollY.get() >= TITLE_COLLAPSE_AT);
@@ -167,7 +178,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
     [TITLE_REST_Y, TITLE_REST_Y - TITLE_COLLAPSE_AT],
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
-  const branded = !collapsed && !selection;
+  const branded = !leading && !collapsed && !selection;
   // What sits in the left corner stays over the page's edge while a note pane slides.
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
@@ -201,7 +212,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
       <motion.header
         data-page-header
         className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
-        style={transition}
+        style={{ ...transition, y: offsetY }}
       >
         {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
         <motion.div
@@ -240,7 +251,7 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
               animate={{
                 left: collapsed ? '0%' : '50%',
                 x: collapsed ? '0%' : '-50%',
-                marginLeft: collapsed ? 12 : 0,
+                marginLeft: collapsed ? 12 + (leadingWidth > 0 ? leadingWidth + 8 : 0) : 0,
                 y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
                 fontSize: collapsed ? 17 : 42,
                 paddingInline: collapsed ? 14 : 0,
@@ -271,9 +282,11 @@ export function TabPageHeader({ title, trailing, selection }: TabPageHeaderProps
             </motion.div>
           </motion.div>
           <HeaderToolbars
+            leading={leading}
             trailing={trailing}
             selection={selection}
             flat={!collapsed}
+            onLeadingWidthChange={setLeadingWidth}
             onTrailingWidthChange={setTrailingWidth}
           />
         </div>
@@ -292,12 +305,14 @@ function HeaderToolbars({
   trailing,
   selection,
   flat = false,
+  onLeadingWidthChange,
   onTrailingWidthChange,
 }: {
   leading?: ReactNode;
   trailing?: ReactNode;
   selection?: HeaderSelection | null;
   flat?: boolean;
+  onLeadingWidthChange?: (width: number) => void;
   onTrailingWidthChange?: (width: number) => void;
 }) {
   const mode = selection ? 'selection' : 'page';
@@ -313,7 +328,7 @@ function HeaderToolbars({
   );
   return (
     <>
-      <HeaderToolbar side="left" mode={mode} glass={glass}>
+      <HeaderToolbar side="left" mode={mode} glass={glass} onWidthChange={onLeadingWidthChange}>
         {selection ? (
           <SelectionCount count={selection.count} onClose={selection.onClose} />
         ) : (

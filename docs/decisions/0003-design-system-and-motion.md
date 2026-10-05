@@ -77,16 +77,18 @@ percentage/calc transform against changing native insets.
 Gallery's sort and settings, the Deck's column editor, Archive and Trash's back button and
 Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
 change it animates its width (never scale) to fit the new ones while the old ones fade out.
-The dock's pages (Gallery, Deck, Search) share `TabPageHeader`: a large centered title that
-moves into the top left corner as a glass pill once the page starts to scroll. It follows
+The dock's pages (Gallery, Deck, Search) and Settings share `TabPageHeader`: a large centered
+title that moves into the top left corner as a glass pill once the page starts to scroll. It follows
 the page for the first 16 px and then leaves for the corner, while it is still below the
 header's row: on a phone the centered title is wider than the gap between the corners, so
 riding the page up to the row ran it into the controls on the right. Until then
 their top right controls are flat buttons on the page, and they gain the same glass as the
-title does. Selecting notes always shows the glass.
+title does. Selecting notes always shows the glass. Settings uses the open page's title on
+phones and “Settings” on wide screens, where its title pill sits beside the Back toolbar.
+The masked top edge blur appears with the pill, and both follow Settings' swipe offset.
 The stable horizontal Catch lockup sits fixed in the header's top left corner on these
-three pages, and fades out as the title becomes a pill in that corner. It does not scroll
-with the page, which would carry it under the system status bar.
+pages without a Back toolbar, and fades out as the title becomes a pill in that corner. It
+does not scroll with the page, which would carry it under the system status bar.
 It reserves room for the right toolbar (including sync status), using icon-only branding
 when a narrow page pane cannot fit the minimum lockup width. Selection hides the branding
 so the count and selection actions have the corners to themselves.

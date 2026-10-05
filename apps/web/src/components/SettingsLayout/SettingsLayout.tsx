@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ReactNode, useLayoutEffect } from 'react';
 import { useSwipeToDismiss } from '@/components/NoteEditorOverlay/useSwipeToDismiss';
-import { PageHeader } from '@/components/PageHeader/PageHeader';
+import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { UpdateDot } from '@/components/UpdateDot/UpdateDot';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -48,7 +48,7 @@ export function SettingsLayout({ current, wide, isAdmin = false, onBack, childre
   if (!wide) {
     return (
       <div ref={swipeRef} className="min-h-[calc(100dvh-var(--dock-space))]" data-settings-swipe>
-        <PageHeader title={current?.label ?? 'Settings'} offsetY={swipeY} />
+        <TabPageHeader title={current?.label ?? 'Settings'} offsetY={swipeY} />
         {/* A shared offset keeps fixed chrome aligned without transforming its ancestor. */}
         <motion.div
           data-settings-content
@@ -63,7 +63,7 @@ export function SettingsLayout({ current, wide, isAdmin = false, onBack, childre
 
   return (
     <>
-      <PageHeader title="Settings" leading={<BackButton onClick={onBack} />} />
+      <TabPageHeader title="Settings" leading={<BackButton onClick={onBack} />} />
       <div
         className={cn(
           'mx-auto grid max-w-7xl gap-8 px-4 pt-4 sm:px-6',
