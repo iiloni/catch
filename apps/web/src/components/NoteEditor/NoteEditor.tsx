@@ -19,15 +19,17 @@ import {
   useExtension,
   useExtensionState,
 } from '@blocknote/react';
-import { BlockNoteView } from '@blocknote/shadcn';
+import { BlockNoteView, useShadCNComponentsContext } from '@blocknote/shadcn';
 import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
-import { type MouseEvent, useEffect, useRef, useState } from 'react';
+import { GripVertical } from 'lucide-react';
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
 import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
+import { noteEditorSchema } from './checkListItem';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
 import { useListItemDrag } from './useListItemDrag';
 
@@ -142,6 +144,7 @@ export function NoteEditor({
   const noteOwner = useRef({ noteId, ensureNote });
   noteOwner.current = { noteId, ensureNote };
   const editor = useCreateBlockNote({
+    schema: noteEditorSchema,
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
@@ -244,14 +247,59 @@ function NoteSideMenu() {
 
   return (
     <SideMenu>
-      <DragHandleButton>
+      <NoteDragHandle>
         <AddBlockMenuItem />
         <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
         <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
         <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
         <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
-      </DragHandleButton>
+      </NoteDragHandle>
     </SideMenu>
+  );
+}
+
+function NoteDragHandle({ children }: { children: ReactNode }) {
+  const Components = useComponentsContext();
+  const ShadCN = useShadCNComponentsContext();
+  const dict = useDictionary();
+  const editor = useBlockNoteEditor();
+  const sideMenu = useExtension(SideMenuExtension);
+  const block = useExtensionState(SideMenuExtension, { selector: (state) => state?.block });
+  const [open, setOpen] = useState(false);
+
+  function setMenuOpen(value: boolean) {
+    setOpen(value);
+    if (value) sideMenu.freezeMenu();
+    else sideMenu.unfreezeMenu();
+  }
+
+  if (!Components || !ShadCN || !block) return null;
+  if (!['checkListItem', 'bulletListItem', 'numberedListItem'].includes(block.type)) {
+    return <DragHandleButton>{children}</DragHandleButton>;
+  }
+  const Menu = ShadCN.DropdownMenu;
+  return (
+    <Menu.DropdownMenu modal={false} open={open} onOpenChange={setMenuOpen}>
+      <Menu.DropdownMenuTrigger
+        render={
+          <Components.SideMenu.Button
+            label={dict.side_menu.drag_handle_label}
+            className="bn-button"
+            draggable
+            icon={<GripVertical size={24} data-test="dragHandle" />}
+            onClick={() => setMenuOpen(!open)}
+            onDragStart={(event) => sideMenu.blockDragStart(event, block)}
+            onDragEnd={sideMenu.blockDragEnd}
+          />
+        }
+      />
+      <Menu.DropdownMenuContent
+        container={editor.domElement?.closest<HTMLElement>('.bn-root')}
+        className="bn-menu-dropdown bn-drag-handle-menu"
+      >
+        {children}
+      </Menu.DropdownMenuContent>
+    </Menu.DropdownMenu>
   );
 }
 

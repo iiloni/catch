@@ -274,8 +274,10 @@ footprint is reserved for caret scrolling during the slide.
 the same checkbox styling at 16 px; the opening preview matches the editor's row sizes,
 text spacing and indentation so mounting the editor does not move the content. Native
 inputs retain checkbox semantics and keyboard support, with their appearance styled locally.
-Holding a checklist, bullet or numbered item for 350 ms picks it up for reordering within
-its sibling group, with its nested children. Moving before the hold expires scrolls as
+Holding a checklist, bullet or numbered item for 350 ms picks it up for reordering, with its nested children. Dragging right by 32 px nests it
+under the preceding list item at the drop position; dragging left brings it out of its parent.
+The mouse drag handle uses the same drop projection. Checkbox items have a trailing X in a
+44 px target that removes the item and its children, with undo available. Moving before the hold expires scrolls as
 usual; checkbox taps keep toggling, and links keep opening. A drop marker and edge scrolling
 guide the move, which is committed as one undo step on release. The mouse drag handle
 remains available.

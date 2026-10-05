@@ -544,8 +544,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => {
-            // The dock folds its open picker before Escape leaves the note.
-            if (noteDockPanelOpen.get()) event.preventDefault();
+            // Fold a picker or editor menu before Escape leaves the note.
+            if (noteDockPanelOpen.get() || document.querySelector('.bn-menu-dropdown[data-open]')) {
+              event.preventDefault();
+            }
           }}
           // Using the dock (or a toast) is not leaving the editor. On touch, Radix checks the
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
