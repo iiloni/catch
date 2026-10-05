@@ -354,10 +354,30 @@ final class ReminderAlarms {
     }
 
     /**
+     * Whose reminder a notification's button is for. One posted before the phone kept
+     * accounts apart does not say, and is found by its note among the alarms.
+     */
+    private static String owner(Context context, String given, String noteId) {
+        JSONObject accounts = accounts(context);
+        if (!given.isEmpty() || accounts.has(LEGACY)) return given;
+        for (java.util.Iterator<String> ids = accounts.keys(); ids.hasNext(); ) {
+            String id = ids.next();
+            JSONObject entry = accounts.optJSONObject(id);
+            JSONArray alarms = entry == null ? null : entry.optJSONArray("alarms");
+            for (int index = 0; alarms != null && index < alarms.length(); index++) {
+                JSONObject alarm = alarms.optJSONObject(index);
+                if (alarm != null && noteId.equals(alarm.optString(NOTE))) return id;
+            }
+        }
+        return given;
+    }
+
+    /**
      * Puts a reminder off from its notification. The phone rings it again itself; the web app
      * is told when it next runs, and passes it on to the server and the user's other devices.
      */
-    static synchronized void snooze(Context context, String account, String noteId, String title, String body) {
+    static synchronized void snooze(Context context, String given, String noteId, String title, String body) {
+        String account = owner(context, given, noteId);
         // The length is the one chosen in Settings, as the web app last told it.
         long until = System.currentTimeMillis() + preferences(context).getInt("snoozeMinutes", SNOOZE_MINUTES) * 60_000L;
         try {

@@ -17,6 +17,16 @@ afterEach(() => {
 });
 
 describe('client compatibility transport', () => {
+  it('does not take another account’s ended session for this page’s', async () => {
+    fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValue(json({}, 401));
+    const { compatibleFetch, compatibleFetchAsOther } = await import('./compatibility');
+    const { getSyncStatus } = await import('./syncStatus');
+    await compatibleFetchAsOther('https://catch.example/api/push/subscriptions');
+    expect(getSyncStatus().signedOut).toBe(false);
+    await compatibleFetch('https://catch.example/api/push/subscriptions');
+    expect(getSyncStatus().signedOut).toBe(true);
+  });
+
   it('pauses a refused shape, preserves pending writes, and resumes after sign-in', async () => {
     fetcher.mockResolvedValueOnce(json(compatible)).mockResolvedValueOnce(json({}, 401));
     const { compatibleShapeFetch } = await import('./compatibility');

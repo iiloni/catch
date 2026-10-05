@@ -44,6 +44,10 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
   await expect(card(page, 'First account note')).toBeVisible();
   await expect(card(page, 'Second account note')).toBeHidden();
+  const noteId = await page
+    .locator('[data-note-card]', { hasText: 'First account note' })
+    .first()
+    .getAttribute('data-note-card');
   // The server answers for the account in use, not for the last one to sign in.
   await seedNotes(page, ['Written after switching back']);
 
@@ -71,10 +75,12 @@ test('accounts signed in together keep their own notes and switch by tap or swip
       ).find(({ user }) => user.email === email)?.user.id,
     first,
   );
-  await page.goto(`/?account=${firstId}`);
-  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
-  await expect(card(page, 'First account note')).toBeVisible();
-  expect(new URL(page.url()).search).toBe('');
+  await page.goto(`/?note=${noteId}&account=${firstId}`);
+  await expect(page.getByRole('dialog').getByRole('textbox')).toContainText('First account note', {
+    timeout: 30_000,
+  });
+  expect(new URL(page.url()).search).toBe(`?note=${noteId}`);
+  await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
 });
 
 test('other tabs follow a switch, and signing out one account leaves the rest', async ({

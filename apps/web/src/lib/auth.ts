@@ -11,6 +11,8 @@ const ACCOUNTS_KEY = 'catch-accounts';
 // Whose session this build last put in use. A build from before the list changes the session
 // without knowing either, which is how the list learns of it.
 const ACTIVE_KEY = 'catch-active-account';
+/** Set in the session when the next page load is a change of account, to say so once. */
+export const SWITCHED_KEY = 'catch-account-switched';
 
 function sessionKey(key: string) {
   // Bundled dev apps share https://localhost across worktrees; their servers do not.
@@ -48,12 +50,15 @@ function followAccountLink() {
   if (userId === null) return;
   url.searchParams.delete('account');
   window.history.replaceState(window.history.state, '', url);
-  const accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
-  const account = accounts.find(({ user }) => user.id === userId);
-  if (!account || activeUser()?.id === userId) return;
-  // As `activateAccount` does: the session being replaced stays in the list.
-  writeAccounts(getAccounts());
-  writeActive(account);
+  if (activeUser()?.id === userId) return;
+  if (activateAccount(userId)) {
+    // Said once the app is up: a link, not the user, chose the account.
+    sessionStorage.setItem(SWITCHED_KEY, 'true');
+  } else {
+    // Not signed in here any more, so its note is not one this page could open.
+    url.searchParams.delete('note');
+    window.history.replaceState(window.history.state, '', url);
+  }
 }
 followAccountLink();
 

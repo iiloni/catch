@@ -146,6 +146,9 @@ async function subscribe(worker: ServiceWorkerRegistration) {
     (a, b) => Number(a.user.id === current) - Number(b.user.id === current),
   );
   for (const account of ordered) {
+    // Signed out, perhaps in another tab, since the loop began: saving it now would leave
+    // its reminders arriving here with nobody left to take them off.
+    if (!getAccounts().some(({ user }) => user.id === account.user.id)) continue;
     try {
       await api.savePushSubscription(
         { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } },
@@ -162,11 +165,14 @@ async function subscribe(worker: ServiceWorkerRegistration) {
 
 /**
  * One at a time: a launch's `syncPush` still giving the server the subscription must not
- * land after the `disablePush` that takes it away.
+ * land after the `disablePush` that takes it away. Across tabs too, where Web Locks allow:
+ * one tab signing an account out must not cross another tab's launch saving it.
  */
 let queue: Promise<unknown> = Promise.resolve();
 function inTurn<T>(task: () => Promise<T>): Promise<T> {
-  const run = queue.then(task, task);
+  const locked = (): Promise<T> =>
+    navigator.locks ? navigator.locks.request('catch-push', task) : task();
+  const run = queue.then(locked, locked);
   queue = run.catch(() => {});
   return run;
 }
@@ -231,9 +237,26 @@ export function disablePush() {
 export function leavePush(account: Account) {
   if (nativeReminders.available) return Promise.resolve();
   const { id } = account.user;
+  const wanted = deviceWantsPush();
   localStorage.removeItem(enabledKey(id));
+  // Notifications are on for the device: the accounts that stay keep them on, even one the
+  // server has not yet been able to save.
+  if (wanted) {
+    for (const { user } of getAccounts()) {
+      if (user.id !== id) localStorage.setItem(enabledKey(user.id), 'true');
+    }
+  }
   return inTurn(async () => {
-    const subscription = await (await registration())?.pushManager.getSubscription();
+    const worker = await registration();
+    // Its reminders already showing would open an account that is no longer here.
+    const shown = (await worker?.getNotifications?.().catch(() => [])) ?? [];
+    for (const notification of shown) {
+      const data: unknown = notification.data;
+      if (data && typeof data === 'object' && 'userId' in data && data.userId === id) {
+        notification.close();
+      }
+    }
+    const subscription = await worker?.pushManager.getSubscription();
     if (!subscription) return;
     const told = await api
       .deletePushSubscription(subscription.endpoint, account.token, AbortSignal.timeout(5000))

@@ -235,8 +235,8 @@ describe('several accounts on one device', () => {
     expect(auth.getSignedInUser()).toEqual(user);
     expect(auth.getAccounts()).toHaveLength(2);
     expect(window.location.search).toBe('?note=abc');
-    // An account that is not signed in here changes nothing.
-    window.history.replaceState(null, '', '/?account=nobody');
+    // An account that is not signed in here changes nothing, and its note is not opened.
+    window.history.replaceState(null, '', '/?note=abc&account=nobody');
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
     expect(window.location.search).toBe('');

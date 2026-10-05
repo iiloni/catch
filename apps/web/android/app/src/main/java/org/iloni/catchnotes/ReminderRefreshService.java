@@ -88,10 +88,13 @@ public class ReminderRefreshService extends JobService {
                 for (int read; (read = stream.read(buffer)) > 0; ) body.write(buffer, 0, read);
             }
             JSONObject answer = new JSONObject(new String(body.toByteArray(), StandardCharsets.UTF_8));
-            // The account may have been signed out of while the request was in the air.
-            JSONObject now = current(account);
-            if (now == null || !token.equals(token(now)) || now.optBoolean("unsent")) return;
-            ReminderAlarms.store(this, account, answer.getJSONArray("alarms"));
+            // The account may have been signed out of while the request was in the air, or the
+            // web app may have handed over a newer list. Checked and stored as one step.
+            synchronized (ReminderAlarms.class) {
+                JSONObject now = current(account);
+                if (now == null || !token.equals(token(now)) || now.optBoolean("unsent")) return;
+                ReminderAlarms.store(this, account, answer.getJSONArray("alarms"));
+            }
             ReminderAlarms.schedule(this);
         } catch (Exception offline) {
             // No network, or an answer that is not the server's. The next period tries again.

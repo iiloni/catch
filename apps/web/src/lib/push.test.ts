@@ -144,6 +144,30 @@ describe('notifications for every account on the device', () => {
     expect(endpoint()).toBe('https://push.example/1');
   });
 
+  it('stays on for the accounts that remain when the one that turned it on leaves', async () => {
+    const { endpoint } = browser();
+    localStorage.setItem('catch-push:ada', 'true');
+    // Bob has not been saved yet, so only Ada carries the device's choice.
+    await leavePush(ada);
+    mocks.accounts = [bob];
+    await syncPush();
+    expect(endpoint()).not.toBeNull();
+    expect(savedFor()).toEqual(['b']);
+  });
+
+  it('does not save an account that signed out while the others were being saved', async () => {
+    browser();
+    localStorage.setItem('catch-push:ada', 'true');
+    mocks.accounts = [ada, bob];
+    mocks.save.mockImplementation(async () => {
+      // Signed out in another tab while this launch was at work.
+      mocks.accounts = [];
+      return { ok: true };
+    });
+    await syncPush();
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+  });
+
   it('drops the subscription when the server cannot be told an account left', async () => {
     const { endpoint } = browser();
     localStorage.setItem('catch-push:ada', 'true');

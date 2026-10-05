@@ -84,7 +84,7 @@ keeps one user per endpoint, so only the account in use rings, as before. An old
 client against a new server no longer takes an endpoint over from a previous user whose
 session ended without a sign-out, so that user's reminders could reach the browser until
 the new client loads and replaces the subscription; web clients update with the server, so
-this lasts until the page is next opened. The Android app's native code and web code ship
+this lasts until the new build is running. The Android app's native code and web code ship
 together. Migration `0010` only changes the table's key.
 
 ## Consequences
@@ -94,5 +94,12 @@ together. Migration `0010` only changes the table's key.
   bearer token takes precedence over it on every request, which `e2e/accounts.spec.ts` checks
   by writing as the first account after the second signed in.
 - A web notification does not say which account it is for; the Android one does.
-- An account whose session has ended stops being refreshed on the phone and keeps the
-  alarms it had until it signs in again or is signed out.
+- An account whose session has ended stays in the device's list until it signs in again or
+  is signed out. Until then it keeps ringing: the server still has its subscription, and
+  the phone keeps the alarms it had without refreshing them.
+- The phone's background check leaves an account alone while that account has changes
+  waiting on the device (ADR 0018), and an account's changes only send while it is in
+  use. So an account left with unsent changes is not refreshed until it is switched back
+  to.
+- On upgrade every browser with notifications on replaces its subscription once, having no
+  record yet of whose it was. This has not been tried on an installed iOS web app.

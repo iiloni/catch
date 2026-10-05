@@ -33,7 +33,7 @@ import type {
   VersionInfo,
 } from '@catch/shared';
 import { getAuthToken } from './auth';
-import { compatibleFetch } from './compatibility';
+import { compatibleFetch, compatibleFetchAsOther } from './compatibility';
 import { getServerUrl } from './serverUrl';
 
 export class ApiError extends Error {
@@ -45,15 +45,27 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit): Promise<T> {
-  const token = getAuthToken();
-  const fetcher = path === '/updates' || path === '/updates/releases' ? fetch : compatibleFetch;
+/** `as` sends the request for another account signed in on this device, with its token. */
+// A launch registers the browser for each account in turn; one that never answers must not
+// hold up the rest, or a sign-out waiting behind it.
+const PUSH_TIMEOUT = 15_000;
+
+async function request<T>(path: string, init: RequestInit & { as?: string }): Promise<T> {
+  const { as, ...options } = init;
+  const own = getAuthToken();
+  const token = as ?? own;
+  const fetcher =
+    path === '/updates' || path === '/updates/releases'
+      ? fetch
+      : as !== undefined && as !== own
+        ? compatibleFetchAsOther
+        : compatibleFetch;
   const response = await fetcher(`${getServerUrl()}/api${path}`, {
-    ...init,
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
+      ...options.headers,
     },
   });
   if (!response.ok) throw new ApiError(response.status, await response.text());
@@ -140,21 +152,23 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
-  pushKey: () => request<PushKey>('/push/key', { method: 'GET' }),
+  pushKey: () =>
+    request<PushKey>('/push/key', { method: 'GET', signal: AbortSignal.timeout(PUSH_TIMEOUT) }),
   // A browser rings for every account signed in on it, so these name whose token to send
   // rather than always acting for the account in use.
   savePushSubscription: (body: PushSubscriptionInput, token: string) =>
     request<{ ok: true }>('/push/subscriptions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      as: token,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(PUSH_TIMEOUT),
     }),
   deletePushSubscription: (endpoint: string, token: string, signal?: AbortSignal) =>
     request<{ ok: true }>('/push/subscriptions', {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      as: token,
       body: JSON.stringify({ endpoint }),
-      signal,
+      signal: signal ?? AbortSignal.timeout(PUSH_TIMEOUT),
     }),
   testPush: (endpoint: string) =>
     request<TestPushResponse>('/push/test', { method: 'POST', body: JSON.stringify({ endpoint }) }),

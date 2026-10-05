@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { deleteAttachmentFiles } from './attachmentFiles';
 import {
   type Account,
@@ -8,6 +9,7 @@ import {
   forgetAccount,
   getAccounts,
   getSignedInUser,
+  SWITCHED_KEY,
 } from './auth';
 import { clearLocalData } from './collections';
 import { editorNote, quickNote } from './dockState';
@@ -27,8 +29,6 @@ import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
  * their copy of their notes until they are switched to, and their reminders still ring.
  */
 
-const SWITCHED_KEY = 'catch-account-switched';
-
 /**
  * Changes the account in use, opening one of its notes if asked. A full load, so the
  * collections open that account's notes.
@@ -37,6 +37,49 @@ export function switchAccount(userId: string, noteId?: string) {
   if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
   window.location.assign(noteId ? `/?note=${encodeURIComponent(noteId)}` : '/');
+}
+
+const openStores = [editorNote, quickNote, linkCaptureOpen];
+
+/**
+ * Opens a note from its reminder's notification, which rings for every account on the
+ * device: the note may be another account's than the one this page shows. The switch waits
+ * for an open note or composer to close, since the load would drop what it has not saved.
+ */
+export function openAccountNote(userId: string, noteId: string) {
+  if (!getAccounts().some(({ user }) => user.id === userId)) {
+    toast('That reminder is for an account that is no longer signed in here.');
+    return;
+  }
+  if (!isUpdateReloadBlocked()) {
+    switchAccount(userId, noteId);
+    return;
+  }
+  toast('Close the open note to see that reminder.');
+  const stops = openStores.map((store) =>
+    store.subscribe(() => {
+      if (isUpdateReloadBlocked()) return;
+      for (const stop of stops) stop();
+      switchAccount(userId, noteId);
+    }),
+  );
+}
+
+/**
+ * While the session still stands, the server must stop sending this browser the account's
+ * reminders. Not for long, though: a connection that never answers must not hold up leaving,
+ * and then the browser drops its subscription instead, for the accounts that stay to make
+ * again.
+ */
+async function stopRinging(account: Account) {
+  const left = await Promise.race([
+    leavePush(account).then(
+      () => true,
+      () => false,
+    ),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+  ]);
+  if (!left) await dropPushSubscription().catch(() => undefined);
 }
 
 /**
@@ -50,7 +93,7 @@ export function followAccountChanges() {
     if (!deviceLeftPageAccount()) return;
     if (isUpdateReloadBlocked()) {
       if (waiting.length === 0) {
-        waiting = [editorNote, quickNote, linkCaptureOpen].map((store) => store.subscribe(follow));
+        waiting = openStores.map((store) => store.subscribe(follow));
       }
       return;
     }
@@ -84,8 +127,7 @@ export async function unsyncedChanges(account: Account) {
 /** Signs an account out of this device and deletes its data here. */
 export async function signOutAccount(account: Account) {
   if (account.user.id === getSignedInUser()?.id) return signOutCurrentAccount();
-  // While the session still stands, the device stops ringing for this account.
-  await leavePush(account).catch(() => undefined);
+  await stopRinging(account);
   await nativeReminders.clear(account.user.id).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await fetch(`${getServerUrl()}/api/auth/sign-out`, {
@@ -131,9 +173,8 @@ export async function signOutAccount(account: Account) {
 export async function signOutCurrentAccount() {
   const user = getSignedInUser();
   const account = getAccounts().find((other) => other.user.id === user?.id);
-  // While the session still stands: the server must stop sending this browser the user's
-  // reminders. The accounts that stay signed in go on ringing.
-  if (account) await leavePush(account).catch(() => undefined);
+  // The accounts that stay signed in go on ringing.
+  if (account) await stopRinging(account);
   else await dropPushSubscription().catch(() => undefined);
   // The phone keeps reminders and a token of its own to ring with the app closed.
   await nativeReminders.clear(user?.id).catch(() => undefined);
