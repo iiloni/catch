@@ -1,4 +1,9 @@
-# <img src="apps/web/public/icon.svg" alt="" width="40" height="40" /> Catch
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/wordmark/catch-lockup-stacked-stable-light.svg" />
+    <img src="apps/web/public/wordmark/catch-lockup-stacked-stable-dark.svg" alt="Catch" width="160" />
+  </picture>
+</h1>
 
 Catch is a notes app in the spirit of Google Keep that you host yourself. Your notes live on
 a server you control, and they keep working on your phone or laptop when you are offline.
