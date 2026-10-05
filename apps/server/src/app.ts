@@ -16,6 +16,8 @@ import { backupDownloadRoutes } from './routes/backups';
 import { boardColumnRoutes } from './routes/boardColumns';
 import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
+import { pushRoutes } from './routes/push';
+import { reminderRoutes } from './routes/reminders';
 import { shapeRoutes } from './routes/shapes';
 import { noteTagRoutes, tagRoutes } from './routes/tags';
 import { updateRoutes } from './routes/updates';
@@ -127,6 +129,8 @@ export function createApp() {
     .route('/attachments', attachmentRoutes)
     .route('/board-columns', boardColumnRoutes)
     .route('/link-previews', linkPreviewRoutes)
+    .route('/reminders', reminderRoutes)
+    .route('/push', pushRoutes)
     .route('/updates', updateRoutes)
     .route('/shapes', shapeRoutes);
 

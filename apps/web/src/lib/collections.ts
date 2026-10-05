@@ -1,6 +1,7 @@
 import {
   type Attachment,
   attachmentSchema,
+  blocksToPlainText,
   boardColumnSchema,
   createAttachmentSchema,
   createBoardColumnSchema,
@@ -12,6 +13,11 @@ import {
   type NoteTags,
   noteSchema,
   noteTagsSchema,
+  type Reminder,
+  type ReminderAlarm,
+  reminderAlarm,
+  reminderSchema,
+  saveReminderSchema,
   type Tag,
   type TxidResponse,
   tagSchema,
@@ -218,12 +224,32 @@ export const noteTagsCollection = createCollection(
   ),
 );
 
+/** Each note's reminder, keyed by the note's id (ADR 0018). */
+export const remindersCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'reminders',
+      schema: reminderSchema,
+      getKey: (reminder) => reminder.noteId,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/reminders`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
   notes: notesCollection,
   tags: tagsCollection,
   noteTags: noteTagsCollection,
   boardColumns: boardColumnsCollection,
   attachments: attachmentsCollection,
+  reminders: remindersCollection,
 };
 
 /** How long to wait for Electric to stream a write back before letting it settle anyway. */
@@ -254,15 +280,8 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
     sent.flatMap(({ collectionId, txid }) => {
       if (txid === null) return [];
       const collection =
-        collectionId === notesCollection.id
-          ? notesCollection
-          : collectionId === tagsCollection.id
-            ? tagsCollection
-            : collectionId === noteTagsCollection.id
-              ? noteTagsCollection
-              : collectionId === attachmentsCollection.id
-                ? attachmentsCollection
-                : boardColumnsCollection;
+        Object.values(writableCollections).find((item) => item.id === collectionId) ??
+        notesCollection;
       // The server has the write; a slow stream only delays the hand-over.
       return [collection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false)];
     }),
@@ -383,6 +402,12 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
       else if (!body.secondaryTagIds?.length) delete body.secondaryTagIds;
     }
     return api.updateNoteTags(key, body);
+  }
+  if (mutation.collection.id === remindersCollection.id) {
+    // A reminder is saved whole, so replaying an insert or an update is the same request.
+    return mutation.type === 'delete'
+      ? api.deleteReminder(key)
+      : api.saveReminder(key, saveReminderSchema.parse(mutation.modified));
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -635,6 +660,74 @@ function subscribeToPreviews(listener: () => void) {
 export function useLinkPreviews(): ReadonlyMap<string, LinkPreview> {
   return useSyncExternalStore(subscribeToPreviews, () => previewsByUrl);
 }
+
+// As with previews: every card reads its note's reminder.
+let remindersByNote: ReadonlyMap<string, Reminder> = new Map();
+const reminderListeners = new Set<() => void>();
+let remindersSubscribed = false;
+
+function subscribeToReminders(listener: () => void) {
+  reminderListeners.add(listener);
+  if (remindersSubscribed) return () => reminderListeners.delete(listener);
+  remindersSubscribed = true;
+  remindersCollection.subscribeChanges(
+    () => {
+      remindersByNote = new Map(
+        [...remindersCollection.values()].map((reminder) => [reminder.noteId, reminder]),
+      );
+      for (const notify of reminderListeners) notify();
+    },
+    { includeInitialState: true },
+  );
+  return () => reminderListeners.delete(listener);
+}
+
+/** No reminders is only known once the reminders have synced: they trail the notes. */
+export function useRemindersReady() {
+  const [ready, setReady] = useState(() => remindersCollection.isReady());
+  useEffect(() => remindersCollection.onFirstReady(() => setReady(true)), []);
+  return ready;
+}
+
+/** The user's reminders by note id. */
+export function useReminders(): ReadonlyMap<string, Reminder> {
+  return useSyncExternalStore(subscribeToReminders, () => remindersByNote);
+}
+
+/**
+ * What the Android app should ring (ADR 0018), told again whenever a reminder or a note
+ * changes: a notification shows its note's words as they are now.
+ */
+export function watchReminderAlarms(listener: (alarms: ReminderAlarm[]) => void) {
+  let scheduled: ReturnType<typeof setTimeout> | undefined;
+  const tell = () => {
+    scheduled = undefined;
+    listener(
+      [...remindersCollection.values()].flatMap((reminder) => {
+        const note = notesCollection.get(reminder.noteId);
+        if (!note || note.deletedAt) return [];
+        return reminderAlarm(reminder, blocksToPlainText(note.content)) ?? [];
+      }),
+    );
+  };
+  // Typing in a note changes it on every key; the phone need only hear once it settles.
+  const changed = () => {
+    if (scheduled === undefined) scheduled = setTimeout(tell, 500);
+  };
+  const reminders = remindersCollection.subscribeChanges(changed, { includeInitialState: true });
+  const notes = notesCollection.subscribeChanges(changed);
+  return () => {
+    clearTimeout(scheduled);
+    reminders.unsubscribe();
+    notes.unsubscribe();
+  };
+}
+
+/**
+ * What a note's reminder is snoozed until: null for not snoozed, undefined for no reminder
+ * (or none loaded yet).
+ */
+export const reminderSnooze = (noteId: string) => remindersCollection.get(noteId)?.snoozedUntil;
 
 let attachmentRows: readonly Attachment[] = [];
 const attachmentListeners = new Set<() => void>();

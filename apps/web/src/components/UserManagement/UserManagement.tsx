@@ -14,6 +14,7 @@ import { UserActions } from '@/components/UserActions/UserActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError, api } from '@/lib/api';
+import { formatDateTime, formatTime, useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 
 const PAGE_SIZE = 25;
@@ -202,7 +203,7 @@ export function UserManagement({ currentUserId, onAccessDenied }: Props) {
                       <td className="hidden px-3 py-3 text-muted-foreground text-xs @lg:table-cell">
                         <time
                           dateTime={account.createdAt}
-                          title={new Date(account.createdAt).toLocaleString()}
+                          title={formatDateTime(new Date(account.createdAt))}
                         >
                           {new Date(account.createdAt).toLocaleDateString(undefined, {
                             year: 'numeric',
@@ -288,14 +289,14 @@ export function UserManagement({ currentUserId, onAccessDenied }: Props) {
 }
 
 function LastLogin({ value }: { value: AdminUser['lastLoginAt'] }) {
+  // Redraws the time below when the clock setting changes.
+  useHour12();
   if (!value) return <span title="No recorded login">—</span>;
   const date = new Date(value);
   return (
-    <time dateTime={value} title={date.toLocaleString()}>
+    <time dateTime={value} title={formatDateTime(date)}>
       {date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}{' '}
-      <span className="@md:block">
-        {date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
-      </span>
+      <span className="@md:block">{formatTime(date)}</span>
     </time>
   );
 }

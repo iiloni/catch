@@ -125,6 +125,11 @@
  */
 [data-note-color] {
   --note-bg: light-dark(oklch(0.925 0.06 var(--note-hue, 0)), oklch(0.35 0.07 var(--note-hue, 0)));
+  /* The note's color at full strength, for a mark drawn on it (a ring, a clock's hand). */
+  --note-accent: light-dark(
+    oklch(from var(--note-bg) 0.5 calc(c * 2) h),
+    oklch(from var(--note-bg) 0.78 calc(c * 1.5) h)
+  );
 }
 [data-note-color="default"] {
   --note-bg: var(--card);
@@ -295,6 +300,26 @@
 
   @media (prefers-reduced-transparency: reduce) {
     background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+/*
+ * The chosen one among a setting's options: glass tinted with the note's color, like a tag's
+ * badge, so the brand color is left to the action that saves. The ring is drawn inside so a
+ * chosen option is the same size as the others.
+ */
+@utility glass-chosen {
+  background-color: color-mix(in oklab, var(--note-bg, var(--card)) 72%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  color: var(--foreground);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--note-accent, var(--foreground)) 45%, transparent),
+    inset 0 1px 0 var(--glass-highlight),
+    0 1px 2px color-mix(in oklab, var(--glass-shadow) 50%, transparent);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--note-bg, var(--card));
     backdrop-filter: none;
   }
 }

@@ -321,6 +321,16 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   powers (ADR 0012), so a migration must not need a superuser. `POSTGRES_MAJOR` in the Dockerfile must follow the postgres image's version.
 - `db/migrate` backs up the database before migrating when migrations are pending, so a
   dev stack collects `update` backups too; they live in the `backup_data` volume.
+- A note's reminder is a row in the `reminders` collection keyed by the note's id (ADR 0018).
+  Set and remove it with the actions in `lib/reminders.ts`. Its times are wall clock strings,
+  not instants; turn one into an instant with the helpers in `packages/shared/src/reminders.ts`
+  (`reminderZone`, `reminderFireTime`), never `new Date(string)`. The server's scheduler rings
+  due reminders over Web Push (`apps/server/src/push`); `fire_at` is the server's and is not
+  synced. The Android app has no Web Push and rings them itself: `lib/nativeReminders.ts`
+  hands the phone each reminder's coming times and `ReminderAlarms.java` sets alarms for
+  them, so `lib/push.ts` answers for both and callers need not know which they are on.
+  `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
+  endpoint must pass `isPushEndpoint` before the server posts to it.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.

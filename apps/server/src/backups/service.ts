@@ -5,6 +5,7 @@ import type { AuthSession } from '../auth';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
 import { resumePendingPreviews } from '../linkPreviews';
+import { forgetVapidKeys } from '../push';
 import { backupConfig } from './config';
 import { BackupError } from './errors';
 import { createBackup, restoreBackup } from './operations';
@@ -91,6 +92,7 @@ export async function runRestore(name: string, session: AuthSession['session'] |
   } finally {
     running = null;
   }
+  forgetVapidKeys();
   // The restored notes may hold links whose previews were still waiting when it was made.
   resumePendingPreviews().catch((error: unknown) => {
     console.error('Could not resume link previews', error);

@@ -1,11 +1,11 @@
 import { type ColumnColor, DEFAULT_BOARD_STATUS, tagColor } from '@catch/shared';
 import {
+  Bell,
   Columns3,
   LayoutDashboard,
   type LucideIcon,
   Palette,
   Paperclip,
-  Pin,
   RotateCcw,
   Tags,
 } from 'lucide-react';
@@ -15,34 +15,35 @@ import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker
 import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { NoteMovePicker, noteDestinationAt } from '@/components/NoteMovePicker/NoteMovePicker';
+import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { useBoardColumns, useNoteTagAssignments, useTags } from '@/lib/collections';
-import { editorControls, editorNote, noteDockPanelOpen } from '@/lib/dockState';
+import { useBoardColumns, useNoteTagAssignments, useReminders, useTags } from '@/lib/collections';
+import {
+  editorControls,
+  editorNote,
+  noteDockPanelOpen,
+  noteReminderRequest,
+} from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
-import {
-  moveNoteToDeck,
-  restoreNote,
-  sendNoteToGallery,
-  setNoteColor,
-  setNotePinned,
-} from '@/lib/notes';
+import { moveNoteToDeck, restoreNote, sendNoteToGallery, setNoteColor } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { setPrimaryTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Action = {
-  /** Stable across label changes (Pin → Unpin), so the button is not remounted. */
   id: string;
   label: string;
   icon: LucideIcon;
   onPress: () => void;
-  /** Shown as held down: the pin of a pinned note, the open palette. */
+  /** Shown as held down: the open palette, the bell of a note with a reminder. */
   active?: boolean;
+  /** Drawn solid: the bell of a note that has a reminder. */
+  filled?: boolean;
   expanded?: boolean;
   columnColor?: ColumnColor;
   disabled?: boolean;
@@ -64,8 +65,8 @@ type Hold = {
 };
 
 /**
- * What the dock shows while a note is open: the note's actions, a palette or the Deck's
- * columns growing the dock upward, and the formatting bar in their place while the keyboard
+ * What the dock shows while a note is open: the note's actions, a palette, the reminder or
+ * the Deck's columns growing the dock upward, and the formatting bar in their place while the keyboard
  * is up.
  */
 export function NoteDock() {
@@ -76,18 +77,24 @@ export function NoteDock() {
   const { close } = useOpenNote();
   const columns = sortBoardColumns(useBoardColumns());
   const ref = useRef<HTMLDivElement>(null);
-  const [panel, setPanel] = useState<'palette' | 'columns' | 'attachments' | 'tags' | null>(null);
+  const [panel, setPanel] = useState<
+    'palette' | 'columns' | 'attachments' | 'tags' | 'reminder' | null
+  >(null);
   const [paletteSession, setPaletteSession] = useState(0);
   const [hoveredColumn, setHoveredColumn] = useState<string | null | undefined>(undefined);
   const hold = useRef<Hold | null>(null);
   useBackHandler(panel !== null, () => setPanel(null));
 
   const editable = note !== null && !note.deletedAt;
-  // The tag search also raises the keyboard; keep its panel mounted while typing.
-  const formatting = keyboardOpen && panel !== 'tags' && editable && controls !== null;
+  // The tag search and a reminder's fields also raise the keyboard; keep their panels mounted
+  // while typing.
+  const formatting =
+    keyboardOpen && panel !== 'tags' && panel !== 'reminder' && editable && controls !== null;
   const showPanel = editable && !formatting && isPresent;
   const showPalette = panel === 'palette' && showPanel;
   const showTags = panel === 'tags' && showPanel;
+  const showReminder = panel === 'reminder' && showPanel;
+  const reminder = useReminders().get(note?.id ?? '');
   const tags = useTags();
   const assignment = useNoteTagAssignments().get(note?.id ?? '');
   const showColumns = panel === 'columns' && showPanel;
@@ -100,8 +107,17 @@ export function NoteDock() {
     setPanel(null);
   }, [noteId]);
 
+  // The reminder chip under the note opens the panel from outside the dock.
+  const reminderRequest = noteReminderRequest.use();
+  const seenRequest = useRef(reminderRequest);
+  useEffect(() => {
+    if (reminderRequest === seenRequest.current) return;
+    seenRequest.current = reminderRequest;
+    setPanel('reminder');
+  }, [reminderRequest]);
+
   // The dock's link tray steps aside while the dock is grown (see NoteLinkTray).
-  const grown = showPalette || showColumns || showAttachments || showTags;
+  const grown = showPalette || showColumns || showAttachments || showTags || showReminder;
   useEffect(() => {
     noteDockPanelOpen.set(grown);
     return () => noteDockPanelOpen.set(false);
@@ -267,20 +283,18 @@ export function NoteDock() {
           setPanel(showColumns ? null : 'columns');
         },
       },
-      ...(note.isArchived
-        ? []
-        : [
-            {
-              id: 'pin',
-              label: note.isPinned ? 'Unpin' : 'Pin',
-              icon: Pin,
-              active: note.isPinned,
-              onPress: () => {
-                haptics.toggle();
-                setNotePinned(note.id, !note.isPinned);
-              },
-            },
-          ]),
+      {
+        id: 'reminder',
+        label: 'Reminder',
+        icon: Bell,
+        active: showReminder || reminder !== undefined,
+        filled: reminder !== undefined,
+        expanded: showReminder,
+        onPress: () => {
+          haptics.toggle();
+          setPanel(showReminder ? null : 'reminder');
+        },
+      },
     ];
   }
 
@@ -342,6 +356,26 @@ export function NoteDock() {
             <TagPicker key={note.id} noteId={note.id} />
           </motion.div>
         )}
+        {showReminder && note && (
+          <motion.div
+            key="reminder"
+            className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={springs.smooth}
+          >
+            <ReminderPanel
+              key={note.id}
+              note={note}
+              color={
+                assignment?.primaryTagId ? tagColor(tags, assignment.primaryTagId) : note.color
+              }
+              reminder={reminder}
+              onDone={() => setPanel(null)}
+            />
+          </motion.div>
+        )}
         {showColumns && note && (
           <motion.div
             key="columns"
@@ -386,7 +420,7 @@ export function NoteDock() {
               key="actions"
               role="toolbar"
               aria-label="Note actions"
-              className="absolute inset-0 grid auto-cols-fr grid-flow-col p-1"
+              className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-1 p-1"
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
@@ -411,6 +445,7 @@ function DockAction({ action }: { action: Action }) {
       aria-label={action.label}
       disabled={action.disabled}
       aria-pressed={action.expanded === undefined ? action.active : undefined}
+      data-filled={action.filled ? '' : undefined}
       aria-expanded={action.expanded}
       onPointerDown={(event) => event.preventDefault()}
       onClick={action.onPress}
@@ -429,10 +464,7 @@ function DockAction({ action }: { action: Action }) {
         className="relative flex size-6 items-center justify-center"
         data-column-color={action.columnColor}
       >
-        <Icon
-          className={cn('size-6', action.active && action.icon === Pin && 'fill-current')}
-          aria-hidden
-        />
+        <Icon className={cn('size-6', action.filled && 'fill-current')} aria-hidden />
         {action.columnColor && (
           <span
             aria-hidden

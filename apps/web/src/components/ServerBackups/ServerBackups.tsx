@@ -30,11 +30,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { formatDateTime } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { BackupRequestError, serverBackups, useServerBackups } from '@/lib/serverBackups';
 
 const numbers = new Intl.NumberFormat();
-const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 const KIND_LABELS: Record<BackupKind, string> = {
   manual: 'Made by hand',
@@ -58,7 +58,7 @@ function formatSize(bytes: number) {
 const count = (value: number, one: string, many: string) =>
   `${numbers.format(value)} ${value === 1 ? one : many}`;
 
-const made = (backup: BackupItem) => dateTime.format(new Date(backup.createdAt));
+const made = (backup: BackupItem) => formatDateTime(new Date(backup.createdAt));
 
 function contents(backup: BackupItem) {
   return [
