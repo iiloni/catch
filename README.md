@@ -1,119 +1,89 @@
-# <img src="apps/web/public/icon.svg" alt="" width="40" height="40" /> Catch
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/wordmark/catch-lockup-stacked-stable-light.svg" />
+    <img src="apps/web/public/wordmark/catch-lockup-stacked-stable-dark.svg" alt="Catch" width="160" />
+  </picture>
+</h1>
 
-A self-hosted, offline-first note-taking app in the spirit of Google Keep, available as a
-web app (installable PWA) and a native Android app.
+Catch is a notes app in the spirit of Google Keep that you host yourself. Your notes live on
+a server you control, and they keep working on your phone or laptop when you are offline.
 
-## Self-hosting
+It runs in any modern browser, installs as an app from the browser (PWA), and has a native
+Android app.
 
-```bash
-cp .env.example .env   # set BETTER_AUTH_SECRET, BETTER_AUTH_URL, POSTGRES_PASSWORD, ELECTRIC_SECRET
-docker compose up -d --build
-```
+<p align="center">
+  <img src="docs/screenshots/desktop-gallery.png" alt="The gallery on a desktop, with a note open beside it" width="400" />
+  <img src="docs/screenshots/desktop-deck.png" alt="The deck on a desktop, with notes in three columns" width="400" />
+</p>
 
-The app listens on port 3000 (`CATCH_PORT` to change it). Put it behind an HTTPS proxy with
-HTTP/2, so sync streams share connections with page loads and writes; the Android app
-requires HTTPS. The first account you create becomes the instance admin, and sign-up then
-closes: invite other people from Settings > Admin > Users, which gives you a link to send
-each of them. `REGISTRATION=open` lets anyone sign up instead. Set `TRUSTED_PROXIES`
-to your reverse proxy's address so the sign-in rate limit counts each visitor rather than
-the proxy (see `.env.example`).
+<p align="center">
+  <img src="docs/screenshots/mobile-gallery.png" alt="The gallery on a phone" width="30%" />
+  &nbsp;
+  <img src="docs/screenshots/mobile-note.png" alt="A note open on a phone" width="30%" />
+  &nbsp;
+  <img src="docs/screenshots/mobile-deck.png" alt="The deck on a phone" width="30%" />
+</p>
 
-Electric uses its pinned prebuilt image when available. If Docker Hub cannot supply it,
-Compose builds the same release from a pinned upstream Git commit; the first build takes
-longer and needs access to GitHub and the upstream build dependencies.
+## What it does
 
-For published Docker images, signed Android APKs, stable/preview channels, and a production
-configuration kept outside this checkout, see [Releasing and deployment](docs/releases.md).
+- **Notes that are quick to write.** Rich text, checklists, colors, pinning, an archive and
+  a trash you can restore from.
+- **Works offline.** Notes are kept on the device. Changes made without a connection are
+  sent when it comes back.
+- **Tags and search.** Nested tags, and search with filters for tags and colors.
+- **Reminders.** One-off or repeating, delivered as notifications in the browser and as
+  alarms in the Android app.
+- **Attachments.** Images, video, audio and other files inside notes.
+- **Link previews.** A link in a note shows the page's title and picture.
+- **A deck for notes in progress.** Give a note a status and follow it on a board.
+- **Import from Google Keep.** Bring your notes over from a Google Takeout export.
+- **Share to Catch on Android.** Send text, links and files from other apps into a note.
+- **Several people on one server.** The first account is the admin, who invites everyone
+  else. Each person sees only their own notes.
+- **Backups built in.** Admins back up and restore the whole server from Settings, by hand
+  or on a daily schedule.
 
-Attachments live in the `attachment_data` Docker volume. Set `CATCH_ATTACHMENTS_MOUNT`
-to a host directory for a bind mount, writable by the container's `node` user (UID 1000).
-Files can be up to 100 MiB, and each account up to 10 GiB in all (`ATTACHMENT_QUOTA_MB`);
-uploads made offline stay on the device and resume when it reconnects.
+## Get Catch
 
-### Backups and updates
+Catch has no hosted service: you need a Catch server, either your own or one somebody runs
+for you.
 
-Admins back up and restore the whole server (database and attachments) in Settings > Admin >
-Backups, and can schedule a daily backup there. Backups go to the `backup_data` volume;
-set `CATCH_BACKUPS_MOUNT` to a directory on another disk so they outlive this one.
+- **In a browser:** open your server's address and sign in. Your browser can install it as
+  an app from there.
+- **On Android:** download the APK from the
+  [latest release](https://github.com/iiloni/catch/releases/latest), install it and enter
+  your server's address on first launch. Later versions are offered in Settings > Update.
 
-```bash
-./scripts/update.sh                  # back up the database, pull, rebuild, restart
-./scripts/backup.sh create           # a full backup from the host
-./scripts/backup.sh restore <backup> # also works when Catch cannot start
-```
+Every version is listed with its changes on the
+[releases page](https://github.com/iiloni/catch/releases). Versions marked *preview* come
+out ahead of stable ones and install as a separate Catch Preview app.
 
-The server also backs up its database by itself before a new version migrates it. See
-[Server backups](docs/backups.md).
+## Run your own server
 
-## Development
+Catch runs with Docker Compose on any machine that can stay on, such as a home server or a
+small VPS. Setting it up takes a few commands and a web address with HTTPS.
 
-Requires Docker and, for end-to-end tests and editor support on the host, Node 24 and pnpm
-(`corepack enable`).
+**[Deployment guide](DEPLOYMENT.md)** covers installation, settings, inviting people,
+backups and updates.
 
-```bash
-./scripts/dev.sh up    # isolated stack for this checkout; prints its URL
-./scripts/dev.sh check # lint, typecheck, test, build
-pnpm install && ./scripts/dev.sh e2e
-```
+## Work on Catch
 
-Each Git worktree gets its own stack, so several branches can run side by side; see
-[WORKTREES.md](WORKTREES.md). See [AGENTS.md](AGENTS.md) for architecture and conventions,
-and [docs/decisions](docs/decisions) for why the stack looks the way it does.
+Catch is a TypeScript project: a React web app, a Node server and an Android app built from
+the same code. The whole development environment starts with one command in Docker.
 
-For PR iteration, label-triggered E2E, required merge checks and GitHub auto-merge setup,
-see [Pull requests and CI](docs/ci.md).
+**[Development guide](DEVELOPMENT.md)** covers setup, tests, the Android app and how
+changes get merged.
 
-## Android
+> [!NOTE]
+> Catch is not accepting external contributions at the moment. You are welcome to read the
+> code, run it and fork it under the license below.
 
-For day-to-day work, open the dev stack's URL in Chrome on the phone (over Tailscale). It is
-the same code the app runs, with hot reload, and `chrome://inspect` gives you DevTools.
+## More documentation
 
-To test inside the native app, connect the phone with USB or wireless debugging and run:
-
-```bash
-./scripts/dev.sh android         # the phone reaches the stack over Tailscale
-./scripts/dev.sh android --usb   # or through adb, without Tailscale on the phone
-./scripts/dev.sh android --static # bundled APK without hot reload
-```
-
-The command starts this worktree's stack and installs the Catch Dev app, whose WebView
-loads its Vite server, so web changes hot-reload on the phone. It is a separate app from
-the released Catch and Catch Preview, and the command builds it whatever `CATCH_CHANNEL`
-is set to. Rerun it only after native changes
-(Capacitor plugins or config, anything under `apps/web/android`) or to point the app at
-another worktree. The app needs the stack running (and, with `--usb`, the device connected)
-while you use it. `chrome://inspect` works here too.
-
-With `--static`, the command rebuilds and bundles the web app, installs the APK on the
-connected device, and exits. The frontend runs from the APK while API requests still reach
-this worktree's HTTP server over Tailscale. Keep the stack running, and rerun the command
-to include later web or native changes. `--static --usb` reaches the same backend via adb.
-The bundled app uses a different WebView origin from live reload, so it has its own login
-and local web data. Capacitor options such as
-`--target <device-id>` can be passed in either mode.
-
-The requirements are a JDK 21 and the Android SDK on the host (`JAVA_HOME`, `ANDROID_HOME`).
-Use `adb pair` and `adb connect` for a wireless connection.
-
-A standalone build bundles the web app and asks for your server URL on first launch:
-
-```bash
-pnpm --filter @catch/web android:sync
-pnpm --filter @catch/web android:open   # or: cd apps/web/android && ./gradlew assembleDevDebug
-```
-
-Dev is the default Android flavor. It installs as Catch Dev (`org.iloni.catchnotes.dev`)
-beside the released Catch and Catch Preview apps and is never distributed. Stable and
-preview release builds read their version and signing credentials from the environment
-(see [Releasing and deployment](docs/releases.md)).
-
-The approved Gentle Drop masters and exact values live in `branding/`, with the icon-only
-preview extension in `branding/preview/`. Run `./scripts/generate-brand-assets.sh all` with
-ImageMagick (SVG support) and Python 3 to regenerate both channels, or pass `stable` (the
-default) or `preview` to regenerate one. Check preview derivation with
-`python3 branding/preview/derive-preview-icons.py --check`.
-See [Brand assets](docs/branding.md) for sizes, shared Android layers, integrity checks,
-and channel selection. UI colors and theme colors stay the same in both channels.
+| For | Read |
+| --- | --- |
+| Server admins | [Deployment](DEPLOYMENT.md), [Server backups](docs/backups.md), [Releases and channels](docs/releases.md) |
+| Contributors | [Development](DEVELOPMENT.md), [Architecture and conventions](AGENTS.md), [Design decisions](docs/decisions), [Pull requests and CI](docs/ci.md) |
 
 ## License
 
