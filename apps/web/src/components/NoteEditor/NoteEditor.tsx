@@ -444,13 +444,17 @@ function createControls(editor: AnyEditor): EditorControls {
       refresh();
     },
     undo() {
+      // Only hold on to focus: taking it would raise a keyboard the user had put away.
+      const focused = editor.isFocused();
       editor.undo();
-      editor.focus();
+      if (focused) editor.focus();
       refresh();
     },
     redo() {
+      // Only hold on to focus: taking it would raise a keyboard the user had put away.
+      const focused = editor.isFocused();
       editor.redo();
-      editor.focus();
+      if (focused) editor.focus();
       refresh();
     },
     focus() {

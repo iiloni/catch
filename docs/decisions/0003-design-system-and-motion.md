@@ -211,6 +211,8 @@ keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the wind
 the WebView never sees the keyboard inset (so it keeps its size), each keyboard animation is
 reported once with its duration and sampled easing curve, and `src/lib/keyboard.ts` replays
 it on the `--keyboard` variable. Chromium browsers get the same with the VirtualKeyboard API.
+A dismissed keyboard also releases focus: Chrome raises the keyboard again after any tap
+while a field is focused, so a dock button would bring it back.
 The plugin also injects the `--safe-area-inset-*` variables, so Capacitor's SystemBars inset
 handling is disabled.
 

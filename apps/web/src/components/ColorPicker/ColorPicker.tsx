@@ -6,6 +6,7 @@ import { type ComponentProps, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
+import { NewTagButton } from '@/components/TagForm/TagForm';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
@@ -168,6 +169,8 @@ export function ColorTagSelector({
       setBranch(tag.id);
     }
   }
+  // Tags without a color can only be primary where the picker assigns tags.
+  const assignCreated = onTagChange && ((id: string) => onTagChange(id));
   const slideVariants = {
     enter: (travel: number) => ({ x: reducedMotion ? 0 : travel * 32, opacity: 0 }),
     visible: { x: 0, opacity: 1 },
@@ -194,11 +197,12 @@ export function ColorTagSelector({
           >
             {branch === null ? (
               <>
-                {selected && (
-                  <div className="flex justify-center px-3 pt-3 pb-2">
-                    <TagBadge tag={selected} tags={tags} primary morph />
+                <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center px-3 pt-2">
+                  <div className="col-start-2 flex min-w-0 justify-center">
+                    {selected && <TagBadge tag={selected} tags={tags} primary morph />}
                   </div>
-                )}
+                  <NewTagButton onCreated={assignCreated} />
+                </div>
                 <ColorSwatches
                   tags={tags}
                   value={value}
@@ -243,6 +247,11 @@ export function ColorTagSelector({
                   <div className="flex min-w-0 justify-center">
                     {selected && <TagBadge tag={selected} tags={tags} primary morph />}
                   </div>
+                  <NewTagButton
+                    parentId={current?.id}
+                    onCreated={assignCreated}
+                    className="justify-self-end"
+                  />
                 </div>
                 <div className="overflow-hidden">
                   <AnimatePresence initial={false} mode="wait" custom={direction}>
