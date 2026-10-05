@@ -970,3 +970,26 @@ test('a long press selects deck notes, and taps add more', async ({ page, isMobi
   await expect(two).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('2 selected')).toBeVisible();
 });
+
+test('a note is handed to Google Calendar with a link back to it', async ({ page }) => {
+  await signUp(page);
+  await seedNotes(page, ['Call the dentist']);
+  await openNote(page, 'Call the dentist');
+  // Google's form is another site: record where the button would go instead of going there.
+  await page.evaluate(() => {
+    window.open = (url) => {
+      document.body.dataset.opened = String(url);
+      return null;
+    };
+  });
+  await noteToolbar(page).getByRole('button', { name: 'Add to Google Calendar' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-opened', /calendar\.google\.com/);
+
+  const opened = new URL((await page.locator('body').getAttribute('data-opened')) ?? '');
+  expect(opened.searchParams.get('text')).toBe('Call the dentist');
+  const link = new URL(opened.searchParams.get('details') ?? '');
+  expect(link.origin).toBe(new URL(page.url()).origin);
+  // The link opens the same note.
+  expect(link.searchParams.get('note')).toBe(new URL(page.url()).searchParams.get('note'));
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
