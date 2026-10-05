@@ -360,12 +360,8 @@ the output with `./scripts/release.sh changelog <tag>` and edit the release on G
 
 Keep a standalone deployment directory on the server, for example `~/services/catch/`,
 with `compose.yaml` and an owner-only `.env`. The server does not need a Git checkout.
-Copy the generic `docker-compose.yml` and `.env.example` there as a starting point, then
-replace the app's `build:` block with:
-
-```yaml
-image: ${CATCH_IMAGE:?Set CATCH_IMAGE}
-```
+Copy the generic `docker-compose.yml` and `.env.example` there as a starting point. The
+Compose file runs `ghcr.io/iiloni/catch:stable` unless `CATCH_IMAGE` names another image.
 
 Choose an exact release or channel alias in the server's `.env`:
 

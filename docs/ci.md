@@ -195,3 +195,21 @@ queued PRs. See [merge queues](https://docs.github.com/en/repositories/configuri
 Local work still must pass `./scripts/dev.sh check` before finishing. Local E2E should be
 targeted; full E2E runs on GitHub through `run e2e` when early coverage is justified,
 or through `merge on pass` before merging.
+
+## Deploying the site
+
+[`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
+Pages when `main` changes the site or its inputs, when a release tag is pushed (the
+changelog gains a version), and on request. It always builds `main` from a full clone,
+because the changelog is derived from tags and history, and fails if that changelog cannot
+be generated. Pull requests do not deploy; CI's `check` job builds the site for them.
+
+The job is skipped until the repository is connected to Cloudflare, once:
+
+1. In Cloudflare, create a Pages project with **Direct Upload** (not the Git integration)
+   and production branch `main`, and add `catchnotes.site` under its custom domains.
+2. Create an API token with the **Cloudflare Pages: Edit** permission for that account.
+3. In the repository's **Settings → Secrets and variables → Actions**, add the secrets
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and the variable
+   `CLOUDFLARE_PAGES_PROJECT` with the project's name.
+4. Run the workflow from the Actions tab (`gh workflow run site.yml`) and open the site.
