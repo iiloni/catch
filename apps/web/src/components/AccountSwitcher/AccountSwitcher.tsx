@@ -5,6 +5,13 @@ import { type PointerEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountAvatar } from '@/components/AccountSummary/AccountSummary';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { signOutAccount, switchAccount, unsyncedChanges } from '@/lib/accounts';
 import { type Account, getAccounts, getSignedInUser } from '@/lib/auth';
@@ -126,15 +133,15 @@ export function AccountSwitcher() {
     void settle(0).then(() => setSwipe(null));
   }
 
-  async function signOut(account: Account, confirmed = false) {
+  /** Signing out deletes the account's notes from the device, so it is always asked first. */
+  async function askToSignOut(account: Account) {
     if (account === current && !canLeave('signing out')) return;
-    if (!confirmed) {
-      const pending = await unsyncedChanges(account);
-      if (pending > 0) {
-        setConfirming({ account, pending });
-        return;
-      }
-    }
+    const pending = await unsyncedChanges(account);
+    setOpen(false);
+    setConfirming({ account, pending });
+  }
+
+  async function signOut(account: Account) {
     setConfirming(null);
     setLeaving(account.user.id);
     try {
@@ -149,130 +156,123 @@ export function AccountSwitcher() {
   }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) setConfirming(null);
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Account: ${label(current)}`}
-          aria-description={accounts.length > 1 ? 'Swipe to switch accounts' : undefined}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerEnd}
-          onPointerCancel={onPointerEnd}
-          onClick={(event) => {
-            // Radix leaves the popover alone when the click that ends a swipe is cancelled.
-            if (swiped.current) event.preventDefault();
-            swiped.current = false;
-          }}
-          className="flex size-10 touch-none select-none items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <span className="relative block size-8 overflow-hidden rounded-full">
-            <motion.span
-              className="absolute inset-0"
-              style={swipe?.axis === 'x' ? { x: offset } : { y: offset }}
-            >
-              <AccountAvatar {...current.user} />
-              {swipe?.target && (
-                <AccountAvatar
-                  {...swipe.target.user}
-                  className="absolute"
-                  // It follows the avatar from the side the swipe is pulling away from.
-                  style={
-                    swipe.axis === 'x'
-                      ? { top: 0, left: swipe.from * TRAVEL }
-                      : { left: 0, top: swipe.from * TRAVEL }
-                  }
-                />
-              )}
-            </motion.span>
-          </span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={12} className="flex w-72 flex-col gap-1 p-2">
-        {confirming ? (
-          <div className="flex flex-col gap-3 p-2">
-            <p className="font-semibold">Sign out {label(confirming.account)}?</p>
-            <p className="text-muted-foreground text-sm">
-              {confirming.pending === 1
-                ? 'A change on this device has not synced yet. Signing out deletes it.'
-                : `${confirming.pending} changes on this device have not synced yet. Signing out deletes them.`}
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                // The button that asked is gone, and focus would be lost with it.
-                autoFocus
-                variant="ghost"
-                className="rounded-full"
-                onClick={() => setConfirming(null)}
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Account: ${label(current)}`}
+            aria-description={accounts.length > 1 ? 'Swipe to switch accounts' : undefined}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
+            onClick={(event) => {
+              // Radix leaves the popover alone when the click that ends a swipe is cancelled.
+              if (swiped.current) event.preventDefault();
+              swiped.current = false;
+            }}
+            className="flex size-10 touch-none select-none items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span className="relative block size-8 overflow-hidden rounded-full">
+              <motion.span
+                className="absolute inset-0"
+                style={swipe?.axis === 'x' ? { x: offset } : { y: offset }}
               >
-                Cancel
-              </Button>
+                <AccountAvatar {...current.user} />
+                {swipe?.target && (
+                  <AccountAvatar
+                    {...swipe.target.user}
+                    className="absolute"
+                    // It follows the avatar from the side the swipe is pulling away from.
+                    style={
+                      swipe.axis === 'x'
+                        ? { top: 0, left: swipe.from * TRAVEL }
+                        : { left: 0, top: swipe.from * TRAVEL }
+                    }
+                  />
+                )}
+              </motion.span>
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" sideOffset={12} className="flex w-72 flex-col gap-1 p-2">
+          <ul aria-label="Accounts" className="flex flex-col gap-1">
+            {accounts.map((account) => {
+              const active = account === current;
+              return (
+                <li key={account.user.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-current={active ? 'true' : undefined}
+                    disabled={leaving !== null}
+                    onClick={() => (active ? setOpen(false) : switchTo(account))}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <AccountAvatar {...account.user} className="size-9" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{label(account)}</span>
+                      {account.user.name && (
+                        <span className="block truncate text-muted-foreground text-sm">
+                          {account.user.email}
+                        </span>
+                      )}
+                    </span>
+                    {active && <Check className="size-4 shrink-0" aria-hidden />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Sign out ${account.user.email}`}
+                    title="Sign out"
+                    disabled={leaving !== null}
+                    onClick={() => askToSignOut(account)}
+                    className="flex size-10 shrink-0 items-center justify-center rounded-full text-destructive outline-none hover:bg-destructive/10 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                  >
+                    <LogOut className="size-4" aria-hidden />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <Link
+            to="/login"
+            className="flex items-center gap-3 rounded-xl p-2 font-medium outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <span className="flex size-9 items-center justify-center rounded-full bg-foreground/[0.06]">
+              <Plus className="size-5" aria-hidden />
+            </span>
+            Add account
+          </Link>
+        </PopoverContent>
+      </Popover>
+      <Dialog open={confirming !== null} onOpenChange={(next) => !next && setConfirming(null)}>
+        {confirming && (
+          <DialogContent>
+            <DialogTitle>Sign out {label(confirming.account)}?</DialogTitle>
+            <DialogDescription>
+              {confirming.pending === 0
+                ? 'Its notes are removed from this device and stay on your Catch server. Sign in again to get them back here.'
+                : confirming.pending === 1
+                  ? 'A change on this device has not synced yet. Signing out deletes it.'
+                  : `${confirming.pending} changes on this device have not synced yet. Signing out deletes them.`}
+            </DialogDescription>
+            <div className="flex justify-end gap-2">
+              <DialogClose asChild>
+                <Button variant="ghost" className="rounded-full">
+                  Cancel
+                </Button>
+              </DialogClose>
               <Button
                 variant="destructive"
                 className="rounded-full"
-                onClick={() => signOut(confirming.account, true)}
+                onClick={() => signOut(confirming.account)}
               >
                 Sign out
               </Button>
             </div>
-          </div>
-        ) : (
-          <>
-            <ul aria-label="Accounts" className="flex flex-col gap-1">
-              {accounts.map((account) => {
-                const active = account === current;
-                return (
-                  <li key={account.user.id} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      aria-current={active ? 'true' : undefined}
-                      disabled={leaving !== null}
-                      onClick={() => (active ? setOpen(false) : switchTo(account))}
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                      <AccountAvatar {...account.user} className="size-9" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{label(account)}</span>
-                        {account.user.name && (
-                          <span className="block truncate text-muted-foreground text-sm">
-                            {account.user.email}
-                          </span>
-                        )}
-                      </span>
-                      {active && <Check className="size-4 shrink-0" aria-hidden />}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Sign out ${account.user.email}`}
-                      title="Sign out"
-                      disabled={leaving !== null}
-                      onClick={() => signOut(account)}
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/[0.06] hover:text-destructive focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
-                    >
-                      <LogOut className="size-4" aria-hidden />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <Link
-              to="/login"
-              className="flex items-center gap-3 rounded-xl p-2 font-medium outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <span className="flex size-9 items-center justify-center rounded-full bg-foreground/[0.06]">
-                <Plus className="size-5" aria-hidden />
-              </span>
-              Add account
-            </Link>
-          </>
+          </DialogContent>
         )}
-      </PopoverContent>
-    </Popover>
+      </Dialog>
+    </>
   );
 }

@@ -68,20 +68,32 @@ describe('AccountSwitcher', () => {
     expect(mocks.switchAccount).not.toHaveBeenCalled();
   });
 
-  it('signs another account out and drops it from the list', async () => {
+  it('asks, then signs another account out and drops it from the list', async () => {
     mocks.signOutAccount.mockImplementation(async () => {
       mocks.accounts = [ada];
     });
     render(<AccountSwitcher />);
     openList();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out bob@example.com' }));
+    expect(await screen.findByRole('dialog', { name: 'Sign out bob@example.com?' })).toBeVisible();
+    expect(mocks.signOutAccount).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mocks.signOutAccount).toHaveBeenCalledWith(bob));
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'bob@example.com' })).not.toBeInTheDocument(),
-    );
+    openList();
+    expect(screen.queryByRole('button', { name: 'bob@example.com' })).not.toBeInTheDocument();
   });
 
-  it('asks before deleting changes that have not synced', async () => {
+  it('keeps the account when signing out is cancelled', async () => {
+    render(<AccountSwitcher />);
+    openList();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out bob@example.com' }));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mocks.signOutAccount).not.toHaveBeenCalled();
+  });
+
+  it('warns about changes that have not synced', async () => {
     mocks.unsyncedChanges.mockResolvedValue(2);
     render(<AccountSwitcher />);
     openList();

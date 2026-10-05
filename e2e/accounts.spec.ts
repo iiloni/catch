@@ -106,7 +106,10 @@ test('other tabs follow a switch, and signing out one account leaves the rest', 
 
   await avatar(page, first).click();
   await page.getByRole('button', { name: `Sign out ${second}`, exact: true }).click();
-  await expect(accounts.getByRole('button', { name: second, exact: true })).toBeHidden();
+  const confirm = page.getByRole('dialog', { name: `Sign out ${second}?` });
+  await confirm.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(confirm).toBeHidden();
+  await avatar(page, first).click();
   await expect(accounts.getByRole('listitem')).toHaveCount(1);
   await page.keyboard.press('Escape');
 
