@@ -37,6 +37,177 @@ async function addTag(
   return tagId;
 }
 
+test('selection actions pin notes and edit mixed tags on touch and desktop', async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const ideas = await addTag(request, headers, 'Ideas');
+  await seedNotes(page, ['One', 'Two', 'Unselected']);
+  const firstId = await card(page, 'One').getAttribute('data-note-card');
+  expect(
+    (
+      await request.patch(`/api/note-tags/${firstId}`, {
+        headers,
+        data: { primaryTagId: null, secondaryTagIds: [ideas] },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect(card(page, 'One').getByRole('button', { name: 'Ideas', exact: true })).toBeVisible();
+
+  if (isMobile) {
+    const box = await settledBox(card(page, 'One').getByRole('button', { name: 'Open note' }));
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
+    });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    const cell = page
+      .locator('[data-note-cell]')
+      .filter({ has: page.getByRole('heading', { name: 'One', exact: true }) });
+    await cell.hover();
+    await cell.getByRole('button', { name: 'Select note', exact: true }).click();
+  }
+  await card(page, 'Two').getByRole('button', { name: 'Select note', exact: true }).click();
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await toolbar.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(toolbar.getByRole('button', { name: 'Unpin', exact: true })).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Unpin', exact: true }).click();
+  await expect(toolbar.getByRole('button', { name: 'Pin', exact: true })).toBeVisible();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  const countBox = await settledBox(page.getByLabel('2 selected'));
+  const toolbarBox = await settledBox(toolbar);
+  expect(toolbarBox.x).toBeGreaterThan(countBox.x + countBox.width);
+
+  await toolbar.getByRole('button', { name: 'Tags', exact: true }).click();
+  const checkbox = page
+    .getByRole('region', { name: 'Secondary tags' })
+    .getByRole('checkbox', { name: 'Ideas', exact: true });
+  await expect(checkbox).toBeChecked({ indeterminate: true });
+  await checkbox.click();
+  await expect(checkbox).toBeChecked();
+  await expect(card(page, 'Two').getByRole('button', { name: 'Ideas', exact: true })).toBeVisible();
+  await expect(
+    card(page, 'Unselected').getByRole('button', { name: 'Ideas', exact: true }),
+  ).toHaveCount(0);
+  await checkbox.click();
+  await expect(checkbox).not.toBeChecked();
+  for (const title of ['One', 'Two'])
+    await expect(card(page, title).getByRole('button', { name: 'Ideas', exact: true })).toHaveCount(
+      0,
+    );
+  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Secondary tags' })).toBeHidden();
+  await toolbar.getByRole('button', { name: 'Tags', exact: true }).click();
+  await checkbox.check();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await page.reload();
+  for (const title of ['One', 'Two'])
+    await expect(
+      card(page, title).getByRole('button', { name: 'Ideas', exact: true }),
+    ).toBeVisible();
+});
+
+test('desktop gallery cards assign secondary tags without opening the editor', async ({
+  page,
+  request,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, 'Card toolbar actions are desktop controls.');
+  await signUp(page);
+  await addTag(request, await auth(page), 'Ideas');
+  await seedNotes(page, ['Card tags']);
+  const noteCard = card(page, 'Card tags');
+  await noteCard.hover();
+  await noteCard.getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  await picker.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
+  await expect(noteCard.getByRole('button', { name: 'Ideas', exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]note=/);
+  await page.screenshot({ path: testInfo.outputPath('card-tag-picker.png') });
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeHidden();
+  await page.reload();
+  await expect(
+    card(page, 'Card tags').getByRole('button', { name: 'Ideas', exact: true }),
+  ).toBeVisible();
+});
+
+test('card actions and tag popovers stay inside narrow and short viewports', async ({
+  page,
+  request,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, 'Exercises desktop card controls at narrow viewport widths.');
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work');
+  for (let index = 0; index < 16; index++) await addTag(request, headers, `Project ${index}`, root);
+  await seedNotes(page, ['Viewport bounds']);
+  const noteCard = card(page, 'Viewport bounds');
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  const popup = page.locator('[data-slot="popover-content"]').filter({ has: picker });
+  const assertBounds = async () => {
+    const box = await settledBox(popup);
+    const viewport = page.viewportSize();
+    expect(box.x).toBeGreaterThanOrEqual(15);
+    expect(box.y).toBeGreaterThanOrEqual(15);
+    expect(box.x + box.width).toBeLessThanOrEqual((viewport?.width ?? 0) - 15);
+    expect(box.y + box.height).toBeLessThanOrEqual((viewport?.height ?? 0) - 15);
+    await expect(picker.getByRole('textbox', { name: 'Find tags' })).toBeInViewport({ ratio: 1 });
+    const scroll = picker.locator('[data-slot="scroll-area-viewport"]');
+    expect(await scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+      true,
+    );
+  };
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 480 });
+    await noteCard.hover();
+    const cardBox = await settledBox(noteCard);
+    for (const label of [
+      'Background color',
+      'Tags',
+      'Move note',
+      'Reminder',
+      'Archive',
+      'Move to trash',
+    ]) {
+      const box = await settledBox(noteCard.getByRole('button', { name: label, exact: true }));
+      expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+    }
+    await noteCard.getByRole('button', { name: 'Tags', exact: true }).click();
+    await expect(
+      picker.getByRole('checkbox', { name: 'Work / Project 15', exact: true }),
+    ).toHaveCount(1);
+    await assertBounds();
+    await page.setViewportSize({ width, height: 320 });
+    await assertBounds();
+    await picker.getByRole('textbox', { name: 'Find tags' }).fill('Project 15');
+    await picker.getByRole('checkbox', { name: 'Work / Project 15', exact: true }).check();
+    await page.screenshot({ path: testInfo.outputPath(`tag-picker-${width}.png`) });
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({ width: 375, height: 480 });
+  await noteCard.hover();
+  await page
+    .locator('[data-note-cell]')
+    .getByRole('button', { name: 'Select note', exact: true })
+    .click();
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Tags', exact: true })
+    .click();
+  await assertBounds();
+});
+
 test('secondary tag search keeps focus and selection usable above the keyboard', async ({
   page,
   request,

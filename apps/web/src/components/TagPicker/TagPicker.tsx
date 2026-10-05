@@ -1,16 +1,27 @@
+import { secondaryTagAncestors } from '@catch/shared';
+import { useMemo } from 'react';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { setSecondaryTag } from '@/lib/tags';
 
-export function TagPicker({ noteId }: { noteId: string }) {
+type Props = { noteId: string; noteIds?: never } | { noteId?: never; noteIds: readonly string[] };
+
+export function TagPicker({ noteId, noteIds }: Props) {
+  const ids = useMemo(() => noteIds ?? [noteId], [noteId, noteIds]);
   const tags = useTags();
   const { awaitingTags, awaitingAssignments } = useTagReadiness();
-  const assignment = useNoteTagAssignments().get(noteId);
+  const assignments = useNoteTagAssignments();
   const ancestors = useMemo(
-    () => secondaryTagAncestors(tags, assignment?.secondaryTagIds ?? []),
-    [tags, assignment],
+    () =>
+      new Map(
+        ids.map((id) => [
+          id,
+          secondaryTagAncestors(tags, assignments.get(id)?.secondaryTagIds ?? []),
+        ]),
+      ),
+    [tags, assignments, ids],
   );
   return (
     <section aria-label="Secondary tags" className="px-3 pt-3 pb-1">
@@ -25,12 +36,32 @@ export function TagPicker({ noteId }: { noteId: string }) {
         <TagTree
           tags={tags}
           searchPosition="bottom"
-          className="max-h-[min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-7rem))]"
+          // Leave room for the heading, search field and padding within an anchored popover.
+          className="max-h-[max(0px,min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-7rem),calc(var(--radix-popover-content-available-height,100dvh)-7rem)))]"
           renderTag={(tag, path) => {
             const root = path[0];
-            const primary = assignment?.primaryTagId === tag.id;
-            const descendant = tags.find((item) => item.id === ancestors.get(tag.id));
-            const reason = descendant ? `${descendant.name} is already assigned` : undefined;
+            const states = ids.map((id) => {
+              const assignment = assignments.get(id);
+              return {
+                id,
+                primary: assignment?.primaryTagId === tag.id,
+                selected:
+                  assignment?.primaryTagId === tag.id ||
+                  (assignment?.secondaryTagIds.includes(tag.id) ?? false),
+                descendant: ancestors.get(id)?.get(tag.id),
+              };
+            });
+            const primary = states.every((state) => state.primary);
+            const checked = states.every((state) => state.selected);
+            const mixed = !checked && states.some((state) => state.selected);
+            const disabled = states.every((state) => state.primary || state.descendant);
+            const descendant = tags.find((item) => item.id === states[0]?.descendant);
+            const reason =
+              disabled && !primary
+                ? ids.length === 1 && descendant
+                  ? `${descendant.name} is already assigned`
+                  : 'Primary or more specific tags are already assigned'
+                : undefined;
             return (
               <label
                 title={reason}
@@ -60,12 +91,24 @@ export function TagPicker({ noteId }: { noteId: string }) {
                 <input
                   type="checkbox"
                   aria-label={path.map((item) => item.name).join(' / ')}
-                  checked={primary || (assignment?.secondaryTagIds.includes(tag.id) ?? false)}
-                  disabled={primary || !!descendant}
+                  checked={checked}
+                  ref={(input) => {
+                    if (input) input.indeterminate = mixed;
+                  }}
+                  disabled={disabled}
                   aria-describedby={!primary && reason ? `tag-reason-${tag.id}` : undefined}
                   onChange={(event) => {
                     haptics.selection();
-                    setSecondaryTag(noteId, tag.id, event.target.checked);
+                    for (const state of states) {
+                      // Keep primary assignments and more specific secondary tags intact.
+                      if (
+                        state.primary ||
+                        state.descendant ||
+                        state.selected === event.target.checked
+                      )
+                        continue;
+                      setSecondaryTag(state.id, tag.id, event.target.checked);
+                    }
                   }}
                   className="size-4 shrink-0 accent-brand"
                 />
@@ -77,6 +120,3 @@ export function TagPicker({ noteId }: { noteId: string }) {
     </section>
   );
 }
-
-import { secondaryTagAncestors } from '@catch/shared';
-import { useMemo } from 'react';
