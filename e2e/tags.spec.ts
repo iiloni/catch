@@ -3,6 +3,7 @@ import { type APIRequestContext, expect, type Locator, type Page, test } from '@
 import {
   card,
   createNote,
+  longPress,
   noteToolbar,
   openNote,
   seedNotes,
@@ -58,14 +59,7 @@ test('selection actions pin notes and edit mixed tags on touch and desktop', asy
   await expect(card(page, 'One').getByRole('button', { name: 'Ideas', exact: true })).toBeVisible();
 
   if (isMobile) {
-    const box = await settledBox(card(page, 'One').getByRole('button', { name: 'Open note' }));
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
-    });
-    await page.waitForTimeout(400);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await longPress(page, card(page, 'One').getByRole('button', { name: 'Open note' }));
   } else {
     const cell = page
       .locator('[data-note-cell]')
@@ -73,7 +67,9 @@ test('selection actions pin notes and edit mixed tags on touch and desktop', asy
     await cell.hover();
     await cell.getByRole('button', { name: 'Select note', exact: true }).click();
   }
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   await card(page, 'Two').getByRole('button', { name: 'Select note', exact: true }).click();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
   const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
   await toolbar.getByRole('button', { name: 'Pin', exact: true }).click();
   await expect(toolbar.getByRole('button', { name: 'Unpin', exact: true })).toBeVisible();
