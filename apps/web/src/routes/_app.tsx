@@ -1,3 +1,5 @@
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
@@ -12,9 +14,13 @@ import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
+import { watchNativeReminders } from '@/lib/nativeReminders';
+import { useOpenNote } from '@/lib/openNote';
+import { onNotificationOpen, syncPush } from '@/lib/push';
+import { syncReminderSettings } from '@/lib/reminders';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
@@ -37,6 +43,31 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   useEffect(watchUpdates, []);
+  const { open } = useOpenNote();
+  useEffect(() => onNotificationOpen(open), [open]);
+  useEffect(watchNativeReminders, []);
+  useEffect(() => {
+    void syncPush();
+    const user = getSignedInUser();
+    if (!user) return;
+    // A phone that has travelled reports its new zone when the app comes back into view,
+    // and picks up quick times changed on another device.
+    const report = () => {
+      if (document.visibilityState === 'visible') void syncReminderSettings(user.id);
+    };
+    report();
+    document.addEventListener('visibilitychange', report);
+    // Android does not always tell the page it is visible again when the app resumes.
+    const resumed = Capacitor.isNativePlatform()
+      ? App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) void syncReminderSettings(user.id);
+        })
+      : null;
+    return () => {
+      document.removeEventListener('visibilitychange', report);
+      void resumed?.then((listener) => listener.remove());
+    };
+  }, []);
   const { note } = Route.useSearch();
   const pane = useNotePaneLayout();
   const noteState = quickNote.use();

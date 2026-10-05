@@ -2,6 +2,7 @@ import { CloudAlert, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { clearAuthToken } from '@/lib/auth';
+import { nativeReminders } from '@/lib/nativeReminders';
 import type { SyncStatus } from '@/lib/syncStatus';
 
 /** Whether the header needs the indicator: only when changes cannot reach the server. */
@@ -46,7 +47,11 @@ function describe({ pending, offline, signedOut, sharedTab, incompatibility }: S
 function signInAgain() {
   // Keeps the device's notes and outbox: signing in as the same user picks them up again.
   clearAuthToken();
-  window.location.assign('/login');
+  // The phone holds a copy of the ended session's token and rings its reminders.
+  void nativeReminders
+    .clear()
+    .catch(() => undefined)
+    .finally(() => window.location.assign('/login'));
 }
 
 /** A header control that says why changes are not syncing, and how many are waiting. */

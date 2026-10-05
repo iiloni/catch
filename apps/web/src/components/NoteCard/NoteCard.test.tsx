@@ -24,7 +24,9 @@ const columns: BoardColumn[] = [
   { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
   { id: 'doing', userId: 'user-1', name: 'Doing', color: 'blue', position: 'a1' },
 ];
+const reminders = vi.hoisted(() => new Map());
 vi.mock('@/lib/collections', () => ({
+  useReminders: () => reminders,
   useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => tags,
   useNoteTagAssignments: () => assignments,

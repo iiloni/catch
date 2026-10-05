@@ -5,6 +5,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { pageTransition } from './lib/dockState';
+import { rememberHomePage, restoreHomePage } from './lib/homePage';
 import { startKeyboardTracking } from './lib/keyboard';
 import { keepScrollAcrossNotes } from './lib/openNote';
 import { initializeWebUpdates } from './lib/webUpdates';
@@ -12,6 +13,7 @@ import { routeTree } from './routeTree.gen';
 import './styles.css';
 
 document.documentElement.dataset.platform = Capacitor.getPlatform();
+restoreHomePage();
 
 const router = createRouter({
   routeTree,
@@ -32,6 +34,7 @@ declare module '@tanstack/react-router' {
 }
 
 keepScrollAcrossNotes(router);
+router.subscribe('onResolved', ({ toLocation }) => rememberHomePage(toLocation.pathname));
 startKeyboardTracking();
 initializeWebUpdates();
 

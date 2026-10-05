@@ -113,8 +113,8 @@ export async function seedNotes(
   );
 }
 
-/** Opens Archive or Trash from the switcher floating above the dock. */
-export async function openGalleryPage(page: Page, name: 'Archive' | 'Trash') {
+/** Opens Reminders, Archive or Trash from the switcher floating above the dock. */
+export async function openGalleryPage(page: Page, name: 'Reminders' | 'Archive' | 'Trash') {
   await page.getByRole('link', { name: 'Gallery' }).click();
   await page
     .getByRole('navigation', { name: 'Gallery pages' })

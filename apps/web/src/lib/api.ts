@@ -11,9 +11,16 @@ import type {
   InvitesResponse,
   LinkIntake,
   ListUsers,
+  PushKey,
+  PushSubscriptionInput,
   RefreshLinkPreview,
   ReleasesResponse,
+  ReminderSettings,
+  ReportTimeZone,
   ResetUserPasswordResponse,
+  SaveReminder,
+  SaveReminderSettings,
+  TestPushResponse,
   TxidResponse,
   UpdateAttachment,
   UpdateBoardColumn,
@@ -118,6 +125,31 @@ export const api = {
     request<TxidResponse>(`/board-columns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteBoardColumn: (id: string) =>
     request<TxidResponse>(`/board-columns/${id}`, { method: 'DELETE' }),
+  saveReminder: (noteId: string, body: SaveReminder) =>
+    request<TxidResponse>(`/reminders/${noteId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteReminder: (noteId: string) =>
+    request<TxidResponse>(`/reminders/${noteId}`, { method: 'DELETE' }),
+  reportTimeZone: (body: ReportTimeZone) =>
+    request<{ timeZone: string }>('/reminders/time-zone', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  reminderSettings: () => request<ReminderSettings>('/reminders/settings', { method: 'GET' }),
+  saveReminderSettings: (body: SaveReminderSettings) =>
+    request<{ ok: true }>('/reminders/settings', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  pushKey: () => request<PushKey>('/push/key', { method: 'GET' }),
+  savePushSubscription: (body: PushSubscriptionInput) =>
+    request<{ ok: true }>('/push/subscriptions', { method: 'POST', body: JSON.stringify(body) }),
+  deletePushSubscription: (endpoint: string) =>
+    request<{ ok: true }>('/push/subscriptions', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
+  testPush: (endpoint: string) =>
+    request<TestPushResponse>('/push/test', { method: 'POST', body: JSON.stringify({ endpoint }) }),
   refreshLinkPreview: (body: RefreshLinkPreview) =>
     request<TxidResponse>('/link-previews/refresh', {
       method: 'POST',

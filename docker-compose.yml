@@ -22,6 +22,7 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       ATTACHMENT_QUOTA_MB: ${ATTACHMENT_QUOTA_MB:-10240}
       LINK_PREVIEWS: ${LINK_PREVIEWS:-true}
+      PUSH_CONTACT: ${PUSH_CONTACT:-}
       ATTACHMENTS_DIR: /data/attachments
       BACKUPS_DIR: /data/backups
       UPDATE_BACKUPS: ${UPDATE_BACKUPS:-true}

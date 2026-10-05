@@ -8,6 +8,7 @@ import { startBackupSchedule } from './backups/service';
 import { env } from './env';
 import { appContentSecurityPolicy, securityHeaders } from './lib/securityHeaders';
 import { resumePendingPreviews } from './linkPreviews';
+import { startReminderSchedule } from './reminders/scheduler';
 
 const webDist = env.WEB_DIST_DIR;
 const indexHtml = webDist ? await readFile(join(webDist, 'index.html'), 'utf8') : null;
@@ -41,4 +42,5 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     console.error('Could not resume link previews', error);
   });
   startBackupSchedule();
+  startReminderSchedule();
 });

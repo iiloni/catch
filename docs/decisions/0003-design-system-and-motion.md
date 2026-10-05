@@ -183,7 +183,11 @@ touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instea
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
 **Cold starts.** The document starts on the saved theme's canvas, without an additional
-in-app splash or a wait for fonts or sync. Header content and notes fade in with a 10 px
+in-app splash or a wait for fonts or sync. Android and installed PWAs remember the last
+Deck or Gallery page in device-local storage and restore it before the router renders a
+fresh launch at `/`. Other pages do not replace that preference, and URLs with a path
+other than `/`, a query or a fragment keep their destination. Ordinary browser tabs keep opening
+the requested URL. Header content and notes fade in with a 10 px
 settle as they arrive; grid cards start after their existing measurement step. The dock
 only translates, keeping opacity 1 so its glass continues to blur the page. These 420 ms
 entries use a gentler ease than the page transitions, keeping more of the fade visible

@@ -17,6 +17,7 @@ import { Route as ShareRouteImport } from './routes/share'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppDeckRouteImport } from './routes/_app/deck'
+import { Route as AppRemindersRouteImport } from './routes/_app/reminders'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
@@ -25,6 +26,7 @@ import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/a
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
 import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/general'
+import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsTagsRouteImport } from './routes/_app/settings/tags'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
@@ -69,6 +71,11 @@ const AppDeckRoute = AppDeckRouteImport.update({
   path: '/deck',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRemindersRoute = AppRemindersRouteImport.update({
+  id: '/reminders',
+  path: '/reminders',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSearchRoute = AppSearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -109,6 +116,12 @@ const AppSettingsGeneralRoute = AppSettingsGeneralRouteImport.update({
   path: '/general',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsNotificationsRoute =
+  AppSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AppSettingsRoute,
+  } as any)
 const AppSettingsTagsRoute = AppSettingsTagsRouteImport.update({
   id: '/tags',
   path: '/tags',
@@ -138,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/share': typeof ShareRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
+  '/reminders': typeof AppRemindersRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
@@ -145,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/': typeof AppSettingsIndexRoute
@@ -158,6 +173,7 @@ export interface FileRoutesByTo {
   '/share': typeof ShareRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
+  '/reminders': typeof AppRemindersRoute
   '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
   '/': typeof AppIndexRoute
@@ -165,6 +181,7 @@ export interface FileRoutesByTo {
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/general': typeof AppSettingsGeneralRoute
+  '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings': typeof AppSettingsIndexRoute
@@ -180,6 +197,7 @@ export interface FileRoutesById {
   '/share': typeof ShareRoute
   '/_app/archive': typeof AppArchiveRoute
   '/_app/deck': typeof AppDeckRoute
+  '/_app/reminders': typeof AppRemindersRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/trash': typeof AppTrashRoute
@@ -188,6 +206,7 @@ export interface FileRoutesById {
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/general': typeof AppSettingsGeneralRoute
+  '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/tags': typeof AppSettingsTagsRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
@@ -204,6 +223,7 @@ export interface FileRouteTypes {
     | '/share'
     | '/archive'
     | '/deck'
+    | '/reminders'
     | '/search'
     | '/settings'
     | '/trash'
@@ -211,6 +231,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
+    | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
     | '/settings/'
@@ -224,6 +245,7 @@ export interface FileRouteTypes {
     | '/share'
     | '/archive'
     | '/deck'
+    | '/reminders'
     | '/search'
     | '/trash'
     | '/'
@@ -231,6 +253,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/data'
     | '/settings/general'
+    | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
     | '/settings'
@@ -245,6 +268,7 @@ export interface FileRouteTypes {
     | '/share'
     | '/_app/archive'
     | '/_app/deck'
+    | '/_app/reminders'
     | '/_app/search'
     | '/_app/settings'
     | '/_app/trash'
@@ -253,6 +277,7 @@ export interface FileRouteTypes {
     | '/_app/settings/admin'
     | '/_app/settings/data'
     | '/_app/settings/general'
+    | '/_app/settings/notifications'
     | '/_app/settings/tags'
     | '/_app/settings/update'
     | '/_app/settings/'
@@ -326,6 +351,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDeckRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reminders': {
+      id: '/_app/reminders'
+      path: '/reminders'
+      fullPath: '/reminders'
+      preLoaderRoute: typeof AppRemindersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/search': {
       id: '/_app/search'
       path: '/search'
@@ -382,6 +414,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsGeneralRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/notifications': {
+      id: '/_app/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AppSettingsNotificationsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/tags': {
       id: '/_app/settings/tags'
       path: '/tags'
@@ -431,6 +470,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAdminRoute: typeof AppSettingsAdminRouteWithChildren
   AppSettingsDataRoute: typeof AppSettingsDataRoute
   AppSettingsGeneralRoute: typeof AppSettingsGeneralRoute
+  AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsTagsRoute: typeof AppSettingsTagsRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
@@ -441,6 +481,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAdminRoute: AppSettingsAdminRouteWithChildren,
   AppSettingsDataRoute: AppSettingsDataRoute,
   AppSettingsGeneralRoute: AppSettingsGeneralRoute,
+  AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsTagsRoute: AppSettingsTagsRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
@@ -453,6 +494,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 interface AppRouteChildren {
   AppArchiveRoute: typeof AppArchiveRoute
   AppDeckRoute: typeof AppDeckRoute
+  AppRemindersRoute: typeof AppRemindersRoute
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppTrashRoute: typeof AppTrashRoute
@@ -462,6 +504,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppArchiveRoute: AppArchiveRoute,
   AppDeckRoute: AppDeckRoute,
+  AppRemindersRoute: AppRemindersRoute,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppTrashRoute: AppTrashRoute,

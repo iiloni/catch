@@ -370,14 +370,14 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   await signUp(page);
   await seedNotes(page, ['Old receipts']);
 
-  // Archive sits in the header; the dock includes tags alongside the other note actions.
+  // Pin and archive sit in the header; the dock holds the actions that grow a panel out of it.
   const opened = await openNote(page, 'Old receipts');
   const toolbar = noteToolbar(page);
   await expect(toolbar.getByRole('button')).toHaveCount(5);
   await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Tags');
   await expect(toolbar.getByRole('button').nth(2)).toHaveAccessibleName('Attach files');
-  await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Pin');
-  await toolbar.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Reminder');
+  await opened.getByRole('button', { name: 'Pin', exact: true }).click();
   await opened.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(opened).toBeHidden();
   await expect(card(page, 'Old receipts')).toBeHidden();
@@ -387,7 +387,7 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   await expect(card(page, 'Old receipts')).toBeVisible();
   await page.reload();
   const restored = await openNote(page, 'Old receipts');
-  await expect(toolbar.getByRole('button', { name: 'Unpin' })).toBeVisible();
+  await expect(restored.getByRole('button', { name: 'Unpin' })).toBeVisible();
   await restored.getByRole('button', { name: 'Close' }).click();
 
   // Reopened while it is still closing, the editor has to close again.
@@ -518,8 +518,8 @@ test('color and pin', async ({ page }) => {
   // The palette grows out of the dock rather than opening a popup.
   await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
   await page.getByRole('button', { name: 'Teal' }).click();
-  await noteToolbar(page).getByRole('button', { name: 'Pin', exact: true }).click();
-  await expect(noteToolbar(page).getByRole('button', { name: 'Unpin' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Unpin' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).click();
 
   await expect(card(page, 'First')).toHaveAttribute('data-note-color', 'teal');
