@@ -7,12 +7,7 @@ import { springs } from '@/lib/motion';
 
 const NO_NOTE = { content: [], hiddenLinks: [] };
 
-/**
- * A tray tucked behind the open note's dock that names its links while the cards under the
- * note are out of view, and opens them as an overlay. It stays out of the way while typing
- * while the dock has grown into its palette or columns, and while its list is open.
- */
-export function NoteLinkTray() {
+function useNoteLinkTray() {
   const note = editorNote.use();
   const inView = editorLinksInView.use() === note?.id;
   const grown = noteDockPanelOpen.use();
@@ -22,10 +17,25 @@ export function NoteLinkTray() {
   const links = useNoteLinks(note ?? NO_NOTE);
   const shown =
     note !== null && links.length > 0 && !inView && !grown && !keyboardOpen && !listOpen;
+  return { note, links, shown };
+}
+
+/** Whether the tray is peeking above the dock, so what floats there can sit above it. */
+export function useNoteLinkTrayShown() {
+  return useNoteLinkTray().shown;
+}
+
+/**
+ * A tray tucked behind the open note's dock that names its links while the cards under the
+ * note are out of view, and opens them as an overlay. It stays out of the way while typing
+ * while the dock has grown into its palette or columns, and while its list is open.
+ */
+export function NoteLinkTray() {
+  const { note, links, shown } = useNoteLinkTray();
 
   return (
     <AnimatePresence initial={false}>
-      {shown && (
+      {note && shown && (
         // Fade the glass button itself; opacity on this wrapper would cut off its backdrop.
         <motion.div
           key="tray"
