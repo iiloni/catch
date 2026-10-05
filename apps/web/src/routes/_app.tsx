@@ -15,7 +15,7 @@ import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { arrivedBySwitching } from '@/lib/accounts';
+import { arrivedBySwitching, followAccountChanges } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -48,6 +48,7 @@ function AppLayout() {
   const { open } = useOpenNote();
   useEffect(() => onNotificationOpen(open), [open]);
   useEffect(watchNativeReminders, []);
+  useEffect(followAccountChanges, []);
   useEffect(() => {
     // The page looks much the same for every account, so a switch says whose it is now.
     const user = getSignedInUser();

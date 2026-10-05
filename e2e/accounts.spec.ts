@@ -62,24 +62,39 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(page.getByRole('list', { name: 'Accounts' })).toBeHidden();
 });
 
-test('signing out one account leaves the other signed in', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Signing out does not depend on the layout.');
+test('other tabs follow a switch, and signing out one account leaves the rest', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Tabs and signing out do not depend on the layout.');
   const first = await signUp(page);
   await seedNotes(page, ['First account note']);
   const second = await addAccount(page, first);
 
+  const tab = await page.context().newPage();
+  await tab.goto('/');
+  await expect(avatar(tab, second)).toBeVisible({ timeout: 30_000 });
   await avatar(page, second).click();
   const accounts = page.getByRole('list', { name: 'Accounts' });
-  await page.getByRole('button', { name: `Sign out ${first}`, exact: true }).click();
-  await expect(accounts.getByRole('button', { name: first, exact: true })).toBeHidden();
+  await accounts.getByRole('button', { name: first, exact: true }).click();
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  // The other tab held the second account's notes; it loads again as the first.
+  await expect(avatar(tab, first)).toBeVisible({ timeout: 30_000 });
+  await expect(card(tab, 'First account note')).toBeVisible();
+  await tab.close();
+
+  await avatar(page, first).click();
+  await page.getByRole('button', { name: `Sign out ${second}`, exact: true }).click();
+  await expect(accounts.getByRole('button', { name: second, exact: true })).toBeHidden();
   await expect(accounts.getByRole('listitem')).toHaveCount(1);
   await page.keyboard.press('Escape');
 
   // Signing out the account in use goes to sign-in only when no other is left.
-  await addAccount(page, second);
+  await addAccount(page, first);
   await page.goto('/settings/account');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(avatar(page, second)).toBeVisible({ timeout: 30_000 });
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, 'First account note')).toBeVisible();
   await page.goto('/settings/account');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);

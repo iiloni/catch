@@ -24,19 +24,29 @@ signing in does. Each account already had its own database, outbox, attachment f
 per-user settings; the other accounts' stay on the device untouched.
 
 **A page belongs to the account it loaded for.** `getAuthToken` and `getSignedInUser` answer
-for that account, not for whichever the device has since switched to in another tab.
-Otherwise a tab would send one account's queued writes with another's token. A tab that
-sees the device switch, or its account signed out, loads again to follow.
+for that account until the page loads again, not for whichever the device has since moved
+to: another signing in from "Add account", a switch in another tab, or the next account
+after a sign-out. Otherwise a page would send one account's queued writes with another's
+token in the moment before it reloads. A page whose account has signed out has no session
+at all. A tab that sees the device switch, or its account signed out, loads again to
+follow (`followAccountChanges`), waiting first for an open note or composer to close.
+
+**An older build's sign-out is noticed.** A build from before the list changes only the
+session keys. `catch-active-account` records whose session this build last put in use; when
+the keys no longer hold it, that account is dropped from the list rather than left there
+with a session that has ended.
 
 **Only the account in use syncs and rings.** Its outbox sends and its shapes stream. Another
 account's queued changes wait on the device until it is switched to. Reminders follow the
 account in use too: a browser has one push subscription, which the server gives to whoever
-saved it last, and the Android app holds one token and one list of alarms.
+saved it last, and the Android app holds one token and one list of alarms. A switch hands
+the phone the next account's token with an empty list (`nativeReminders.handOver`), so the
+account being left stops ringing at once and notifications stay on.
 
 **Signing out removes one account.** For the account in use it is what it was, then the
 device carries on as the next account, or goes to sign-in when none is left. For another
 account, `signOutAccount` ends its session with its own token and deletes its database,
-outbox and files without opening them. Both warn first about changes that have not synced;
+outbox, files and per-user settings without opening them. Both warn first about changes that have not synced;
 for an account not in use the count is read from its outbox's store.
 
 **The avatar in the Gallery header is the switcher.** A tap opens the list of accounts, with

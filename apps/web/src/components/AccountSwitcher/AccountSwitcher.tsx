@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { Check, LogOut, Plus } from 'lucide-react';
-import { animate, motion, useMotionValue } from 'motion/react';
+import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import { type PointerEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccountAvatar } from '@/components/AccountSummary/AccountSummary';
@@ -19,14 +19,17 @@ const SLOP = 6;
 
 const label = ({ user }: Account) => user.name || user.email;
 
-/** Switching reloads the page, which would drop a note or composer that is still open. */
+/** Leaving an account reloads the page, which would drop a note or composer still open. */
+function canLeave(action: string) {
+  if (!isUpdateReloadBlocked()) return true;
+  toast(`Close the open note before ${action}.`);
+  return false;
+}
+
 function switchTo(account: Account) {
-  if (isUpdateReloadBlocked()) {
-    toast('Close the open note before switching accounts.');
-    return false;
-  }
+  if (!canLeave('switching accounts')) return false;
   haptics.success();
-  switchAccount(account.user.id);
+  void switchAccount(account.user.id);
   return true;
 }
 
@@ -42,7 +45,19 @@ export function AccountSwitcher() {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<{ account: Account; pending: number } | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
-  const [swipe, setSwipe] = useState<Swipe | null>(null);
+  const [swipe, setSwipeState] = useState<Swipe | null>(null);
+  // Read by the pointer handlers, which can run again before the swipe has rendered.
+  const swipeRef = useRef<Swipe | null>(null);
+  const setSwipe = (next: Swipe | null) => {
+    swipeRef.current = next;
+    setSwipeState(next);
+  };
+  const reducedMotion = useReducedMotion();
+  const settle = (to: number) => {
+    if (!reducedMotion) return animate(offset, to, springs.snappy);
+    offset.set(to);
+    return Promise.resolve();
+  };
   const offset = useMotionValue(0);
   const press = useRef<{ id: number; x: number; y: number; committed: boolean } | null>(null);
   const swiped = useRef(false);
@@ -69,6 +84,7 @@ export function AccountSwitcher() {
     if (!start || event.pointerId !== start.id) return;
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
+    const swipe = swipeRef.current;
     let axis = swipe?.axis;
     if (!axis) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SLOP) return;
@@ -94,17 +110,24 @@ export function AccountSwitcher() {
     const start = press.current;
     if (!start || event.pointerId !== start.id) return;
     press.current = null;
+    const swipe = swipeRef.current;
     if (!swipe) return;
+    // The click that ends a swipe comes next, if one comes at all: a cancelled touch sends
+    // none, and must not leave the next key press on the avatar ignored.
+    setTimeout(() => {
+      swiped.current = false;
+    }, 300);
     const target = event.type === 'pointerup' && start.committed ? swipe.target : null;
     if (target && switchTo(target)) {
       // The page is about to load again as the other account; its avatar stays in place.
-      animate(offset, -swipe.from * TRAVEL, springs.snappy);
+      void settle(-swipe.from * TRAVEL);
       return;
     }
-    void animate(offset, 0, springs.snappy).then(() => setSwipe(null));
+    void settle(0).then(() => setSwipe(null));
   }
 
   async function signOut(account: Account, confirmed = false) {
+    if (account === current && !canLeave('signing out')) return;
     if (!confirmed) {
       const pending = await unsyncedChanges(account);
       if (pending > 0) {
@@ -118,6 +141,8 @@ export function AccountSwitcher() {
       // Signing out the account in use loads the page again; any other just leaves the list.
       await signOutAccount(account);
       setAccounts(getAccounts());
+    } catch {
+      toast.error('Could not finish signing out. Try again.');
     } finally {
       setLeaving(null);
     }
@@ -179,7 +204,13 @@ export function AccountSwitcher() {
                 : `${confirming.pending} changes on this device have not synced yet. Signing out deletes them.`}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" className="rounded-full" onClick={() => setConfirming(null)}>
+              <Button
+                // The button that asked is gone, and focus would be lost with it.
+                autoFocus
+                variant="ghost"
+                className="rounded-full"
+                onClick={() => setConfirming(null)}
+              >
                 Cancel
               </Button>
               <Button

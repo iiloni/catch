@@ -4,18 +4,22 @@ import {
   activateAccount,
   authClient,
   clearAuthToken,
+  deviceLeftPageAccount,
   forgetAccount,
   getAccounts,
   getSignedInUser,
 } from './auth';
 import { clearLocalData } from './collections';
+import { editorNote, quickNote } from './dockState';
 import { forgetImport } from './imports';
+import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
 import { nativeReminders } from './nativeReminders';
 import { disablePush, dropPushSubscription } from './push';
 import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
 import { getSyncStatus } from './syncStatus';
+import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
 
 /**
  * Several accounts can be signed in on one device (ADR 0019). One is in use at a time: its
@@ -26,10 +30,42 @@ import { getSyncStatus } from './syncStatus';
 const SWITCHED_KEY = 'catch-account-switched';
 
 /** Changes the account in use. A full load, so the collections open that account's notes. */
-export function switchAccount(userId: string) {
-  if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
+export async function switchAccount(userId: string) {
+  const account = getAccounts().find(({ user }) => user.id === userId);
+  if (!account || userId === getSignedInUser()?.id) return;
+  // The phone rings for one account, and would go on ringing for the one being left.
+  await nativeReminders.handOver(account.token).catch(() => undefined);
+  if (!activateAccount(userId)) return;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
   window.location.assign('/');
+}
+
+/**
+ * Follows a switch or sign-out made in another tab. This page holds the old account's notes
+ * and outbox, so it loads again for whichever account the device now uses, once it holds no
+ * open note or composer whose text the load would drop. Until then it stays on its account.
+ */
+export function followAccountChanges() {
+  let waiting: (() => void)[] = [];
+  const follow = () => {
+    if (!deviceLeftPageAccount()) return;
+    if (isUpdateReloadBlocked()) {
+      if (waiting.length === 0) {
+        waiting = [editorNote, quickNote, linkCaptureOpen].map((store) => store.subscribe(follow));
+      }
+      return;
+    }
+    // Not a reload: the address may name a note that the other account does not have.
+    window.location.assign('/');
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.storageArea === localStorage) follow();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    for (const stop of waiting) stop();
+  };
 }
 
 /** Whether this page load is the one a switch asked for. True once. */
@@ -59,13 +95,30 @@ export async function signOutAccount(account: Account) {
     signal: AbortSignal.timeout(5000),
   }).catch(() => undefined);
   const { id } = account.user;
-  await Promise.allSettled([
+  const removed = await Promise.allSettled([
     deleteLocalDatabase(id),
     deleteAttachmentFiles(id),
     clearIncomingShares(id),
   ]);
+  for (const result of removed) {
+    if (result.status === 'rejected') {
+      console.warn("Some of a signed-out account's data is still on this device.", result.reason);
+    }
+  }
   deleteOutbox(id);
-  localStorage.removeItem(`catch-import-${id}`);
+  // What the device remembered for this user: a later sign-in starts as on a new device,
+  // with notifications off until they are turned on.
+  for (const key of [
+    `catch-import-${id}`,
+    `catch-push:${id}`,
+    `catch-reminder-times:${id}`,
+    `catch-reminder-times:${id}:unsent`,
+    `catch-snooze:${id}`,
+    `catch-snooze:${id}:unsent`,
+    `catch-time-zone:${id}`,
+  ]) {
+    localStorage.removeItem(key);
+  }
   forgetAccount(id);
 }
 

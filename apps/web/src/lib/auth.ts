@@ -8,6 +8,9 @@ const TOKEN_KEY = 'catch-auth-token';
 const USER_KEY = 'catch-user';
 // Every session on this device, the one in use among them.
 const ACCOUNTS_KEY = 'catch-accounts';
+// Whose session this build last put in use. A build from before the list changes the session
+// without knowing either, which is how the list learns of it.
+const ACTIVE_KEY = 'catch-active-account';
 
 function sessionKey(key: string) {
   // Bundled dev apps share https://localhost across worktrees; their servers do not.
@@ -37,16 +40,22 @@ const activeUser = () => read(USER_KEY, signedInUserSchema);
 
 /**
  * The account this page was loaded for. Collections open that user's database when the app
- * starts (ADR 0007), so the page keeps sending that account's token even after another tab
- * has switched the device to a different one, until it reloads to follow.
+ * starts (ADR 0007), so the page keeps sending that account's token even after the device
+ * has switched to a different one, here or in another tab, until it loads again. Once set it
+ * never changes: a page whose account signed out has no session, not somebody else's.
  */
 let pageUserId = activeUser()?.id ?? null;
 
 /** Every account signed in on this device (ADR 0019), in the order they were added. */
 export function getAccounts(): Account[] {
-  const accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
+  let accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
   const user = activeUser();
   const token = activeToken();
+  // An older build ended or replaced the session this one had in use, and with it the account.
+  const marked = localStorage.getItem(sessionKey(ACTIVE_KEY));
+  if (marked && (!token || user?.id !== marked)) {
+    accounts = accounts.filter((account) => account.user.id !== marked);
+  }
   if (!user || !token) return accounts;
   // The session in use is the newer word on its account, and the only record of one from
   // before the list was kept.
@@ -67,6 +76,13 @@ function writeAccounts(accounts: Account[]) {
 function writeActive(account: Account) {
   localStorage.setItem(sessionKey(TOKEN_KEY), account.token);
   localStorage.setItem(sessionKey(USER_KEY), JSON.stringify(account.user));
+  localStorage.setItem(sessionKey(ACTIVE_KEY), account.user.id);
+}
+
+function clearActive() {
+  localStorage.removeItem(sessionKey(TOKEN_KEY));
+  localStorage.removeItem(sessionKey(USER_KEY));
+  localStorage.removeItem(sessionKey(ACTIVE_KEY));
 }
 
 function saveAccount(account: Account, activate: boolean) {
@@ -105,15 +121,16 @@ export function activateAccount(userId: string): boolean {
   return true;
 }
 
+/** Whether the device now uses another account than the one this page was loaded for. */
+export function deviceLeftPageAccount() {
+  return pageUserId !== null && activeUser()?.id !== pageUserId;
+}
+
 /** Forgets an account's session on this device. Its data here is the caller's to remove. */
 export function forgetAccount(userId: string) {
   const wasActive = activeUser()?.id === userId;
   writeAccounts(getAccounts().filter(({ user }) => user.id !== userId));
-  if (wasActive) {
-    localStorage.removeItem(sessionKey(TOKEN_KEY));
-    localStorage.removeItem(sessionKey(USER_KEY));
-  }
-  if (pageUserId === userId) pageUserId = null;
+  if (wasActive) clearActive();
 }
 
 /** Forgets the session this page uses, leaving the device's other accounts signed in. */
@@ -123,8 +140,7 @@ export function clearAuthToken() {
     forgetAccount(userId);
   } else {
     // A token from before the app remembered whose it was.
-    localStorage.removeItem(sessionKey(TOKEN_KEY));
-    localStorage.removeItem(sessionKey(USER_KEY));
+    clearActive();
   }
 }
 
@@ -150,15 +166,19 @@ export const authClient = createAuthClient({
       const url = String(context.request.url);
       if (/\/(sign-in|sign-up)\//.test(url)) {
         if (!token) return;
-        // A new session joins the device's accounts and becomes the one in use.
+        // A new session joins the device's accounts and becomes the one in use. A page that
+        // already has an account keeps it until the load that follows: its collections and
+        // outbox are still that account's, and must not send with the new one's token.
         const user = userOf(context.data);
         if (user) {
           saveAccount({ user, token }, true);
+          pageUserId ??= user.id;
         } else {
+          // Kept in the list first, since the keys below are about to name someone else.
+          writeAccounts(getAccounts());
+          clearActive();
           localStorage.setItem(sessionKey(TOKEN_KEY), token);
-          localStorage.removeItem(sessionKey(USER_KEY));
         }
-        pageUserId = user?.id ?? null;
         return;
       }
       // Anything else answers for this page's own session: a session response carries its
@@ -196,10 +216,3 @@ export async function resolveSignedInUser(): Promise<SignedInUser | null> {
   }
   return getSignedInUser();
 }
-
-// Another tab switched accounts, or signed this one out. This page holds the old account's
-// notes and outbox, so it loads again for whichever account the device now uses.
-window.addEventListener('storage', (event) => {
-  if (event.key !== null && event.key !== sessionKey(USER_KEY)) return;
-  if (pageUserId && activeUser()?.id !== pageUserId) window.location.reload();
-});

@@ -75,6 +75,26 @@ export const nativeReminders = {
     cleared = true;
     if (available) await Reminders.clear();
   },
+  /**
+   * Switching accounts. The phone forgets the alarms and snoozes of the account being left
+   * and checks for the next one's with its token, without notifications being turned off as
+   * `clear` would. Nothing more is told to the phone until the page next loads.
+   */
+  async handOver(token: string) {
+    if (!available) return;
+    cleared = true;
+    const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
+    if (snoozes.length > 0) {
+      await Reminders.ackSnoozes({ noteIds: snoozes.map(({ noteId }) => noteId) });
+    }
+    await Reminders.sync({
+      alarms: [],
+      server: getServerUrl(),
+      token,
+      protocol: String(API_PROTOCOL_VERSION),
+      unsent: false,
+    });
+  },
   /** A tapped notification opens its note, including the one that launched the app. */
   onOpen(open: (noteId: string) => void) {
     const listening = Reminders.addListener('open', (event) => {
