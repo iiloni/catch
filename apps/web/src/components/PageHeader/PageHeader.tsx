@@ -146,7 +146,7 @@ const TITLE_REST_Y = 66;
  * centered title on a phone is wider than the gap between the corners, so riding the page
  * any further would run it into the controls on the right.
  */
-const TITLE_COLLAPSE_AT = 16;
+const TITLE_COLLAPSE_AT = 8;
 
 /** Fit the complete title using its actual font metrics, including after fonts load. */
 function useFittedTitle(title: string) {

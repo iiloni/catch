@@ -17,7 +17,14 @@ vi.mock('better-auth/react', () => ({
   },
 }));
 
-import { clearAuthToken, getAuthToken, getSignedInUser } from './auth';
+import {
+  activateAccount,
+  clearAuthToken,
+  forgetAccount,
+  getAccounts,
+  getAuthToken,
+  getSignedInUser,
+} from './auth';
 
 const user = { id: 'first-user', name: 'Test', email: 'test@example.com' };
 function signIn(token: string, signedInUser = user) {
@@ -74,4 +81,98 @@ describe('bundled development sessions', () => {
       expect(localStorage.getItem('catch-user')).toBeNull();
     },
   );
+});
+
+describe('several accounts on one device', () => {
+  const other = { id: 'second-user', name: 'Other', email: 'other@example.com' };
+  beforeEach(() => {
+    mocks.native.mockReturnValue(false);
+    // Each test starts as a page that loaded signed out.
+    clearAuthToken();
+    localStorage.clear();
+  });
+
+  it('keeps the earlier account signed in when another signs in', () => {
+    signIn('first-token');
+    signIn('second-token', other);
+    expect(getSignedInUser()).toEqual(other);
+    expect(getAuthToken()).toBe('second-token');
+    expect(getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: other, token: 'second-token' },
+    ]);
+  });
+
+  it('lists a session saved before accounts were listed', () => {
+    localStorage.setItem('catch-auth-token', 'legacy-token');
+    localStorage.setItem('catch-user', JSON.stringify(user));
+    expect(getAccounts()).toEqual([{ user, token: 'legacy-token' }]);
+    signIn('second-token', other);
+    expect(getAccounts().map((account) => account.token)).toEqual(['legacy-token', 'second-token']);
+  });
+
+  it('replaces the session of an account that signs in again', () => {
+    signIn('first-token');
+    signIn('second-token', other);
+    signIn('newer-token');
+    expect(getAccounts()).toEqual([
+      { user, token: 'newer-token' },
+      { user: other, token: 'second-token' },
+    ]);
+  });
+
+  it('keeps using the account the page loaded for after the device switches', () => {
+    signIn('first-token');
+    signIn('second-token', other);
+    // As another tab would: the page itself has not loaded again.
+    expect(activateAccount(user.id)).toBe(true);
+    expect(localStorage.getItem('catch-auth-token')).toBe('first-token');
+    expect(getAuthToken()).toBe('second-token');
+    expect(getSignedInUser()).toEqual(other);
+  });
+
+  it('gives a new token to the account the page uses, not the one the device switched to', () => {
+    signIn('first-token');
+    signIn('second-token', other);
+    activateAccount(user.id);
+    mocks.success?.({
+      response: new Response(null, { headers: { 'set-auth-token': 'changed-token' } }),
+      request: { url: `${mocks.server()}/api/auth/change-password` },
+      data: {},
+    });
+    expect(localStorage.getItem('catch-auth-token')).toBe('first-token');
+    expect(getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: other, token: 'changed-token' },
+    ]);
+  });
+
+  it('forgets one account and leaves the rest', () => {
+    signIn('first-token');
+    signIn('second-token', other);
+    forgetAccount(user.id);
+    expect(getAccounts()).toEqual([{ user: other, token: 'second-token' }]);
+    expect(getAuthToken()).toBe('second-token');
+    clearAuthToken();
+    expect(getAccounts()).toEqual([]);
+    expect(getAuthToken()).toBeNull();
+    expect(localStorage.getItem('catch-user')).toBeNull();
+  });
+
+  it('does not sign a removed account back in when a late response arrives', () => {
+    signIn('first-token');
+    localStorage.clear();
+    mocks.success?.({
+      response: new Response(null),
+      request: { url: `${mocks.server()}/api/auth/get-session` },
+      data: { user },
+    });
+    expect(getAccounts()).toEqual([]);
+  });
+
+  it('refuses to switch to an account that is not signed in', () => {
+    signIn('first-token');
+    expect(activateAccount('nobody')).toBe(false);
+    expect(getAuthToken()).toBe('first-token');
+  });
 });

@@ -4,6 +4,9 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const auth = vi.hoisted(() => ({ signIn: vi.fn(), signUp: vi.fn() }));
 vi.mock('@/lib/auth', () => ({
   authClient: { signIn: { email: auth.signIn }, signUp: { email: auth.signUp } },
+  getAccounts: () => [],
+  getSignedInUser: () => null,
+  activateAccount: () => false,
 }));
 vi.mock('@/lib/serverUrl', () => ({ needsServerUrl: () => false }));
 vi.mock('@/components/BrandLockup/BrandLockup', () => ({ BrandLockup: () => <img alt="Catch" /> }));

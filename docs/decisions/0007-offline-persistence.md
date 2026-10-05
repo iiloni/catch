@@ -42,7 +42,8 @@ same URLs, so a shared database would resume one user's stream for another. The 
 outbox are named after the user id. The app remembers the signed-in user next to the token
 (`getSignedInUser`), since offline there is no session to fetch. Signing in does a full page
 load so the collections open that user's database; signing out deletes the database and the
-outbox after warning about changes that have not synced.
+outbox after warning about changes that have not synced. Several accounts can be signed in
+at once (ADR 0019); each keeps its own database and outbox, and only the one in use syncs.
 
 **Writes go through an outbox.** `@tanstack/offline-transactions` stores every write in
 IndexedDB before it is applied, then sends the queue in order, retrying with backoff until

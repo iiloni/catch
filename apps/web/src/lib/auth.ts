@@ -3,8 +3,11 @@ import { createAuthClient } from 'better-auth/react';
 import { z } from 'zod';
 import { getServerUrl } from './serverUrl';
 
+// The session in use, kept under the keys it had before a device could hold several.
 const TOKEN_KEY = 'catch-auth-token';
 const USER_KEY = 'catch-user';
+// Every session on this device, the one in use among them.
+const ACCOUNTS_KEY = 'catch-accounts';
 
 function sessionKey(key: string) {
   // Bundled dev apps share https://localhost across worktrees; their servers do not.
@@ -13,39 +16,124 @@ function sessionKey(key: string) {
     : key;
 }
 
-export function getAuthToken(): string | null {
-  return localStorage.getItem(sessionKey(TOKEN_KEY));
-}
-
 const signedInUserSchema = z.object({ id: z.string().min(1), name: z.string(), email: z.string() });
+const accountSchema = z.object({ user: signedInUserSchema, token: z.string().min(1) });
 
 export type SignedInUser = z.infer<typeof signedInUserSchema>;
+/** An account signed in on this device, with the bearer token of its session. */
+export type Account = z.infer<typeof accountSchema>;
 
-/**
- * The user the saved token belongs to, remembered from the last session the server returned.
- * Offline there is no session to fetch, and the app still needs to know whose notes to open.
- */
-export function getSignedInUser(): SignedInUser | null {
+function read<T extends z.ZodType>(key: string, schema: T): z.infer<T> | null {
   try {
-    const parsed = signedInUserSchema.safeParse(
-      JSON.parse(localStorage.getItem(sessionKey(USER_KEY)) ?? ''),
-    );
+    const parsed = schema.safeParse(JSON.parse(localStorage.getItem(sessionKey(key)) ?? ''));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
 }
 
-function rememberUser(value: unknown) {
-  const parsed = signedInUserSchema.safeParse(value);
-  if (!parsed.success) return;
-  const { id, name, email } = parsed.data;
-  localStorage.setItem(sessionKey(USER_KEY), JSON.stringify({ id, name, email }));
+const activeToken = () => localStorage.getItem(sessionKey(TOKEN_KEY));
+const activeUser = () => read(USER_KEY, signedInUserSchema);
+
+/**
+ * The account this page was loaded for. Collections open that user's database when the app
+ * starts (ADR 0007), so the page keeps sending that account's token even after another tab
+ * has switched the device to a different one, until it reloads to follow.
+ */
+let pageUserId = activeUser()?.id ?? null;
+
+/** Every account signed in on this device (ADR 0019), in the order they were added. */
+export function getAccounts(): Account[] {
+  const accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
+  const user = activeUser();
+  const token = activeToken();
+  if (!user || !token) return accounts;
+  // The session in use is the newer word on its account, and the only record of one from
+  // before the list was kept.
+  const active = { user, token };
+  return accounts.some((account) => account.user.id === user.id)
+    ? accounts.map((account) => (account.user.id === user.id ? active : account))
+    : [...accounts, active];
 }
 
+function writeAccounts(accounts: Account[]) {
+  if (accounts.length > 0) {
+    localStorage.setItem(sessionKey(ACCOUNTS_KEY), JSON.stringify(accounts));
+  } else {
+    localStorage.removeItem(sessionKey(ACCOUNTS_KEY));
+  }
+}
+
+function writeActive(account: Account) {
+  localStorage.setItem(sessionKey(TOKEN_KEY), account.token);
+  localStorage.setItem(sessionKey(USER_KEY), JSON.stringify(account.user));
+}
+
+function saveAccount(account: Account, activate: boolean) {
+  const accounts = getAccounts();
+  const known = accounts.some(({ user }) => user.id === account.user.id);
+  writeAccounts(
+    known
+      ? accounts.map((other) => (other.user.id === account.user.id ? account : other))
+      : [...accounts, account],
+  );
+  if (activate || activeUser()?.id === account.user.id) writeActive(account);
+}
+
+const pageAccount = () =>
+  pageUserId ? (getAccounts().find(({ user }) => user.id === pageUserId) ?? null) : null;
+
+export function getAuthToken(): string | null {
+  return pageUserId ? (pageAccount()?.token ?? null) : activeToken();
+}
+
+/**
+ * The user the saved token belongs to, remembered from the last session the server returned.
+ * Offline there is no session to fetch, and the app still needs to know whose notes to open.
+ */
+export function getSignedInUser(): SignedInUser | null {
+  return pageUserId ? (pageAccount()?.user ?? null) : activeUser();
+}
+
+/** Makes a signed-in account the one the device uses. The page must load again afterwards. */
+export function activateAccount(userId: string): boolean {
+  const account = getAccounts().find(({ user }) => user.id === userId);
+  if (!account) return false;
+  // Written to the list first: making it the session in use must not drop the one it replaces.
+  writeAccounts(getAccounts());
+  writeActive(account);
+  return true;
+}
+
+/** Forgets an account's session on this device. Its data here is the caller's to remove. */
+export function forgetAccount(userId: string) {
+  const wasActive = activeUser()?.id === userId;
+  writeAccounts(getAccounts().filter(({ user }) => user.id !== userId));
+  if (wasActive) {
+    localStorage.removeItem(sessionKey(TOKEN_KEY));
+    localStorage.removeItem(sessionKey(USER_KEY));
+  }
+  if (pageUserId === userId) pageUserId = null;
+}
+
+/** Forgets the session this page uses, leaving the device's other accounts signed in. */
 export function clearAuthToken() {
-  localStorage.removeItem(sessionKey(TOKEN_KEY));
-  localStorage.removeItem(sessionKey(USER_KEY));
+  const userId = pageUserId ?? activeUser()?.id;
+  if (userId) {
+    forgetAccount(userId);
+  } else {
+    // A token from before the app remembered whose it was.
+    localStorage.removeItem(sessionKey(TOKEN_KEY));
+    localStorage.removeItem(sessionKey(USER_KEY));
+  }
+}
+
+function userOf(data: unknown): SignedInUser | null {
+  if (!data || typeof data !== 'object' || !('user' in data)) return null;
+  const parsed = signedInUserSchema.safeParse(data.user);
+  if (!parsed.success) return null;
+  const { id, name, email } = parsed.data;
+  return { id, name, email };
 }
 
 /**
@@ -59,17 +147,35 @@ export const authClient = createAuthClient({
     auth: { type: 'Bearer', token: () => getAuthToken() ?? '' },
     onSuccess: (context) => {
       const token = context.response.headers.get('set-auth-token');
-      if (token) localStorage.setItem(sessionKey(TOKEN_KEY), token);
-      // Sign-in, sign-up and session responses carry the signed-in user.
-      const data: unknown = context.data;
-      if (
-        /\/(sign-in|sign-up)\/|\/get-session(\?|$)/.test(String(context.request.url)) &&
-        data &&
-        typeof data === 'object' &&
-        'user' in data
-      ) {
-        rememberUser(data.user);
+      const url = String(context.request.url);
+      if (/\/(sign-in|sign-up)\//.test(url)) {
+        if (!token) return;
+        // A new session joins the device's accounts and becomes the one in use.
+        const user = userOf(context.data);
+        if (user) {
+          saveAccount({ user, token }, true);
+        } else {
+          localStorage.setItem(sessionKey(TOKEN_KEY), token);
+          localStorage.removeItem(sessionKey(USER_KEY));
+        }
+        pageUserId = user?.id ?? null;
+        return;
       }
+      // Anything else answers for this page's own session: a session response carries its
+      // user, and a changed password a new token.
+      const session = /\/get-session(\?|$)/.test(url);
+      if (!token && !session) return;
+      const current = getAuthToken();
+      // The account was removed in another tab; a late response must not sign it back in.
+      if (!current) return;
+      const user = (session && userOf(context.data)) || getSignedInUser();
+      if (!user) {
+        if (token) localStorage.setItem(sessionKey(TOKEN_KEY), token);
+        return;
+      }
+      if (pageUserId && user.id !== pageUserId) return;
+      saveAccount({ user, token: token ?? current }, pageUserId === null);
+      pageUserId = user.id;
     },
   },
 });
@@ -90,3 +196,10 @@ export async function resolveSignedInUser(): Promise<SignedInUser | null> {
   }
   return getSignedInUser();
 }
+
+// Another tab switched accounts, or signed this one out. This page holds the old account's
+// notes and outbox, so it loads again for whichever account the device now uses.
+window.addEventListener('storage', (event) => {
+  if (event.key !== null && event.key !== sessionKey(USER_KEY)) return;
+  if (pageUserId && activeUser()?.id !== pageUserId) window.location.reload();
+});

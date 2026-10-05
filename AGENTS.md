@@ -310,6 +310,10 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Collections open the signed-in user's local database when the module loads (top-level
   await), so signing in does a full page load. Offline, collections never become ready (that
   needs the server); pages wait with `useAwaitingSync`, not `isLoading`.
+- A device can hold several signed-in accounts (ADR 0019, `lib/auth.ts`, `lib/accounts.ts`).
+  `getAuthToken` and `getSignedInUser` answer for the account the page loaded for; changing
+  it is a full page load (`switchAccount`). Anything kept on the device for a user is named
+  after the user id, and `signOutAccount` must delete it for an account that is not in use.
 - Server backups (ADR 0012, `apps/server/src/backups`, Settings > Admin > Backups) are
   admin-only server state, not a synced collection: `lib/serverBackups.ts` makes plain
   requests. Their routes sit in the admin routes behind `requireAdmin`, except the download

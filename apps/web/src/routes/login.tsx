@@ -4,7 +4,7 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authClient } from '@/lib/auth';
+import { activateAccount, authClient, getAccounts, getSignedInUser } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
@@ -29,6 +29,8 @@ function LoginPage() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>(invite ? 'sign-up' : 'sign-in');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Reached from the account list to add another, or after the session in use ended.
+  const [signedIn] = useState(() => getAccounts()[0]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -97,6 +99,19 @@ function LoginPage() {
         >
           {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
         </Button>
+        {signedIn && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              // A full load: the collections open the notes of the account that is in use.
+              if (!getSignedInUser()) activateAccount(signedIn.user.id);
+              window.location.assign('/');
+            }}
+          >
+            Back to your notes
+          </Button>
+        )}
       </form>
     </main>
   );

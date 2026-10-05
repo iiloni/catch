@@ -112,12 +112,16 @@ export async function clearAttachmentFiles() {
   objectUrls.clear();
   accessUrls.clear();
   const user = getSignedInUser();
-  if (user)
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.deleteDatabase(`catch-files-${user.id}`);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+  if (user) await deleteAttachmentFiles(user.id);
+}
+
+/** Deletes the files kept on this device for one account, which need not be the one in use. */
+export function deleteAttachmentFiles(userId: string) {
+  return new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(`catch-files-${userId}`);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }
 
 async function authorizedFetch(path: string) {
