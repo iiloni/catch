@@ -12,14 +12,23 @@ import {
   useScroll,
   useTransform,
 } from 'motion/react';
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  use,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
-import { PAGE_MAX, useHeaderGutterShift, useNotePane, usePageGutterShift } from '@/lib/splitView';
+import { PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
@@ -28,17 +37,6 @@ import { cn } from '@/lib/utils';
  * right toolbar reshapes itself around the selection's actions.
  */
 export type HeaderSelection = { count: number; onClose: () => void; actions: ReactNode };
-
-type Props = {
-  title: string;
-  /** Controls in a glass toolbar at the top left, such as a back button. */
-  leading?: ReactNode;
-  /** Controls in a glass toolbar at the top right. */
-  trailing?: ReactNode;
-  selection?: HeaderSelection | null;
-  /** Moves both the fixed bar and the scrolling title with a dismissible page. */
-  offsetY?: MotionValue<number>;
-};
 
 type HeaderLayerStyle = MotionStyle & { '--header-layer-opacity': MotionValue<number> };
 
@@ -69,63 +67,6 @@ function useHeaderTransition() {
   const visibility = useTransform(() => (opacity.get() === 0 ? 'hidden' : 'visible'));
   // Opacity on the header would isolate every descendant blur until the fade reaches 1.
   return { '--header-opacity': opacity, zIndex, visibility };
-}
-
-/**
- * iOS-style large title. The bar above it starts transparent and turns to frosted glass,
- * with a small centered title, once the large title scrolls under it.
- */
-export function PageHeader({ title, leading, trailing, selection, offsetY }: Props) {
-  const entry = useEntryMotion('header:title', true, 20);
-  const transition = useHeaderTransition();
-  const gutterShift = usePageGutterShift(PAGE_MAX);
-  const { scrollY } = useScroll();
-  const barOpacity = useTransform(scrollY, [8, 40], [0, 1]);
-  const smallTitleOpacity = useTransform(scrollY, [36, 56], [0, 1]);
-  const smallTitleY = useTransform(scrollY, [36, 56], [6, 0]);
-  const largeTitleOpacity = useTransform(scrollY, [0, 40], [1, 0]);
-  const barStyle: HeaderLayerStyle = { '--header-layer-opacity': barOpacity };
-  const smallTitleStyle: HeaderLayerStyle = {
-    '--header-layer-opacity': smallTitleOpacity,
-    y: smallTitleY,
-  };
-
-  return (
-    <>
-      <motion.header
-        data-page-header
-        className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
-        style={{ ...transition, y: offsetY }}
-      >
-        <motion.div
-          aria-hidden
-          className="glass-bar header-fade absolute inset-0"
-          style={barStyle}
-        />
-        <div className="relative mx-auto flex h-[var(--header-height)] max-w-7xl items-center px-2 sm:px-4">
-          <motion.span
-            aria-hidden
-            className="header-fade flex-1 truncate px-32 text-center font-semibold text-[1.0625rem]"
-            style={smallTitleStyle}
-          >
-            {title}
-          </motion.span>
-          <HeaderToolbars leading={leading} trailing={trailing} selection={selection} />
-        </div>
-      </motion.header>
-      <motion.div
-        className="mx-auto max-w-7xl px-4 pt-[calc(var(--safe-top)+var(--header-height)+0.75rem)] sm:px-6"
-        style={{ opacity: largeTitleOpacity, x: gutterShift, y: offsetY }}
-      >
-        <motion.h1
-          style={entry}
-          className="truncate font-display font-extrabold text-[2.25rem] leading-tight tracking-[-0.03em]"
-        >
-          {title}
-        </motion.h1>
-      </motion.div>
-    </>
-  );
 }
 
 type TabPageHeaderProps = {
@@ -184,9 +125,13 @@ function useFittedTitle(title: string) {
   return { area, measure, fontSize };
 }
 
+/** Whether the header's title has left for its corner, for controls that make room for it. */
+const HeaderCollapsed = createContext(false);
+
 /**
- * The header of the pages in the dock. The large title moves into the top left corner as a
- * glass pill once the page starts to scroll, taking the place of the brand there.
+ * The header of every page. The large title moves into the top left corner as a glass pill
+ * once the page starts to scroll, taking the place of the brand there or sitting beside the
+ * back button.
  */
 export function TabPageHeader({
   title,
@@ -245,7 +190,7 @@ export function TabPageHeader({
   }
 
   return (
-    <>
+    <HeaderCollapsed value={collapsed}>
       <motion.header
         data-page-header
         className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
@@ -337,7 +282,7 @@ export function TabPageHeader({
         </div>
       </motion.header>
       <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
-    </>
+    </HeaderCollapsed>
   );
 }
 
@@ -546,19 +491,39 @@ function MorphingPill({
   );
 }
 
-/** Returns to the Gallery, the parent of every page that shows one. */
+/**
+ * Returns to the Gallery, the parent of every page that shows one. Its label goes once the
+ * title is a pill beside it: a phone has no room for both and Trash's button on the right.
+ */
 export function BackToGallery() {
   const goToGalleryPage = useGalleryPages();
+  const collapsed = use(HeaderCollapsed);
   return (
     <motion.button
       type="button"
       aria-label="Back to Gallery"
       whileTap={{ scale: 0.9 }}
       onClick={() => goToGalleryPage('/')}
-      className="flex h-10 items-center gap-0.5 rounded-full pr-3 pl-0.5 font-medium text-[1.0625rem] outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className={cn(
+        'relative flex h-10 items-center gap-0.5 rounded-full font-medium text-[1.0625rem] outline-none transition-[padding] hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        collapsed ? 'px-1.5' : 'pr-3 pl-0.5',
+      )}
     >
       <ChevronLeft className="size-7" aria-hidden />
-      Gallery
+      {/* Out of the layout at once, so the toolbar closes over the label as it fades. */}
+      <AnimatePresence initial={false} mode="popLayout">
+        {!collapsed && (
+          <motion.span
+            key="label"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14 }}
+          >
+            Gallery
+          </motion.span>
+        )}
+      </AnimatePresence>
     </motion.button>
   );
 }

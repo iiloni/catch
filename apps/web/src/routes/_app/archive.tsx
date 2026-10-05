@@ -4,7 +4,7 @@ import { Archive } from 'lucide-react';
 import { motion } from 'motion/react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
-import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
+import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { notesCollection } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
@@ -32,7 +32,7 @@ function ArchivePage() {
 
   return (
     <>
-      <PageHeader
+      <TabPageHeader
         title="Archive"
         leading={<BackToGallery />}
         selection={selectionHeader(selection, 'archive')}

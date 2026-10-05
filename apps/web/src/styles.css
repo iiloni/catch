@@ -338,18 +338,6 @@
   }
 }
 
-/* Glass for full-width bars: a hairline underneath instead of a border and shadow. */
-@utility glass-bar {
-  background-color: var(--glass);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border);
-
-  @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--background);
-    backdrop-filter: none;
-  }
-}
-
 /* Blur scrolling content behind the page's fixed controls without a visible bar edge. */
 .page-top-blur,
 .page-bottom-blur {
