@@ -3,6 +3,10 @@
 This guide is for people changing Catch's code. It covers the development environment,
 tests, the Android app and how changes reach `main`.
 
+> [!NOTE]
+> Catch is not accepting external contributions at the moment. You are welcome to read the
+> code, run it and fork it under the [MIT license](LICENSE).
+
 For how the code is organized and the conventions it follows, read [AGENTS.md](AGENTS.md).
 [docs/decisions](docs/decisions) records why the stack looks the way it does.
 

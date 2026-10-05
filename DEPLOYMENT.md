@@ -11,13 +11,41 @@ server, then covers settings, backups and updates.
 
 ## Install
 
+You need two files from this repository, not the whole of it:
+
+- [`docker-compose.yml`](https://github.com/iiloni/catch/blob/main/docker-compose.yml),
+  which describes the services Catch is made of.
+- [`.env.example`](https://github.com/iiloni/catch/blob/main/.env.example), a template for
+  your settings, saved as `.env`.
+
+Make a directory for Catch and download them into it:
+
 ```bash
-git clone https://github.com/iiloni/catch.git
-cd catch
-cp .env.example .env
+mkdir catch && cd catch
+curl -fsSLO https://raw.githubusercontent.com/iiloni/catch/main/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/iiloni/catch/main/.env.example
+chmod 600 .env
 ```
 
-Open `.env` and set these four values:
+`docker-compose.yml` is written to build Catch from source. To run the published release
+instead, open it and replace these three lines under `app:`
+
+```yaml
+    build:
+      context: .
+      target: production
+```
+
+with this one:
+
+```yaml
+    image: ghcr.io/iiloni/catch:stable
+```
+
+`stable` follows the latest stable release. Use `preview` for preview releases, or an exact
+version such as `0.3.2` to stay on it until you choose to move.
+
+Then open `.env` and set these four values:
 
 | Setting | Value |
 | --- | --- |
@@ -29,15 +57,11 @@ Open `.env` and set these four values:
 Then start Catch:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 The server listens on port 3000. Point your reverse proxy at it, with HTTP/2 enabled so sync
 streams share connections with page loads and writes.
-
-The first start builds Catch from source, which takes a few minutes. To run a published
-image instead, without a checkout on the server, see
-[Running a published release](#running-a-published-release).
 
 ## First sign-in and inviting people
 
@@ -87,12 +111,19 @@ Backups. A daily backup can be scheduled there too.
 Backups go to the `backup_data` volume, on the same disk as everything else. Set
 `CATCH_BACKUPS_MOUNT` to a directory on another disk so they survive losing this one.
 
-Backups also work from the command line, including when Catch cannot start:
+Backups also work from the command line, including when Catch cannot start. Download the
+two helper scripts next to `docker-compose.yml` once:
 
 ```bash
-./scripts/backup.sh create           # a full backup
-./scripts/backup.sh list
-./scripts/backup.sh restore <backup>
+curl -fsSLO https://raw.githubusercontent.com/iiloni/catch/main/scripts/backup.sh
+curl -fsSLO https://raw.githubusercontent.com/iiloni/catch/main/scripts/update.sh
+chmod +x backup.sh update.sh
+```
+
+```bash
+./backup.sh create           # a full backup
+./backup.sh list
+./backup.sh restore <backup>
 ```
 
 [Server backups](docs/backups.md) explains what a backup holds, how a restore works, and how
@@ -101,28 +132,37 @@ to move to another server.
 ## Updating
 
 ```bash
-./scripts/update.sh
+./update.sh
 ```
 
-This backs up the database, fetches the new version, restarts Catch and waits until it is
-healthy. The server also backs up its database by itself before a new version changes it.
+This backs up the database, pulls the newer image, restarts Catch and waits until it is
+healthy. With an exact version in `docker-compose.yml`, change it to the new one first. The server also backs up its database by itself before a new version changes it.
 
 Release notes are on the [releases page](https://github.com/iiloni/catch/releases). When a
 release needs the server updated before the Android app, or the other way round, its notes
 say so. If an update goes wrong, see
 [Going back after a bad update](docs/backups.md#going-back-after-a-bad-update).
 
-## Running a published release
-
-Every release is published as a Docker image at `ghcr.io/iiloni/catch`, so a server does not
-need the source code or a build. The `stable` tag follows stable releases, `preview` follows
-previews, and each version has an exact tag such as `0.3.2`.
+## More on deployment
 
 [Releasing and deployment](docs/releases.md#production-configuration-outside-the-repository)
-shows the setup: a directory holding only a Compose file and `.env`, an example for Traefik,
-and the update commands.
+has an example for running Catch behind Traefik, and explains the stable and preview
+channels.
 
-## Troubleshooting the first build
+## Building from source
+
+To build Catch yourself instead of running a published image, clone the repository, copy
+`.env.example` to `.env` and leave `docker-compose.yml` as it is:
+
+```bash
+git clone https://github.com/iiloni/catch.git
+cd catch
+cp .env.example .env   # then set the four values above
+docker compose up -d --build
+```
+
+The helper scripts are in `scripts/` there, and `./scripts/update.sh` pulls the source and
+rebuilds.
 
 Catch's sync service, Electric, normally comes as a prebuilt image from Docker Hub. If
 Docker Hub cannot supply it, Compose builds the same version from source. That first build

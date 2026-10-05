@@ -6,6 +6,16 @@ a server you control, and they keep working on your phone or laptop when you are
 It runs in any modern browser, installs as an app from the browser (PWA), and has a native
 Android app.
 
+![The gallery on a desktop, with a note open beside it](docs/screenshots/desktop-gallery.png)
+
+<p align="center">
+  <img src="docs/screenshots/mobile-gallery.png" alt="The gallery on a phone" width="30%" />
+  &nbsp;
+  <img src="docs/screenshots/mobile-note.png" alt="A note open on a phone" width="30%" />
+  &nbsp;
+  <img src="docs/screenshots/mobile-deck.png" alt="The deck on a phone" width="30%" />
+</p>
+
 ## What it does
 
 - **Notes that are quick to write.** Rich text, checklists, colors, pinning, an archive and
@@ -24,6 +34,8 @@ Android app.
   else. Each person sees only their own notes.
 - **Backups built in.** Admins back up and restore the whole server from Settings, by hand
   or on a daily schedule.
+
+![The deck on a desktop, with notes in three columns](docs/screenshots/desktop-deck.png)
 
 ## Get Catch
 
@@ -55,6 +67,10 @@ the same code. The whole development environment starts with one command in Dock
 
 **[Development guide](DEVELOPMENT.md)** covers setup, tests, the Android app and how
 changes get merged.
+
+> [!NOTE]
+> Catch is not accepting external contributions at the moment. You are welcome to read the
+> code, run it and fork it under the license below.
 
 ## More documentation
 
