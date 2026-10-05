@@ -234,7 +234,7 @@ final class ReminderAlarms {
 
     private static NotificationCompat.Builder notification(Context context, String title, String body) {
         return new NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat_reminder)
+                .setSmallIcon(R.drawable.ic_stat_catch)
                 .setContentTitle(title)
                 .setContentText(body.isEmpty() ? null : body)
                 .setStyle(body.isEmpty() ? null : new NotificationCompat.BigTextStyle().bigText(body))

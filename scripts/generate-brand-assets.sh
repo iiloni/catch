@@ -168,3 +168,9 @@ done
 render_icon 96 "$temp_dir/splash-icon.png"
 magick -size 480x320 xc:'#f7f6f2' "$temp_dir/splash-icon.png" \
   -gravity center -composite -strip "PNG32:$res_dir/drawable/splash.png"
+
+# Android draws a web notification's status bar badge from alpha alone, like the app's own
+# small icon (res/drawable/ic_stat_catch.xml, the same mark as a vector).
+magick -background none "$brand_dir/catch-mark-mono-light.svg" -trim +repage \
+  -filter Lanczos -resize 84x84 -gravity center -extent 96x96 \
+  -fill white -colorize 100 -strip "PNG32:$public_dir/notification-badge.png"

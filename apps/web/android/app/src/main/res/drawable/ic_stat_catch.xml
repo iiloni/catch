@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- The Catch mark, from branding/catch-mark-mono-light.svg. Android draws a notification's
+         small icon from its shape alone, so the note's lines are cut out of the card (wound the
+         other way) rather than painted. The outer group fills the 24dp box with the mark. -->
+    <group
+        android:pivotX="484.5"
+        android:pivotY="505"
+        android:scaleX="1.28"
+        android:scaleY="1.28"
+        android:translateX="27.5"
+        android:translateY="7">
+        <group
+            android:pivotX="244"
+            android:pivotY="305"
+            android:rotation="-24">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M244,256a24,24 0,0 1,24 24v50a24,24 0,0 1,-48 0v-50a24,24 0,0 1,24 -24z" />
+        </group>
+        <group
+            android:pivotX="189"
+            android:pivotY="400"
+            android:rotation="28">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M155,376h68a24,24 0,0 1,0 48h-68a24,24 0,0 1,0 -48z" />
+        </group>
+        <group
+            android:rotation="16.5"
+            android:translateX="520"
+            android:translateY="505">
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M-199,-245H199A56,56 0,0 1,255 -189V189A56,56 0,0 1,199 245H-199A56,56 0,0 1,-255 189V-189A56,56 0,0 1,-199 -245ZM-120,-48A25,25 0,0 0,-145 -23A25,25 0,0 0,-120 2H130A25,25 0,0 0,155 -23A25,25 0,0 0,130 -48ZM-120,68A25,25 0,0 0,-145 93A25,25 0,0 0,-120 118H108A25,25 0,0 0,133 93A25,25 0,0 0,108 68Z" />
+        </group>
+    </group>
+</vector>
