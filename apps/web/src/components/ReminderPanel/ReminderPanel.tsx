@@ -13,6 +13,7 @@ import {
   AlarmClock,
   Bell,
   BellOff,
+  CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ import { DatePicker } from '@/components/DatePicker/DatePicker';
 import { TimePicker } from '@/components/TimePicker/TimePicker';
 import { TimeZonePicker } from '@/components/TimeZonePicker/TimeZonePicker';
 import { Button } from '@/components/ui/button';
+import { addToGoogleCalendar } from '@/lib/calendar';
 import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -337,7 +339,7 @@ const ENDS: { value: Ends; label: string }[] = [
 ];
 
 type Props = {
-  note: Pick<Note, 'id' | 'userId'>;
+  note: Pick<Note, 'id' | 'userId' | 'content'>;
   /** The color the note shows in, which tints the chosen options. */
   color?: NoteColor;
   reminder: Reminder | undefined;
@@ -533,6 +535,17 @@ export function ReminderPanel({ note, color = 'default', reminder, onDone, class
                       <Trash2 className="size-4" aria-hidden />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    aria-label="Add to Google Calendar"
+                    onClick={() => {
+                      haptics.selection();
+                      addToGoogleCalendar(note);
+                    }}
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-inset"
+                  >
+                    <CalendarPlus className="size-4" aria-hidden />
+                  </button>
                 </div>
 
                 <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto rounded-xl [scrollbar-width:none] [&>*]:shrink-0">
