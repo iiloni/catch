@@ -1,4 +1,4 @@
-import { type BoardColumn, type NoteColor, tagColor } from '@catch/shared';
+import { type BoardColumn, type Note, type NoteColor, tagColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Clock, SearchX } from 'lucide-react';
@@ -14,6 +14,8 @@ import {
   SearchFilterPanel,
   SearchFilters,
 } from '@/components/SearchFilters/SearchFilters';
+import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
+import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import {
   boardColumnsCollection,
   notesCollection,
@@ -22,7 +24,10 @@ import {
   useTagReadiness,
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
+import { haptics } from '@/lib/haptics';
+import { useLongPress } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
+import { useNoteSelection } from '@/lib/noteSelection';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
@@ -88,6 +93,14 @@ function SearchPage() {
       ).slice(0, MAX_RESULTS),
     [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
   );
+  // The notes as stored: a result's note wears its primary tag's color.
+  const resultNotes = useMemo(() => {
+    const ids = new Set(results.map((result) => result.note.id));
+    return notes.filter((note) => ids.has(note.id));
+  }, [notes, results]);
+  const selection = useNoteSelection(resultNotes);
+  // Results mix archived notes with the rest, as the Reminders page does.
+  const place = selection.notes.every((note) => note.isArchived) ? 'archive' : 'gallery';
   const searching = query.trim() !== '' || color !== null || browsing;
   const view = awaitingTagData
     ? 'loading'
@@ -144,7 +157,7 @@ function SearchPage() {
           </SearchFilterPanel>
         )}
       </AnimatePresence>
-      <TabPageHeader title="Search" />
+      <TabPageHeader title="Search" selection={selectionHeader(selection, place)} />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
         <ActiveSearchFilters
           tags={tags}
@@ -223,7 +236,15 @@ function SearchPage() {
                           exit={{ opacity: 0, scale: 0.97 }}
                           transition={springs.smooth}
                         >
-                          <ResultCard result={result} columns={columns} onOpen={openResult} />
+                          <ResultCard
+                            result={result}
+                            columns={columns}
+                            onOpen={openResult}
+                            selected={
+                              selection.selecting ? selection.ids.has(result.note.id) : undefined
+                            }
+                            onSelect={selection.select}
+                          />
                         </motion.li>
                       ))}
                     </AnimatePresence>
@@ -285,28 +306,45 @@ function ResultCard({
   result,
   columns,
   onOpen,
+  selected,
+  onSelect,
 }: {
   result: SearchResult;
   columns: BoardColumn[];
   onOpen: (result: SearchResult, card: HTMLElement) => void;
+  /** Undefined unless notes are being selected, when a tap selects instead of opening. */
+  selected: boolean | undefined;
+  onSelect: (note: Note, selected: boolean) => void;
 }) {
   const { note } = result;
   const hidden = useIsCardHidden(note.id);
   const column = columns.find((c) => c.id === note.status);
+  const selecting = selected !== undefined;
+  const longPress = useLongPress(() => {
+    haptics.longPress();
+    onSelect(note, true);
+  });
 
   return (
     <article
       data-note-card={note.id}
       data-note-color={note.color}
+      {...longPress}
       className={cn(
-        'rounded-2xl border border-transparent bg-note data-[note-color=default]:border-border',
+        'group/cell relative touch-manipulation select-none rounded-2xl border border-transparent bg-note [-webkit-touch-callout:none] data-[note-color=default]:border-border',
         hidden && 'invisible',
       )}
     >
       <button
         type="button"
-        aria-label="Open note"
+        aria-label={selecting ? 'Select note' : 'Open note'}
+        aria-pressed={selecting ? selected : undefined}
         onClick={(event) => {
+          if (selecting) {
+            haptics.selection();
+            onSelect(note, !selected);
+            return;
+          }
           const card = event.currentTarget.closest('article');
           if (card) onOpen(result, card);
         }}
@@ -329,6 +367,14 @@ function ResultCard({
         )}
       </button>
       <NoteTags noteId={note.id} className="px-3.5 pb-3 [&>h3]:sr-only" />
+      <motion.span
+        aria-hidden
+        className="-inset-px pointer-events-none absolute rounded-2xl border-2 border-foreground"
+        initial={false}
+        animate={{ opacity: selected ? 1 : 0 }}
+        transition={{ duration: 0.15 }}
+      />
+      <SelectCheck selected={selected} onSelect={() => onSelect(note, true)} />
     </article>
   );
 }
