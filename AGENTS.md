@@ -104,8 +104,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
   investigate failures, fix them and push updates until required validation passes.
   Continue through the authorized merge and verify the PR is actually merged, then update
-  local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
-  not complete the task.
+  local `main`, clean up the worktree and settle the thread (see Working in parallel).
+  Opening a PR or enabling auto-merge alone does not complete the task.
 - Your task ends with your PR merged. Do not watch `main` CI afterwards or take on a
   failure there: a red `main` only blocks releasing that commit, and the user starts an
   agent for it when needed. Do not fix a failure that comes from `main` inside an
@@ -185,8 +185,15 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   checks pass. Then fast-forward the primary checkout's
   `main` from its configured upstream, after checking its working tree. Never force-push
   `main` or bypass its required PR/check rules.
-- When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
-  from inside the worktree. It refuses to delete uncommitted work.
+- When your work is committed and merged, run `./scripts/worktree.sh self-remove -y` from
+  inside the worktree. It refuses to delete uncommitted work.
+- Settle your T3 thread as your last action, once nothing is left for it to do: call
+  `t3_thread_organize` with `action: "settle"` and no `threadId`. Usually that is right
+  after the merge and the worktree cleanup. T3 does not settle a thread when its PR merges,
+  so a thread you leave unsettled stays open in the user's list. Do not settle while work
+  remains: the user asked for something after the merge, you are waiting on their answer,
+  or the cleanup failed. Finish or report that first. Skip this step when the tool is not
+  available (a session outside T3).
 
 ## How data flows
 

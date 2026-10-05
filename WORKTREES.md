@@ -116,7 +116,7 @@ From another checkout:
 ./scripts/worktree.sh remove feature/board-view [-y] [--delete-branch]
 ```
 
-Or from inside the worktree itself, as an agent's final command:
+Or from inside the worktree itself, as an agent's cleanup step before it settles its thread:
 
 ```bash
 ./scripts/worktree.sh self-remove [-y] [--delete-branch]
