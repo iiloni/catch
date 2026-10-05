@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
-import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
+import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { notesCollection, useReminders, useRemindersReady } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
@@ -51,7 +51,7 @@ function RemindersPage() {
 
   return (
     <>
-      <PageHeader
+      <TabPageHeader
         title="Reminders"
         leading={<BackToGallery />}
         selection={selectionHeader(selection, place)}

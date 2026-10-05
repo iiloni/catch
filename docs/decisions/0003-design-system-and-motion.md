@@ -24,7 +24,7 @@ compose button. Warm graphite neutrals give both light and dark
 themes a quiet canvas. Titles use Bricolage Grotesque, everything else Figtree, both bundled so they work
 offline. Note colors are generated in OKLCH with one lightness and chroma per theme, so text
 contrast is the same on every color. Menus, sheets and the dock use frosted glass
-(`glass`, `glass-thick`, `glass-bar` utilities in `styles.css`).
+(`glass`, `glass-thick` utilities in `styles.css`).
 
 **Navigation.** A floating dock with three icon-only tabs (Deck, Gallery, Search) and a detached compose
 button. Tapping Gallery while on a gallery page shows a separate segmented control
@@ -77,8 +77,10 @@ percentage/calc transform against changing native insets.
 Gallery's sort and settings, the Deck's column editor, Archive and Trash's back button and
 Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
 change it animates its width (never scale) to fit the new ones while the old ones fade out.
-The dock's pages (Gallery, Deck, Search) and Settings share `TabPageHeader`: a large centered
+Every page shares `TabPageHeader`: a large centered
 title that moves into the top left corner as a glass pill once the page starts to scroll.
+Archive, Trash and Reminders drop the back button's “Gallery” label when the title joins it
+there, since a phone cannot fit the label, the title and Empty trash in one row.
 Long titles reduce their expanded font size to fit the page's width, keeping the full name
 on one line and measuring again when the page resizes or the font loads.
 The title follows the page for the first 16 px and then leaves for the corner, while it is

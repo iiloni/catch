@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
-import { BackToGallery, PageHeader } from '@/components/PageHeader/PageHeader';
+import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { Button } from '@/components/ui/button';
 import {
@@ -48,7 +48,7 @@ function TrashPage() {
 
   return (
     <>
-      <PageHeader
+      <TabPageHeader
         title="Trash"
         leading={<BackToGallery />}
         trailing={
