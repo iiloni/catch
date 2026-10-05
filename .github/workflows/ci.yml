@@ -125,13 +125,14 @@ jobs:
       - run: ./scripts/dev.sh up
       # Server backups and video posters are tested against a real Postgres with its client
       # tools and FFmpeg, which the check job's bare runner lacks (the tests skip themselves
-      # there) and this stack has.
-      - if: env.PROJECT == 'desktop' && matrix.shard == 1
+      # there) and this stack has. They and the API tests ride on the runner that finishes
+      # first, so they add nothing to the time the whole suite takes.
+      - if: env.PROJECT == 'android' && matrix.shard == 2
         run: ./scripts/dev.sh test
       # The tests that only call the API open no page, so they run once. They get a run of
       # their own because Playwright cuts the list of files in half by test count, and their
-      # few tests would move desktop's cut to the far side of its largest file.
-      - if: env.PROJECT == 'desktop' && matrix.shard == 1
+      # few tests would move a project's cut to the far side of its largest file.
+      - if: env.PROJECT == 'android' && matrix.shard == 2
         run: ./scripts/dev.sh e2e --project=api --workers=1
       - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/2 --workers=1
       - if: failure()
