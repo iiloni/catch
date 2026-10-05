@@ -42,6 +42,7 @@ async function settingsPositions(page: Page) {
       '[data-settings-swipe] h1',
       '[data-settings-content]',
       '[data-page-header]',
+      '[data-page-header] .page-top-blur',
       '[data-dock]',
       '[data-page-bottom-blur]',
     ];
@@ -55,6 +56,102 @@ async function settingsPositions(page: Page) {
     };
   });
 }
+
+test('settings titles collapse into glass pills with an edge blur on every user page', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await page.setViewportSize({ width: isMobile ? 320 : 1024, height: 300 });
+  await page.goto('/settings/general');
+
+  for (const [path, label] of [
+    ['general', 'General'],
+    ['tags', 'Tags'],
+    ['account', 'Account'],
+    ['notifications', 'Notifications'],
+    ['data', 'Data Management'],
+    ['update', 'Update'],
+  ]) {
+    if (path !== 'general') {
+      if (isMobile) await page.setViewportSize({ width: 320, height: 500 });
+      const pages = page.getByRole('navigation', { name: 'Settings pages' });
+      if (isMobile) {
+        await page.getByRole('button', { name: /^Settings page:/ }).click();
+        await pages.getByRole('button', { name: label, exact: true }).click();
+      } else {
+        await pages.getByRole('link', { name: label, exact: true }).click();
+      }
+    }
+    await waitForPageTransition(page);
+    if (isMobile) await page.setViewportSize({ width: 320, height: 300 });
+    const header = page.locator('[data-page-header]');
+    const title = header.getByRole('heading', { level: 1, name: isMobile ? label : 'Settings' });
+    const pill = header.getByRole('button', { name: 'Scroll to top' });
+    const blur = header.locator('.page-top-blur');
+    await expect(title).toBeVisible({ timeout: 30_000 });
+    await expect(pill).toBeDisabled();
+    await expect(blur).toHaveCSS('opacity', '0');
+    const expandedBox = await settledBox(title);
+    const expandedSize = await title.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).fontSize),
+    );
+    if (isMobile && path === 'data') {
+      expect(expandedSize).toBeGreaterThan(17);
+      expect(expandedSize).toBeLessThan(42);
+    } else {
+      expect(expandedSize).toBe(42);
+    }
+    expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true,
+    );
+    expect(expandedBox.x).toBeGreaterThanOrEqual(0);
+    expect(expandedBox.x + expandedBox.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      page.viewportSize()?.width ?? 0,
+    );
+    if (isMobile && path === 'data') {
+      await page.setViewportSize({ width: 360, height: 300 });
+      await expect
+        .poll(() =>
+          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        )
+        .toBeGreaterThan(expandedSize);
+      await settledBox(title);
+      expect(
+        await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+      ).toBe(true);
+      await page.setViewportSize({ width: 320, height: 300 });
+      await expect
+        .poll(() =>
+          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        )
+        .toBeCloseTo(expandedSize, 1);
+    }
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect(pill).toBeEnabled();
+    await expect(title).toHaveCSS('font-size', '17px');
+    await expect(blur).toHaveCSS('opacity', '1');
+    await expect(pill.locator('..').locator('.glass')).toHaveCSS('opacity', '1');
+    const pillBox = await settledBox(pill);
+    expect(pillBox.y).toBeGreaterThanOrEqual(0);
+    if (!isMobile) {
+      const backBox = await settledBox(header.getByRole('button', { name: 'Back', exact: true }));
+      expect(pillBox.x).toBeGreaterThan(backBox.x + backBox.width);
+    }
+
+    await pill.click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(pill).toBeDisabled();
+    await expect
+      .poll(() =>
+        title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+      )
+      .toBeCloseTo(expandedSize, 1);
+    await expect(blur).toHaveCSS('opacity', '0');
+  }
+});
 
 async function watchSettingsTitle(page: Page) {
   await page.evaluate(() => {
@@ -104,6 +201,7 @@ test('mobile settings leave with a pull at either scroll edge', async ({
     expect(overflow).toBeGreaterThan(100);
 
     // Observe the held gesture: every part of the page must travel the same distance.
+    await settledBox(page.getByRole('heading', { level: 1 }));
     await watchSettingsTitle(page);
     const before = await settingsPositions(page);
     await pullSettings(touch, direction * 150, async () => {

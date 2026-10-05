@@ -20,6 +20,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 const account = SETTINGS_TABS.find((tab) => tab.path === '/settings/account')!;
 
 vi.mock('@/lib/haptics', () => ({ haptics: { threshold: vi.fn() } }));
+vi.mock('@/components/BrandLockup/BrandLockup', () => ({
+  BrandLockup: () => <img src="/icon.svg" alt="Catch" />,
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
