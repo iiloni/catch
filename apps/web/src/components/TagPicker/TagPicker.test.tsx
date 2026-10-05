@@ -34,7 +34,11 @@ vi.mock('@/lib/collections', () => ({
   useNoteTagAssignments: () =>
     new Map([['note', { primaryTagId, secondaryTagIds }], ...otherAssignments]),
 }));
-vi.mock('@/lib/tags', () => ({ setSecondaryTag: vi.fn() }));
+vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'ada' }) }));
+vi.mock('@/lib/tags', () => ({
+  setSecondaryTag: vi.fn(),
+  createTag: vi.fn(() => ({ id: 'made' })),
+}));
 describe('secondary tag picker', () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -51,6 +55,15 @@ describe('secondary tag picker', () => {
     readiness.awaitingAssignments = false;
     otherAssignments.clear();
     vi.clearAllMocks();
+  });
+  it('adds a tag made from the picker to every note it is tagging', () => {
+    otherAssignments.set('other', { primaryTagId: null, secondaryTagIds: [] });
+    render(<TagPicker noteIds={['note', 'other']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Errands' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+    expect(setSecondaryTag).toHaveBeenCalledWith('note', 'made', true);
+    expect(setSecondaryTag).toHaveBeenCalledWith('other', 'made', true);
   });
   it.each(['awaitingTags', 'awaitingAssignments'] as const)(
     'waits for %s before offering assignment toggles',

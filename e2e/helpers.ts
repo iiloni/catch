@@ -188,6 +188,44 @@ export async function settledBox(locator: Locator) {
   return box;
 }
 
+/**
+ * Holds a touch on a card until it is selected (and picked up), then lifts it. Returns once
+ * the page takes clicks again. Lifting sends a click of its own a moment later, which the app
+ * swallows, and dnd-kit stops every click until a timer at least 50 ms after the lift, later
+ * on a busy page. A click or tap sent sooner is dropped, so the next card is never selected.
+ */
+export async function longPress(page: Page, locator: Locator) {
+  const box = await settledBox(locator);
+  const released = page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        window.addEventListener('click', () => resolve(), { capture: true, once: true });
+      }),
+  );
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
+  });
+  await page.waitForTimeout(400);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  // Probing before the lift's click would use up the app's swallow, and that click would
+  // then toggle the card back off.
+  await released;
+  await page.waitForFunction(() => {
+    const probe = document.createElement('span');
+    let reached = false;
+    probe.addEventListener('click', () => {
+      reached = true;
+    });
+    document.body.append(probe);
+    probe.click();
+    probe.remove();
+    return reached;
+  });
+  await cdp.detach();
+}
+
 /** Opens the Deck and waits for it to slide in, so a raw pointer gesture can follow. */
 export async function openDeck(page: Page) {
   await page.getByRole('link', { name: 'Deck' }).click();

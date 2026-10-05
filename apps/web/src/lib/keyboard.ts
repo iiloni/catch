@@ -45,7 +45,25 @@ function sampledEase(curve: readonly number[]) {
   };
 }
 
+/**
+ * Gives up focus once the keyboard is dismissed (the back button, the keyboard's own hide
+ * key). Left focused, the field would bring the keyboard back on the next tap anywhere on the
+ * page, such as on a dock button: Chrome shows it again after any tap while a field has focus.
+ */
+function releaseFocus() {
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement)) return;
+  if (focused.isContentEditable || focused.matches('input, textarea, select')) focused.blur();
+}
+
 let started = false;
+/** Where the keyboard is heading, ahead of `keyboardHeight`, which is still animating there. */
+let target = 0;
+
+function keyboardMovesTo(height: number) {
+  if (height <= 0 && target > 0) releaseFocus();
+  target = height;
+}
 
 /**
  * Starts tracking the keyboard. On Android the WebView is not resized for the keyboard
@@ -65,11 +83,13 @@ export function startKeyboardTracking() {
         for (const side of ['top', 'right', 'bottom', 'left'] as const) {
           root.style.setProperty(`--safe-area-inset-${side}`, `${insets[side]}px`);
         }
+        target = insets.keyboard;
         keyboardHeight.jump(insets.keyboard);
       })
       // An app build without the plugin: fall back to the WebView resizing.
       .catch(() => {});
     void KeyboardInsets.addListener('keyboard', ({ to, duration, curve }) => {
+      keyboardMovesTo(to);
       if (duration <= 0) keyboardHeight.jump(to);
       else
         void animate(keyboardHeight, to, { duration: duration / 1000, ease: sampledEase(curve) });
@@ -82,6 +102,7 @@ export function startKeyboardTracking() {
   if (virtualKeyboard) {
     virtualKeyboard.overlaysContent = true;
     virtualKeyboard.addEventListener('geometrychange', () => {
+      keyboardMovesTo(virtualKeyboard.boundingRect.height);
       void animate(keyboardHeight, virtualKeyboard.boundingRect.height, springs.smooth);
     });
   }

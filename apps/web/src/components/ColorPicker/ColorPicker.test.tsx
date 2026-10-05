@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorTagSelector } from './ColorPicker';
 
 const root: Tag = {
-  id: 'root',
+  id: '018f3b5e-0000-7000-8000-000000000001',
   userId: 'ada',
   name: 'Work',
   parentId: null,
@@ -25,8 +25,26 @@ vi.mock('@/lib/collections', () => ({
   useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [root, child, leaf],
 }));
+vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'ada' }) }));
+vi.mock('@/lib/tags', () => ({ createTag: vi.fn(() => ({ id: 'made' })) }));
 
 describe('primary tag color picker', () => {
+  it('makes a tag under the open branch and assigns it as the primary tag', async () => {
+    const onTagChange = vi.fn();
+    render(<ColorTagSelector value="default" onChange={vi.fn()} onTagChange={onTagChange} />, {
+      wrapper: TooltipProvider,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+    expect(screen.getByLabelText('Parent tag')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue: Work' }));
+    await screen.findByRole('button', { name: 'Back to parent tags' });
+    fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+    expect(screen.getByLabelText('Parent tag')).toHaveValue(root.id);
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Errands' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+    expect(onTagChange).toHaveBeenLastCalledWith('made');
+  });
   it('assigns intermediate tags immediately and drills down through children', async () => {
     const onTagChange = vi.fn();
     const onChange = vi.fn();
