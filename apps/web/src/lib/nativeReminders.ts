@@ -2,7 +2,7 @@ import { App } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { API_PROTOCOL_VERSION, type ReminderAlarm } from '@catch/shared';
 import { z } from 'zod';
-import { getAuthToken } from './auth';
+import { getAuthToken, getSignedInUser } from './auth';
 import { setSystemHour12 } from './clock';
 import { reminderSnooze, watchReminderAlarms } from './collections';
 import { snoozeReminder } from './reminders';
@@ -16,15 +16,20 @@ const statusSchema = z.object({
   hour24: z.boolean().optional(),
 });
 const snoozesSchema = z.object({
-  snoozes: z.array(z.object({ noteId: z.uuid(), until: z.number() })),
+  // `account` is whose reminder it is; a snooze from before the phone kept several has none.
+  snoozes: z.array(
+    z.object({ noteId: z.uuid(), until: z.number(), account: z.string().optional() }),
+  ),
 });
-const openSchema = z.object({ noteId: z.uuid() });
+const openSchema = z.object({ noteId: z.uuid(), userId: z.string().optional() });
 
 const Reminders = registerPlugin<{
   status(): Promise<unknown>;
   enable(): Promise<unknown>;
   disable(): Promise<unknown>;
   sync(options: {
+    account: string;
+    label: string;
     alarms: ReminderAlarm[];
     server: string;
     token: string;
@@ -35,7 +40,7 @@ const Reminders = registerPlugin<{
   pendingSnoozes(): Promise<unknown>;
   ackSnoozes(options: { noteIds: string[] }): Promise<void>;
   test(): Promise<void>;
-  clear(): Promise<void>;
+  clear(options: { account?: string }): Promise<void>;
   addListener(event: 'open', listener: (event: unknown) => void): Promise<PluginListenerHandle>;
 }>('Reminders');
 
@@ -54,7 +59,8 @@ async function status() {
  * The Android app rings reminders itself (ADR 0018): the web app hands the phone each
  * reminder's coming times, and the phone sets alarms for them, so they ring offline and
  * with the app closed. It is also given the server and a token, to ask for reminders set
- * on other devices while the app stays closed.
+ * on other devices while the app stays closed. It keeps these for every account signed in
+ * on the device, so each one's reminders ring whichever is in use.
  */
 export const nativeReminders = {
   available,
@@ -70,36 +76,20 @@ export const nativeReminders = {
     await Reminders.disable();
   },
   test: () => Reminders.test(),
-  /** Signing out. Nothing more is told to the phone until the page next loads. */
-  async clear() {
-    cleared = true;
-    if (available) await Reminders.clear();
-  },
   /**
-   * Switching accounts. The phone forgets the alarms and snoozes of the account being left
-   * and checks for the next one's with its token, without notifications being turned off as
-   * `clear` would. Nothing more is told to the phone until the page next loads.
+   * An account signing out: the phone forgets its alarms and its token, and goes on ringing
+   * for the others. For the account in use, nothing more is told to the phone until the
+   * page next loads.
    */
-  async handOver(token: string) {
-    if (!available) return;
-    cleared = true;
-    const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
-    if (snoozes.length > 0) {
-      await Reminders.ackSnoozes({ noteIds: snoozes.map(({ noteId }) => noteId) });
-    }
-    await Reminders.sync({
-      alarms: [],
-      server: getServerUrl(),
-      token,
-      protocol: String(API_PROTOCOL_VERSION),
-      unsent: false,
-    });
+  async clear(userId?: string) {
+    if (!userId || userId === getSignedInUser()?.id) cleared = true;
+    if (available) await Reminders.clear({ account: userId });
   },
   /** A tapped notification opens its note, including the one that launched the app. */
-  onOpen(open: (noteId: string) => void) {
+  onOpen(open: (noteId: string, userId?: string) => void) {
     const listening = Reminders.addListener('open', (event) => {
       const parsed = openSchema.safeParse(event);
-      if (parsed.success) open(parsed.data.noteId);
+      if (parsed.success) open(parsed.data.noteId, parsed.data.userId || undefined);
     });
     return () => {
       void listening.then((listener) => listener.remove());
@@ -119,7 +109,10 @@ const written = new Set<string>();
 async function settleSnoozes() {
   const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
   const settled: string[] = [];
-  for (const { noteId, until } of snoozes) {
+  const userId = getSignedInUser()?.id;
+  for (const { noteId, until, account } of snoozes) {
+    // Another account's, to be written when that account is next in use.
+    if (account && account !== userId) continue;
     const snoozed = reminderSnooze(noteId);
     if (until <= Date.now() || snoozed?.getTime() === until) {
       settled.push(noteId);
@@ -141,9 +134,13 @@ export function watchNativeReminders() {
   let wasUnsent = unsent();
   const tell = () => {
     const token = getAuthToken();
-    if (alarms === null || !token || cleared) return;
+    const user = getSignedInUser();
+    if (alarms === null || !token || !user || cleared) return;
     wasUnsent = unsent();
     void Reminders.sync({
+      // The phone keeps a list and a token for each account signed in on it (ADR 0019).
+      account: user.id,
+      label: user.name || user.email,
       alarms,
       server: getServerUrl(),
       token,

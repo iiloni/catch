@@ -314,6 +314,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   `getAuthToken` and `getSignedInUser` answer for the account the page loaded for; changing
   it is a full page load (`switchAccount`). Anything kept on the device for a user is named
   after the user id, and `signOutAccount` must delete it for an account that is not in use.
+  Reminders ring for every signed-in account: `lib/push.ts` saves the browser's one
+  subscription for each of them, and the phone keeps alarms and a token per account. A
+  notification carries its user's id, and opening it switches to that account.
 - Server backups (ADR 0012, `apps/server/src/backups`, Settings > Admin > Backups) are
   admin-only server state, not a synced collection: `lib/serverBackups.ts` makes plain
   requests. Their routes sit in the admin routes behind `requireAdmin`, except the download

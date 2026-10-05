@@ -75,11 +75,16 @@ function pushMessage(event: PushEvent) {
       data && typeof data === 'object' ? (data as Record<string, unknown>)[name] : undefined;
     return typeof value === 'string' ? value : null;
   };
-  return { title: field('title') ?? 'Catch', body: field('body') ?? '', noteId: field('noteId') };
+  return {
+    title: field('title') ?? 'Catch',
+    body: field('body') ?? '',
+    noteId: field('noteId'),
+    userId: field('userId'),
+  };
 }
 
 self.addEventListener('push', (event) => {
-  const { title, body, noteId } = pushMessage(event);
+  const { title, body, noteId, userId } = pushMessage(event);
   // `renotify` is in browsers but not yet in TypeScript's types.
   const options: NotificationOptions & { renotify: boolean } = {
     body,
@@ -88,7 +93,8 @@ self.addEventListener('push', (event) => {
     tag: noteId ?? 'catch',
     // And alerts again when it does, which a replaced notification otherwise would not.
     renotify: true,
-    data: { noteId },
+    // Whose note it is: the browser may be signed in to several accounts (ADR 0019).
+    data: { noteId, userId },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -96,7 +102,10 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const noteId: unknown = event.notification.data?.noteId;
-  const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}` : '/';
+  const userId: unknown = event.notification.data?.userId;
+  // A page that loads with `account` makes that account the one in use before it starts.
+  const account = typeof userId === 'string' ? `&account=${encodeURIComponent(userId)}` : '';
+  const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}${account}` : '/';
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -114,7 +123,7 @@ self.addEventListener('notificationclick', (event) => {
         return;
       }
       // Navigating would reload the app; it opens the note itself.
-      if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId });
+      if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId, userId });
     })(),
   );
 });

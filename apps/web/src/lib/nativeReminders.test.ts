@@ -43,7 +43,10 @@ vi.mock('@capacitor/core', () => ({
   }),
 }));
 vi.mock('@capacitor/app', () => ({ App: { addListener: native.resume } }));
-vi.mock('./auth', () => ({ getAuthToken: native.token }));
+vi.mock('./auth', () => ({
+  getAuthToken: native.token,
+  getSignedInUser: () => ({ id: 'ada', name: 'Ada', email: 'ada@example.com' }),
+}));
 vi.mock('./clock', () => ({ setSystemHour12: native.hour12 }));
 vi.mock('./collections', () => ({
   reminderSnooze: (noteId: string) => (noteId === NOTE ? native.snoozedUntil() : undefined),
@@ -104,6 +107,8 @@ describe('native reminders', () => {
     const stop = watchNativeReminders();
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).toHaveBeenCalledWith({
+      account: 'ada',
+      label: 'Ada',
       alarms: [alarm],
       server: 'https://catch.example',
       token: 'signed-token',
@@ -181,6 +186,26 @@ describe('native reminders', () => {
     expect(native.snooze).not.toHaveBeenCalled();
   });
 
+  it('leaves another account’s snooze for when that account is in use', async () => {
+    native.pendingSnoozes.mockResolvedValue({
+      snoozes: [{ noteId: NOTE, until: Date.now() - 1000, account: 'bob' }],
+    });
+    watchNativeReminders();
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    await vi.waitFor(() => expect(native.pendingSnoozes).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(native.ackSnoozes).not.toHaveBeenCalled();
+    expect(native.snooze).not.toHaveBeenCalled();
+  });
+
+  it('keeps handing the phone its reminders after another account signs out', async () => {
+    watchNativeReminders();
+    await nativeReminders.clear('bob');
+    expect(native.clear).toHaveBeenCalledWith({ account: 'bob' });
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    expect(native.sync).toHaveBeenCalledTimes(1);
+  });
+
   it('settles snoozes again when the app comes back', async () => {
     watchNativeReminders();
     expect(native.pendingSnoozes).not.toHaveBeenCalled();
@@ -201,7 +226,10 @@ describe('native reminders', () => {
     native.listen.mock.calls[0]?.[1]({ noteId: NOTE });
     native.listen.mock.calls[0]?.[1]({ noteId: 'not-a-note' });
     expect(open).toHaveBeenCalledTimes(1);
-    expect(open).toHaveBeenCalledWith(NOTE);
+    expect(open).toHaveBeenCalledWith(NOTE, undefined);
+    // The phone rings for every account on it, and says whose note was tapped.
+    native.listen.mock.calls[0]?.[1]({ noteId: NOTE, userId: 'bob' });
+    expect(open).toHaveBeenLastCalledWith(NOTE, 'bob');
     stop();
     await vi.waitFor(() => expect(native.remove).toHaveBeenCalled());
   });
@@ -209,8 +237,8 @@ describe('native reminders', () => {
   // Last: the flag holds until the page next loads.
   it('hands nothing more to the phone after signing out clears it', async () => {
     watchNativeReminders();
-    await nativeReminders.clear();
-    expect(native.clear).toHaveBeenCalled();
+    await nativeReminders.clear('ada');
+    expect(native.clear).toHaveBeenCalledWith({ account: 'ada' });
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).not.toHaveBeenCalled();
   });

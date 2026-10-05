@@ -36,12 +36,32 @@ session keys. `catch-active-account` records whose session this build last put i
 the keys no longer hold it, that account is dropped from the list rather than left there
 with a session that has ended.
 
-**Only the account in use syncs and rings.** Its outbox sends and its shapes stream. Another
-account's queued changes wait on the device until it is switched to. Reminders follow the
-account in use too: a browser has one push subscription, which the server gives to whoever
-saved it last, and the Android app holds one token and one list of alarms. A switch hands
-the phone the next account's token with an empty list (`nativeReminders.handOver`), so the
-account being left stops ringing at once and notifications stay on.
+**Only the account in use syncs.** Its outbox sends and its shapes stream. Another account's
+queued changes wait on the device until it is switched to.
+
+**Every signed-in account's reminders ring.** Notifications are turned on for the device,
+not for an account: on for one is on for all, including one added later.
+
+- *Browsers.* A browser has one push subscription, so its endpoint can now belong to
+  several users: `push_subscriptions` is keyed by endpoint and user. At launch the app
+  saves the subscription for every signed-in account with that account's token
+  (`syncPush`). The device records which accounts it has registered on the subscription;
+  if one of them is no longer signed in here and the server was not told (a session that
+  ended, an older build's sign-out, a sign-out offline), the subscription is replaced with
+  a new one, so the old endpoint stops ringing for anyone. The server cannot do this
+  itself: only the account can remove its own row.
+- *The Android app* keeps a token and a list of alarms for each account
+  (`ReminderAlarms.java`). The web app replaces the list of the account in use while it
+  runs; the hourly background check asks the server for each account with its own token,
+  which is how the other accounts' lists stay current. What has rung, and snoozes, are
+  kept by note, since note ids are unique across accounts.
+- *A notification says whose note it is.* The server adds the user's id to the push
+  message, and the phone to its intent. Tapped, the app switches to that account and opens
+  the note: an open app is told and calls `switchAccount`; a cold start loads
+  `/?note=<id>&account=<user id>`, and `lib/auth.ts` makes that account the one in use
+  before anything reads it. On Android the notification also shows the account's name when
+  the phone rings for more than one. A snooze taken from a notification is written to the
+  server when its account is next in use.
 
 **Signing out removes one account.** For the account in use it is what it was, then the
 device carries on as the next account, or goes to sign-in when none is left. For another
@@ -55,11 +75,24 @@ avatar in any direction changes to the next or previous account. A switch is ref
 note or composer is open, since the load would drop what it has not saved. Avatars take a
 hue from the account's id so accounts with the same initials can be told apart.
 
+## Compatibility
+
+No request or shape changes shape, and the API protocol is unchanged. The push message gains
+an optional `userId`, which an older service worker ignores. A new client against an older
+server saves the subscription for each account in turn, the one in use last; that server
+keeps one user per endpoint, so only the account in use rings, as before. An older web
+client against a new server no longer takes an endpoint over from a previous user whose
+session ended without a sign-out, so that user's reminders could reach the browser until
+the new client loads and replaces the subscription; web clients update with the server, so
+this lasts until the page is next opened. The Android app's native code and web code ship
+together. Migration `0010` only changes the table's key.
+
 ## Consequences
 
 - Preferences that were per device stay per device: theme, gallery layout, recent searches.
 - The session cookie Better Auth leaves in a browser is the last account to sign in. The
   bearer token takes precedence over it on every request, which `e2e/accounts.spec.ts` checks
   by writing as the first account after the second signed in.
-- A tapped notification for an account that is not in use opens the app as the account that
-  is, where its note does not exist.
+- A web notification does not say which account it is for; the Android one does.
+- An account whose session has ended stops being refreshed on the phone and keeps the
+  alarms it had until it signs in again or is signed out.

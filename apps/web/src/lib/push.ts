@@ -1,7 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { useEffect } from 'react';
+import { z } from 'zod';
 import { api } from './api';
-import { getSignedInUser } from './auth';
+import { type Account, getAccounts, getSignedInUser } from './auth';
 import { nativeReminders } from './nativeReminders';
 import { createStore } from './store';
 
@@ -20,7 +21,33 @@ export type PushState = 'needs-install' | 'unsupported' | 'blocked' | 'off' | 'o
 const state = createStore<PushState | null>(null);
 export const usePushState = state.use;
 
-const enabledKey = () => `catch-push:${getSignedInUser()?.id ?? ''}`;
+const enabledKey = (userId: string) => `catch-push:${userId}`;
+const isEnabled = (userId: string) => localStorage.getItem(enabledKey(userId)) === 'true';
+
+/**
+ * Notifications are turned on for the device, and it then rings for every account signed in
+ * on it (ADR 0019): on for one of them is on for all, including one added later.
+ */
+const deviceWantsPush = () => getAccounts().some(({ user }) => isEnabled(user.id));
+
+// Whose reminders the server may be sending to this browser's subscription: every account
+// this device has registered on it and has not taken off again. One that is no longer signed
+// in here left without saying so, and the subscription is replaced to be rid of it.
+const OWNERS_KEY = 'catch-push-owners';
+const ownersSchema = z.object({ endpoint: z.string(), users: z.array(z.string()) });
+
+function owners(endpoint: string): string[] | null {
+  try {
+    const parsed = ownersSchema.safeParse(JSON.parse(localStorage.getItem(OWNERS_KEY) ?? ''));
+    return parsed.success && parsed.data.endpoint === endpoint ? parsed.data.users : null;
+  } catch {
+    return null;
+  }
+}
+
+function setOwners(endpoint: string, users: string[]) {
+  localStorage.setItem(OWNERS_KEY, JSON.stringify({ endpoint, users: [...new Set(users)] }));
+}
 
 function isIos() {
   return (
@@ -52,7 +79,7 @@ async function detect(): Promise<PushState> {
   if (!worker) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
   const subscription = await worker.pushManager.getSubscription().catch(() => null);
-  return subscription && localStorage.getItem(enabledKey()) === 'true' ? 'on' : 'off';
+  return subscription && deviceWantsPush() ? 'on' : 'off';
 }
 
 export async function refreshPushState() {
@@ -82,12 +109,25 @@ function decodeKey(key: string) {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
 }
 
-/** This device's subscription under the server's key, made if it has none, and saved there. */
+/**
+ * This device's subscription under the server's key, made if it has none, and saved there
+ * for every account signed in here. Throws if the account in use could not be saved.
+ */
 async function subscribe(worker: ServiceWorkerRegistration) {
+  const accounts = getAccounts();
+  const ids = accounts.map(({ user }) => user.id);
   const key = decodeKey((await api.pushKey()).publicKey);
   let subscription = await worker.pushManager.getSubscription();
-  // A subscription made for another key (the server's was replaced) cannot be reused.
-  if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
+  const known = subscription && owners(subscription.endpoint);
+  // A subscription made for another key (the server's was replaced) cannot be reused. Nor
+  // can one that may still ring for someone who is not signed in here any more, or whose
+  // owners this device has no record of.
+  if (
+    subscription &&
+    (!sameKey(subscription.options.applicationServerKey, key) ||
+      !known ||
+      known.some((id) => !ids.includes(id)))
+  ) {
     await subscription.unsubscribe();
     subscription = null;
   }
@@ -97,7 +137,26 @@ async function subscribe(worker: ServiceWorkerRegistration) {
   });
   const { endpoint, keys } = subscription.toJSON();
   if (!endpoint || !keys?.p256dh || !keys.auth) throw new Error('The browser gave no push keys.');
-  await api.savePushSubscription({ endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } });
+  // Recorded before asking: a request can reach the server and still fail here.
+  setOwners(endpoint, ids);
+  const current = getSignedInUser()?.id;
+  // The account in use goes last: a server from before accounts shared a browser gives the
+  // subscription to whoever saved it last.
+  const ordered = [...accounts].sort(
+    (a, b) => Number(a.user.id === current) - Number(b.user.id === current),
+  );
+  for (const account of ordered) {
+    try {
+      await api.savePushSubscription(
+        { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } },
+        account.token,
+      );
+      localStorage.setItem(enabledKey(account.user.id), 'true');
+    } catch (error) {
+      // Another account's session may have ended; the next launch tries it again.
+      if (account.user.id === current) throw error;
+    }
+  }
   return subscription;
 }
 
@@ -130,65 +189,101 @@ export async function enablePush() {
       return;
     }
     await subscribe(worker);
-    localStorage.setItem(enabledKey(), 'true');
     state.set('on');
   });
 }
 
+const forgetEnabled = () => {
+  for (const { user } of getAccounts()) localStorage.removeItem(enabledKey(user.id));
+};
+
+/** Turns notifications off for the device: every account signed in on it stops ringing here. */
 export function disablePush() {
   if (nativeReminders.available) return nativeReminders.disable().then(refreshPushState);
-  localStorage.removeItem(enabledKey());
+  const accounts = getAccounts();
+  forgetEnabled();
   return inTurn(async () => {
     const subscription = await (await registration())?.pushManager.getSubscription();
     if (subscription) {
       // The server forgets it first, while the endpoint still names it. Offline it cannot,
       // and learns from the push service instead: an unsubscribed endpoint answers "gone".
-      const told = await api.deletePushSubscription(subscription.endpoint).then(
-        () => true,
-        () => false,
+      const { endpoint } = subscription;
+      const told = await Promise.allSettled(
+        accounts.map(({ token }) => api.deletePushSubscription(endpoint, token)),
       );
       const dropped = await subscription.unsubscribe().catch(() => false);
-      if (!told && !dropped) {
-        // Neither end let go, so this browser would still be sent the user's reminders.
+      if (!dropped && told.some((result) => result.status === 'rejected')) {
+        // Neither end let go, so this browser would still be sent someone's reminders.
         await refreshPushState();
         throw new Error('Could not turn notifications off.');
       }
+      localStorage.removeItem(OWNERS_KEY);
     }
     await refreshPushState();
   });
 }
 
 /**
- * For a sign-out that could not wait for `disablePush`: the browser drops its subscription
- * without the server's say, so the push service refuses whatever the server still sends.
+ * An account is signing out of this device: the server must stop sending this browser its
+ * reminders, while the session still stands. Not for long, though: a connection that never
+ * answers must not hold up leaving. The accounts that stay keep ringing.
  */
+export function leavePush(account: Account) {
+  if (nativeReminders.available) return Promise.resolve();
+  const { id } = account.user;
+  localStorage.removeItem(enabledKey(id));
+  return inTurn(async () => {
+    const subscription = await (await registration())?.pushManager.getSubscription();
+    if (!subscription) return;
+    const told = await api
+      .deletePushSubscription(subscription.endpoint, account.token, AbortSignal.timeout(5000))
+      .then(
+        () => true,
+        () => false,
+      );
+    if (told) {
+      const users = owners(subscription.endpoint);
+      if (users) {
+        setOwners(
+          subscription.endpoint,
+          users.filter((user) => user !== id),
+        );
+      }
+      return;
+    }
+    // The server could not be told, so the browser drops the subscription itself and the
+    // push service refuses whatever is still sent. The accounts that stay subscribe again
+    // at the next launch.
+    await subscription.unsubscribe().catch(() => {});
+    localStorage.removeItem(OWNERS_KEY);
+  });
+}
+
+/** For a sign-out that knows no account to leave: the browser stops taking anyone's pushes. */
 export async function dropPushSubscription() {
   const subscription = await (await registration())?.pushManager.getSubscription();
   await subscription?.unsubscribe().catch(() => {});
+  localStorage.removeItem(OWNERS_KEY);
 }
 
 /**
- * Run at launch: a device with notifications on gives the server its subscription again.
- * Browsers replace subscriptions (iOS drops them now and then), and a restored server
- * backup may not hold this one.
+ * Run at launch: a device with notifications on gives the server its subscription again,
+ * for every account signed in on it. Browsers replace subscriptions (iOS drops them now and
+ * then), a restored server backup may not hold this one, and an account may have been added.
  */
 export function syncPush() {
   if (nativeReminders.available) return refreshPushState();
   return inTurn(async () => {
     try {
       const worker = await registration();
-      if (
-        worker &&
-        supported() &&
-        Notification.permission === 'granted' &&
-        localStorage.getItem(enabledKey()) === 'true'
-      ) {
+      if (worker && supported() && Notification.permission === 'granted' && deviceWantsPush()) {
         await subscribe(worker);
       } else if (worker && supported()) {
-        // A subscription this user never turned on was left by whoever used the browser
+        // A subscription nobody here turned on was left by whoever used the browser
         // before, whose session ended without a sign-out. Dropped, so their reminders stop
         // arriving here.
         await (await worker.pushManager.getSubscription())?.unsubscribe();
+        localStorage.removeItem(OWNERS_KEY);
       }
     } catch {
       // Offline; the next launch tries again.
@@ -205,8 +300,11 @@ export async function sendTestPush() {
   if (sent === 0) throw new Error('The push service did not take the notification.');
 }
 
-/** A notification that was tapped asks the open app to show its note. */
-export function onNotificationOpen(open: (noteId: string) => void) {
+/**
+ * A notification that was tapped asks the open app to show its note. It says whose note it
+ * is when it knows, since the app may be showing another account's.
+ */
+export function onNotificationOpen(open: (noteId: string, userId?: string) => void) {
   if (nativeReminders.available) return nativeReminders.onOpen(open);
   if (!('serviceWorker' in navigator)) return () => {};
   const listener = (event: MessageEvent) => {
@@ -219,7 +317,10 @@ export function onNotificationOpen(open: (noteId: string) => void) {
       'noteId' in data &&
       typeof data.noteId === 'string'
     ) {
-      open(data.noteId);
+      open(
+        data.noteId,
+        'userId' in data && typeof data.userId === 'string' ? data.userId : undefined,
+      );
     }
   };
   navigator.serviceWorker.addEventListener('message', listener);

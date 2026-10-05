@@ -312,7 +312,7 @@ export const reminderSettings = pgTable('reminder_settings', {
 export const pushSubscriptions = pgTable(
   'push_subscriptions',
   {
-    endpoint: text().primaryKey(),
+    endpoint: text().notNull(),
     userId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
@@ -320,7 +320,8 @@ export const pushSubscriptions = pgTable(
     auth: text().notNull(),
     createdAt: createdAt(),
   },
-  (table) => [index().on(table.userId)],
+  // One browser can be signed in to several accounts, and rings for each (ADR 0019).
+  (table) => [primaryKey({ columns: [table.endpoint, table.userId] }), index().on(table.userId)],
 );
 
 /**

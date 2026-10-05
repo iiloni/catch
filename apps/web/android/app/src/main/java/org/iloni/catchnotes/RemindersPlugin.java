@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 /** The web app's side of the phone's reminders: what to ring, and what was done about it. */
 @CapacitorPlugin(
@@ -39,7 +40,9 @@ public class RemindersPlugin extends Plugin {
         // A rotation or a return from the background must not open it again.
         intent.setAction(Intent.ACTION_MAIN);
         ReminderAlarms.dismiss(getContext(), noteId);
-        notifyListeners("open", new JSObject().put("noteId", noteId), true);
+        String account = intent.getStringExtra(ReminderAlarms.ACCOUNT);
+        // The web app switches to the account whose note it is before opening it.
+        notifyListeners("open", new JSObject().put("noteId", noteId).put("userId", account == null ? "" : account), true);
     }
 
     private String permission() {
@@ -88,19 +91,24 @@ public class RemindersPlugin extends Plugin {
     @PluginMethod
     public void sync(PluginCall call) {
         JSArray alarms = call.getArray("alarms", new JSArray());
+        String account = call.getString("account");
+        if (account == null || account.isEmpty()) {
+            call.reject("The reminders name no account.");
+            return;
+        }
         try {
-            ReminderAlarms.store(getContext(), new JSONArray(alarms.toString()));
+            ReminderAlarms.sync(getContext(), account, new JSONObject()
+                    .put("label", call.getString("label", ""))
+                    .put("server", call.getString("server"))
+                    .put("token", call.getString("token"))
+                    .put("protocol", call.getString("protocol"))
+                    // Changes still waiting on this device are ones the server cannot tell of.
+                    .put("unsent", Boolean.TRUE.equals(call.getBoolean("unsent", false))),
+                    new JSONArray(alarms.toString()));
         } catch (JSONException error) {
             call.reject("The reminders could not be read.");
             return;
         }
-        ReminderAlarms.preferences(getContext()).edit()
-                .putString("server", call.getString("server"))
-                .putString("token", call.getString("token"))
-                .putString("protocol", call.getString("protocol"))
-                // Changes still waiting on this device are ones the server cannot tell of.
-                .putBoolean("unsent", Boolean.TRUE.equals(call.getBoolean("unsent", false)))
-                .apply();
         ReminderAlarms.schedule(getContext());
         call.resolve();
     }
@@ -138,7 +146,7 @@ public class RemindersPlugin extends Plugin {
 
     @PluginMethod
     public void clear(PluginCall call) {
-        ReminderAlarms.clear(getContext());
+        ReminderAlarms.clear(getContext(), call.getString("account"));
         call.resolve();
     }
 }

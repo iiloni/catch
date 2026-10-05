@@ -15,7 +15,7 @@ import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
-import { arrivedBySwitching, followAccountChanges } from '@/lib/accounts';
+import { arrivedBySwitching, followAccountChanges, switchAccount } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -26,6 +26,7 @@ import { syncReminderSettings } from '@/lib/reminders';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
+import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 
 /**
  * Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`.
@@ -46,7 +47,16 @@ export const Route = createFileRoute('/_app')({
 function AppLayout() {
   useEffect(watchUpdates, []);
   const { open } = useOpenNote();
-  useEffect(() => onNotificationOpen(open), [open]);
+  useEffect(
+    () =>
+      onNotificationOpen((noteId, userId) => {
+        // A reminder rings for every account on the device; this one may be another's.
+        if (!userId || userId === getSignedInUser()?.id) open(noteId);
+        else if (isUpdateReloadBlocked()) toast('Close the open note to see that reminder.');
+        else switchAccount(userId, noteId);
+      }),
+    [open],
+  );
   useEffect(watchNativeReminders, []);
   useEffect(followAccountChanges, []);
   useEffect(() => {

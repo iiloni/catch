@@ -29,7 +29,7 @@ function canLeave(action: string) {
 function switchTo(account: Account) {
   if (!canLeave('switching accounts')) return false;
   haptics.success();
-  void switchAccount(account.user.id);
+  switchAccount(account.user.id);
   return true;
 }
 

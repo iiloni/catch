@@ -60,6 +60,21 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(card(page, 'Written after switching back')).toBeHidden();
   // A swipe is not a tap: the list stays closed.
   await expect(page.getByRole('list', { name: 'Accounts' })).toBeHidden();
+
+  // A reminder's notification opens the app as the account it rang for.
+  const firstId = await page.evaluate(
+    (email) =>
+      (
+        JSON.parse(localStorage.getItem('catch-accounts') ?? '[]') as {
+          user: { id: string; email: string };
+        }[]
+      ).find(({ user }) => user.email === email)?.user.id,
+    first,
+  );
+  await page.goto(`/?account=${firstId}`);
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, 'First account note')).toBeVisible();
+  expect(new URL(page.url()).search).toBe('');
 });
 
 test('other tabs follow a switch, and signing out one account leaves the rest', async ({

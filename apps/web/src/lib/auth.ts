@@ -39,6 +39,25 @@ const activeToken = () => localStorage.getItem(sessionKey(TOKEN_KEY));
 const activeUser = () => read(USER_KEY, signedInUserSchema);
 
 /**
+ * A notification says whose note it opens (`?account=<id>`), and the app may have last been
+ * used as someone else. That account becomes the one in use before anything reads it.
+ */
+function followAccountLink() {
+  const url = new URL(window.location.href);
+  const userId = url.searchParams.get('account');
+  if (userId === null) return;
+  url.searchParams.delete('account');
+  window.history.replaceState(window.history.state, '', url);
+  const accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
+  const account = accounts.find(({ user }) => user.id === userId);
+  if (!account || activeUser()?.id === userId) return;
+  // As `activateAccount` does: the session being replaced stays in the list.
+  writeAccounts(getAccounts());
+  writeActive(account);
+}
+followAccountLink();
+
+/**
  * The account this page was loaded for. Collections open that user's database when the app
  * starts (ADR 0007), so the page keeps sending that account's token even after the device
  * has switched to a different one, here or in another tab, until it loads again. Once set it

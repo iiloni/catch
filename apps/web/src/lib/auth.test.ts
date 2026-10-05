@@ -228,6 +228,20 @@ describe('several accounts on one device', () => {
     ]);
   });
 
+  it('loads as the account a notification names', async () => {
+    await signInBoth();
+    window.history.replaceState(null, '', `/?note=abc&account=${user.id}`);
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(auth.getAccounts()).toHaveLength(2);
+    expect(window.location.search).toBe('?note=abc');
+    // An account that is not signed in here changes nothing.
+    window.history.replaceState(null, '', '/?account=nobody');
+    await load();
+    expect(auth.getSignedInUser()).toEqual(user);
+    expect(window.location.search).toBe('');
+  });
+
   it('refuses to switch to an account that is not signed in', () => {
     signIn('first-token');
     expect(auth.activateAccount('nobody')).toBe(false);

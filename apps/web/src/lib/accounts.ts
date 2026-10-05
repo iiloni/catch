@@ -15,7 +15,7 @@ import { forgetImport } from './imports';
 import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
 import { nativeReminders } from './nativeReminders';
-import { disablePush, dropPushSubscription } from './push';
+import { dropPushSubscription, leavePush, syncPush } from './push';
 import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
 import { getSyncStatus } from './syncStatus';
@@ -23,21 +23,20 @@ import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
 
 /**
  * Several accounts can be signed in on one device (ADR 0019). One is in use at a time: its
- * notes are the ones open, its outbox the one sending, and its reminders the ones that ring.
- * The others keep their session and their copy of their notes until they are switched to.
+ * notes are the ones open and its outbox the one sending. The others keep their session and
+ * their copy of their notes until they are switched to, and their reminders still ring.
  */
 
 const SWITCHED_KEY = 'catch-account-switched';
 
-/** Changes the account in use. A full load, so the collections open that account's notes. */
-export async function switchAccount(userId: string) {
-  const account = getAccounts().find(({ user }) => user.id === userId);
-  if (!account || userId === getSignedInUser()?.id) return;
-  // The phone rings for one account, and would go on ringing for the one being left.
-  await nativeReminders.handOver(account.token).catch(() => undefined);
-  if (!activateAccount(userId)) return;
+/**
+ * Changes the account in use, opening one of its notes if asked. A full load, so the
+ * collections open that account's notes.
+ */
+export function switchAccount(userId: string, noteId?: string) {
+  if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
-  window.location.assign('/');
+  window.location.assign(noteId ? `/?note=${encodeURIComponent(noteId)}` : '/');
 }
 
 /**
@@ -85,6 +84,9 @@ export async function unsyncedChanges(account: Account) {
 /** Signs an account out of this device and deletes its data here. */
 export async function signOutAccount(account: Account) {
   if (account.user.id === getSignedInUser()?.id) return signOutCurrentAccount();
+  // While the session still stands, the device stops ringing for this account.
+  await leavePush(account).catch(() => undefined);
+  await nativeReminders.clear(account.user.id).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await fetch(`${getServerUrl()}/api/auth/sign-out`, {
     method: 'POST',
@@ -120,22 +122,21 @@ export async function signOutAccount(account: Account) {
     localStorage.removeItem(key);
   }
   forgetAccount(id);
+  // The browser's subscription was dropped if the server could not be told; this makes
+  // one again for the accounts that stay.
+  void syncPush();
 }
 
 /** Signs out the account in use, then carries on as another if one is signed in. */
 export async function signOutCurrentAccount() {
+  const user = getSignedInUser();
+  const account = getAccounts().find((other) => other.user.id === user?.id);
   // While the session still stands: the server must stop sending this browser the user's
-  // reminders. Not for long, though: a connection that never answers must not hold up leaving.
-  const told = await Promise.race([
-    disablePush().then(
-      () => true,
-      () => false,
-    ),
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
-  ]);
-  if (!told) await dropPushSubscription().catch(() => undefined);
+  // reminders. The accounts that stay signed in go on ringing.
+  if (account) await leavePush(account).catch(() => undefined);
+  else await dropPushSubscription().catch(() => undefined);
   // The phone keeps reminders and a token of its own to ring with the app closed.
-  await nativeReminders.clear().catch(() => undefined);
+  await nativeReminders.clear(user?.id).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();

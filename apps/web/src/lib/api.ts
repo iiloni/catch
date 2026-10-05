@@ -141,12 +141,20 @@ export const api = {
       body: JSON.stringify(body),
     }),
   pushKey: () => request<PushKey>('/push/key', { method: 'GET' }),
-  savePushSubscription: (body: PushSubscriptionInput) =>
-    request<{ ok: true }>('/push/subscriptions', { method: 'POST', body: JSON.stringify(body) }),
-  deletePushSubscription: (endpoint: string) =>
+  // A browser rings for every account signed in on it, so these name whose token to send
+  // rather than always acting for the account in use.
+  savePushSubscription: (body: PushSubscriptionInput, token: string) =>
+    request<{ ok: true }>('/push/subscriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }),
+  deletePushSubscription: (endpoint: string, token: string, signal?: AbortSignal) =>
     request<{ ok: true }>('/push/subscriptions', {
       method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({ endpoint }),
+      signal,
     }),
   testPush: (endpoint: string) =>
     request<TestPushResponse>('/push/test', { method: 'POST', body: JSON.stringify({ endpoint }) }),
