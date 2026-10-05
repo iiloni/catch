@@ -69,10 +69,12 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     ['general', 'General'],
     ['tags', 'Tags'],
     ['account', 'Account'],
+    ['notifications', 'Notifications'],
     ['data', 'Data Management'],
     ['update', 'Update'],
   ]) {
     if (path !== 'general') {
+      if (isMobile) await page.setViewportSize({ width: 320, height: 500 });
       const pages = page.getByRole('navigation', { name: 'Settings pages' });
       if (isMobile) {
         await page.getByRole('button', { name: /^Settings page:/ }).click();
@@ -82,6 +84,7 @@ test('settings titles collapse into glass pills with an edge blur on every user 
       }
     }
     await waitForPageTransition(page);
+    if (isMobile) await page.setViewportSize({ width: 320, height: 300 });
     const header = page.locator('[data-page-header]');
     const title = header.getByRole('heading', { level: 1, name: isMobile ? label : 'Settings' });
     const pill = header.getByRole('button', { name: 'Scroll to top' });
