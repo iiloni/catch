@@ -140,6 +140,67 @@ test('desktop gallery cards assign secondary tags without opening the editor', a
   ).toBeVisible();
 });
 
+test('card actions and tag popovers stay inside narrow and short viewports', async ({
+  page,
+  request,
+  isMobile,
+}, testInfo) => {
+  test.skip(isMobile, 'Exercises desktop card controls at narrow viewport widths.');
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Work');
+  for (let index = 0; index < 16; index++) await addTag(request, headers, `Project ${index}`, root);
+  await seedNotes(page, ['Viewport bounds']);
+  const noteCard = card(page, 'Viewport bounds');
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  const popup = page.locator('[data-slot="popover-content"]').filter({ has: picker });
+  const assertBounds = async () => {
+    const box = await settledBox(popup);
+    const viewport = page.viewportSize();
+    expect(box.x).toBeGreaterThanOrEqual(15);
+    expect(box.y).toBeGreaterThanOrEqual(15);
+    expect(box.x + box.width).toBeLessThanOrEqual((viewport?.width ?? 0) - 15);
+    expect(box.y + box.height).toBeLessThanOrEqual((viewport?.height ?? 0) - 15);
+    await expect(picker.getByRole('textbox', { name: 'Find tags' })).toBeInViewport({ ratio: 1 });
+    const scroll = picker.locator('[data-slot="scroll-area-viewport"]');
+    expect(await scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+      true,
+    );
+  };
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 480 });
+    await noteCard.hover();
+    const cardBox = await settledBox(noteCard);
+    for (const label of ['Background color', 'Tags', 'Move note', 'Archive', 'Move to trash']) {
+      const box = await settledBox(noteCard.getByRole('button', { name: label, exact: true }));
+      expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+    }
+    await noteCard.getByRole('button', { name: 'Tags', exact: true }).click();
+    await expect(
+      picker.getByRole('checkbox', { name: 'Work / Project 15', exact: true }),
+    ).toHaveCount(1);
+    await assertBounds();
+    await page.setViewportSize({ width, height: 320 });
+    await assertBounds();
+    await picker.getByRole('textbox', { name: 'Find tags' }).fill('Project 15');
+    await picker.getByRole('checkbox', { name: 'Work / Project 15', exact: true }).check();
+    await page.screenshot({ path: testInfo.outputPath(`tag-picker-${width}.png`) });
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({ width: 375, height: 480 });
+  await noteCard.hover();
+  await page
+    .locator('[data-note-cell]')
+    .getByRole('button', { name: 'Select note', exact: true })
+    .click();
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Tags', exact: true })
+    .click();
+  await assertBounds();
+});
+
 test('secondary tag search keeps focus and selection usable above the keyboard', async ({
   page,
   request,

@@ -61,7 +61,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   return (
     <div className={cn('flex flex-col', className, (moving || tagging) && 'opacity-100')}>
-      <div className="flex items-center gap-0.5">
+      <div className="flex min-w-0 items-center gap-0.5 [&>button]:min-w-0 [&>button]:shrink">
         <NoteColorPicker
           note={note}
           onChange={(color) => setNoteColor(note.id, color)}
@@ -75,6 +75,8 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             align="start"
+            collisionPadding={16}
+            sticky="always"
             className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
           >

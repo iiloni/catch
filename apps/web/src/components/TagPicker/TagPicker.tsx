@@ -36,7 +36,8 @@ export function TagPicker({ noteId, noteIds }: Props) {
         <TagTree
           tags={tags}
           searchPosition="bottom"
-          className="max-h-[min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-7rem))]"
+          // Leave room for the heading, search field and padding within an anchored popover.
+          className="max-h-[max(0px,min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-7rem),calc(var(--radix-popover-content-available-height,100dvh)-7rem)))]"
           renderTag={(tag, path) => {
             const root = path[0];
             const states = ids.map((id) => {

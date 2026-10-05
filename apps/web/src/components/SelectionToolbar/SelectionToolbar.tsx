@@ -139,6 +139,8 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
         <PopoverContent
           align="end"
           sideOffset={10}
+          collisionPadding={16}
+          sticky="always"
           className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
         >
           <TagPicker noteIds={ids} />
