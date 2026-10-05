@@ -87,12 +87,44 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     const pill = header.getByRole('button', { name: 'Scroll to top' });
     const blur = header.locator('.page-top-blur');
     await expect(title).toBeVisible({ timeout: 30_000 });
-    await expect(title).toHaveCSS('font-size', '42px');
     await expect(pill).toBeDisabled();
     await expect(blur).toHaveCSS('opacity', '0');
     const expandedBox = await settledBox(title);
+    const expandedSize = await title.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).fontSize),
+    );
+    if (isMobile && path === 'data') {
+      expect(expandedSize).toBeGreaterThan(17);
+      expect(expandedSize).toBeLessThan(42);
+    } else {
+      expect(expandedSize).toBe(42);
+    }
+    expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true,
+    );
     expect(expandedBox.x).toBeGreaterThanOrEqual(0);
     expect(expandedBox.x + expandedBox.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      page.viewportSize()?.width ?? 0,
+    );
+    if (isMobile && path === 'data') {
+      await page.setViewportSize({ width: 360, height: 300 });
+      await expect
+        .poll(() =>
+          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        )
+        .toBeGreaterThan(expandedSize);
+      await settledBox(title);
+      expect(
+        await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+      ).toBe(true);
+      await page.setViewportSize({ width: 320, height: 300 });
+      await expect
+        .poll(() =>
+          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+        )
+        .toBeCloseTo(expandedSize, 1);
+    }
 
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(pill).toBeEnabled();
@@ -109,7 +141,11 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     await pill.click();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(pill).toBeDisabled();
-    await expect(title).toHaveCSS('font-size', '42px');
+    await expect
+      .poll(() =>
+        title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+      )
+      .toBeCloseTo(expandedSize, 1);
     await expect(blur).toHaveCSS('opacity', '0');
   }
 });

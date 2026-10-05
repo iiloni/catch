@@ -148,6 +148,42 @@ const TITLE_REST_Y = 66;
  */
 const TITLE_COLLAPSE_AT = 16;
 
+/** Fit the complete title using its actual font metrics, including after fonts load. */
+function useFittedTitle(title: string) {
+  const area = useRef<HTMLDivElement>(null);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [fontSize, setFontSize] = useState(42);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Remeasure changed text before paint, as well as observing later width and font changes.
+  useLayoutEffect(() => {
+    const container = area.current;
+    const text = measure.current;
+    if (!container || !text) return;
+    const update = () => {
+      const available = container.clientWidth - 24;
+      let size = 42;
+      text.style.fontSize = `${size}px`;
+      let width = text.getBoundingClientRect().width;
+      if (available <= 1 || width <= 0) return;
+      // Optical sizing changes the font's proportions, so verify each smaller size.
+      for (let attempt = 0; width > available && attempt < 4; attempt++) {
+        size *= (available - 1) / width;
+        text.style.fontSize = `${size}px`;
+        width = text.getBoundingClientRect().width;
+      }
+      setFontSize(size);
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    observer.observe(text);
+    return () => observer.disconnect();
+  }, [title]);
+
+  return { area, measure, fontSize };
+}
+
 /**
  * The header of the pages in the dock. The large title moves into the top left corner as a
  * glass pill once the page starts to scroll, taking the place of the brand there.
@@ -182,6 +218,7 @@ export function TabPageHeader({
   // What sits in the left corner stays over the page's edge while a note pane slides.
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
+  const fittedTitle = useFittedTitle(title);
 
   useEffect(() => {
     const stop = () => scrollAnimation.current?.stop();
@@ -242,9 +279,17 @@ export function TabPageHeader({
             </motion.div>
           </motion.div>
           <motion.div
+            ref={fittedTitle.area}
             className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
             style={{ x: titleShift, y: titleScrollY }}
           >
+            <span
+              ref={fittedTitle.measure}
+              aria-hidden
+              className="invisible absolute w-max whitespace-nowrap font-display font-extrabold text-[42px] leading-none tracking-[-0.03em]"
+            >
+              {title}
+            </span>
             <motion.div
               className="absolute flex h-full max-w-[calc(100%-1.5rem)] items-center rounded-[var(--dock-radius)]"
               initial={false}
@@ -253,7 +298,7 @@ export function TabPageHeader({
                 x: collapsed ? '0%' : '-50%',
                 marginLeft: collapsed ? 12 + (leadingWidth > 0 ? leadingWidth + 8 : 0) : 0,
                 y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
-                fontSize: collapsed ? 17 : 42,
+                fontSize: collapsed ? 17 : fittedTitle.fontSize,
                 paddingInline: collapsed ? 14 : 0,
                 opacity: selection ? 0 : 1,
               }}
@@ -268,7 +313,7 @@ export function TabPageHeader({
               />
               <motion.h1
                 style={entry}
-                className="header-fade relative min-w-0 truncate font-display font-extrabold leading-none tracking-[-0.03em]"
+                className="header-fade relative min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
               >
                 {title}
               </motion.h1>

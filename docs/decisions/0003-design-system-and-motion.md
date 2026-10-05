@@ -78,9 +78,11 @@ Gallery's sort and settings, the Deck's column editor, Archive and Trash's back 
 Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
 change it animates its width (never scale) to fit the new ones while the old ones fade out.
 The dock's pages (Gallery, Deck, Search) and Settings share `TabPageHeader`: a large centered
-title that moves into the top left corner as a glass pill once the page starts to scroll. It follows
-the page for the first 16 px and then leaves for the corner, while it is still below the
-header's row: on a phone the centered title is wider than the gap between the corners, so
+title that moves into the top left corner as a glass pill once the page starts to scroll.
+Long titles reduce their expanded font size to fit the page's width, keeping the full name
+on one line and measuring again when the page resizes or the font loads.
+The title follows the page for the first 16 px and then leaves for the corner, while it is
+still below the header's row: on a phone the centered title is wider than the gap between the corners, so
 riding the page up to the row ran it into the controls on the right. Until then
 their top right controls are flat buttons on the page, and they gain the same glass as the
 title does. Selecting notes always shows the glass. Settings uses the open page's title on
