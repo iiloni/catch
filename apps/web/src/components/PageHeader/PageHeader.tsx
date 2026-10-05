@@ -424,14 +424,21 @@ function MorphingPill({
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
+  const glassOpacity = useMotionValue(glass ? 1 : 0);
+  const measured = useRef(0);
+  const glassNow = useRef(glass);
+  glassNow.current = glass;
   const measure = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return;
       const update = () => {
         const next = element.offsetWidth;
+        measured.current = next;
         onWidthChange?.(next);
-        if (width.get() === 'auto') width.jump(next);
-        else animate(width, next, springs.smooth);
+        // Nobody sees a pill without glass resize, so it takes its size at once and the
+        // glass arrives already fitted. Glass on its way out keeps its size until it is gone.
+        if (width.get() === 'auto' || glassOpacity.get() < 0.1) width.jump(next);
+        else if (glassNow.current) animate(width, next, springs.smooth);
       };
       update();
       if (typeof ResizeObserver === 'undefined') return;
@@ -439,8 +446,19 @@ function MorphingPill({
       observer.observe(element);
       return () => observer.disconnect();
     },
-    [width, onWidthChange],
+    [width, glassOpacity, onWidthChange],
   );
+  useEffect(() => {
+    let current = true;
+    const fade = animate(glassOpacity, glass ? 1 : 0, { ...springs.smooth, visualDuration: 0.3 });
+    fade.then(() => {
+      if (current && !glass && measured.current > 0) width.jump(measured.current);
+    });
+    return () => {
+      current = false;
+      fade.stop();
+    };
+  }, [glass, glassOpacity, width]);
 
   return (
     <motion.div
@@ -458,12 +476,13 @@ function MorphingPill({
       <motion.span
         aria-hidden
         className="glass header-fade absolute inset-0 rounded-[var(--dock-radius)]"
-        initial={false}
-        animate={{ '--header-layer-opacity': glass ? 1 : 0 }}
-        transition={{ ...springs.smooth, visualDuration: 0.3 }}
+        style={{ '--header-layer-opacity': glassOpacity } as HeaderLayerStyle}
       />
-      {/* Clip changing controls separately so the glass surface keeps its outer shadow. */}
-      <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+      {/*
+        Clip changing controls separately so the glass surface keeps its outer shadow. Flat
+        controls are not clipped: they may be wider than the glass fading out behind them.
+      */}
+      <div className={cn('absolute inset-0 rounded-[inherit]', glass && 'overflow-hidden')}>
         <AnimatePresence initial={false}>
           <motion.div
             key={mode}
@@ -505,25 +524,21 @@ export function BackToGallery() {
       whileTap={{ scale: 0.9 }}
       onClick={() => goToGalleryPage('/')}
       className={cn(
-        'relative flex h-10 items-center gap-0.5 rounded-full font-medium text-[1.0625rem] outline-none transition-[padding] hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'flex h-10 items-center gap-0.5 rounded-full font-medium text-[1.0625rem] outline-none transition-[padding] hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50',
         collapsed ? 'px-1.5' : 'pr-3 pl-0.5',
       )}
     >
       <ChevronLeft className="size-7" aria-hidden />
-      {/* Out of the layout at once, so the toolbar closes over the label as it fades. */}
-      <AnimatePresence initial={false} mode="popLayout">
-        {!collapsed && (
-          <motion.span
-            key="label"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.14 }}
-          >
-            Gallery
-          </motion.span>
-        )}
-      </AnimatePresence>
+      {/* It goes at once: the glass arriving around the chevron would clip a fading label. */}
+      {!collapsed && (
+        <motion.span
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          Gallery
+        </motion.span>
+      )}
     </motion.button>
   );
 }
