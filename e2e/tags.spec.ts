@@ -171,7 +171,14 @@ test('card actions and tag popovers stay inside narrow and short viewports', asy
     await page.setViewportSize({ width, height: 480 });
     await noteCard.hover();
     const cardBox = await settledBox(noteCard);
-    for (const label of ['Background color', 'Tags', 'Move note', 'Archive', 'Move to trash']) {
+    for (const label of [
+      'Background color',
+      'Tags',
+      'Move note',
+      'Reminder',
+      'Archive',
+      'Move to trash',
+    ]) {
       const box = await settledBox(noteCard.getByRole('button', { name: label, exact: true }));
       expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
       expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);

@@ -2,6 +2,7 @@ import { DEFAULT_BOARD_STATUS, type Note } from '@catch/shared';
 import {
   Archive,
   ArchiveRestore,
+  Bell,
   Columns3,
   LayoutDashboard,
   RotateCcw,
@@ -13,10 +14,11 @@ import { useState } from 'react';
 import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
+import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { useBoardColumns } from '@/lib/collections';
+import { useBoardColumns, useReminders } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import {
   deleteNoteForever,
@@ -27,7 +29,7 @@ import {
   setNoteColor,
   trashNote,
 } from '@/lib/notes';
-import { setPrimaryTag } from '@/lib/tags';
+import { setPrimaryTag, useNoteColor } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -41,6 +43,9 @@ type Props = {
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
   const [tagging, setTagging] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const reminder = useReminders().get(note.id);
+  const color = useNoteColor(note);
   const then = (action: () => unknown) => () => {
     action();
     onDone?.();
@@ -60,7 +65,9 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   }
 
   return (
-    <div className={cn('flex flex-col', className, (moving || tagging) && 'opacity-100')}>
+    <div
+      className={cn('flex flex-col', className, (moving || tagging || reminding) && 'opacity-100')}
+    >
       <div className="flex min-w-0 items-center gap-0.5 [&>button]:min-w-0 [&>button]:shrink">
         <NoteColorPicker
           note={note}
@@ -103,6 +110,28 @@ export function NoteToolbar({ note, onDone, className }: Props) {
                 if (status === null) sendNoteToGallery(note.id);
                 else moveNoteToDeck(note.id, status);
               }}
+            />
+          </PopoverContent>
+        </Popover>
+        <Popover open={reminding} onOpenChange={setReminding}>
+          <PopoverTrigger asChild>
+            <IconButton label="Reminder" onClick={() => haptics.toggle()}>
+              <Bell className={cn(reminder && 'fill-current')} />
+            </IconButton>
+          </PopoverTrigger>
+          <PopoverContent
+            aria-label="Reminder"
+            // Beside an open note the page is only as wide as the pane leaves it.
+            className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ReminderPanel
+              note={note}
+              color={color}
+              reminder={reminder}
+              onDone={() => setReminding(false)}
+              // Less the panel's action row, which sits under this.
+              className="max-h-[min(30rem,calc(var(--radix-popover-content-available-height)-5.25rem))]"
             />
           </PopoverContent>
         </Popover>

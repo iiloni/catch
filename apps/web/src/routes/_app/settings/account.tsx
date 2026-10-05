@@ -16,6 +16,8 @@ import {
 import { authClient, clearAuthToken, getSignedInUser } from '@/lib/auth';
 import { clearLocalData } from '@/lib/collections';
 import { forgetImport } from '@/lib/imports';
+import { nativeReminders } from '@/lib/nativeReminders';
+import { disablePush, dropPushSubscription } from '@/lib/push';
 import { getServerUrl } from '@/lib/serverUrl';
 import { useSyncStatus } from '@/lib/syncStatus';
 
@@ -24,6 +26,18 @@ export const Route = createFileRoute('/_app/settings/account')({
 });
 
 async function signOut() {
+  // While the session still stands: the server must stop sending this browser the user's
+  // reminders. Not for long, though: a connection that never answers must not hold up leaving.
+  const told = await Promise.race([
+    disablePush().then(
+      () => true,
+      () => false,
+    ),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+  ]);
+  if (!told) await dropPushSubscription().catch(() => undefined);
+  // The phone keeps reminders and a token of its own to ring with the app closed.
+  await nativeReminders.clear().catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();

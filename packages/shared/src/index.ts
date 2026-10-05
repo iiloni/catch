@@ -10,6 +10,7 @@ export * from './plainText';
 export * from './position';
 export * from './protocol';
 export * from './releases';
+export * from './reminders';
 export * from './sync';
 export * from './tags';
 export * from './users';

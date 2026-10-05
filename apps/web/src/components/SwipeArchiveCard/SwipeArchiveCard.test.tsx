@@ -6,7 +6,9 @@ import { haptics } from '@/lib/haptics';
 import { SwipeArchiveCard } from './SwipeArchiveCard';
 
 // Cards read link previews; these notes have no links, so no sync is needed.
+const reminders = vi.hoisted(() => new Map());
 vi.mock('@/lib/collections', () => ({
+  useReminders: () => reminders,
   useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),

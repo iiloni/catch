@@ -53,7 +53,7 @@ export const backupItemSchema = z.object({
 });
 export type BackupItem = z.infer<typeof backupItemSchema>;
 
-function isTimeZone(value: string) {
+export function isTimeZone(value: string) {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value });
     return true;

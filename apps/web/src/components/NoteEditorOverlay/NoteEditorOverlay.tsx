@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { Archive, ArchiveRestore, ChevronLeft, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronLeft, Pin, Trash2 } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -22,11 +22,12 @@ import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
+import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
-import { notesCollection } from '@/lib/collections';
-import { editorControls, noteDockPanelOpen, quickNote } from '@/lib/dockState';
+import { notesCollection, useReminders } from '@/lib/collections';
+import { editorControls, noteDockPanelOpen, noteReminderRequest, quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { useNoteLinks } from '@/lib/linkPreviews';
@@ -38,7 +39,13 @@ import {
   springs,
   stopSteady,
 } from '@/lib/motion';
-import { deleteNoteForever, discardIfEmpty, setNoteArchived, trashNote } from '@/lib/notes';
+import {
+  deleteNoteForever,
+  discardIfEmpty,
+  setNoteArchived,
+  setNotePinned,
+  trashNote,
+} from '@/lib/notes';
 import {
   CARD_FACE_FADE_END,
   editorProgress,
@@ -150,6 +157,7 @@ const leavingPanes = new Set<() => void>();
 const SWAP_MS = 250;
 
 function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
+  const reminder = useReminders().get(note.id);
   const popupState = quickNote.use();
   const capture = linkCaptureControls.use();
   const color = useNoteColor(note);
@@ -491,6 +499,17 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           {!sideLinks && (
             <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />
           )}
+          {reminder && !note.deletedAt && (
+            <div className="flex justify-center px-4 pt-6">
+              <ReminderChip
+                reminder={reminder}
+                onClick={() => {
+                  haptics.toggle();
+                  noteReminderRequest.set(noteReminderRequest.get() + 1);
+                }}
+              />
+            </div>
+          )}
           <NoteTimestamp updatedAt={note.updatedAt} />
           {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
           <div
@@ -638,13 +657,35 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 <div
                   className={cn(
                     'pointer-events-none relative h-[50px] min-w-0 flex-1',
-                    // Balance the archive button so the centered pill clears history in narrow panes.
-                    editable && 'ml-10',
+                    // Balance the buttons on the right so the centered pill clears history in
+                    // narrow panes. A phone has no history there and no width to spare.
+                    editable && (note.isArchived ? 'sm:ml-10' : 'sm:ml-[5.5625rem]'),
                   )}
                 >
                   <SaveStatus state={state} compact={split && target.width < 480} />
                 </div>
-                <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
+                <div className="glass flex shrink-0 items-center rounded-[var(--dock-radius)] p-1">
+                  {editable && !note.isArchived && (
+                    <>
+                      <IconButton
+                        label={note.isPinned ? 'Unpin' : 'Pin'}
+                        aria-pressed={note.isPinned}
+                        onPointerDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          haptics.toggle();
+                          setNotePinned(note.id, !note.isPinned);
+                        }}
+                        className={cn(
+                          'size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6',
+                          note.isPinned && 'bg-foreground/[0.08]',
+                        )}
+                      >
+                        <Pin className={cn(note.isPinned && 'fill-current')} />
+                      </IconButton>
+                      {/* Pinning keeps the note; the two beyond the line put it away. */}
+                      <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
+                    </>
+                  )}
                   {editable && (
                     <IconButton
                       label={note.isArchived ? 'Unarchive' : 'Archive'}

@@ -19,7 +19,12 @@ self.addEventListener('message', (event) => {
 });
 clientsClaim();
 cleanupOutdatedCaches();
-precacheAndRoute(self.__WB_MANIFEST);
+const precached = self.__WB_MANIFEST;
+// Release channels have icons of their own; the precache list names this build's.
+const appIcon = precached
+  .map((entry) => (typeof entry === 'string' ? entry : entry.url))
+  .find((url) => url.endsWith('pwa-192x192.png'));
+precacheAndRoute(precached);
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//] }),
 );
@@ -56,3 +61,60 @@ registerRoute(
   },
   'POST',
 );
+
+// Reminders arrive as Web Push messages from the Catch server (ADR 0018).
+function pushMessage(event: PushEvent) {
+  let data: unknown = null;
+  try {
+    data = event.data?.json();
+  } catch {
+    // Not ours, or not JSON. iOS withdraws push from an app that shows nothing for a message.
+  }
+  const field = (name: string) => {
+    const value =
+      data && typeof data === 'object' ? (data as Record<string, unknown>)[name] : undefined;
+    return typeof value === 'string' ? value : null;
+  };
+  return { title: field('title') ?? 'Catch', body: field('body') ?? '', noteId: field('noteId') };
+}
+
+self.addEventListener('push', (event) => {
+  const { title, body, noteId } = pushMessage(event);
+  // `renotify` is in browsers but not yet in TypeScript's types.
+  const options: NotificationOptions & { renotify: boolean } = {
+    body,
+    icon: appIcon,
+    // A reminder that rings again replaces its last notification instead of stacking.
+    tag: noteId ?? 'catch',
+    // And alerts again when it does, which a replaced notification otherwise would not.
+    renotify: true,
+    data: { noteId },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const noteId: unknown = event.notification.data?.noteId;
+  const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}` : '/';
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Only the signed-in app listens for the message; a window at sign-in or setup does not.
+      const outside = (client: WindowClient) =>
+        /^\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
+      const open = windows.find((client) => !outside(client)) ?? windows[0];
+      if (!open) {
+        await self.clients.openWindow(path);
+        return;
+      }
+      await open.focus();
+      if (outside(open)) {
+        await open.navigate(path).catch(() => self.clients.openWindow(path));
+        return;
+      }
+      // Navigating would reload the app; it opens the note itself.
+      if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId });
+    })(),
+  );
+});

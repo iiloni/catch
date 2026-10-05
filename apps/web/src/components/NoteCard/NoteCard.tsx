@@ -9,7 +9,9 @@ import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
+import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
 import { useNoteAttachments } from '@/lib/attachments';
+import { useReminders } from '@/lib/collections';
 import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
@@ -46,9 +48,21 @@ export function NoteCardFace({ note }: { note: Note }) {
   return (
     <>
       <NoteCardContent note={note} />
+      <NoteReminder note={note} />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" interactive={false} />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
     </>
+  );
+}
+
+/** When the note's reminder rings. A tap on it opens the note like the rest of the face. */
+function NoteReminder({ note }: { note: Note }) {
+  const reminder = useReminders().get(note.id);
+  if (!reminder || note.deletedAt) return null;
+  return (
+    <div className="pointer-events-none flex px-3.5 pb-3">
+      <ReminderChip reminder={reminder} />
+    </div>
   );
 }
 
@@ -184,6 +198,7 @@ export function NoteCard({
       >
         <NoteCardContent note={note} />
       </button>
+      <NoteReminder note={note} />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
       <motion.span
