@@ -128,14 +128,14 @@ test('the quick note formats text without leaving the editor', async ({ page }) 
   await expect(editor).toBeFocused();
   await page.keyboard.type('Plan');
   await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Checklist' }).click();
+  await page.getByRole('button', { name: 'Checklist', exact: true }).click();
   await page.getByRole('button', { name: 'Bold' }).click();
   await expect(editor).toBeFocused();
   await page.keyboard.type('Book flights');
   await expect(editor.locator('[data-content-type="checkListItem"] strong')).toHaveText(
     'Book flights',
   );
-  await expect(page.getByRole('button', { name: 'Checklist' })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: 'Checklist', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );

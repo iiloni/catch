@@ -161,7 +161,7 @@ test('a quick note list also reorders by holding, while a tap still edits text',
   await expect(editor).toBeFocused();
   await page.keyboard.type('Quick list');
   await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Checklist' }).click();
+  await page.getByRole('button', { name: 'Checklist', exact: true }).click();
   await page.keyboard.type('First');
   await page.keyboard.press('Enter');
   await page.keyboard.type('Second');
