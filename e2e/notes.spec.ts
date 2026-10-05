@@ -5,6 +5,7 @@ import {
   bearerToken,
   card,
   createNote,
+  longPress,
   noteAction,
   noteToolbar,
   openDeck,
@@ -788,6 +789,53 @@ test('a long press starts selecting notes, and taps add more', async ({ page, is
   await expect(card(page, 'One')).toHaveCount(2);
   await expect(card(page, 'Two')).toHaveCount(2);
   await expect(card(page, 'Three')).toHaveCount(1);
+});
+
+test('a right click selects a note instead of opening a menu', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'A right click is a mouse gesture.');
+  await signUp(page);
+  await seedNotes(page, ['One', 'Two']);
+
+  await card(page, 'One').click({ button: 'right' });
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByLabel('1 selected')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await card(page, 'Two').click({ button: 'right' });
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  // It adds to the selection, and never takes a note back out of it.
+  await card(page, 'One').click({ button: 'right' });
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+});
+
+test('search results are selected and archived together', async ({ page, isMobile }) => {
+  await signUp(page);
+  await seedNotes(page, ['Milk one', 'Milk two', 'Milk three']);
+
+  await page.getByRole('link', { name: 'Search' }).click();
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('milk');
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(results.getByRole('article')).toHaveCount(3);
+  const result = (title: string) => results.getByRole('article').filter({ hasText: title });
+
+  if (isMobile) await longPress(page, result('Milk one'));
+  else await result('Milk one').click({ button: 'right' });
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByLabel('1 selected')).toBeVisible();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  // While selecting, a result is added to the selection instead of opened.
+  const two = result('Milk two').getByRole('button', { name: 'Select note' });
+  await two.click();
+  await expect(two).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+
+  await toolbar.getByRole('button', { name: 'Archive' }).click();
+  await expect(toolbar).toBeHidden();
+  await expect(results.getByText('Archived')).toHaveCount(2);
+  await expect(result('Milk three').getByRole('button', { name: 'Open note' })).toBeVisible();
 });
 
 test('selected notes are recolored, archived and trashed together', async ({ page, isMobile }) => {
