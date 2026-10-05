@@ -192,6 +192,8 @@ async function dragListItem(page: Page, item: Locator, dx: number, isMobile: boo
     const touch = await page.context().newCDPSession(page);
     await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
     await expect(page.locator('[data-list-dragging]')).toBeVisible();
+    // A phone's long press also sends a mousemove, which must not bring up the block handle.
+    await page.mouse.move(from.x, from.y);
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [{ ...from, x: from.x + dx }],
@@ -269,6 +271,8 @@ for (const kind of ['checkListItem', 'bulletListItem', 'numberedListItem']) {
     await expect(
       item('item-1').locator('[data-id="item-0"][data-node-type="blockOuter"]'),
     ).toBeVisible();
+    // The drop replaces the row's DOM; a handle left showing would lose its anchor.
+    await expect(page.locator('.bn-side-menu')).toBeHidden();
     await expect(rows).toHaveText(['Touch list', 'Item 1Item 0!Child', 'Item 2']);
     await expect(item('item-0').locator('strong')).toHaveText('Item 0');
     await expect(
@@ -307,6 +311,22 @@ test('only checkbox items have a trailing delete button, with undo and persisted
   const target = await buttons.first().boundingBox();
   expect(target?.width).toBeGreaterThanOrEqual(44);
   expect(target?.height).toBeGreaterThanOrEqual(44);
+  // An empty item's placeholder sits where its text goes, before the delete button.
+  await dialog.locator('.bn-editor [data-id="item-2"] p').click();
+  await page.keyboard.press('End');
+  // Typing lets the editor catch up with the caret before Enter splits the item there.
+  await page.keyboard.type('!');
+  await expect(dialog.locator('.bn-editor [data-id="item-2"] p')).toHaveText('Item 2!');
+  await page.keyboard.press('Enter');
+  await expect(buttons).toHaveCount(4);
+  const emptyRow = dialog.locator('[data-content-type="checkListItem"][data-is-empty-and-focused]');
+  const rowBox = await emptyRow.boundingBox();
+  const deleteBox = await emptyRow.getByRole('button').boundingBox();
+  if (!rowBox || !deleteBox) throw new Error('Missing empty checklist layout');
+  expect(deleteBox.x + deleteBox.width).toBeCloseTo(rowBox.x + rowBox.width, 0);
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expect(buttons).toHaveCount(3);
   await dialog.locator('.bn-editor [data-id="item-0"] p').first().click();
   if (isMobile) await buttons.first().tap();
   else await buttons.first().click();

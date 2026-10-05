@@ -510,9 +510,10 @@
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
-/* The trailing control reserves space so wrapped checklist text stays clear of it. */
+/* The trailing control reserves space so wrapped checklist text stays clear of it. The text
+   keeps its own width so BlockNote's placeholder (an ::after of the row) stays beside it. */
 .bn-container.note-editor [data-content-type="checkListItem"] > .bn-inline-content {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .bn-container.note-editor
@@ -535,6 +536,8 @@
   justify-content: center;
   align-self: flex-start;
   flex: 0 0 44px;
+  order: 1;
+  margin-inline-start: auto;
   height: 44px;
   padding: 12px;
   border: 0;

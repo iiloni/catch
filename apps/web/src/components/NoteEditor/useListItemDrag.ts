@@ -261,6 +261,7 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       const destination = targetId ? editor.getBlock(targetId) : undefined;
       const dropPlacement = placement;
       clear();
+      editor.getExtension(SideMenuExtension)?.hideMenuIfNotFrozen();
       if (cancelled || !block || !destination || block.id === destination.id) return;
       const parent = editor.getParentBlock(block);
       const destinationParent = editor.getParentBlock(destination);
@@ -333,7 +334,9 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
     }
 
     function onMouseMove(event: MouseEvent) {
-      if (mousePending && dragging) event.stopPropagation();
+      // A phone's long press sends a mousemove too. The block handle would follow it to the
+      // row being dragged, and the drop replaces that row's DOM out from under it.
+      if (dragging) event.stopPropagation();
     }
 
     function onPointerUp(event: PointerEvent) {
@@ -370,7 +373,8 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
     root.addEventListener('pointerdown', onPointerDown, true);
     root.addEventListener('dragstart', onNativeDragStart, true);
     document.addEventListener('pointermove', onPointerMove, true);
-    document.addEventListener('mousemove', onMouseMove, true);
+    // The window comes before the document, where BlockNote listens for the same event.
+    window.addEventListener('mousemove', onMouseMove, true);
     document.addEventListener('pointerup', onPointerUp, true);
     document.addEventListener('pointercancel', onPointerUp, true);
     root.addEventListener('touchstart', onStart, { passive: true, capture: true });
@@ -387,7 +391,7 @@ export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
       root.removeEventListener('pointerdown', onPointerDown, true);
       root.removeEventListener('dragstart', onNativeDragStart, true);
       document.removeEventListener('pointermove', onPointerMove, true);
-      document.removeEventListener('mousemove', onMouseMove, true);
+      window.removeEventListener('mousemove', onMouseMove, true);
       document.removeEventListener('pointerup', onPointerUp, true);
       document.removeEventListener('pointercancel', onPointerUp, true);
       root.removeEventListener('touchstart', onStart, true);
