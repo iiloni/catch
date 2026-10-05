@@ -62,7 +62,8 @@ test('settings titles collapse into glass pills with an edge blur on every user 
   isMobile,
 }) => {
   await signUp(page);
-  await page.setViewportSize({ width: isMobile ? 393 : 1024, height: 300 });
+  await page.setViewportSize({ width: isMobile ? 320 : 1024, height: 300 });
+  await page.goto('/settings/general');
 
   for (const [path, label] of [
     ['general', 'General'],
@@ -71,15 +72,27 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     ['data', 'Data Management'],
     ['update', 'Update'],
   ]) {
-    await page.goto(`/settings/${path}`);
+    if (path !== 'general') {
+      const pages = page.getByRole('navigation', { name: 'Settings pages' });
+      if (isMobile) {
+        await page.getByRole('button', { name: /^Settings page:/ }).click();
+        await pages.getByRole('button', { name: label, exact: true }).click();
+      } else {
+        await pages.getByRole('link', { name: label, exact: true }).click();
+      }
+    }
+    await waitForPageTransition(page);
     const header = page.locator('[data-page-header]');
     const title = header.getByRole('heading', { level: 1, name: isMobile ? label : 'Settings' });
     const pill = header.getByRole('button', { name: 'Scroll to top' });
     const blur = header.locator('.page-top-blur');
-    await expect(title).toBeVisible();
+    await expect(title).toBeVisible({ timeout: 30_000 });
     await expect(title).toHaveCSS('font-size', '42px');
     await expect(pill).toBeDisabled();
     await expect(blur).toHaveCSS('opacity', '0');
+    const expandedBox = await settledBox(title);
+    expect(expandedBox.x).toBeGreaterThanOrEqual(0);
+    expect(expandedBox.x + expandedBox.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
 
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(pill).toBeEnabled();

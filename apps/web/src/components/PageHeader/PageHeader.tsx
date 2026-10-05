@@ -246,7 +246,7 @@ export function TabPageHeader({
             style={{ x: titleShift, y: titleScrollY }}
           >
             <motion.div
-              className="absolute flex h-full items-center rounded-[var(--dock-radius)]"
+              className="absolute flex h-full max-w-[calc(100%-1.5rem)] items-center rounded-[var(--dock-radius)]"
               initial={false}
               animate={{
                 left: collapsed ? '0%' : '50%',
@@ -268,7 +268,7 @@ export function TabPageHeader({
               />
               <motion.h1
                 style={entry}
-                className="header-fade relative whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
+                className="header-fade relative min-w-0 truncate font-display font-extrabold leading-none tracking-[-0.03em]"
               >
                 {title}
               </motion.h1>
