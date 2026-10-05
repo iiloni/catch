@@ -76,10 +76,12 @@ export const reminderRoutes = new Hono<AppEnv>()
   .put('/settings', zValidator('json', saveReminderSettingsSchema), async (c) => {
     const userId = c.get('user')!.id;
     const { times, snoozeMinutes, timeZone } = c.req.valid('json');
+    // Only what the device changed: Drizzle leaves an undefined column as it is.
+    const changes = { times, snoozeMinutes };
     await db
       .insert(reminderSettings)
-      .values({ userId, timeZone, times, snoozeMinutes })
-      .onConflictDoUpdate({ target: reminderSettings.userId, set: { times, snoozeMinutes } });
+      .values({ userId, timeZone, ...changes })
+      .onConflictDoUpdate({ target: reminderSettings.userId, set: changes });
     return c.json({ ok: true });
   })
   // Where the user is, which is where their floating reminders ring.

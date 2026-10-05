@@ -14,6 +14,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import java.util.HashSet;
+import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONException;
 
@@ -96,6 +98,8 @@ public class RemindersPlugin extends Plugin {
                 .putString("server", call.getString("server"))
                 .putString("token", call.getString("token"))
                 .putString("protocol", call.getString("protocol"))
+                // Changes still waiting on this device are ones the server cannot tell of.
+                .putBoolean("unsent", Boolean.TRUE.equals(call.getBoolean("unsent", false)))
                 .apply();
         ReminderAlarms.schedule(getContext());
         call.resolve();
@@ -113,8 +117,17 @@ public class RemindersPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void takeSnoozes(PluginCall call) {
-        call.resolve(new JSObject().put("snoozes", ReminderAlarms.takeSnoozes(getContext())));
+    public void pendingSnoozes(PluginCall call) {
+        call.resolve(new JSObject().put("snoozes", ReminderAlarms.pendingSnoozes(getContext())));
+    }
+
+    @PluginMethod
+    public void ackSnoozes(PluginCall call) {
+        Set<String> noteIds = new HashSet<>();
+        JSArray given = call.getArray("noteIds", new JSArray());
+        for (int index = 0; index < given.length(); index++) noteIds.add(given.optString(index));
+        ReminderAlarms.ackSnoozes(getContext(), noteIds);
+        call.resolve();
     }
 
     @PluginMethod

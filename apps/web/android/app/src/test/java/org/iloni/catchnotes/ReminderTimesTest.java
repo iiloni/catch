@@ -53,4 +53,22 @@ public class ReminderTimesTest {
         assertEquals(utc("2026-10-06T13:00"), ReminderTimes.next(times, snooze, NEW_YORK, snooze));
         assertEquals(snooze, ReminderTimes.next(Collections.<String>emptyList(), snooze, NEW_YORK, 0));
     }
+
+    @Test
+    public void doesNotRingAWallClockTimeAgainAfterMovingWest() {
+        java.util.List<String> times = Arrays.asList("2026-10-05T09:00", "2026-10-06T09:00");
+        TimeZone losAngeles = TimeZone.getTimeZone("America/Los_Angeles");
+        long rangInNewYork = ReminderTimes.instant("2026-10-05T09:00", NEW_YORK);
+        assertEquals("2026-10-05T09:00", ReminderTimes.due(times, NEW_YORK, rangInNewYork - 1, rangInNewYork, ""));
+        // By the instant alone, nine in Los Angeles is still ahead.
+        assertEquals(
+                ReminderTimes.instant("2026-10-05T09:00", losAngeles),
+                ReminderTimes.next(times, 0, losAngeles, rangInNewYork));
+        assertEquals(
+                ReminderTimes.instant("2026-10-06T09:00", losAngeles),
+                ReminderTimes.next(times, 0, losAngeles, rangInNewYork, "2026-10-05T09:00"));
+        // A snooze is an instant and rings whatever the wall clock record says.
+        assertEquals(rangInNewYork + 60_000, ReminderTimes.next(times, rangInNewYork + 60_000, losAngeles, rangInNewYork, "2026-10-05T09:00"));
+        assertEquals("", ReminderTimes.due(times, NEW_YORK, rangInNewYork, rangInNewYork + 60_000, "2026-10-05T09:00"));
+    }
 }

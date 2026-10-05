@@ -122,7 +122,9 @@ server until the server is updated: **update the server first.**
     hourly background job that asks `GET /api/reminders/alarms` with the session's token.
     Android runs such jobs when it sees fit, so that reminder can be late or, under battery
     saving, missed until the app is opened; one set on the phone, or synced while the app
-    was open, is not affected. An older server answers 404 and the phone keeps what it has.
+    was open, is not affected. While changes made on the phone are still waiting to be
+    sent, the job leaves the phone's list alone: the server's is the older one. An older
+    server turns the request down and the phone keeps what it has; a 401 drops the token.
   - The phone and the server ring independently, so a user with notifications on in both a
     browser and the app gets one from each, as with two browsers.
   - A notification has Snooze and Done. Snooze puts a reminder off for 15 minutes, 30 (the
@@ -130,8 +132,13 @@ server until the server is updated: **update the server first.**
     reminder settings on the server (`lib/snooze.ts` caches it). The phone is told the
     length so it holds with the app closed. It rings again on the phone and is
     written as the reminder's snooze the next time the app runs, which is when the server
-    and the other devices learn of it. Done only dismisses the notification.
-  - Signing out clears the phone's alarms and its copy of the token.
+    and the other devices learn of it. The phone keeps it until the app says it has been
+    written, so one asked for before the reminders have loaded is not lost. Done only dismisses the notification.
+  - Signing out, or signing in again after a session ended, clears the phone's alarms and
+    its copy of the token.
+  - The phone remembers the wall clock time that last rang for each reminder, as well as
+    the instant: carried west with its list unchanged, a floating reminder's time would
+    otherwise come round a second time.
 - **Backups hold the push keys and subscriptions.** A backup already holds every note, so
   it was always to be kept as carefully as the database. What reminders add is that someone
   with one could also send notifications to those browsers until they re-subscribe.

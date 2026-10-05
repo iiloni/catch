@@ -1,14 +1,16 @@
 import { DEFAULT_SNOOZE_MINUTES, type SnoozeMinutes, snoozeMinutesSchema } from '@catch/shared';
+import { getSignedInUser } from './auth';
 import { createStore } from './store';
 
 export type { SnoozeMinutes };
 
-export const SNOOZE_KEY = 'catch-snooze';
+/** Per user, as the quick times are: two people may share a device. */
+export const snoozeKey = () => `catch-snooze:${getSignedInUser()?.id ?? ''}`;
 
 function cached(): SnoozeMinutes {
   try {
     const parsed = snoozeMinutesSchema.safeParse(
-      JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? ''),
+      JSON.parse(localStorage.getItem(snoozeKey()) ?? ''),
     );
     return parsed.success ? parsed.data : DEFAULT_SNOOZE_MINUTES;
   } catch {
@@ -44,7 +46,7 @@ export function onSnoozeChange(listener: Listener) {
 function set(minutes: SnoozeMinutes, from: Source) {
   if (minutes === store.get()) return;
   store.set(minutes);
-  localStorage.setItem(SNOOZE_KEY, JSON.stringify(minutes));
+  localStorage.setItem(snoozeKey(), JSON.stringify(minutes));
   for (const listener of listeners) listener(minutes, from);
 }
 

@@ -9,7 +9,11 @@ const native = vi.hoisted(() => ({
   enable: vi.fn(async () => ({})),
   disable: vi.fn(async () => ({})),
   sync: vi.fn(async () => {}),
-  takeSnoozes: vi.fn(),
+  pendingSnoozes: vi.fn(),
+  ackSnoozes: vi.fn(async () => {}),
+  snoozedUntil: vi.fn((): Date | null | undefined => undefined),
+  pending: vi.fn((): string[] => []),
+  statusChanged: vi.fn(),
   configure: vi.fn(async () => {}),
   snoozeChanged: vi.fn(),
   test: vi.fn(async () => {}),
@@ -30,7 +34,8 @@ vi.mock('@capacitor/core', () => ({
     enable: native.enable,
     disable: native.disable,
     sync: native.sync,
-    takeSnoozes: native.takeSnoozes,
+    pendingSnoozes: native.pendingSnoozes,
+    ackSnoozes: native.ackSnoozes,
     configure: native.configure,
     test: native.test,
     clear: native.clear,
@@ -41,8 +46,12 @@ vi.mock('@capacitor/app', () => ({ App: { addListener: native.resume } }));
 vi.mock('./auth', () => ({ getAuthToken: native.token }));
 vi.mock('./clock', () => ({ setSystemHour12: native.hour12 }));
 vi.mock('./collections', () => ({
-  hasReminder: (noteId: string) => noteId === NOTE,
+  reminderSnooze: (noteId: string) => (noteId === NOTE ? native.snoozedUntil() : undefined),
   watchReminderAlarms: native.watch,
+}));
+vi.mock('./syncStatus', () => ({
+  getPendingWriteIds: native.pending,
+  subscribeToSyncStatus: native.statusChanged,
 }));
 vi.mock('./reminders', () => ({ snoozeReminder: native.snooze }));
 vi.mock('./snooze', () => ({ snoozeMinutes: () => 30, onSnoozeChange: native.snoozeChanged }));
@@ -64,7 +73,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   native.token.mockReturnValue('signed-token');
   native.status.mockResolvedValue({ enabled: true, permission: 'granted', hour24: true });
-  native.takeSnoozes.mockResolvedValue({ snoozes: [] });
+  native.pendingSnoozes.mockResolvedValue({ snoozes: [] });
+  native.snoozedUntil.mockReturnValue(null);
+  native.pending.mockReturnValue([]);
+  native.statusChanged.mockReturnValue(() => {});
   native.listen.mockResolvedValue({ remove: native.remove });
   native.resume.mockResolvedValue({ remove: native.remove });
   native.watch.mockReturnValue(native.stopWatching);
@@ -88,53 +100,92 @@ describe('native reminders', () => {
     expect(native.hour12).toHaveBeenCalledWith(false);
   });
 
-  it('hands the phone the alarms with what it needs to ask the server for more', async () => {
+  it('hands the phone the alarms with what it needs to ask the server for more', () => {
     const stop = watchNativeReminders();
-    await vi.waitFor(() => expect(native.watch).toHaveBeenCalled());
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).toHaveBeenCalledWith({
       alarms: [alarm],
       server: 'https://catch.example',
       token: 'signed-token',
       protocol: String(API_PROTOCOL_VERSION),
+      unsent: false,
     });
     stop();
     expect(native.stopWatching).toHaveBeenCalled();
   });
 
-  it('tells the phone nothing once signed out', async () => {
+  it('says when changes made here are still waiting, and again once they are sent', () => {
+    native.pending.mockReturnValue(['write-1']);
+    watchNativeReminders();
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    expect(native.sync).toHaveBeenLastCalledWith(expect.objectContaining({ unsent: true }));
+
+    // Sync status changes for many reasons; only the writes draining is news to the phone.
+    native.statusChanged.mock.calls[0]?.[0]();
+    expect(native.sync).toHaveBeenCalledTimes(1);
+    native.pending.mockReturnValue([]);
+    native.statusChanged.mock.calls[0]?.[0]();
+    expect(native.sync).toHaveBeenCalledTimes(2);
+    expect(native.sync).toHaveBeenLastCalledWith(
+      expect.objectContaining({ alarms: [alarm], unsent: false }),
+    );
+  });
+
+  it('tells the phone nothing once signed out', () => {
     native.token.mockReturnValue(null);
     watchNativeReminders();
-    await vi.waitFor(() => expect(native.watch).toHaveBeenCalled());
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).not.toHaveBeenCalled();
   });
 
-  it('writes snoozes taken from notifications before telling the phone its alarms', async () => {
+  it('writes a snooze taken from a notification, and only then lets the phone forget it', async () => {
     const until = Date.now() + 60 * 60 * 1000;
-    native.takeSnoozes.mockResolvedValue({
+    native.pendingSnoozes.mockResolvedValue({
       snoozes: [
         { noteId: NOTE, until },
-        // Over already, and one whose reminder was removed since.
-        { noteId: NOTE, until: Date.now() - 1000 },
+        // One whose reminder is not loaded yet, or was removed since: the phone keeps it.
         { noteId: GONE, until },
       ],
     });
-    native.watch.mockImplementation(() => {
-      expect(native.snooze).toHaveBeenCalledTimes(1);
-      return native.stopWatching;
-    });
     watchNativeReminders();
-    await vi.waitFor(() => expect(native.watch).toHaveBeenCalled());
-    expect(native.snooze).toHaveBeenCalledWith(NOTE, new Date(until));
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    await vi.waitFor(() => expect(native.snooze).toHaveBeenCalledWith(NOTE, new Date(until)));
+    expect(native.ackSnoozes).not.toHaveBeenCalled();
+
+    // The write shows in the reminder, which tells the alarms again.
+    native.snoozedUntil.mockReturnValue(new Date(until));
+    native.watch.mock.calls[0]?.[0]([{ ...alarm, snoozedUntil: until }]);
+    await vi.waitFor(() => expect(native.ackSnoozes).toHaveBeenCalledWith({ noteIds: [NOTE] }));
+    expect(native.snooze).toHaveBeenCalledTimes(1);
   });
 
-  it('takes snoozes again when the app comes back', async () => {
+  it('leaves a snooze with the phone while the reminders have not loaded', async () => {
+    const until = Date.now() + 60 * 60 * 1000;
+    native.pendingSnoozes.mockResolvedValue({ snoozes: [{ noteId: NOTE, until }] });
+    native.snoozedUntil.mockReturnValue(undefined);
     watchNativeReminders();
-    await vi.waitFor(() => expect(native.watch).toHaveBeenCalled());
-    expect(native.takeSnoozes).toHaveBeenCalledTimes(1);
+    native.watch.mock.calls[0]?.[0]([]);
+    await vi.waitFor(() => expect(native.pendingSnoozes).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(native.snooze).not.toHaveBeenCalled();
+    expect(native.ackSnoozes).not.toHaveBeenCalled();
+  });
+
+  it('lets the phone forget a snooze that has passed', async () => {
+    native.pendingSnoozes.mockResolvedValue({
+      snoozes: [{ noteId: NOTE, until: Date.now() - 1000 }],
+    });
+    watchNativeReminders();
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    await vi.waitFor(() => expect(native.ackSnoozes).toHaveBeenCalledWith({ noteIds: [NOTE] }));
+    expect(native.snooze).not.toHaveBeenCalled();
+  });
+
+  it('settles snoozes again when the app comes back', async () => {
+    watchNativeReminders();
+    expect(native.pendingSnoozes).not.toHaveBeenCalled();
     native.resume.mock.calls[0]?.[1]({ isActive: true });
-    await vi.waitFor(() => expect(native.takeSnoozes).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(native.pendingSnoozes).toHaveBeenCalledTimes(1));
   });
 
   it('tells the phone how long its notifications snooze for, and again when that changes', () => {
@@ -153,5 +204,14 @@ describe('native reminders', () => {
     expect(open).toHaveBeenCalledWith(NOTE);
     stop();
     await vi.waitFor(() => expect(native.remove).toHaveBeenCalled());
+  });
+
+  // Last: the flag holds until the page next loads.
+  it('hands nothing more to the phone after signing out clears it', async () => {
+    watchNativeReminders();
+    await nativeReminders.clear();
+    expect(native.clear).toHaveBeenCalled();
+    native.watch.mock.calls[0]?.[0]([alarm]);
+    expect(native.sync).not.toHaveBeenCalled();
   });
 });

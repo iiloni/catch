@@ -147,12 +147,20 @@ export const reminderSettingsSchema = z.object({
 });
 export type ReminderSettings = z.infer<typeof reminderSettingsSchema>;
 
-/** The device's zone comes along for a user the server has not seen a zone for yet. */
-export const saveReminderSettingsSchema = z.object({
-  times: reminderTimesSchema,
-  snoozeMinutes: snoozeMinutesSchema,
-  timeZone: timeZoneSchema,
-});
+/**
+ * A device sends only what was changed on it: one that has not yet fetched the user's
+ * settings would otherwise write its defaults over the rest. The device's zone comes along
+ * for a user the server has not seen a zone for yet.
+ */
+export const saveReminderSettingsSchema = z
+  .object({
+    times: reminderTimesSchema.optional(),
+    snoozeMinutes: snoozeMinutesSchema.optional(),
+    timeZone: timeZoneSchema,
+  })
+  .refine((settings) => settings.times !== undefined || settings.snoozeMinutes !== undefined, {
+    message: 'Nothing to save',
+  });
 export type SaveReminderSettings = z.infer<typeof saveReminderSettingsSchema>;
 
 type Parts = { year: number; month: number; day: number; hour: number; minute: number };

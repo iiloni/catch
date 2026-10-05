@@ -4,10 +4,11 @@ import { API_PROTOCOL_VERSION, type ReminderAlarm } from '@catch/shared';
 import { z } from 'zod';
 import { getAuthToken } from './auth';
 import { setSystemHour12 } from './clock';
-import { hasReminder, watchReminderAlarms } from './collections';
+import { reminderSnooze, watchReminderAlarms } from './collections';
 import { snoozeReminder } from './reminders';
 import { getServerUrl } from './serverUrl';
 import { onSnoozeChange, snoozeMinutes } from './snooze';
+import { getPendingWriteIds, subscribeToSyncStatus } from './syncStatus';
 
 const statusSchema = z.object({
   enabled: z.boolean(),
@@ -28,15 +29,20 @@ const Reminders = registerPlugin<{
     server: string;
     token: string;
     protocol: string;
+    unsent: boolean;
   }): Promise<void>;
   configure(options: { snoozeMinutes: number }): Promise<void>;
-  takeSnoozes(): Promise<unknown>;
+  pendingSnoozes(): Promise<unknown>;
+  ackSnoozes(options: { noteIds: string[] }): Promise<void>;
   test(): Promise<void>;
   clear(): Promise<void>;
   addListener(event: 'open', listener: (event: unknown) => void): Promise<PluginListenerHandle>;
 }>('Reminders');
 
 const available = Capacitor.getPlatform() === 'android';
+
+// The watcher outlives the sign-out that clears the phone, and would hand the token back.
+let cleared = false;
 
 async function status() {
   const status = statusSchema.parse(await Reminders.status());
@@ -64,7 +70,9 @@ export const nativeReminders = {
     await Reminders.disable();
   },
   test: () => Reminders.test(),
+  /** Signing out. Nothing more is told to the phone until the page next loads. */
   async clear() {
+    cleared = true;
     if (available) await Reminders.clear();
   },
   /** A tapped notification opens its note, including the one that launched the app. */
@@ -79,43 +87,60 @@ export const nativeReminders = {
   },
 };
 
+// Written this session, so one the server turned down is not written round and round.
+const written = new Set<string>();
+
 /**
- * A snooze taken from a notification is the phone's alone until the web app hears of it
- * here and writes it, which is how the server and the user's other devices learn of it.
+ * A snooze taken from a notification is the phone's alone until the web app writes it here,
+ * which is how the server and the user's other devices learn of it. The phone keeps it
+ * until told it has been written: at launch the reminders may not be loaded yet, and a
+ * snooze taken from the phone then would be lost.
  */
-async function takeSnoozes() {
-  const { snoozes } = snoozesSchema.parse(await Reminders.takeSnoozes());
+async function settleSnoozes() {
+  const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
+  const settled: string[] = [];
   for (const { noteId, until } of snoozes) {
-    if (until > Date.now() && hasReminder(noteId)) snoozeReminder(noteId, new Date(until));
+    const snoozed = reminderSnooze(noteId);
+    if (until <= Date.now() || snoozed?.getTime() === until) {
+      settled.push(noteId);
+    } else if (snoozed !== undefined && !written.has(`${noteId}:${until}`)) {
+      // Left with the phone until the reminder is seen to hold it.
+      written.add(`${noteId}:${until}`);
+      snoozeReminder(noteId, new Date(until));
+    }
   }
+  if (settled.length > 0) await Reminders.ackSnoozes({ noteIds: settled });
 }
 
 /** Keeps the phone's alarms in step with the reminders while the app runs. */
 export function watchNativeReminders() {
   if (!available) return () => {};
-  let stopped = false;
-  let stopWatching = () => {};
   const failed = (error: unknown) => console.error('Reminders did not reach the phone', error);
-  const returned = () => {
-    void status().catch(failed);
-    void takeSnoozes().catch(failed);
+  let alarms: ReminderAlarm[] | null = null;
+  const unsent = () => getPendingWriteIds().length > 0;
+  let wasUnsent = unsent();
+  const tell = () => {
+    const token = getAuthToken();
+    if (alarms === null || !token || cleared) return;
+    wasUnsent = unsent();
+    void Reminders.sync({
+      alarms,
+      server: getServerUrl(),
+      token,
+      protocol: String(API_PROTOCOL_VERSION),
+      // The phone's background check must not replace this list with the server's while
+      // changes made here are still waiting to be sent.
+      unsent: wasUnsent,
+    }).catch(failed);
   };
-  // Snoozes first: alarms told before them would be told without them.
-  void takeSnoozes()
-    .catch(failed)
-    .then(() => {
-      if (stopped) return;
-      stopWatching = watchReminderAlarms((alarms) => {
-        const token = getAuthToken();
-        if (!token) return;
-        void Reminders.sync({
-          alarms,
-          server: getServerUrl(),
-          token,
-          protocol: String(API_PROTOCOL_VERSION),
-        }).catch(failed);
-      });
-    });
+  const stopWatching = watchReminderAlarms((next) => {
+    alarms = next;
+    void settleSnoozes().catch(failed);
+    tell();
+  });
+  const stopFollowingWrites = subscribeToSyncStatus(() => {
+    if (unsent() !== wasUnsent) tell();
+  });
   void status().catch(failed);
   // A notification's Snooze works with the app closed, so the phone keeps the length itself.
   const configure = (minutes: number) =>
@@ -123,11 +148,13 @@ export function watchNativeReminders() {
   configure(snoozeMinutes());
   const stopFollowing = onSnoozeChange(configure);
   const resumed = App.addListener('appStateChange', ({ isActive }) => {
-    if (isActive) returned();
+    if (!isActive) return;
+    void status().catch(failed);
+    void settleSnoozes().catch(failed);
   });
   return () => {
-    stopped = true;
     stopWatching();
+    stopFollowingWrites();
     stopFollowing();
     void resumed.then((listener) => listener.remove());
   };

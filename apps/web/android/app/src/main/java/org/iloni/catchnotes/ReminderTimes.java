@@ -53,13 +53,34 @@ final class ReminderTimes {
      * none), or -1 when there is none.
      */
     static long next(List<String> times, long snoozedUntil, TimeZone zone, long after) {
+        return next(times, snoozedUntil, zone, after, "");
+    }
+
+    /**
+     * As above, leaving out the times up to `rungWall`, the wall clock time that last rang.
+     * An instant alone does not say a time has rung: carried west, the same wall clock time
+     * comes round again later.
+     */
+    static long next(List<String> times, long snoozedUntil, TimeZone zone, long after, String rungWall) {
         long next = snoozedUntil > after ? snoozedUntil : -1;
         for (String time : times) {
+            if (time.compareTo(rungWall) <= 0) continue;
             long instant = instant(time, zone);
             if (instant <= after) continue;
             if (next < 0 || instant < next) next = instant;
             // Times come soonest first, but one near a clock change can be out of order.
         }
         return next;
+    }
+
+    /** The latest of the times that came due in (after, now], or "" when it was the snooze. */
+    static String due(List<String> times, TimeZone zone, long after, long now, String rungWall) {
+        String due = "";
+        for (String time : times) {
+            if (time.compareTo(rungWall) <= 0) continue;
+            long instant = instant(time, zone);
+            if (instant > after && instant <= now && time.compareTo(due) > 0) due = time;
+        }
+        return due;
     }
 }

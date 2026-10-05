@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applySnoozeMinutes,
   onSnoozeChange,
-  SNOOZE_KEY,
   setSnoozeMinutes,
+  snoozeKey,
   snoozeMinutes,
   snoozeUntil,
   useSnoozeMinutes,
@@ -28,7 +28,7 @@ describe('snooze', () => {
     act(() => result.current[1](60));
     expect(result.current[0]).toBe(60);
     expect(snoozeUntil(0)).toEqual(new Date(60 * 60_000));
-    expect(localStorage.getItem(SNOOZE_KEY)).toBe('60');
+    expect(localStorage.getItem(snoozeKey())).toBe('60');
     expect(heard).toHaveBeenLastCalledWith(60, 'device');
 
     // The server's length is taken without being a change to send back.

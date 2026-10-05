@@ -16,7 +16,7 @@ import { api } from './api';
 import { getSignedInUser } from './auth';
 import { formatTime } from './clock';
 import { remindersCollection, write } from './collections';
-import { applySnoozeMinutes, onSnoozeChange, snoozeMinutes } from './snooze';
+import { applySnoozeMinutes, onSnoozeChange, snoozeKey, snoozeMinutes } from './snooze';
 import { createStore } from './store';
 
 export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -206,6 +206,7 @@ export function describeRecurrence(recurrence: Recurrence) {
 const timesKey = () => `catch-reminder-times:${getSignedInUser()?.id ?? ''}`;
 /** Set while a change made on this device has not reached the server. */
 const unsentKey = () => `${timesKey()}:unsent`;
+const snoozeUnsentKey = () => `${snoozeKey()}:unsent`;
 
 function cachedTimes(): ReminderTimes {
   try {
@@ -223,19 +224,27 @@ const reminderTimes = createStore<ReminderTimes>(cachedTimes());
 
 let sending: Promise<void> = Promise.resolve();
 
-/** One after another, so the server ends on the last change, and only it clears the flag. */
+/**
+ * One after another, so the server ends on the last change, and only it clears the flag.
+ * Only what was changed here is sent: a device that has not yet fetched the user's settings
+ * would otherwise write its defaults over the rest.
+ */
 function sendReminderSettings() {
   sending = sending.then(async () => {
-    const times = reminderTimes.get();
-    const snooze = snoozeMinutes();
+    const times = localStorage.getItem(unsentKey()) === 'true' ? reminderTimes.get() : undefined;
+    const snooze = localStorage.getItem(snoozeUnsentKey()) === 'true' ? snoozeMinutes() : undefined;
+    if (times === undefined && snooze === undefined) return;
     try {
       await api.saveReminderSettings({
         times,
         snoozeMinutes: snooze,
         timeZone: deviceTimeZone(),
       });
-      if (reminderTimes.get() === times && snoozeMinutes() === snooze) {
+      if (times !== undefined && reminderTimes.get() === times) {
         localStorage.removeItem(unsentKey());
+      }
+      if (snooze !== undefined && snoozeMinutes() === snooze) {
+        localStorage.removeItem(snoozeUnsentKey());
       }
     } catch {
       // Offline: `syncReminderSettings` sends it at the next launch or return to the app.
@@ -255,7 +264,7 @@ export function setReminderTimes(times: ReminderTimes) {
 // The snooze length follows the user too, and is sent with the times.
 onSnoozeChange((_minutes, from) => {
   if (from !== 'device') return;
-  localStorage.setItem(unsentKey(), 'true');
+  localStorage.setItem(snoozeUnsentKey(), 'true');
   void sendReminderSettings();
 });
 
@@ -313,16 +322,14 @@ export async function syncReminderSettings(userId: string) {
       await api.reportTimeZone({ timeZone, changed: reported !== null });
       localStorage.setItem(zoneKey, timeZone);
     }
-    if (localStorage.getItem(unsentKey()) === 'true') {
-      await sendReminderSettings();
-      return;
-    }
+    await sendReminderSettings();
     const { times, snoozeMinutes: snooze } = await api.reminderSettings();
-    // A change made here while the request was out is newer than its answer.
-    if (localStorage.getItem(unsentKey()) === 'true') return;
-    reminderTimes.set(times);
-    localStorage.setItem(timesKey(), JSON.stringify(times));
-    applySnoozeMinutes(snooze);
+    // A change made here that has not reached the server is newer than its answer.
+    if (localStorage.getItem(unsentKey()) !== 'true') {
+      reminderTimes.set(times);
+      localStorage.setItem(timesKey(), JSON.stringify(times));
+    }
+    if (localStorage.getItem(snoozeUnsentKey()) !== 'true') applySnoozeMinutes(snooze);
   } catch {
     // Offline, or a server that is restarting: the next launch or return tries again.
   }

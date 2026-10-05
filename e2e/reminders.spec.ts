@@ -480,20 +480,25 @@ test('quick times and the snooze length are kept per user', { tag: '@api' }, asy
 
   const times = { morning: '06:30', afternoon: '12:00', evening: '20:15' };
   const save = (data: object) =>
-    alice.context.put('/api/reminders/settings', {
-      headers: alice.headers,
-      data: { snoozeMinutes: 30, ...data },
-    });
+    alice.context.put('/api/reminders/settings', { headers: alice.headers, data });
   expect((await save({ times: { ...times, evening: '25:00' }, timeZone: 'UTC' })).status()).toBe(
     400,
   );
   expect((await save({ times, snoozeMinutes: 45, timeZone: 'UTC' })).status()).toBe(400);
+  expect((await save({ timeZone: 'UTC' })).status()).toBe(400);
   expect((await save({ times, snoozeMinutes: 15, timeZone: 'Europe/London' })).ok()).toBeTruthy();
   expect(await settings(alice)).toEqual({ timeZone: 'Europe/London', times, snoozeMinutes: 15 });
   expect(await settings(bob)).toEqual({ timeZone: null, times: defaults, snoozeMinutes: 30 });
 
   // Saving settings is not a report of where the user is: the zone a device reported stays.
+  // A device sends only what it changed, and the rest stays as it was.
   expect((await save({ times: defaults, timeZone: 'Asia/Tokyo' })).ok()).toBeTruthy();
+  expect(await settings(alice)).toEqual({
+    timeZone: 'Europe/London',
+    times: defaults,
+    snoozeMinutes: 15,
+  });
+  expect((await save({ snoozeMinutes: 30, timeZone: 'Asia/Tokyo' })).ok()).toBeTruthy();
   expect(await settings(alice)).toEqual({
     timeZone: 'Europe/London',
     times: defaults,

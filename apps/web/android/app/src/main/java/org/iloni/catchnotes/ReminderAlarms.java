@@ -142,6 +142,8 @@ final class ReminderAlarms {
             JSONArray alarms = array(context, "alarms");
             JSONObject rung = object(context, "rung");
             JSONObject kept = new JSONObject();
+            JSONObject walls = object(context, "walls");
+            JSONObject keptWalls = new JSONObject();
             long now = System.currentTimeMillis();
             for (int index = 0; index < alarms.length(); index++) {
                 JSONObject alarm = alarms.optJSONObject(index);
@@ -149,17 +151,27 @@ final class ReminderAlarms {
                 String noteId = alarm.optString(NOTE);
                 long snoozedUntil = alarm.isNull("snoozedUntil") ? 0 : alarm.optLong("snoozedUntil");
                 long after = Math.max(rung.optLong(noteId), now - ReminderTimes.LATE_MS);
-                long next = ReminderTimes.next(times(alarm), snoozedUntil, zone(alarm), after);
+                List<String> times = times(alarm);
+                // The wall clock time that last rang holds for the list it rang from: the
+                // same list read in a zone further west would bring that time round again.
+                // A list that has changed since is a reminder set anew, and starts clean.
+                String list = String.valueOf(alarm.optJSONArray("times"));
+                JSONObject wall = walls.optJSONObject(noteId);
+                String rungWall = wall != null && list.equals(wall.optString("times")) ? wall.optString("wall") : "";
+                long next = ReminderTimes.next(times, snoozedUntil, zone(alarm), after, rungWall);
                 if (next >= 0 && next <= now) {
                     ring(context, alarm);
+                    String due = ReminderTimes.due(times, zone(alarm), after, now, rungWall);
+                    if (!due.isEmpty()) rungWall = due;
                     after = now;
-                    next = ReminderTimes.next(times(alarm), snoozedUntil, zone(alarm), after);
+                    next = ReminderTimes.next(times, snoozedUntil, zone(alarm), after, rungWall);
                 }
                 try {
-                    // Only what is still a reminder is remembered, so the record cannot grow.
+                    // Only what is still a reminder is remembered, so the records cannot grow.
                     if (after > now - ReminderTimes.LATE_MS) kept.put(noteId, after);
+                    if (!rungWall.isEmpty()) keptWalls.put(noteId, new JSONObject().put("wall", rungWall).put("times", list));
                 } catch (JSONException ignored) {
-                    // A number cannot fail to be put.
+                    // Text and numbers cannot fail to be put.
                 }
                 if (next < 0) continue;
                 PendingIntent pending = broadcast(context, ACTION_RING, noteId, PendingIntent.FLAG_UPDATE_CURRENT);
@@ -171,7 +183,7 @@ final class ReminderAlarms {
                 }
                 scheduled.add(noteId);
             }
-            preferences.edit().putString("rung", kept.toString()).apply();
+            preferences.edit().putString("rung", kept.toString()).putString("walls", keptWalls.toString()).apply();
         }
         preferences.edit().putStringSet("scheduled", scheduled).apply();
         refreshInBackground(context, enabled && preferences.getString("token", null) != null);
@@ -281,17 +293,38 @@ final class ReminderAlarms {
         schedule(context);
     }
 
-    /** The snoozes taken from notifications since the web app last asked. */
-    static synchronized JSONArray takeSnoozes(Context context) {
+    /**
+     * The snoozes taken from notifications that the web app has not yet said it wrote. They
+     * are kept until it does or until they ring: asked at launch, it may not have loaded the
+     * reminders they belong to, and one handed over then would be lost.
+     */
+    static synchronized JSONArray pendingSnoozes(Context context) {
+        JSONArray pending = new JSONArray();
         JSONArray snoozes = array(context, "snoozes");
-        preferences(context).edit().remove("snoozes").apply();
-        return snoozes;
+        long now = System.currentTimeMillis();
+        for (int index = 0; index < snoozes.length(); index++) {
+            JSONObject snooze = snoozes.optJSONObject(index);
+            if (snooze != null && snooze.optLong("until") > now) pending.put(snooze);
+        }
+        preferences(context).edit().putString("snoozes", pending.toString()).apply();
+        return pending;
+    }
+
+    /** The web app has written these as their reminders' snoozes, so they come with the alarms now. */
+    static synchronized void ackSnoozes(Context context, Set<String> noteIds) {
+        JSONArray left = new JSONArray();
+        JSONArray snoozes = array(context, "snoozes");
+        for (int index = 0; index < snoozes.length(); index++) {
+            JSONObject snooze = snoozes.optJSONObject(index);
+            if (snooze != null && !noteIds.contains(snooze.optString(NOTE))) left.put(snooze);
+        }
+        preferences(context).edit().putString("snoozes", left.toString()).apply();
     }
 
     /** Signing out: nothing of the account is left to ring or to ask the server with. */
     static synchronized void clear(Context context) {
-        preferences(context).edit().remove("alarms").remove("snoozes").remove("rung")
-                .remove("token").remove("server").remove("protocol").putBoolean("enabled", false).apply();
+        preferences(context).edit().remove("alarms").remove("snoozes").remove("rung").remove("walls")
+                .remove("unsent").remove("token").remove("server").remove("protocol").putBoolean("enabled", false).apply();
         schedule(context);
     }
 }

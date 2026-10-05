@@ -38,6 +38,9 @@ public class ReminderRefreshService extends JobService {
         String server = preferences.getString("server", null);
         String token = preferences.getString("token", null);
         if (server == null || token == null || !ReminderAlarms.enabled(this)) return;
+        // The app closed with changes it had not sent. The server's list is older than the
+        // phone's until the app runs again and sends them, and must not replace it.
+        if (preferences.getBoolean("unsent", false)) return;
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(server + "/api/reminders/alarms").openConnection();
@@ -45,8 +48,17 @@ public class ReminderRefreshService extends JobService {
             connection.setReadTimeout(TIMEOUT_MS);
             connection.setRequestProperty("Authorization", "Bearer " + token);
             connection.setRequestProperty("X-Catch-Protocol", preferences.getString("protocol", ""));
-            // Signed out, an older server, a server being restored: what the phone has stands.
-            if (connection.getResponseCode() != 200) return;
+            int status = connection.getResponseCode();
+            if (status == 401) {
+                // The session has ended. The token is of no more use, here or to anyone else.
+                if (token.equals(preferences.getString("token", null))) {
+                    preferences.edit().remove("token").apply();
+                    ReminderAlarms.schedule(this);
+                }
+                return;
+            }
+            // An older server, a server being restored: what the phone has stands.
+            if (status != 200) return;
             ByteArrayOutputStream body = new ByteArrayOutputStream();
             try (InputStream stream = connection.getInputStream()) {
                 byte[] buffer = new byte[8192];
@@ -55,6 +67,7 @@ public class ReminderRefreshService extends JobService {
             JSONObject answer = new JSONObject(new String(body.toByteArray(), StandardCharsets.UTF_8));
             // The account may have been signed out of while the request was in the air.
             if (!token.equals(preferences.getString("token", null))) return;
+            if (preferences.getBoolean("unsent", false)) return;
             ReminderAlarms.store(this, answer.getJSONArray("alarms"));
             ReminderAlarms.schedule(this);
         } catch (Exception offline) {

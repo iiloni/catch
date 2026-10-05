@@ -723,8 +723,11 @@ export function watchReminderAlarms(listener: (alarms: ReminderAlarm[]) => void)
   };
 }
 
-/** Whether a note still has a reminder to put off. */
-export const hasReminder = (noteId: string) => remindersCollection.has(noteId);
+/**
+ * What a note's reminder is snoozed until: null for not snoozed, undefined for no reminder
+ * (or none loaded yet).
+ */
+export const reminderSnooze = (noteId: string) => remindersCollection.get(noteId)?.snoozedUntil;
 
 let attachmentRows: readonly Attachment[] = [];
 const attachmentListeners = new Set<() => void>();
