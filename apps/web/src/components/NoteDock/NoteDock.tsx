@@ -25,6 +25,7 @@ import {
   editorNote,
   noteDockPanelOpen,
   noteReminderRequest,
+  tagFormOpen,
 } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
@@ -88,8 +89,14 @@ export function NoteDock() {
   const editable = note !== null && !note.deletedAt;
   // The tag search and a reminder's fields also raise the keyboard; keep their panels mounted
   // while typing.
+  const formOpen = tagFormOpen.use();
   const formatting =
-    keyboardOpen && panel !== 'tags' && panel !== 'reminder' && editable && controls !== null;
+    keyboardOpen &&
+    !formOpen &&
+    panel !== 'tags' &&
+    panel !== 'reminder' &&
+    editable &&
+    controls !== null;
   const showPanel = editable && !formatting && isPresent;
   const showPalette = panel === 'palette' && showPanel;
   const showTags = panel === 'tags' && showPanel;
@@ -127,6 +134,8 @@ export function NoteDock() {
   useEffect(() => {
     if (!grown) return;
     const onPointerDown = (event: globalThis.PointerEvent) => {
+      // The tag form belongs to the open picker, though it is drawn outside the dock.
+      if (tagFormOpen.get()) return;
       if (!ref.current?.contains(event.target as Node)) setPanel(null);
     };
     document.addEventListener('pointerdown', onPointerDown, true);
@@ -136,7 +145,7 @@ export function NoteDock() {
   useEffect(() => {
     if (!grown) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || tagFormOpen.get()) return;
       event.preventDefault();
       event.stopPropagation();
       setPanel(null);

@@ -140,6 +140,82 @@ test('desktop gallery cards assign secondary tags without opening the editor', a
   ).toBeVisible();
 });
 
+test('pickers make a new tag and assign it without leaving the note', async ({
+  page,
+  request,
+}, testInfo) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const work = await addTag(request, headers, 'Work', null, 'blue');
+  await addTag(request, headers, 'Projects', work);
+  await createNote(page, 'Tagged here', 'A note to tag');
+  const dialog = await openNote(page, 'Tagged here');
+  const form = page.getByRole('dialog', { name: 'New tag' });
+  const newTag = page.getByRole('button', { name: 'New tag', exact: true });
+
+  await noteToolbar(page).getByRole('button', { name: 'Background color' }).click();
+  await newTag.click();
+  await form.getByLabel('Name', { exact: true }).fill('Home');
+  await form.getByRole('button', { name: 'Green', exact: true }).click();
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toBeHidden();
+  await expect(dialog.locator('[data-note-scroll]')).toHaveAttribute('data-note-color', 'green');
+  // The picker stays open under the form, so the new tag can be changed straight away.
+  await page.getByRole('button', { name: 'Blue: Work', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Back to parent tags' })).toBeVisible();
+  await newTag.click();
+  await expect(form.getByLabel('Parent tag')).toHaveValue(work);
+  await form.getByLabel('Name', { exact: true }).fill('Catch');
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toBeHidden();
+  await expect(dialog.getByRole('button', { name: 'Work / Catch', exact: true })).toBeVisible();
+
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Secondary tags' });
+  await picker.getByRole('button', { name: 'New tag', exact: true }).click();
+  await form.getByLabel('Name', { exact: true }).fill('Dropped');
+  await page.keyboard.press('Escape');
+  await expect(form).toBeHidden();
+  // Escape left the form only: the picker and the note are still there.
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button', { name: 'New tag', exact: true }).click();
+  await form.getByLabel('Name', { exact: true }).fill('Errands');
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(picker.getByRole('checkbox', { name: 'Errands', exact: true })).toBeChecked();
+  await page.screenshot({ path: testInfo.outputPath('tag-picker-new-tag.png') });
+  await expect(picker.getByRole('checkbox', { name: 'Dropped', exact: true })).toHaveCount(0);
+  await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
+  await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.reload();
+  await expect(card(page, 'Tagged here')).toHaveAttribute('data-note-color', 'blue');
+  await expect(
+    card(page, 'Tagged here').getByRole('region', { name: 'Tags' }).getByRole('button'),
+  ).toHaveCount(2);
+});
+
+test("a card's color picker makes a new primary tag without opening the note", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Card toolbar actions are desktop controls.');
+  await signUp(page);
+  await seedNotes(page, ['Card color']);
+  const noteCard = card(page, 'Card color');
+  await noteCard.hover();
+  await noteCard.getByRole('button', { name: 'Background color', exact: true }).click();
+  await page.getByRole('button', { name: 'New tag', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'New tag' });
+  await form.getByLabel('Name', { exact: true }).fill('Home');
+  await form.getByRole('button', { name: 'Green', exact: true }).click();
+  await form.getByRole('button', { name: 'Save tag', exact: true }).click();
+  await expect(form).toBeHidden();
+  await expect(noteCard).toHaveAttribute('data-note-color', 'green');
+  await expect(noteCard.getByRole('button', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Green: Home', exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]note=/);
+});
+
 test('card actions and tag popovers stay inside narrow and short viewports', async ({
   page,
   request,
