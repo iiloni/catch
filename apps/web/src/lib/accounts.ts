@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 import { deleteAttachmentFiles } from './attachmentFiles';
 import {
   type Account,
+  accountPath,
   activateAccount,
   authClient,
   clearAuthToken,
@@ -46,7 +47,9 @@ const removedKey = (userId: string) => `catch-account-removed:${userId}`;
 export function switchAccount(userId: string, noteId?: string) {
   if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
-  window.location.assign(noteId ? `/?note=${encodeURIComponent(noteId)}` : '/');
+  window.location.assign(
+    accountPath(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/'),
+  );
 }
 
 const openStores = [editorNote, quickNote, linkCaptureOpen];
@@ -115,7 +118,7 @@ export function followAccountChanges() {
       user && localStorage.getItem(removedKey(user.id)) === 'true'
         ? clearLocalData().catch(() => undefined)
         : Promise.resolve();
-    // Not a reload: the address may name a note that the next account does not have.
+    // Not a reload: the address names this account, and maybe a note the next does not have.
     void cleared.then(() => window.location.assign('/'));
   };
   const onStorage = (event: StorageEvent) => {
@@ -206,5 +209,5 @@ export async function signOutCurrentAccount() {
   const next = getAccounts()[0];
   if (next) activateAccount(next.user.id);
   // A full reload drops this user's synced notes from memory.
-  window.location.assign(next ? '/' : '/login');
+  window.location.assign(next ? accountPath(next.user.id) : '/login');
 }

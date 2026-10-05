@@ -52,37 +52,118 @@ function tabUserId() {
   return userId && getAccounts().some(({ user }) => user.id === userId) ? userId : null;
 }
 
-/**
- * A notification says whose note it opens (`?account=<id>`), and the tab may be showing
- * someone else. That account becomes the tab's before anything reads it.
- */
-function followAccountLink() {
-  const url = new URL(window.location.href);
-  const userId = url.searchParams.get('account');
-  if (userId === null) return;
-  url.searchParams.delete('account');
-  window.history.replaceState(window.history.state, '', url);
-  if ((tabUserId() ?? activeUser()?.id) === userId) return;
-  if (activateAccount(userId)) {
-    // Said once the app is up: a link, not the user, chose the account.
-    sessionStorage.setItem(SWITCHED_KEY, 'true');
-  } else {
-    // Not signed in here any more, so its note is not one this page could open.
-    url.searchParams.delete('note');
-    window.history.replaceState(window.history.state, '', url);
+// The number each account has in addresses on this device (`/u/2/archive`). Kept after a
+// sign-out, so a bookmark still means the same account once it signs in again, and a number
+// is never handed to anyone else.
+const NUMBERS_KEY = 'catch-account-numbers';
+const numbersSchema = z.record(z.string(), z.number().int().positive());
+
+function accountNumbers() {
+  const numbers = read(NUMBERS_KEY, numbersSchema) ?? {};
+  let last = Math.max(0, ...Object.values(numbers));
+  let added = false;
+  for (const { user } of getAccounts()) {
+    if (numbers[user.id]) continue;
+    numbers[user.id] = ++last;
+    added = true;
   }
+  if (added) localStorage.setItem(sessionKey(NUMBERS_KEY), JSON.stringify(numbers));
+  return numbers;
 }
-followAccountLink();
+
+// The phone's app has no address bar to read one from, and nothing to bookmark.
+const numbersAddresses = () => !Capacitor.isNativePlatform();
+const NUMBERED = /^\/u\/(\d+)(?=[/?#]|$)/;
+const prefixFor = (userId: string) => `/u/${accountNumbers()[userId]}`;
 
 /**
- * The account this page was loaded for: the tab's, or for a new tab the one last used on
- * the device. Collections open that user's database when the app starts (ADR 0007), so the
- * page keeps sending that account's token whatever another tab switches to, and after this
- * tab has chosen another, until it loads again. Once set it never changes: a page whose
- * account signed out has no session, not somebody else's.
+ * The address of a page as one of the device's accounts, for a full page load: `/u/2/archive`
+ * while several are signed in (ADR 0019). With one account there is nobody to tell apart,
+ * and addresses stay as they always were.
  */
-let pageUserId = tabUserId() ?? activeUser()?.id ?? null;
-if (pageUserId) sessionStorage.setItem(sessionKey(TAB_KEY), pageUserId);
+export function accountPath(userId: string, path = '/') {
+  if (!numbersAddresses()) return path;
+  // A destination kept from another account's address goes to this one's.
+  const plain = path.replace(NUMBERED, '') || '/';
+  const rest = plain.startsWith('/') ? plain : `/${plain}`;
+  return getAccounts().length > 1 ? prefixFor(userId) + rest : rest;
+}
+
+/**
+ * Settles whose page this is before anything reads it, from the address: `/u/<number>/…`
+ * names an account, as a bookmark or another tab's link does, and a notification says whose
+ * note it opens (`?account=<id>`), since the service worker does not know the numbers. An
+ * address that names nobody belongs to the tab's account, or for a new tab the one last used
+ * on the device. Returns the account and the prefix its addresses carry.
+ */
+function resolvePage(): { userId: string | null; prefix: string } {
+  const url = new URL(window.location.href);
+  const show = () => window.history.replaceState(window.history.state, '', url);
+  const numbered = NUMBERED.exec(url.pathname);
+  if (numbered && numbersAddresses()) url.pathname = url.pathname.slice(numbered[0].length) || '/';
+  const signedIn = (userId: string | undefined) =>
+    getAccounts().find(({ user }) => user.id === userId)?.user.id;
+  const tab = tabUserId() ?? activeUser()?.id ?? null;
+
+  let userId = tab;
+  let named = false;
+  const linked = url.searchParams.get('account');
+  url.searchParams.delete('account');
+  if (linked !== null) {
+    if (signedIn(linked)) {
+      userId = linked;
+      // Said once the app is up: a link, not the user, chose the account.
+      if (linked !== tab) sessionStorage.setItem(SWITCHED_KEY, 'true');
+    } else {
+      // Not signed in here any more, so its note is not one this page could open.
+      url.searchParams.delete('note');
+    }
+  } else if (numbered && numbersAddresses()) {
+    const numbers = accountNumbers();
+    const owner = signedIn(Object.keys(numbers).find((id) => numbers[id] === Number(numbered[1])));
+    if (owner) {
+      userId = owner;
+      named = true;
+    } else {
+      // Nobody signed in here has that number. Signing in leads to the page that was asked
+      // for, as whoever signs in.
+      const redirect = url.pathname + url.search;
+      url.pathname = '/login';
+      url.search = redirect === '/' ? '' : `?${new URLSearchParams({ redirect })}`;
+    }
+  }
+  // A new tab on the account last used has nothing to change on the device.
+  if (userId && userId !== tab) activateAccount(userId);
+  if (userId) sessionStorage.setItem(sessionKey(TAB_KEY), userId);
+
+  const prefix =
+    userId && numbersAddresses() && (named || getAccounts().length > 1) ? prefixFor(userId) : '';
+  url.pathname = prefix + url.pathname;
+  if (url.href !== window.location.href) show();
+  return { userId, prefix };
+}
+
+const page = resolvePage();
+
+/**
+ * What this page's addresses start with: `/u/<number>` or nothing. The router is mounted on
+ * it, so routes and links never mention it; only a full page load has to (`accountPath`).
+ */
+export const basePath = page.prefix;
+
+/** The address of a page of this tab's account, for a plain link or a full page load. */
+export const pagePath = (path: string) => basePath + path;
+
+/** The path of the page showing, as routes name it. */
+export const currentPath = () => window.location.pathname.slice(basePath.length) || '/';
+
+/**
+ * The account this page was loaded for. Collections open that user's database when the app
+ * starts (ADR 0007), so the page keeps sending that account's token whatever another tab
+ * switches to, and after this tab has chosen another, until it loads again. Once set it never
+ * changes: a page whose account signed out has no session, not somebody else's.
+ */
+let pageUserId = page.userId;
 
 /** Every account signed in on this device (ADR 0019), in the order they were added. */
 export function getAccounts(): Account[] {

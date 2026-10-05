@@ -134,7 +134,7 @@ self.addEventListener('notificationclick', (event) => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       // Only the signed-in app listens for the message; a window at sign-in or setup does not.
       const outside = (client: WindowClient) =>
-        /^\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
+        /^(\/u\/\d+)?\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
       const inside = windows.filter((client) => !outside(client));
       const showing =
         typeof userId === 'string' && inside.length > 1

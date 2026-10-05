@@ -4,7 +4,7 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { activateAccount, authClient, getAccounts, getSignedInUser } from '@/lib/auth';
+import { accountPath, activateAccount, authClient, getAccounts, getSignedInUser } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
 
@@ -53,7 +53,8 @@ function LoginPage() {
       }
       // A full load, so the collections open this user's copy of their notes on the device.
       // The invite is spent: it must not ride along as a destination's fragment.
-      window.location.assign(authReturnTo(returnTo, invite ? '' : window.location.hash));
+      const destination = authReturnTo(returnTo, invite ? '' : window.location.hash);
+      window.location.assign(accountPath(result.data.user.id, destination));
     } catch {
       setError('Could not reach the Catch server. Check your connection and try again.');
     } finally {
@@ -105,8 +106,9 @@ function LoginPage() {
             variant="ghost"
             onClick={() => {
               // A full load: the collections open the notes of the account that is in use.
-              if (!getSignedInUser()) activateAccount(signedIn.user.id);
-              window.location.assign('/');
+              const user = getSignedInUser();
+              if (!user) activateAccount(signedIn.user.id);
+              window.location.assign(accountPath((user ?? signedIn.user).id));
             }}
           >
             Back to your notes

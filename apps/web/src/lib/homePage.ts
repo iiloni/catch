@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { currentPath, pagePath } from './auth';
 
 const STORAGE_KEY = 'catch-home-page';
 
@@ -13,12 +14,12 @@ function isInstalledApp(): boolean {
 /** Restore before creating the router so the first page is the saved view. */
 export function restoreHomePage() {
   if (!isInstalledApp()) return;
-  const { pathname, search, hash } = window.location;
+  const { search, hash } = window.location;
   // A note, share, capture or other explicit destination takes precedence over the preference.
-  if (pathname !== '/' || search || hash) return;
+  if (currentPath() !== '/' || search || hash) return;
   try {
     if (localStorage.getItem(STORAGE_KEY) === '/deck') {
-      window.history.replaceState(window.history.state, '', '/deck');
+      window.history.replaceState(window.history.state, '', pagePath('/deck'));
     }
   } catch {
     // Storage may be unavailable; the default Gallery still works.

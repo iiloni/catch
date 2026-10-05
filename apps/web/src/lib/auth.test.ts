@@ -45,6 +45,7 @@ async function openTab() {
 beforeEach(async () => {
   localStorage.clear();
   sessionStorage.clear();
+  window.history.replaceState(null, '', '/');
   mocks.native.mockReturnValue(true);
   mocks.server.mockReturnValue('http://llm:24085');
   vi.stubEnv('CATCH_DEV_SERVER_URL', 'http://llm:24085');
@@ -164,6 +165,8 @@ describe('several accounts on one device', () => {
     expect(localStorage.getItem('catch-auth-token')).toBe('first-token');
     expect(auth.getAuthToken()).toBe('second-token');
     expect(auth.getSignedInUser()).toEqual(other);
+    // A switch loads the address of the account it chose.
+    window.history.replaceState(null, '', auth.accountPath(user.id));
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
   });
@@ -175,9 +178,11 @@ describe('several accounts on one device', () => {
     await openTab();
     expect(auth.getSignedInUser()).toEqual(other);
     auth.activateAccount(user.id);
+    window.history.replaceState(null, '', auth.accountPath(user.id));
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
     // Back in the first tab, which reloads.
+    window.history.replaceState(null, '', auth.accountPath(other.id));
     sessionStorage.clear();
     sessionStorage.setItem('catch-tab-account', tab ?? '');
     await load();
@@ -271,12 +276,96 @@ describe('several accounts on one device', () => {
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
     expect(auth.getAccounts()).toHaveLength(2);
-    expect(window.location.search).toBe('?note=abc');
+    expect(window.location.pathname + window.location.search).toBe('/u/1/?note=abc');
     // An account that is not signed in here changes nothing, and its note is not opened.
     window.history.replaceState(null, '', '/?note=abc&account=nobody');
     await load();
     expect(auth.getSignedInUser()).toEqual(user);
-    expect(window.location.search).toBe('');
+    expect(window.location.pathname + window.location.search).toBe('/u/1/');
+  });
+
+  describe('addresses', () => {
+    const address = () => window.location.pathname + window.location.search;
+
+    it('leaves addresses alone while one account is signed in', async () => {
+      signIn('first-token');
+      window.history.replaceState(null, '', '/archive');
+      await load();
+      expect(address()).toBe('/archive');
+      expect(auth.basePath).toBe('');
+      expect(auth.accountPath(user.id, '/archive')).toBe('/archive');
+    });
+
+    it('numbers the page of each account once there are several', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/archive?note=abc');
+      await load();
+      expect(address()).toBe('/u/2/archive?note=abc');
+      expect(auth.basePath).toBe('/u/2');
+      expect(auth.currentPath()).toBe('/archive');
+      expect(auth.pagePath('/settings/update')).toBe('/u/2/settings/update');
+      expect(auth.accountPath(user.id)).toBe('/u/1/');
+      expect(auth.accountPath(user.id, '/u/2/archive?note=abc')).toBe('/u/1/archive?note=abc');
+      expect(auth.accountPath(user.id, '/u/2')).toBe('/u/1/');
+    });
+
+    it('loads as the account an address names, in a tab showing another', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/1/archive');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(user);
+      expect(auth.getAuthToken()).toBe('first-token');
+      expect(address()).toBe('/u/1/archive');
+      // Arriving by an address is not announced the way a notification's switch is.
+      expect(sessionStorage.getItem(auth.SWITCHED_KEY)).toBeNull();
+      // A new tab starts on the account last opened, and its address says which.
+      window.history.replaceState(null, '', '/');
+      await openTab();
+      expect(address()).toBe('/u/1/');
+    });
+
+    it('keeps an address that names the only account', async () => {
+      signIn('first-token');
+      window.history.replaceState(null, '', '/u/1/deck');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(user);
+      expect(address()).toBe('/u/1/deck');
+      expect(auth.basePath).toBe('/u/1');
+    });
+
+    it('asks to sign in for an address that names nobody signed in', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/7/archive?note=abc');
+      await load();
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(address()).toBe(
+        `/u/2/login?${new URLSearchParams({ redirect: '/archive?note=abc' })}`,
+      );
+      localStorage.clear();
+      sessionStorage.clear();
+      window.history.replaceState(null, '', '/u/7/');
+      await load();
+      expect(address()).toBe('/login');
+    });
+
+    it('gives an account its number back when it signs in again, and to nobody else', async () => {
+      await signInBoth();
+      auth.forgetAccount(user.id);
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      expect(auth.accountPath('third-user')).toBe('/u/3/');
+      signIn('first-again');
+      expect(auth.accountPath(user.id)).toBe('/u/1/');
+    });
+
+    it('has no numbers in the phone’s app', async () => {
+      await signInBoth();
+      mocks.native.mockReturnValue(true);
+      vi.unstubAllEnvs();
+      window.history.replaceState(null, '', '/archive');
+      await load();
+      expect(address()).toBe('/archive');
+      expect(auth.accountPath(user.id)).toBe('/');
+    });
   });
 
   it('refuses to switch to an account that is not signed in', () => {

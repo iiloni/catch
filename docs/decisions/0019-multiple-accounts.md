@@ -30,6 +30,28 @@ switched to or signed in. Each account already has its own database, outbox lead
 files, so two tabs on two accounts sync side by side, and two tabs on one account share its
 database as before (ADR 0007). The Android app is one tab.
 
+**The address says whose page it is.** While several accounts are signed in, a browser's
+addresses start with the account's number on the device: `/u/2/archive`,
+`/u/2/?note=<id>`. So a bookmark, a copied address or a link opened in a new tab leads to
+the same account's page, whatever the tab or the device was last showing. `lib/auth.ts`
+reads the number when the page loads, before anything asks whose page it is, and the
+router is mounted on the prefix (`basepath`), so routes and links never mention it. Only a
+full page load to another account has to: `accountPath` builds its address, and `pagePath`
+that of a plain link within this one.
+
+- Numbers are per device, given in the order accounts first signed in here
+  (`catch-account-numbers`). A number is kept after a sign-out: it is never given to
+  another account, and an account that signs in again has the number its bookmarks name.
+  The user's id would be the same on every device, but makes an address nobody can read or
+  type.
+- An address with no number means the tab's account, or for a new tab the one last used.
+  It gains the number when the page loads if several accounts are signed in. With one
+  account, addresses stay as they were: there is nobody to tell apart, and an existing
+  bookmark or the installed app's start address needs no number.
+- An address whose number belongs to nobody signed in goes to the sign-in page, keeping the
+  page asked for. Whoever signs in is taken to that page as themselves.
+- The Android app has no address bar and keeps its addresses without numbers.
+
 **A page belongs to the account it loaded for.** `getAuthToken` and `getSignedInUser` answer
 for that account until the page loads again, whatever the tab or the device has since
 moved to: another signing in from "Add account", a switch, or the next account after a
@@ -68,8 +90,9 @@ not for an account: on for one is on for all, including one added later.
   message, and the phone to its intent. Tapped, the app switches to that account and opens
   the note: an open app is told and calls `switchAccount`; with several tabs open the
   service worker first asks which of them shows that account; a cold start loads
-  `/?note=<id>&account=<user id>`, and `lib/auth.ts` makes that account the one in use
-  before anything reads it. On Android the notification also shows the account's name when
+  `/?note=<id>&account=<user id>`, since the service worker cannot read the device's
+  numbers, and `lib/auth.ts` makes that account the page's before anything reads it,
+  replacing the parameter with the account's number. On Android the notification also shows the account's name when
   the phone rings for more than one. A snooze taken from a notification is written to the
   server when its account is next in use.
 
@@ -104,6 +127,12 @@ together. Migration `0010` only changes the table's key.
   bearer token takes precedence over it on every request, which `e2e/accounts.spec.ts` checks
   by writing as the first account after the second signed in.
 - A web notification does not say which account it is for; the Android one does.
+- A bookmark saved while one account was signed in has no number, and opens whichever
+  account was last used once there are several. A numbered address means a different
+  account, or nobody, on another device.
+- Code that reads `window.location.pathname` sees the number. Compare `currentPath()`
+  instead, and build an absolute link outside the router with `pagePath`.
+- The ids of accounts that signed out stay on the device with their numbers.
 - An account whose session has ended stays in the device's list until it signs in again or
   is signed out. Until then it keeps ringing: the server still has its subscription, and
   the phone keeps the alarms it had without refreshing them.

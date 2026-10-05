@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { getAuthToken, getSignedInUser } from '@/lib/auth';
+import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
@@ -56,7 +56,7 @@ function Root() {
     const open = async (id: string) => {
       if (stopped) return;
       if (
-        window.location.pathname === '/share' &&
+        currentPath() === '/share' &&
         new URLSearchParams(window.location.search).get('id') === id
       )
         return;
@@ -67,7 +67,7 @@ function Root() {
           // Keep the signed-in layout mounted so open notes and composer drafts can flush.
           if (share.kind !== 'link' || quickNote.get() !== 'capture') quickNote.set('closed');
           if (share.kind === 'link') {
-            if (['/share', '/capture', '/login', '/setup'].includes(window.location.pathname))
+            if (['/share', '/capture', '/login', '/setup'].includes(currentPath()))
               await navigate({ to: '/' });
             if (!stopped) enqueueLinkCapture(share);
           } else await navigate({ to: '/', search: { note: share.id } });
@@ -93,7 +93,7 @@ function Root() {
     const stopNative = watchNativeShares(open, fail);
     // Native acknowledgement can precede a WebView restart. Recover staging that has
     // already moved into IndexedDB, without competing with the explicit share route.
-    if (window.location.pathname !== '/share' && getSignedInUser()) {
+    if (currentPath() !== '/share' && getSignedInUser()) {
       void pendingIncomingShares()
         .then(async (shares) => {
           const user = getSignedInUser();

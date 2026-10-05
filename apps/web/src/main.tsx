@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { basePath } from './lib/auth';
 import { pageTransition } from './lib/dockState';
 import { rememberHomePage, restoreHomePage } from './lib/homePage';
 import { startKeyboardTracking } from './lib/keyboard';
@@ -17,6 +18,8 @@ restoreHomePage();
 
 const router = createRouter({
   routeTree,
+  // A page of one of several accounts is at `/u/<number>/…` (ADR 0019); routes never say so.
+  basepath: basePath || undefined,
   // Pages slide in the direction of travel (see the view transition styles in styles.css).
   // Without transition types the router would cross-fade every navigation, opening notes too.
   defaultViewTransition: CSS.supports('selector(:active-view-transition-type(a))')

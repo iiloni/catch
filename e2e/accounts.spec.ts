@@ -29,6 +29,8 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(card(page, 'First account note')).toBeVisible();
 
   const second = await addAccount(page, first);
+  // With several signed in, the address says whose page it is.
+  await expect(page).toHaveURL(/\/u\/2\/$/);
   await expect(card(page, 'First account note')).toBeHidden();
   await seedNotes(page, ['Second account note']);
   await expect(card(page, 'Second account note')).toBeVisible();
@@ -42,6 +44,7 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await accounts.getByRole('button', { name: first, exact: true }).click();
   await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
+  await expect(page).toHaveURL(/\/u\/1\/$/);
   await expect(card(page, 'First account note')).toBeVisible();
   await expect(card(page, 'Second account note')).toBeHidden();
   const noteId = await page
@@ -79,7 +82,7 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await expect(page.getByRole('dialog').getByRole('textbox')).toContainText('First account note', {
     timeout: 30_000,
   });
-  expect(new URL(page.url()).search).toBe(`?note=${noteId}`);
+  expect(page.url()).toBe(new URL(`/u/1/?note=${noteId}`, page.url()).href);
   await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
 });
 
@@ -137,4 +140,57 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('button', { name: 'Back to your notes' })).toBeHidden();
+});
+
+test('an address names its account, as a bookmark of it does', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Addresses do not depend on the layout.');
+  const first = await signUp(page);
+  await seedNotes(page, ['First account note']);
+  // One account has nobody to be told apart from.
+  await expect(page).toHaveURL(new URL('/', page.url()).href);
+  const second = await addAccount(page, first);
+  await seedNotes(page, ['Second account note']);
+
+  // The tab shows the second account; the address asks for the first.
+  await page.goto('/u/1/search');
+  await expect(page).toHaveURL(/\/u\/1\/search$/);
+  await page.goto('/u/1/');
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, 'First account note')).toBeVisible();
+  // Moving about the app and opening a note stay at the account's addresses.
+  await card(page, 'First account note').click();
+  await expect(page).toHaveURL(/\/u\/1\/\?note=/);
+  await page.reload();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toContainText('First account note', {
+    timeout: 30_000,
+  });
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/\/u\/1\/$/);
+
+  // Another tab opens the other account's address beside it.
+  const tab = await page.context().newPage();
+  await tab.goto('/u/2/');
+  await expect(avatar(tab, second)).toBeVisible({ timeout: 30_000 });
+  await expect(card(tab, 'Second account note')).toBeVisible();
+  await tab.close();
+  await page.reload();
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+
+  // An address of an account that signed out asks for it, then carries on to its page.
+  await avatar(page, first).click();
+  await page.getByRole('button', { name: `Sign out ${second}`, exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: `Sign out ${second}?` });
+  await confirm.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(confirm).toBeHidden();
+  await avatar(page, first).click();
+  await expect(page.getByRole('list', { name: 'Accounts' }).getByRole('listitem')).toHaveCount(1);
+  await page.goto('/u/2/search');
+  await expect(page).toHaveURL(/\/login\?redirect=%2Fsearch$/);
+  await page.getByLabel('Email').fill(second);
+  await page.getByLabel('Password').fill('password123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/u\/2\/search$/, { timeout: 30_000 });
+  await page.goto('/u/2/');
+  await expect(avatar(page, second)).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, 'Second account note')).toBeVisible();
 });
