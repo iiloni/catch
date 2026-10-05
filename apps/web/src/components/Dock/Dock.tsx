@@ -17,6 +17,7 @@ import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/Gal
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { NoteLinkTray } from '@/components/NoteLinkTray/NoteLinkTray';
+import { ScrollToBottom } from '@/components/ScrollToBottom/ScrollToBottom';
 import {
   SettingsTabPicker,
   SettingsTabSelector,
@@ -203,6 +204,9 @@ export function Dock() {
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && <NoteLinkTray />}
                   {mode === 'note' && <FloatingHistoryToolbar className="sm:hidden" />}
+                  {mode === 'note' && (
+                    <ScrollToBottom className="absolute bottom-full left-0 mb-3 sm:hidden" />
+                  )}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField inputRef={inputRef} active={mode === 'search'} />
                     <AnimatePresence initial={false}>

@@ -29,6 +29,7 @@ import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection, useReminders } from '@/lib/collections';
 import {
   editorControls,
+  editorScrollToBottom,
   noteDockPanelOpen,
   noteReminderRequest,
   quickNote,
@@ -110,6 +111,8 @@ type Insets = { top: number; bottom: number };
  * Only a pane gets this wide: the centered panel stops at 672 px and phones are narrower.
  */
 const SIDE_LINKS_MIN = 700;
+/** How much note must lie below the screen before the dock offers a jump to its end. */
+const END_FAR = 160;
 
 /** Space between the panel and the screen's top edge or the dock. */
 const PANEL_GAP = 12;
@@ -429,7 +432,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     enabled: isPresent && !split,
   });
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
-  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false, far: false });
   const attachScroll = useCallback(
     (element: HTMLDivElement | null) => {
       scrollRef(element);
@@ -442,10 +445,14 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (!fullscreen || !scrollElement) return;
     const update = () => {
       const top = scrollElement.scrollTop > 1;
-      const bottom =
-        scrollElement.scrollTop + scrollElement.clientHeight < scrollElement.scrollHeight - 1;
+      const below =
+        scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight;
+      const bottom = below > 1;
+      const far = below > END_FAR;
       setScrollEdges((edges) =>
-        edges.top === top && edges.bottom === bottom ? edges : { top, bottom },
+        edges.top === top && edges.bottom === bottom && edges.far === far
+          ? edges
+          : { top, bottom, far },
       );
     };
     update();
@@ -458,6 +465,20 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       observer.disconnect();
     };
   }, [fullscreen, scrollElement]);
+
+  const offerScrollToBottom = fullscreen && isPresent && scrollEdges.far;
+  useEffect(() => {
+    if (!offerScrollToBottom || !scrollElement) return;
+    const scrollToBottom = () =>
+      scrollElement.scrollTo({
+        top: scrollElement.scrollHeight,
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      });
+    editorScrollToBottom.set(scrollToBottom);
+    return () => {
+      if (editorScrollToBottom.get() === scrollToBottom) editorScrollToBottom.set(null);
+    };
+  }, [offerScrollToBottom, scrollElement]);
 
   const scrollArea = (
     <ScrollArea

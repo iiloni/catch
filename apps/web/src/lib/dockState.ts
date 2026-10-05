@@ -64,6 +64,9 @@ export function pageTransition(from: string | undefined, to: string): ['forward'
 export const editorNote = createStore<Note | null>(null);
 export const editorControls = createStore<EditorControls | null>(null);
 
+/** Scrolls the open note to its end. Null unless the end is well out of view on a phone. */
+export const editorScrollToBottom = createStore<(() => void) | null>(null);
+
 /** The open note's dock has grown upward into its palette or the Deck's columns. */
 export const noteDockPanelOpen = createStore(false);
 
