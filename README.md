@@ -13,6 +13,8 @@ Android app.
 
 ![The gallery on a desktop, with a note open beside it](docs/screenshots/desktop-gallery.png)
 
+![The deck on a desktop, with notes in three columns](docs/screenshots/desktop-deck.png)
+
 <p align="center">
   <img src="docs/screenshots/mobile-gallery.png" alt="The gallery on a phone" width="30%" />
   &nbsp;
@@ -39,8 +41,6 @@ Android app.
   else. Each person sees only their own notes.
 - **Backups built in.** Admins back up and restore the whole server from Settings, by hand
   or on a daily schedule.
-
-![The deck on a desktop, with notes in three columns](docs/screenshots/desktop-deck.png)
 
 ## Get Catch
 
