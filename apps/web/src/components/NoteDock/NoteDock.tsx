@@ -1,7 +1,6 @@
 import { type ColumnColor, DEFAULT_BOARD_STATUS, tagColor } from '@catch/shared';
 import {
   Bell,
-  CalendarPlus,
   Columns3,
   LayoutDashboard,
   type LucideIcon,
@@ -20,7 +19,6 @@ import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { addToGoogleCalendar } from '@/lib/calendar';
 import { useBoardColumns, useNoteTagAssignments, useReminders, useTags } from '@/lib/collections';
 import {
   editorControls,
@@ -304,16 +302,6 @@ export function NoteDock() {
         onPress: () => {
           haptics.toggle();
           setPanel(showReminder ? null : 'reminder');
-        },
-      },
-      {
-        id: 'calendar',
-        label: 'Add to Google Calendar',
-        icon: CalendarPlus,
-        onPress: () => {
-          haptics.selection();
-          setPanel(null);
-          addToGoogleCalendar(note);
         },
       },
     ];

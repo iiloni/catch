@@ -2,12 +2,14 @@ import type { Reminder } from '@catch/shared';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { addToGoogleCalendar } from '@/lib/calendar';
 import { formatTimeOfDay, removeReminder, setReminder, snoozeReminder } from '@/lib/reminders';
 import { setSnoozeMinutes } from '@/lib/snooze';
 import { ReminderPanel } from './ReminderPanel';
 
 vi.mock('@/lib/collections', () => ({ remindersCollection: {}, write: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: {} }));
+vi.mock('@/lib/calendar');
 const app = vi.hoisted(() => ({ notificationsOff: false, openSettings: vi.fn() }));
 vi.mock('@/lib/push', () => ({ useAppNotificationsOff: () => app.notificationsOff }));
 vi.mock('@/lib/settings', () => ({ useSettingsNavigation: () => ({ open: app.openSettings }) }));
@@ -20,7 +22,7 @@ vi.mock('@/lib/reminders', async (original) => ({
   useReminderTimes: () => [{ morning: '08:00', afternoon: '13:00', evening: '18:00' }, vi.fn()],
 }));
 
-const note = { id: '0199a0a0-0000-7000-8000-000000000000', userId: 'user-1' };
+const note = { id: '0199a0a0-0000-7000-8000-000000000000', userId: 'user-1', content: [] };
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const saved: Reminder = {
@@ -106,6 +108,14 @@ describe('ReminderPanel', () => {
       recurrence: null,
     });
     expect(onDone).toHaveBeenCalled();
+  });
+
+  it('hands the note to Google Calendar and stays open', () => {
+    render(<ReminderPanel note={note} reminder={undefined} onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Google Calendar' }));
+    expect(addToGoogleCalendar).toHaveBeenCalledWith(note);
+    expect(setReminder).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('says when the Android app may not show reminders, and leads to the setting', () => {

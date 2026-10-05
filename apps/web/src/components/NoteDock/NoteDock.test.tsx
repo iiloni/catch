@@ -1,14 +1,12 @@
 import type { BoardColumn, Note } from '@catch/shared';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addToGoogleCalendar } from '@/lib/calendar';
 import { editorControls, editorNote, noteReminderRequest } from '@/lib/dockState';
 import { HOLD_MS } from '@/lib/longPress';
 import { moveNoteToDeck, restoreNote, sendNoteToGallery, setNoteColor } from '@/lib/notes';
 import { NoteDock } from './NoteDock';
 
 vi.mock('@/lib/notes');
-vi.mock('@/lib/calendar');
 vi.mock('@/components/ReminderPanel/ReminderPanel', () => ({
   ReminderPanel: ({ onDone }: { onDone: () => void }) => (
     <form aria-label="Reminder">
@@ -156,19 +154,12 @@ describe('NoteDock', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('orders tags second and the calendar last, with archive in the header', () => {
+  it('orders tags second and the reminder last, with archive in the header', () => {
     renderDock();
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeEnabled();
     expect(
       screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
-    ).toEqual([
-      'Background color',
-      'Tags',
-      'Attach files',
-      'Move note',
-      'Reminder',
-      'Add to Google Calendar',
-    ]);
+    ).toEqual(['Background color', 'Tags', 'Attach files', 'Move note', 'Reminder']);
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
     expect(screen.getByRole('region', { name: 'Add attachment' })).toBeInTheDocument();
@@ -196,15 +187,6 @@ describe('NoteDock', () => {
     renderDock();
     const bell = screen.getByRole('button', { name: 'Reminder' });
     expect(bell).toHaveAttribute('data-filled');
-  });
-
-  it('hands the note to Google Calendar without closing the editor', () => {
-    renderDock();
-    const calendar = screen.getByRole('button', { name: 'Add to Google Calendar' });
-    expect(calendar).not.toHaveAttribute('aria-expanded');
-    fireEvent.click(calendar);
-    expect(addToGoogleCalendar).toHaveBeenCalledWith(expect.objectContaining({ id: note.id }));
-    expect(close).not.toHaveBeenCalled();
   });
 
   it('only offers restoring a trashed note', () => {

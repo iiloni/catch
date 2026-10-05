@@ -982,7 +982,9 @@ test('a note is handed to Google Calendar with a link back to it', async ({ page
       return null;
     };
   });
-  await noteToolbar(page).getByRole('button', { name: 'Add to Google Calendar' }).click();
+  // The button sits with the reminder, the note's other tie to a day and time.
+  await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+  await page.getByRole('button', { name: 'Add to Google Calendar' }).click();
   await expect(page.locator('body')).toHaveAttribute('data-opened', /calendar\.google\.com/);
 
   const opened = new URL((await page.locator('body').getAttribute('data-opened')) ?? '');
