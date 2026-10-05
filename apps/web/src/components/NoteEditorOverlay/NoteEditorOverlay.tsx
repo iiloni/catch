@@ -27,7 +27,13 @@ import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
 import { notesCollection, useReminders } from '@/lib/collections';
-import { editorControls, noteDockPanelOpen, noteReminderRequest, quickNote } from '@/lib/dockState';
+import {
+  editorControls,
+  noteDockPanelOpen,
+  noteReminderRequest,
+  quickNote,
+  tagFormOpen,
+} from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { useNoteLinks } from '@/lib/linkPreviews';
@@ -551,7 +557,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
           // detached target counts as ours too. Beside the page, the page is not outside.
           onInteractOutside={(event) => {
-            if (split) {
+            if (split || tagFormOpen.get()) {
               event.preventDefault();
               return;
             }

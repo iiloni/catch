@@ -1,5 +1,6 @@
 import { secondaryTagAncestors } from '@catch/shared';
 import { useMemo } from 'react';
+import { NewTagButton } from '@/components/TagForm/TagForm';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
@@ -25,19 +26,27 @@ export function TagPicker({ noteId, noteIds }: Props) {
   );
   return (
     <section aria-label="Secondary tags" className="px-3 pt-3 pb-1">
-      <p className="mb-2 text-sm font-medium">Secondary tags</p>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">Secondary tags</p>
+        <NewTagButton
+          disabled={awaitingTags || awaitingAssignments}
+          onCreated={(tagId) => {
+            for (const id of ids) setSecondaryTag(id, tagId, true);
+          }}
+        />
+      </div>
       {awaitingTags || awaitingAssignments ? (
         <p role="status" className="py-3 text-sm text-muted-foreground">
           Loading tags…
         </p>
       ) : !tags.length ? (
-        <p className="py-3 text-sm text-muted-foreground">Create tags in Settings → Tags.</p>
+        <p className="py-3 text-sm text-muted-foreground">No tags yet.</p>
       ) : (
         <TagTree
           tags={tags}
           searchPosition="bottom"
           // Leave room for the heading, search field and padding within an anchored popover.
-          className="max-h-[max(0px,min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-7rem),calc(var(--radix-popover-content-available-height,100dvh)-7rem)))]"
+          className="max-h-[max(0px,min(22rem,45dvh,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-8rem),calc(var(--radix-popover-content-available-height,100dvh)-8rem)))]"
           renderTag={(tag, path) => {
             const root = path[0];
             const states = ids.map((id) => {
