@@ -51,4 +51,15 @@ describe('NotePreview', () => {
     expect(screen.queryByText('hidden')).not.toBeInTheDocument();
     expect(screen.getByText('…')).toBeInTheDocument();
   });
+
+  it("names a code block's language in the editor preview only", () => {
+    const content = [{ type: 'codeBlock', props: { language: 'py' }, content: [text('print(1)')] }];
+    const { unmount } = render(<NotePreview content={content} variant="editor" />);
+    expect(screen.getByText('Python')).toBeInTheDocument();
+    expect(screen.getByText('print(1)')).toBeInTheDocument();
+    unmount();
+    render(<NotePreview content={content} />);
+    expect(screen.queryByText('Python')).not.toBeInTheDocument();
+    expect(screen.getByText('print(1)')).toBeInTheDocument();
+  });
 });

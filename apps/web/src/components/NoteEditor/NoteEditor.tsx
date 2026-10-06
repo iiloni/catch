@@ -30,6 +30,7 @@ import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { noteEditorSchema } from './checkListItem';
+import { syntaxHighlighting } from './codeBlock';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
 import { useListItemDrag } from './useListItemDrag';
 
@@ -145,6 +146,7 @@ export function NoteEditor({
   noteOwner.current = { noteId, ensureNote };
   const editor = useCreateBlockNote({
     schema: noteEditorSchema,
+    extensions: [syntaxHighlighting],
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
