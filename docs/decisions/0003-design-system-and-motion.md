@@ -271,10 +271,12 @@ redo history. From 640 px it sits beside the back button, including in narrow sp
 It is positioned outside the header's flow so it never moves the centered sync pill.
 Split panes narrower than 480 px show the sync pill's icon with an accessible status label
 and a tooltip, leaving room for every header control. On phones the history toolbar floats
-at the dock's right edge above either the note actions or formatting bar.
+at the dock's left edge above either the note actions or formatting bar, and the jump to
+the note's end at its right. Both slide out to their sides while the list of the note's
+links is open over them, and back in when it closes.
 Keyboard scrolling keeps the caret's line above this toolbar too,
 with enough bottom padding to reach the note's last line.
-The toolbar slides in from the top in the header or the right above the dock with `springs.smooth`,
+The toolbar slides in from the top in the header or the left above the dock with `springs.smooth`,
 matching the sync pill, and skips animation when reduced motion is requested. Its final
 footprint is reserved for caret scrolling during the slide.
 

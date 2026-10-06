@@ -57,7 +57,7 @@ test('mobile notes scroll behind the controls and keep their timestamp below the
   const dockBounds = await page.locator('[data-note-toolbar]').last().boundingBox();
   if (!dockBounds) throw new Error('Missing note dock');
   expect(toBottomBounds.y + toBottomBounds.height).toBeLessThan(dockBounds.y);
-  expect(toBottomBounds.x - dockBounds.x).toBeLessThan(8);
+  expect(dockBounds.x + dockBounds.width - toBottomBounds.x - toBottomBounds.width).toBeLessThan(8);
   await toBottom.click();
   await expect(bottomBlur).toHaveCSS('opacity', '0');
   await expect(toBottom).toBeHidden();
