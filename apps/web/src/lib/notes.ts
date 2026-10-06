@@ -83,6 +83,9 @@ export function createNote(input: {
   return { id, transaction };
 }
 
+/** The note as this device has it now, local writes included. Not a subscription. */
+export const getNote = (id: string): Note | undefined => notesCollection.get(id);
+
 export function updateNote(id: string, changes: NoteChanges) {
   return write(() =>
     notesCollection.update(id, (draft) => {
