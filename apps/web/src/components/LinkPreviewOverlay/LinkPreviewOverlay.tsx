@@ -277,11 +277,15 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                 }
                 note={note}
                 fromEditor={fromEditor}
-                className="glass-thick shrink-0 rounded-t-3xl border-b-0! shadow-none"
+                className="glass-thick shrink-0 rounded-t-3xl border-b-0! pb-[calc(0.5rem+1px)] shadow-none"
               />
+              {/*
+                Tucked a pixel under the header: two sheets of glass that only touch show the
+                page through their seam whenever the panel sits between device pixels.
+              */}
               <div
                 data-link-overlay-scroll
-                className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-b-3xl"
+                className="-mt-px flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-b-3xl"
               >
                 {files.length > 0 && (
                   <section className="glass-thick shrink-0 rounded-b-3xl border-t-0! shadow-none">
