@@ -49,6 +49,7 @@ import {
 } from '@tanstack/react-db';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
+import { uuidv7 } from 'uuidv7';
 import { z } from 'zod';
 import { ApiError, api } from './api';
 import {
@@ -509,7 +510,12 @@ for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
  * them, which offline can be much later.
  */
 export function write(mutate: () => void): Transaction {
-  const offline = executor.createOfflineTransaction({ mutationFnName: 'push', autoCommit: false });
+  const offline = executor.createOfflineTransaction({
+    mutationFnName: 'push',
+    autoCommit: false,
+    // Ordered within a millisecond, unlike the outbox's own times (see `mergeQueuedWrites`).
+    idempotencyKey: uuidv7(),
+  });
   const transaction = offline.mutate(mutate);
   addPendingWrite(transaction.id);
   offline.commit().then(

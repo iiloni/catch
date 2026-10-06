@@ -7,6 +7,7 @@ type Mutation = { type: string; key: string; collection?: string; changes?: obje
 const queued = (id: string, at: number, ...mutations: Mutation[]) =>
   ({
     id,
+    idempotencyKey: id,
     createdAt: new Date(at),
     mutations: mutations.map(({ type, key, collection = 'notes', changes = {} }) => ({
       type,
@@ -68,5 +69,18 @@ describe('mergeQueuedWrites', () => {
       'notes',
     );
     expect(ids(merged)).toEqual(['1', '2']);
+  });
+
+  it('keeps writes made in the same millisecond in the order they were made', () => {
+    const tag = { ...queued('stored-second', 5, { type: 'insert', key: 't', collection: 'tags' }) };
+    const assignment = {
+      ...queued('stored-first', 5, { type: 'update', key: 'a', collection: 'note-tags' }),
+    };
+    tag.idempotencyKey = '0199b2f0-0000-7000-8000-000000000001';
+    assignment.idempotencyKey = '0199b2f0-0000-7000-8000-000000000002';
+    expect(ids(mergeQueuedWrites([assignment, tag], 'notes'))).toEqual([
+      'stored-second',
+      'stored-first',
+    ]);
   });
 });
