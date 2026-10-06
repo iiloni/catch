@@ -41,6 +41,7 @@ import { GALLERY_PAGES, type GalleryPage, useGalleryPages } from '@/lib/galleryP
 import { haptics } from '@/lib/haptics';
 import { useKeyboardOpen } from '@/lib/keyboard';
 import { linkCaptureControls } from '@/lib/linkCapture';
+import { linkOverlay } from '@/lib/linkPreviews';
 import { HOLD_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
@@ -257,7 +258,7 @@ export function Dock() {
   );
 }
 
-/** Undo and redo at the dock's right end and the jump to the note's end at its left. */
+/** Undo and redo at the dock's left end and the jump to the note's end at its right. */
 function FloatingNoteToolbars() {
   const note = editorNote.use();
   const controls = editorControls.use();
@@ -266,13 +267,20 @@ function FloatingNoteToolbars() {
     'absolute bottom-full mb-3 transition-transform duration-300 ease-out motion-reduce:transition-none sm:hidden',
     useNoteLinkTrayShown() && '-translate-y-11',
   );
+  // The list of links slides up over where these float, so they slide out to their sides.
+  const hidden = linkOverlay.use() !== null;
 
   return (
     <>
       {note && !note.deletedAt && (
-        <HistoryToolbar controls={controls} floating className={cn(place, 'right-0')} />
+        <HistoryToolbar
+          controls={controls}
+          floating
+          hidden={hidden}
+          className={cn(place, 'left-0')}
+        />
       )}
-      <ScrollToBottom className={cn(place, 'left-0')} />
+      <ScrollToBottom hidden={hidden} className={cn(place, 'right-0')} />
     </>
   );
 }

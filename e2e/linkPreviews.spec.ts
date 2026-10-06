@@ -214,6 +214,20 @@ test('the buttons floating above the dock clear the link tray', async ({ page, i
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(trayBounds.y);
   }
 
+  // The list of links opens over where they float, so they leave until it closes.
+  const toBottom = page.getByRole('button', { name: 'Scroll to bottom', exact: true });
+  const undoRedo = page.getByRole('toolbar', { name: 'Undo and redo' });
+  await tray.click();
+  const overlay = page.locator('[data-link-overlay]');
+  await expect(overlay).toBeVisible();
+  await expect(toBottom).toHaveCount(0);
+  await expect(undoRedo).toHaveCount(0);
+  await overlay.getByRole('button', { name: 'Close' }).click();
+  await expect(overlay).toBeHidden();
+  await expect(tray).toBeVisible();
+  const [left, right] = [await settledBox(undoRedo), await settledBox(toBottom)];
+  expect(left.x + left.width).toBeLessThan(right.x);
+
   // At the end the links are in view, so the tray leaves and undo and redo come back down.
   await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click();
   await expect(tray).toBeHidden();

@@ -12,10 +12,13 @@ const noState = () => null;
 export function HistoryToolbar({
   controls,
   floating = false,
+  hidden = false,
   className,
 }: {
   controls: EditorControls | null;
   floating?: boolean;
+  /** Slides the toolbar away for something that takes its place. */
+  hidden?: boolean;
   className?: string;
 }) {
   const state = useSyncExternalStore(
@@ -25,11 +28,11 @@ export function HistoryToolbar({
 
   return (
     <AnimatePresence>
-      {state && (state.canUndo || state.canRedo) && (
+      {state && (state.canUndo || state.canRedo) && !hidden && (
         <FloatingToolbar
           key="history"
           label="Undo and redo"
-          from={floating ? 'right' : 'top'}
+          from={floating ? 'left' : 'top'}
           className={className}
         >
           {[
