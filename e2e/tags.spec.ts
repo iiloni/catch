@@ -1000,6 +1000,12 @@ test('search combines descendant tags, any and all matching, text, colors and un
   ).toHaveCount(2);
   const filters = page.getByRole('region', { name: 'Search filters' });
   await page.getByRole('button', { name: 'Filter notes' }).click();
+  const showArchived = filters.getByRole('switch', { name: 'Show archived notes' });
+  await showArchived.click();
+  await expect(notes).toHaveCount(1);
+  await expect(results).not.toContainText('Archived roadmap');
+  await showArchived.click();
+  await expect(notes).toHaveCount(2);
   await filters.getByRole('tab', { name: 'Tags', exact: true }).click();
   await filters.getByRole('textbox', { name: 'Find tags' }).fill('Ideas');
   await filters.getByRole('checkbox', { name: 'Ideas', exact: true }).check();
