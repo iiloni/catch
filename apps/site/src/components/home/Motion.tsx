@@ -10,22 +10,18 @@ const clips = [
   {
     name: 'quick-note',
     title: 'A new note flies to its place',
-    body: 'Write in the window above the dock and save. The note travels to the card it becomes, so you see where it landed.',
   },
   {
     name: 'open-note',
     title: 'A note opens out of its card',
-    body: 'The editor grows from the card you tapped and shrinks back into it, so you never lose your place on the wall.',
   },
   {
     name: 'note-color',
     title: 'The dock becomes the toolbar',
-    body: "While a note is open, the dock holds that note's actions. Its color button grows the dock upward into a palette.",
   },
   {
     name: 'tabs',
     title: 'Pages slide the way you went',
-    body: 'Deck, Gallery and Search sit side by side, and moving between them follows the direction of the tab you chose.',
   },
 ] as const;
 
@@ -72,13 +68,11 @@ export function Motion() {
       />
       <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-20 sm:py-28 lg:grid-cols-2">
         <div>
-          <p className="mb-3 text-sm font-semibold text-(--brand-amber-light)">Motion</p>
           <h2 className="text-balance text-4xl font-bold tracking-tight sm:text-5xl">
             Motion that shows where things went.
           </h2>
           <p className="mt-4 max-w-xl text-pretty text-lg text-(--brand-cream)/70">
-            Nothing in Catch just appears or vanishes. These clips are recorded from the app, not
-            made for this page.
+            Recorded from the app.
           </p>
           <div role="tablist" aria-label="Recordings" className="mt-8 space-y-2">
             {clips.map((item, index) => (
@@ -92,21 +86,13 @@ export function Motion() {
                   setChosen(true);
                 }}
                 className={cn(
-                  'block w-full rounded-2xl border p-5 text-left transition-colors',
+                  'block w-full rounded-2xl border px-5 py-4 text-left font-display text-lg font-semibold transition-colors',
                   index === active
                     ? 'border-(--brand-amber-primary)/60 bg-white/10'
                     : 'border-white/10 hover:bg-white/5',
                 )}
               >
-                <span className="block font-display text-lg font-semibold">{item.title}</span>
-                <span
-                  className={cn(
-                    'mt-1 block text-[0.95rem] text-(--brand-cream)/70',
-                    index !== active && 'hidden sm:block',
-                  )}
-                >
-                  {item.body}
-                </span>
+                {item.title}
               </button>
             ))}
           </div>

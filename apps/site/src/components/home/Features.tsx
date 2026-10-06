@@ -44,46 +44,14 @@ function Feature({
 }
 
 const more = [
-  {
-    icon: Images,
-    title: 'Attachments',
-    body: 'Images, video, audio and other files inside a note.',
-  },
-  {
-    icon: Link2,
-    title: 'Link previews',
-    body: "A link in a note shows the page's title and picture.",
-  },
-  {
-    icon: Type,
-    title: 'Rich text',
-    body: 'Headings, bold, lists and checklists in one editor.',
-  },
-  {
-    icon: Search,
-    title: 'Search with filters',
-    body: 'Find notes by words, then narrow by tag or color.',
-  },
-  {
-    icon: MousePointerClick,
-    title: 'Select several notes',
-    body: 'Pin, tag, color, archive or delete many at once.',
-  },
-  {
-    icon: CalendarPlus,
-    title: 'Add to Google Calendar',
-    body: 'Turn a reminder into a calendar event from its panel.',
-  },
-  {
-    icon: Share2,
-    title: 'Share to Catch',
-    body: 'On Android, send text, links and files from other apps.',
-  },
-  {
-    icon: SunMoon,
-    title: 'Light and dark',
-    body: 'Both themes, following your device unless you choose.',
-  },
+  { icon: Images, title: 'Attachments' },
+  { icon: Link2, title: 'Link previews' },
+  { icon: Type, title: 'Rich text' },
+  { icon: Search, title: 'Search by tag or color' },
+  { icon: MousePointerClick, title: 'Select several notes' },
+  { icon: CalendarPlus, title: 'Add to Google Calendar' },
+  { icon: Share2, title: 'Share to Catch on Android' },
+  { icon: SunMoon, title: 'Light and dark' },
 ];
 
 export function Features() {
@@ -92,48 +60,30 @@ export function Features() {
       id="features"
       className="mx-auto w-full max-w-6xl scroll-mt-24 space-y-24 px-6 py-16 sm:py-24"
     >
-      <Feature title="Works without a connection." shot={shots.phoneGallery} phone>
-        <p>
-          Your notes are kept on the device, so they open at once, online or not. Write on the
-          train; the changes are sent when the signal comes back.
-        </p>
+      <Feature title="Works offline." shot={shots.phoneGallery} phone>
+        <p>Notes live on the device and sync when the signal comes back.</p>
       </Feature>
       <Feature title="A deck for notes in progress." shot={shots.desktopDeck} flip>
-        <p>
-          Give a note a status and it moves to the deck: a board with three columns, New, In
-          progress and On hold, that you drag notes between.
-        </p>
-        <p>When it is done, send it back to the gallery or archive it.</p>
+        <p>Give a note a status and it moves to a board: New, In progress, On hold.</p>
       </Feature>
-      <Feature title="Tags that nest and carry a color." shot={shots.desktopTags}>
-        <p>
-          Tags can sit inside other tags. A top-level tag has an icon and a color, and the notes
-          filed under it take that color on.
-        </p>
-        <p>Search finds notes by their words and narrows by tag or color.</p>
+      <Feature title="Tags that nest." shot={shots.desktopTags}>
+        <p>Tags sit inside tags, and a top-level tag gives its notes a color.</p>
       </Feature>
-      <Feature
-        title="Reminders that repeat and cross time zones."
-        shot={shots.phoneReminder}
-        phone
-        flip
-      >
+      <Feature title="Reminders that repeat." shot={shots.phoneReminder} phone flip>
         <p>
-          Remind yourself once or on a repeat, such as every weekday or the second Tuesday of the
-          month. A reminder can follow you across time zones or stay fixed to one.
-        </p>
-        <p>
-          Browsers get a notification. The Android app sets its own alarms, so they ring without a
-          connection, with Snooze and Done on the notification.
+          Every weekday, or the second Tuesday of the month. On Android they ring without a
+          connection.
         </p>
       </Feature>
 
-      <ul className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-        {more.map(({ icon: Icon, title, body }) => (
-          <li key={title} className="reveal">
-            <Icon className="size-5 text-brand-link" aria-hidden />
-            <h3 className="mt-3 font-sans text-base font-semibold">{title}</h3>
-            <p className="mt-1 text-[0.95rem] text-muted-foreground">{body}</p>
+      <ul className="flex flex-wrap justify-center gap-3">
+        {more.map(({ icon: Icon, title }) => (
+          <li
+            key={title}
+            className="reveal flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-[0.95rem] font-medium"
+          >
+            <Icon className="size-4 text-brand-link" aria-hidden />
+            {title}
           </li>
         ))}
       </ul>

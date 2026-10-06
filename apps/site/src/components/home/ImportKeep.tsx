@@ -3,25 +3,21 @@ import { Section } from './Section';
 const steps = [
   {
     title: 'Export from Google',
-    body: 'Ask Google Takeout for your Keep data. It sends you a zip file.',
+    body: 'Google Takeout sends your Keep data as a zip.',
   },
   {
     title: 'Choose the file in Catch',
-    body: 'Open Settings > Data Management and pick the zip. It is read on your device; the archive itself is never uploaded.',
+    body: 'Settings > Data Management. The zip is read on your device, never uploaded.',
   },
   {
     title: 'Check and confirm',
-    body: 'Catch shows what it found before adding anything. Importing the same export again skips the notes you already have.',
+    body: 'Review what Catch found. Importing again skips what you already have.',
   },
 ];
 
 export function ImportKeep() {
   return (
-    <Section
-      eyebrow="Moving in"
-      title="Bring your Keep notes."
-      lead="You do not start from an empty page."
-    >
+    <Section title="Bring your Keep notes.">
       <ol className="grid gap-4 md:grid-cols-3">
         {steps.map((step, index) => (
           <li

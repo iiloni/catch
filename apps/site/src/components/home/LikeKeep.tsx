@@ -6,35 +6,31 @@ const cards = [
     color: 'yellow',
     icon: Palette,
     title: 'Colors and pins',
-    body: 'Eighteen colors, and a pinned row for the notes you open every day.',
+    body: 'Eighteen colors and a pinned row.',
   },
   {
     color: 'orange',
     icon: ListChecks,
     title: 'Checklists',
-    body: 'Tick things off on the card without opening the note. Drag items to indent them.',
+    body: 'Tick items off right on the card.',
   },
   {
     color: 'pink',
     icon: Bell,
     title: 'Reminders',
-    body: 'Once or on a repeat. They arrive as notifications in the browser and alarms on Android.',
+    body: 'Once or on a repeat.',
   },
   {
     color: 'violet',
     icon: Archive,
     title: 'Archive and trash',
-    body: 'Put notes away without losing them, and restore the ones you deleted.',
+    body: 'Put notes away, or get them back.',
   },
 ];
 
 export function LikeKeep() {
   return (
-    <Section
-      eyebrow="Familiar"
-      title="If you know Keep, you know Catch."
-      lead="A wall of cards, a box to type in, and nothing to file."
-    >
+    <Section title="If you know Keep, you know Catch.">
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ color, icon: Icon, title, body }) => (
           <li

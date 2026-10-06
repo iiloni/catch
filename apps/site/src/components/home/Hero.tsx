@@ -4,8 +4,9 @@ import { shots } from '@/lib/screenshots';
 import { REPOSITORY_URL } from '@/lib/site';
 
 export function Hero() {
+  // Starts under the floating header, so the glow runs behind it instead of ending at its edge.
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative -mt-17 overflow-hidden pt-17">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 -top-40 mx-auto h-[36rem] max-w-5xl rounded-full bg-brand-gradient opacity-25 blur-3xl"
@@ -13,11 +14,11 @@ export function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-balance text-5xl font-extrabold tracking-tight sm:text-7xl">
-            Notes like Keep, on a server you own.
+            Catch it before it's gone.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground sm:text-xl">
-            Catch is a quick, colorful notes app for the browser and Android. It works offline and
-            syncs through a server run by you or someone you trust. There is no hosted Catch.
+            Quick, colorful notes for the browser and Android. They work offline and sync through
+            your own server. There is no hosted Catch.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a
@@ -35,7 +36,7 @@ export function Hero() {
             </a>
           </div>
           <p className="mt-5 text-sm text-muted-foreground">
-            Free and open source. Imports your notes from Google Keep.
+            Open source. Imports from Google Keep.
           </p>
         </div>
 

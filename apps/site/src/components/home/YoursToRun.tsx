@@ -4,28 +4,24 @@ import { Section } from './Section';
 const points = [
   {
     icon: Users,
-    title: 'Room for your people',
-    body: 'The first account is the admin, who invites everyone else with a link. Each person sees only their own notes.',
+    title: 'Invite your people',
+    body: 'The admin invites by link. Everyone sees only their own notes.',
   },
   {
     icon: DatabaseBackup,
     title: 'Backups built in',
-    body: 'Back up and restore the whole server, notes and attachments, from Settings. By hand, or every day on a schedule.',
+    body: 'Back up and restore the whole server from Settings, by hand or every day.',
   },
   {
     icon: RefreshCw,
     title: 'Updates you choose',
-    body: 'Follow stable releases, try previews first, or stay on one version. The server backs itself up before an update changes its data.',
+    body: 'Follow stable releases, try previews, or stay on one version.',
   },
 ];
 
 export function YoursToRun() {
   return (
-    <Section
-      eyebrow="For whoever runs the server"
-      title="Yours to run."
-      lead="Catch runs from one Docker Compose file on a home server or a small VPS, looked after by one person for a household or a group of friends."
-    >
+    <Section title="Yours to run." lead="One Docker Compose file, on a home server or a small VPS.">
       <ul className="grid gap-4 md:grid-cols-3">
         {points.map(({ icon: Icon, title, body }) => (
           <li key={title} className="reveal lift glass rounded-3xl p-7">

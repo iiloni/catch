@@ -42,8 +42,8 @@ export function Screenshot({
 export function PhoneBody({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn('@container', className)}>
-      <div className="relative rounded-[9cqw] bg-[#18191b] p-[2.2cqw] shadow-2xl shadow-black/30 ring-1 ring-white/15 ring-inset">
-        <div className="relative aspect-[360/840] overflow-hidden rounded-[7cqw] bg-black">
+      <div className="relative rounded-[5.6cqw] bg-[#18191b] p-[2.2cqw] shadow-2xl shadow-black/30 ring-1 ring-white/15 ring-inset">
+        <div className="relative aspect-[360/840] overflow-hidden rounded-[3.4cqw] bg-black">
           {children}
           <span
             aria-hidden
@@ -71,7 +71,7 @@ export function WindowFrame({ shot, eager, className }: Parameters<typeof Screen
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/15',
+        'overflow-hidden rounded-lg border border-border shadow-2xl shadow-black/15',
         className,
       )}
     >
