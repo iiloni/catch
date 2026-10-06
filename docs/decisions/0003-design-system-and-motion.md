@@ -93,6 +93,12 @@ The masked top edge blur appears with the pill, and both follow Settings' swipe 
 The stable horizontal Catch lockup sits fixed in the header's top left corner on these
 pages without a Back toolbar, and fades out as the title becomes a pill in that corner. It
 does not scroll with the page, which would carry it under the system status bar.
+A page flung into its top or bottom carries on past the edge and springs back
+(`lib/scrollBounce.ts`), since the browser's own overscroll is off and a fling would
+otherwise stop dead. The bounce scales with the speed of arrival up to about 70 px; a slow
+arrival, a jump and a scroll under a resting finger stop at the edge, as does everything with
+reduced motion. The page moves by `top` rather than a transform, which would unpin the fixed
+header and dock; those stay put, and only the large title rides the page off its top.
 It reserves room for the right toolbar (including sync status), using icon-only branding
 when a narrow page pane cannot fit the minimum lockup width. Selection hides the branding
 so the count and selection actions have the corners to themselves.
