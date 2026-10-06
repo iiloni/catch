@@ -116,7 +116,9 @@ test('a saved quick note lands as its card, with no empty window in between', as
   await page.getByRole('button', { name: 'New note' }).click();
   await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
   await page.keyboard.type('Landing note');
-  // Every frame of the window's exit: what it shows, and where its card face is.
+  // Every step of the window's exit: what it shows, and where its card face is. Sampled as
+  // the animation writes its styles, not once a frame: a frame callback can run ahead of
+  // the last step, and then reports the window short of where it landed.
   const frames = page.evaluate(
     () =>
       new Promise<{ face: number; handle: number; body: number; left: number; top: number }[]>(
@@ -133,6 +135,7 @@ test('a saved quick note lands as its card, with no empty window in between', as
           const sample = () => {
             const popup = document.querySelector('section[aria-label="New note"]');
             if (!popup) {
+              observer.disconnect();
               resolve(samples);
               return;
             }
@@ -145,8 +148,14 @@ test('a saved quick note lands as its card, with no empty window in between', as
               left: box?.left ?? Number.NaN,
               top: box?.top ?? Number.NaN,
             });
-            requestAnimationFrame(sample);
           };
+          const observer = new MutationObserver(sample);
+          observer.observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['style'],
+          });
           sample();
         },
       ),
