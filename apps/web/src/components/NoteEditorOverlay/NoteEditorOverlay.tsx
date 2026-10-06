@@ -56,6 +56,7 @@ import {
 import {
   CARD_FACE_FADE_END,
   editorProgress,
+  findCard,
   hideCard,
   landCard,
   measureCard,
@@ -154,6 +155,8 @@ function cssPixels(length: string) {
   probe.remove();
   return pixels;
 }
+
+const SCROLL_OPTIONS = { capture: true, passive: true } as const;
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
 
@@ -392,10 +395,20 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     // to take the card off the page, and shrinking into a card that vanishes looks broken.
     let landing = 0;
     let start = 0;
+    const follow = () => {
+      const card = findCard(note.id);
+      if (!card || !cardRect.current) return;
+      const box = card.getBoundingClientRect();
+      cardRect.current = { ...cardRect.current, x: box.left, y: box.top };
+      layoutTick.set(layoutTick.get() + 1);
+    };
     const frame = requestAnimationFrame(() => {
       cardRect.current = discarded ? null : measureCard(note.id);
       if (cardRect.current) hideCard(note.id);
       rerender((n) => n + 1);
+      // The page behind is live again and can be scrolled while the editor shrinks, which
+      // moves the card. Any scroller counts (the Deck's columns), hence the capture.
+      if (cardRect.current) document.addEventListener('scroll', follow, SCROLL_OPTIONS);
 
       // A frame later again, once the card's face is drawn on the surface shrinking into it.
       start = requestAnimationFrame(() => {
@@ -411,6 +424,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         ];
         if (!cardRect.current) animations.push(animateSteady(fade, 0, curves.collapse));
         void Promise.all(animations).then(() => {
+          document.removeEventListener('scroll', follow, SCROLL_OPTIONS);
           showCard(note.id);
           // A pane folded away into full screen leaves no pane behind.
           if (leadSurface === self) paneReveal.jump(0);
@@ -422,8 +436,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(start);
       window.clearTimeout(landing);
+      document.removeEventListener('scroll', follow, SCROLL_OPTIONS);
     };
-  }, [isPresent, flush, note.id, progress, dragY, fade, textFade, self, safeToRemove]);
+  }, [isPresent, flush, note.id, progress, dragY, fade, textFade, layoutTick, self, safeToRemove]);
 
   // A pane is part of the layout, not a sheet over it, so it does not swipe away.
   const scrollRef = useSwipeToDismiss({

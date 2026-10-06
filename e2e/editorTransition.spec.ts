@@ -90,3 +90,67 @@ for (const withLinks of [false, true]) {
     }
   });
 }
+
+test('a closing note follows its card when the page scrolls under it', async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 600 });
+  await signUp(page);
+  const title = 'Followed home';
+  const body = 'A paragraph that gives each card some height in the gallery. '.repeat(4);
+  await seedNotes(page, [
+    ...Array.from({ length: 12 }, (_, index) => ({ title: `Filler ${index}`, body })),
+    { title, body },
+  ]);
+  const note = card(page, title);
+  // Read before opening: the page behind an open note is inert.
+  const id = await note.getAttribute('data-note-card');
+  await note.getByRole('button', { name: 'Open note' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit note' });
+  await expect(dialog.getByRole('textbox')).toBeVisible();
+
+  // Scroll once the editor has started shrinking, then compare the last frame drawn before
+  // it is removed with where the card is by then.
+  const landing = dialog.evaluate(
+    (surface, id) =>
+      new Promise<{ top: number; cardTop: number; scrolled: number }>((resolve, reject) => {
+        let last: { top: number; cardTop: number } | undefined;
+        let scrolled = false;
+        let frames = 0;
+        const timeout = setTimeout(
+          () => reject(new Error('The editor did not finish closing')),
+          10_000,
+        );
+        function capture() {
+          if (!surface.isConnected) {
+            clearTimeout(timeout);
+            if (last) resolve({ ...last, scrolled: window.scrollY });
+            else reject(new Error('No card landing frames captured'));
+            return;
+          }
+          const target = document.querySelector(`[data-note-card="${id}"]`);
+          // The card's face is drawn on the surface only while it morphs, and the surface
+          // lets touches through once it is closing.
+          const closing = (surface as HTMLElement).style.pointerEvents === 'none';
+          if (closing && surface.querySelector(':scope > [aria-hidden="true"]') && target) {
+            // A few frames in: the card is measured on the first frame of the close.
+            frames += 1;
+            if (!scrolled && frames > 6) {
+              scrolled = true;
+              window.scrollBy({ top: 120, behavior: 'instant' });
+            }
+            last = {
+              top: surface.getBoundingClientRect().top,
+              cardTop: target.getBoundingClientRect().top,
+            };
+          }
+          requestAnimationFrame(capture);
+        }
+        capture();
+      }),
+    id,
+  );
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  const landed = await landing;
+  expect(landed.scrolled).toBe(120);
+  expect(Math.abs(landed.top - landed.cardTop)).toBeLessThan(4);
+  await expect(note).toBeVisible();
+});
