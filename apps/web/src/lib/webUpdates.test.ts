@@ -218,4 +218,28 @@ describe('web updates', () => {
     expect(fetchBuild).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
   });
+
+  it('updates a signed-out page without asking, once for a build', async () => {
+    const tried = new Map<string, string>();
+    vi.stubGlobal('sessionStorage', {
+      getItem: (key: string) => tried.get(key) ?? null,
+      setItem: (key: string, value: string) => tried.set(key, value),
+    });
+    fetchBuild.mockImplementation(async () => new Response(JSON.stringify({ id: next })));
+    const updates = await import('./webUpdates');
+    await updates.updateSignedOutPage();
+    expect(reload).toHaveBeenCalledTimes(1);
+    // The page that loads next still has the old build: it is left alone.
+    vi.resetModules();
+    const again = await import('./webUpdates');
+    await again.updateSignedOutPage();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a signed-out page that is up to date alone', async () => {
+    fetchBuild.mockResolvedValue(new Response(JSON.stringify({ id: current })));
+    const updates = await import('./webUpdates');
+    await updates.updateSignedOutPage();
+    expect(reload).not.toHaveBeenCalled();
+  });
 });

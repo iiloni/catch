@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inviteFromFragment, inviteLink } from './invites';
+import { inviteFromFragment, inviteFromText, inviteLink } from './invites';
 
 const token = 'aB3_-'.repeat(8) + 'xyz';
 
@@ -19,6 +19,14 @@ describe('invite links', () => {
       '#url=https%3A%2F%2Fexample.com',
     ]) {
       expect(inviteFromFragment(fragment), fragment).toBeNull();
+    }
+  });
+
+  it('read a pasted link or a token alone', () => {
+    expect(inviteFromText(` ${inviteLink('https://catch.example.com', token)}\n`)).toBe(token);
+    expect(inviteFromText(token)).toBe(token);
+    for (const text of ['', 'https://catch.example.com', 'https://catch.example.com/login#x']) {
+      expect(inviteFromText(text), text).toBeNull();
     }
   });
 });

@@ -15,7 +15,9 @@ new endpoint. Development stacks run open: seeding and the E2E tests make accoun
 **Admins invite people with a link.** Settings > Admin > Users makes an invite: a link to
 the sign-in page with a random token in its fragment, good for one account and seven days.
 The page sends the token with sign-up in an `X-Catch-Invite` header, and the server uses the
-invite up in the same statement that checks it, so a link cannot make two accounts. A token
+invite up in the same statement that checks it, so a link cannot make two accounts. The
+Android app opens no links, so its server setup and the sign-up form also take a pasted
+link. A token
 that is sent must be good even when registration is open. The server keeps only the token's
 hash, shows the link once, and lists each invite with the account it made; removing one
 revokes it. Invites are admin server state like the user directory (ADR 0011): plain

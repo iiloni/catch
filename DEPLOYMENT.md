@@ -73,7 +73,8 @@ send them. Set `REGISTRATION=open` to let anyone with the address sign up instea
 
 People using Android install the app from the
 [releases page](https://github.com/iiloni/catch/releases) and enter the server's address on
-first launch.
+first launch. Someone you invited pastes their invite link there instead: it names the
+server and lets them make their account in the app. The sign-up form takes a pasted link too.
 
 ## Settings
 
