@@ -16,9 +16,8 @@ export function Hero() {
             Notes like Keep, on a server you own.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground sm:text-xl">
-            Catch is a quick, colorful notes app for the browser and Android. It keeps working
-            offline and syncs through a server that you, or someone you trust, run. There is no
-            hosted Catch.
+            Catch is a quick, colorful notes app for the browser and Android. It works offline and
+            syncs through a server run by you or someone you trust. There is no hosted Catch.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <a
@@ -36,7 +35,7 @@ export function Hero() {
             </a>
           </div>
           <p className="mt-5 text-sm text-muted-foreground">
-            Free and open source. Brings your notes over from Google Keep.
+            Free and open source. Imports your notes from Google Keep.
           </p>
         </div>
 

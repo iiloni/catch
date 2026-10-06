@@ -22,7 +22,7 @@ export function Compare() {
       id="compare"
       eyebrow="Compare"
       title="Where Catch stands."
-      lead="Next to the app it is modeled on and two open source alternatives, including the rows where Catch is behind."
+      lead="Catch next to Google Keep and two open source alternatives, including the rows where it is behind."
     >
       <div className="reveal overflow-x-auto rounded-3xl border border-border bg-card">
         <table className="w-full min-w-[46rem] border-collapse text-left text-[0.95rem]">

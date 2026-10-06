@@ -414,6 +414,7 @@ async function record(
   name: string,
   prepare: (page: Page) => Promise<void>,
   act: (page: Page) => Promise<void>,
+  restore: (page: Page) => Promise<void>,
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'catch-recording-'));
   const context = await phoneContext(browser, storageState, theme);
@@ -433,6 +434,7 @@ async function record(
   await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 95, everyNthFrame: 1 });
   await act(page);
   await cdp.send('Page.stopScreencast');
+  await restore(page);
   await context.close();
   if (frames.length < 2) throw new Error(`No frames were recorded for ${name}.`);
 
@@ -480,13 +482,54 @@ async function record(
 }
 
 const pause = (page: Page, ms: number) => page.waitForTimeout(ms);
+const quickNote = { title: 'Call the plumber', body: 'Kitchen tap, before Friday' };
 
 /** The clips, in the order the page lists them. Each leaves the account as it found it. */
 const clips: {
   name: string;
   prepare?: (page: Page) => Promise<void>;
   act: (page: Page) => Promise<void>;
+  restore?: (page: Page) => Promise<void>;
 }[] = [
+  {
+    name: 'quick-note',
+    // A new note lands first among the unpinned ones, which start below the first screen.
+    prepare: async (page) => {
+      const others = page.getByText('Others', { exact: true });
+      // Twice: the header folds away on the first scroll and moves the page under it.
+      for (let pass = 0; pass < 2; pass++) {
+        await others.evaluate((heading) => {
+          window.scrollBy({ top: heading.getBoundingClientRect().top - 130 });
+        });
+        await pause(page, 600);
+      }
+    },
+    act: async (page) => {
+      await pause(page, 500);
+      await page.getByRole('button', { name: 'New note' }).tap();
+      await page
+        .getByRole('region', { name: 'New note', exact: true })
+        .getByRole('textbox')
+        .waitFor();
+      await pause(page, 700);
+      await page.keyboard.type(quickNote.title, { delay: 55 });
+      await page.keyboard.press('Enter');
+      await page.keyboard.type(quickNote.body, { delay: 45 });
+      await pause(page, 600);
+      await page.getByRole('button', { name: 'Save note' }).tap();
+      await pause(page, 2400);
+    },
+    // The next recording starts from the same wall, so the note written here goes again.
+    restore: async (page) => {
+      const id = await card(page, quickNote.title).getAttribute('data-note-card');
+      if (!id) throw new Error('The quick note was not saved.');
+      await page.evaluate(async (noteId) => {
+        const file = 'notes';
+        const { deleteNoteForever } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+        await deleteNoteForever(noteId).isPersisted.promise;
+      }, id);
+    },
+  },
   {
     name: 'open-note',
     act: async (page) => {
@@ -557,6 +600,7 @@ for (const layout of Object.keys(layouts) as Layout[]) {
 for (const theme of themes) {
   if (only === 'pictures') break;
   for (const clip of clips) {
+    if (process.argv[3] && clip.name !== process.argv[3]) continue;
     await record(
       browser,
       storageState,
@@ -564,6 +608,7 @@ for (const theme of themes) {
       clip.name,
       clip.prepare ?? (async () => {}),
       clip.act,
+      clip.restore ?? (async () => {}),
     );
   }
 }

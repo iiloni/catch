@@ -225,3 +225,31 @@
     transform: translateY(24px);
   }
 }
+
+/*
+ * The header floats over the page as a glass pill, like the app's dock. Fumadocs draws it
+ * (`#nd-nav` on the marketing pages, `#nd-subnav` above the docs on a phone), so this
+ * restyles its elements rather than replacing them. The radius is half the bar's height:
+ * a pill while closed, a rounded sheet once the phone menu opens inside it.
+ */
+#nd-nav {
+  top: 0.75rem;
+  margin-top: 0.75rem;
+  padding-inline: 0.75rem;
+}
+
+#nd-nav > div,
+#nd-subnav {
+  @apply glass;
+  border-radius: 1.75rem;
+}
+
+#nd-nav > div {
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+#nd-subnav {
+  top: calc(var(--fd-docs-row-1) + 0.5rem);
+  margin: 0.5rem 0.75rem 0;
+}

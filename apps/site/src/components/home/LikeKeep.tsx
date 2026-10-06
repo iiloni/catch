@@ -24,7 +24,7 @@ const cards = [
     color: 'violet',
     icon: Archive,
     title: 'Archive and trash',
-    body: 'Put notes away without losing them, and restore the ones you deleted by mistake.',
+    body: 'Put notes away without losing them, and restore the ones you deleted.',
   },
 ];
 
@@ -33,7 +33,7 @@ export function LikeKeep() {
     <Section
       eyebrow="Familiar"
       title="If you know Keep, you know Catch."
-      lead="A wall of cards, a box to type in, and nothing to file. The parts of Keep worth keeping are here."
+      lead="A wall of cards, a box to type in, and nothing to file."
     >
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ color, icon: Icon, title, body }) => (

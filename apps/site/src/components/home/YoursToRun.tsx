@@ -24,7 +24,7 @@ export function YoursToRun() {
     <Section
       eyebrow="For whoever runs the server"
       title="Yours to run."
-      lead="Catch is one Docker Compose file on a home server or a small VPS. It is built to be looked after by one person for a household or a group of friends."
+      lead="Catch runs from one Docker Compose file on a home server or a small VPS, looked after by one person for a household or a group of friends."
     >
       <ul className="grid gap-4 md:grid-cols-3">
         {points.map(({ icon: Icon, title, body }) => (

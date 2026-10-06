@@ -92,28 +92,32 @@ export function Features() {
       id="features"
       className="mx-auto w-full max-w-6xl scroll-mt-24 space-y-24 px-6 py-16 sm:py-24"
     >
-      <Feature title="Offline is the normal case." shot={shots.phoneGallery} phone>
+      <Feature title="Works without a connection." shot={shots.phoneGallery} phone>
         <p>
-          Your notes are kept on the device, so they open at once and stay there without a
-          connection. Write on the train; the changes are sent when the signal comes back.
+          Your notes are kept on the device, so they open at once, online or not. Write on the
+          train; the changes are sent when the signal comes back.
         </p>
-        <p>The server is where devices meet, not where you wait.</p>
       </Feature>
       <Feature title="A deck for notes in progress." shot={shots.desktopDeck} flip>
         <p>
-          Some notes are things you are doing. Give one a status and it moves to the deck, a board
-          with columns you drag notes between.
+          Give a note a status and it moves to the deck: a board with three columns, New, In
+          progress and On hold, that you drag notes between.
         </p>
         <p>When it is done, send it back to the gallery or archive it.</p>
       </Feature>
-      <Feature title="Tags that nest, and color that means something." shot={shots.desktopTags}>
+      <Feature title="Tags that nest and carry a color." shot={shots.desktopTags}>
         <p>
-          Tags can sit inside other tags. A top-level tag carries an icon and a color, and the notes
-          filed under it take that color on, so the wall sorts itself at a glance.
+          Tags can sit inside other tags. A top-level tag has an icon and a color, and the notes
+          filed under it take that color on.
         </p>
         <p>Search finds notes by their words and narrows by tag or color.</p>
       </Feature>
-      <Feature title="Reminders that know where you are." shot={shots.phoneReminder} phone flip>
+      <Feature
+        title="Reminders that repeat and cross time zones."
+        shot={shots.phoneReminder}
+        phone
+        flip
+      >
         <p>
           Remind yourself once or on a repeat, such as every weekday or the second Tuesday of the
           month. A reminder can follow you across time zones or stay fixed to one.

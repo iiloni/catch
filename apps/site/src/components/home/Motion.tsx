@@ -8,6 +8,11 @@ import { cn } from '@/lib/utils';
 /** Recorded from the app by `scripts/screenshots.ts`, as `<name>-<theme>.mp4` and `.jpg`. */
 const clips = [
   {
+    name: 'quick-note',
+    title: 'A new note flies to its place',
+    body: 'Write in the window above the dock and save. The note travels to the card it becomes, so you see where it landed.',
+  },
+  {
     name: 'open-note',
     title: 'A note opens out of its card',
     body: 'The editor grows from the card you tapped and shrinks back into it, so you never lose your place on the wall.',
@@ -26,6 +31,8 @@ const clips = [
 
 export function Motion() {
   const [active, setActive] = useState(0);
+  // The clips play one after another until somebody chooses one, which then repeats.
+  const [chosen, setChosen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
   const video = useRef<HTMLVideoElement>(null);
@@ -70,8 +77,8 @@ export function Motion() {
             Motion that shows where things went.
           </h2>
           <p className="mt-4 max-w-xl text-pretty text-lg text-(--brand-cream)/70">
-            Things in Catch come from somewhere and go somewhere. These are recordings of the app,
-            not animations made for this page.
+            Nothing in Catch just appears or vanishes. These clips are recorded from the app, not
+            made for this page.
           </p>
           <div role="tablist" aria-label="Recordings" className="mt-8 space-y-2">
             {clips.map((item, index) => (
@@ -80,7 +87,10 @@ export function Motion() {
                 type="button"
                 role="tab"
                 aria-selected={index === active}
-                onClick={() => setActive(index)}
+                onClick={() => {
+                  setActive(index);
+                  setChosen(true);
+                }}
                 className={cn(
                   'block w-full rounded-2xl border p-5 text-left transition-colors',
                   index === active
@@ -112,7 +122,12 @@ export function Motion() {
                 poster={`${source}.jpg`}
                 aria-label={clip.title}
                 muted
-                loop
+                loop={chosen}
+                onEnded={() => {
+                  // With less motion asked for, a clip somebody played by hand just stops.
+                  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+                  setActive((active + 1) % clips.length);
+                }}
                 playsInline
                 preload="metadata"
                 className="size-full object-cover"
