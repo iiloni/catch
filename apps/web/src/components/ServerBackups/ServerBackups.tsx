@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { ProgressRow } from '@/components/ImportProgress/ImportProgress';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
+import { TimePicker } from '@/components/TimePicker/TimePicker';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,8 +30,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { formatDateTime } from '@/lib/clock';
+import { formatDateTime, formatTime, useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 import { BackupRequestError, serverBackups, useServerBackups } from '@/lib/serverBackups';
 
@@ -456,7 +458,7 @@ function Schedule({
       <SettingsRow
         icon={CalendarClock}
         label="Back up every day"
-        description={draft.enabled ? `At ${draft.time}, ${draft.timeZone} time` : 'Off'}
+        description={draft.enabled ? `At ${timeOfDay(draft.time)}, ${draft.timeZone} time` : 'Off'}
       >
         <Switch
           aria-label="Back up every day"
@@ -470,15 +472,7 @@ function Schedule({
       {draft.enabled && (
         <>
           <SettingsRow label="Time">
-            <Input
-              type="time"
-              aria-label="Backup time"
-              className="w-32"
-              value={draft.time}
-              onChange={(event) => {
-                if (event.target.value) void save({ time: event.target.value.slice(0, 5) });
-              }}
-            />
+            <TimeField value={draft.time} onCommit={(time) => void save({ time })} />
           </SettingsRow>
           <SettingsRow label="Backups to keep" description="Older scheduled ones are removed">
             <KeepInput value={draft.keep} onCommit={(keep) => void save({ keep })} />
@@ -500,6 +494,43 @@ function Schedule({
         </>
       )}
     </SettingsSection>
+  );
+}
+
+/** A time of day (`HH:MM`) as this device writes times. */
+function timeOfDay(time: string) {
+  const [hour = 0, minute = 0] = time.split(':').map(Number);
+  return formatTime(new Date(2000, 0, 1, hour, minute));
+}
+
+/** Saves when the clock is put away, so dragging its hand is not a save for every minute. */
+function TimeField({ value, onCommit }: { value: string; onCommit: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState(value);
+  // Redraws the time when the 12 or 24 hour setting changes.
+  useHour12();
+
+  function change(next: boolean) {
+    if (next) setTime(value);
+    else if (time !== value) onCommit(time);
+    setOpen(next);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={change}>
+      <PopoverTrigger
+        aria-label={`Backup time: ${timeOfDay(value)}`}
+        className="flex h-9 min-w-24 items-center justify-center rounded-md border border-input bg-transparent px-3 text-sm tabular-nums outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {timeOfDay(value)}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-72 max-w-[calc(100vw-1.5rem)] flex-col gap-3">
+        <TimePicker value={time} onChange={setTime} />
+        <Button className="h-11 rounded-full" onClick={() => change(false)}>
+          Done
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }
 

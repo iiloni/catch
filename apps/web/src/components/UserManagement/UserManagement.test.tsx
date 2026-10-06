@@ -36,6 +36,12 @@ function show(onAccessDenied = vi.fn()) {
   return onAccessDenied;
 }
 
+async function chooseRole(trigger: HTMLElement, name: string) {
+  // Radix opens a menu on the pointer or the keyboard, not on a click.
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitemradio', { name }));
+}
+
 describe('UserManagement', () => {
   it('shows login dates and handles accounts with no recorded login', async () => {
     show();
@@ -51,8 +57,11 @@ describe('UserManagement', () => {
   });
   it('protects the current admin and waits for a role change to save', async () => {
     show();
-    const select = await screen.findByRole('combobox', { name: 'Role for user@example.com' });
-    expect(screen.getByRole('combobox', { name: 'Role for admin@example.com' })).toBeDisabled();
+    const role = () => screen.getByRole('button', { name: /^Role for user@example\.com/ });
+    await screen.findByRole('table', { name: 'Users' });
+    expect(
+      screen.getByRole('button', { name: 'Role for admin@example.com: Admin' }),
+    ).toBeDisabled();
     let finish: (value: AdminUser) => void = () => {};
     vi.mocked(api.updateUserRole).mockImplementation(
       () =>
@@ -60,23 +69,34 @@ describe('UserManagement', () => {
           finish = resolve;
         }),
     );
-    fireEvent.change(select, { target: { value: 'admin' } });
-    expect(select).toBeDisabled();
-    expect(select).toHaveValue('user');
+    await chooseRole(role(), 'Admin');
+    expect(role()).toBeDisabled();
+    expect(role()).toHaveTextContent('User');
     expect(api.updateUserRole).toHaveBeenCalledWith('user', { role: 'admin' });
     finish({ ...user, role: 'admin' });
-    await waitFor(() => expect(select).toHaveValue('admin'));
-    expect(select).toBeEnabled();
+    await waitFor(() => expect(role()).toHaveTextContent('Admin'));
+    expect(role()).toBeEnabled();
+  });
+
+  it('saves nothing when the role a user already has is chosen', async () => {
+    show();
+    await screen.findByRole('table', { name: 'Users' });
+    await chooseRole(
+      screen.getByRole('button', { name: 'Role for user@example.com: User' }),
+      'User',
+    );
+    expect(api.updateUserRole).not.toHaveBeenCalled();
   });
 
   it('keeps the saved role and reports a failed change', async () => {
     vi.mocked(api.updateUserRole).mockRejectedValue(new Error('offline'));
     show();
-    const select = await screen.findByRole('combobox', { name: 'Role for user@example.com' });
-    fireEvent.change(select, { target: { value: 'admin' } });
+    await screen.findByRole('table', { name: 'Users' });
+    const role = () => screen.getByRole('button', { name: /^Role for user@example\.com/ });
+    await chooseRole(role(), 'Admin');
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not change the role');
-    expect(select).toHaveValue('user');
-    expect(select).toBeEnabled();
+    expect(role()).toHaveTextContent('User');
+    expect(role()).toBeEnabled();
   });
 
   it('searches on the server and resets pagination', async () => {

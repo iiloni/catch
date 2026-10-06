@@ -483,7 +483,7 @@
   align-items: center;
 }
 .note-code-block > .note-code-language > span,
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select {
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > button {
   position: static;
   height: 1.75rem;
   padding-inline: 0.5rem 1.375rem;
@@ -497,18 +497,15 @@
   line-height: 1.75rem;
   opacity: 1;
   transition: none;
-  appearance: none;
-  /* As wide as the chosen language, not the longest one in the list. */
-  field-sizing: content;
 }
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select:disabled {
-  cursor: default;
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > button:enabled {
+  cursor: pointer;
 }
 @media (hover: hover) {
   .bn-container.note-editor
     [data-content-type="codeBlock"]
     > .note-code-language
-    > select:enabled:hover {
+    > button:enabled:hover {
     background: var(--code-background);
     color: var(--foreground);
   }
@@ -516,15 +513,12 @@
 .bn-container.note-editor
   [data-content-type="codeBlock"]
   > .note-code-language
-  > select:focus-visible {
+  > button:focus-visible {
   box-shadow: 0 0 0 2px var(--ring);
   color: var(--foreground);
+  outline: none;
 }
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select > option {
-  background: var(--popover);
-  color: var(--popover-foreground);
-}
-/* The select's arrow, drawn here because `appearance: none` removes the native one. */
+/* The arrow that marks the language as a choice. A read-only note shows the name alone. */
 .note-code-language::after {
   position: absolute;
   top: 50%;
@@ -537,7 +531,7 @@
   pointer-events: none;
   transform: translateY(-70%) rotate(45deg);
 }
-.note-code-language:has(> select:disabled)::after {
+.note-code-language:has(> button:disabled)::after {
   display: none;
 }
 

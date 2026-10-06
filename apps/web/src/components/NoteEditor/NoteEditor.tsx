@@ -23,9 +23,11 @@ import { BlockNoteView, useShadCNComponentsContext } from '@blocknote/shadcn';
 import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
 import { GripVertical } from 'lucide-react';
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { SearchSelectDialog, type SelectOption } from '@/components/SearchSelect/SearchSelect';
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
 import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
+import { CODE_LANGUAGES, codeLanguageId } from '@/lib/codeLanguages';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -178,9 +180,23 @@ export function NoteEditor({
 
   useCaretAboveKeyboard(editor);
   const editorRef = useListItemDrag(editor, editable);
+  // The code block whose language is being chosen.
+  const [languageBlock, setLanguageBlock] = useState<string | null>(null);
+
+  function onClick(event: MouseEvent<HTMLDivElement>) {
+    if (!editable || !(event.target instanceof Element)) return;
+    // A code block draws its language button itself, outside React (see codeBlock.ts).
+    const language = event.target.closest('.note-code-language > button');
+    if (language && editor.domElement?.contains(language)) {
+      const id = language.closest<HTMLElement>('[data-node-type="blockContainer"]')?.dataset.id;
+      if (id) setLanguageBlock(id);
+      return;
+    }
+    focusAboveBlankSpace(event);
+  }
 
   function focusAboveBlankSpace(event: MouseEvent<HTMLDivElement>) {
-    if (!editable || !(event.target instanceof Element)) return;
+    if (!(event.target instanceof Element)) return;
     // Floating controls share BlockNoteView's click handler, including through portals.
     // Only clicks on the writing surface should move the caret.
     if (event.target !== event.currentTarget && !editor.domElement?.contains(event.target)) {
@@ -220,7 +236,7 @@ export function NoteEditor({
       sideMenu={false}
       slashMenu={false}
       className={cn('note-editor', className)}
-      onClick={focusAboveBlankSpace}
+      onClick={onClick}
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
       <NoteSideMenuController />
@@ -230,7 +246,72 @@ export function NoteEditor({
         portalElement={typeof document === 'undefined' ? undefined : document.body}
         floatingUIOptions={slashMenuFloatingOptions}
       />
+      {languageBlock && (
+        <CodeLanguagePicker
+          editor={editor}
+          blockId={languageBlock}
+          onDone={() => setLanguageBlock(null)}
+        />
+      )}
     </BlockNoteView>
+  );
+}
+
+const CODE_LANGUAGE_OPTIONS: SelectOption[] = Object.entries(CODE_LANGUAGES).map(
+  ([value, language]) => ({
+    value,
+    label: language.name,
+    keywords: [value, ...('aliases' in language ? language.aliases : [])],
+  }),
+);
+
+function CodeLanguagePicker({
+  editor,
+  blockId,
+  onDone,
+}: {
+  editor: AnyEditor;
+  blockId: string;
+  onDone: () => void;
+}) {
+  const block = editor.getBlock(blockId);
+  const language = block?.type === 'codeBlock' ? String(block.props.language ?? '') : '';
+  const id = codeLanguageId(language);
+  // A language outside the list (pasted, imported) stays a choice, so opening the list
+  // does not show the block as something it is not.
+  const options = useMemo(
+    () =>
+      id || !language
+        ? CODE_LANGUAGE_OPTIONS
+        : [...CODE_LANGUAGE_OPTIONS, { value: language, label: language }],
+    [id, language],
+  );
+  const chosen = useRef(false);
+  return (
+    <SearchSelectDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onDone();
+      }}
+      // Back to the code, as the list took focus from it. Its button was drawn again for
+      // the new language, so the dialog has nothing to return focus to.
+      onCloseAutoFocus={(event) => {
+        if (!chosen.current) return;
+        event.preventDefault();
+        if (editor.getBlock(blockId)) editor.setTextCursorPosition(blockId, 'end');
+        editor.focus();
+      }}
+      title="Code language"
+      searchLabel="Search languages"
+      emptyText="No language matches."
+      options={options}
+      value={id ?? language}
+      onChange={(value) => {
+        if (!editor.isEditable || !editor.getBlock(blockId)) return;
+        chosen.current = true;
+        editor.updateBlock(blockId, { props: { language: value } });
+      }}
+    />
   );
 }
 

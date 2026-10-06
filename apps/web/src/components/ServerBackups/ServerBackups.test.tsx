@@ -202,6 +202,24 @@ describe('ServerBackups', () => {
     });
   });
 
+  it('saves a time chosen on the clock once it is put away', async () => {
+    ready({ schedule: { ...DEFAULT_BACKUP_SCHEDULE, enabled: true } });
+    fireEvent.click(screen.getByRole('button', { name: /^Backup time: / }));
+    const clock = await screen.findByRole('dialog');
+    fireEvent.click(clock.querySelector('[data-hour="5"]') as HTMLElement);
+    fireEvent.click(clock.querySelector('[data-minute="30"]') as HTMLElement);
+    // Each step on the face is a draft, not a save.
+    expect(serverBackups.saveSchedule).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(serverBackups.saveSchedule).toHaveBeenCalledWith({
+      ...DEFAULT_BACKUP_SCHEDULE,
+      enabled: true,
+      time: '05:30',
+      timeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('announces a backup or restore that ends while the page is open', () => {
     const { rerender } = ready({
       running: { kind: 'backup', startedAt: '2026-10-01T03:00:00.000Z' },
