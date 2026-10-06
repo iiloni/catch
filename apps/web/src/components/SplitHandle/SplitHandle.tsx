@@ -85,8 +85,10 @@ export function SplitHandle({ listWidth, viewportWidth }: Props) {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
-      // Wider than the gutter, so a finger does not have to land exactly on it.
-      className="group fixed top-0 bottom-0 z-[55] flex w-6 cursor-col-resize touch-none select-none items-center justify-center outline-none"
+      // As wide as the gutter, so a finger does not have to land exactly on the grip. Over the
+      // page and its headers (30), and under menus, pickers and dialogs (50), which may reach
+      // across the gutter. The note starts past the gutter, so it never covers the grip.
+      className="group fixed top-0 bottom-0 z-40 flex w-6 cursor-col-resize touch-none select-none items-center justify-center outline-none"
       // Centered on the gutter, following the pane's edge as it slides.
       style={{ left: `calc(100% - var(--note-pane) + ${GUTTER / 2 - 12}px)` }}
       initial={{ opacity: 0 }}
