@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { Dock } from '@/components/Dock/Dock';
@@ -14,6 +15,7 @@ import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
+import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -44,8 +46,22 @@ export const Route = createFileRoute('/_app')({
 function AppLayout() {
   useEffect(watchUpdates, []);
   const { open } = useOpenNote();
-  useEffect(() => onNotificationOpen(open), [open]);
+  useEffect(
+    () =>
+      onNotificationOpen((noteId, userId) => {
+        // A reminder rings for every account on the device; this one may be another's.
+        if (!userId || userId === getSignedInUser()?.id) open(noteId);
+        else openAccountNote(userId, noteId);
+      }),
+    [open],
+  );
   useEffect(watchNativeReminders, []);
+  useEffect(followAccountChanges, []);
+  useEffect(() => {
+    // The page looks much the same for every account, so a switch says whose it is now.
+    const user = getSignedInUser();
+    if (user && arrivedBySwitching()) toast(`Switched to ${user.name || user.email}`);
+  }, []);
   useEffect(() => {
     void syncPush();
     const user = getSignedInUser();

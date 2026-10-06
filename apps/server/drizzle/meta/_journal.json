@@ -71,6 +71,13 @@
       "when": 1791157170914,
       "tag": "0009_snooze_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791179985213,
+      "tag": "0010_push_subscription_accounts",
+      "breakpoints": true
     }
   ]
 }

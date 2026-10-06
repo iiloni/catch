@@ -85,9 +85,10 @@ const TITLE_REST_Y = 66;
 /**
  * The scroll at which the title leaves for its corner: while it is still below the row. A
  * centered title on a phone is wider than the gap between the corners, so riding the page
- * any further would run it into the controls on the right.
+ * any further would run it into the controls on the right, and it still rises a little on
+ * its way out from under them.
  */
-const TITLE_COLLAPSE_AT = 16;
+const TITLE_COLLAPSE_AT = 2;
 
 /** Fit the complete title using its actual font metrics, including after fonts load. */
 function useFittedTitle(title: string) {

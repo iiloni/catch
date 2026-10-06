@@ -16,7 +16,9 @@ public class ReminderReceiver extends BroadcastReceiver {
         if (ReminderAlarms.ACTION_SNOOZE.equals(action) && noteId != null) {
             String title = intent.getStringExtra("title");
             String body = intent.getStringExtra("body");
-            ReminderAlarms.snooze(context, noteId, title == null ? "Reminder" : title, body == null ? "" : body);
+            String account = intent.getStringExtra(ReminderAlarms.ACCOUNT);
+            ReminderAlarms.snooze(
+                    context, account == null ? "" : account, noteId, title == null ? "Reminder" : title, body == null ? "" : body);
         } else if (ReminderAlarms.ACTION_DONE.equals(action) && noteId != null) {
             ReminderAlarms.dismiss(context, noteId);
         } else {

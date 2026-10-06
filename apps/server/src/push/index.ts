@@ -49,12 +49,14 @@ export async function saveSubscription(userId: string, subscription: PushSubscri
     p256dh: subscription.keys.p256dh,
     auth: subscription.keys.auth,
   };
-  // An endpoint is one browser. Whoever signed in on it last gets its notifications.
+  // An endpoint is one browser, which rings for every account signed in on it (ADR 0019).
+  // An account that leaves takes its own row away; a browser that cannot say so drops the
+  // endpoint instead.
   await db
     .insert(pushSubscriptions)
     .values(values)
     .onConflictDoUpdate({
-      target: pushSubscriptions.endpoint,
+      target: [pushSubscriptions.endpoint, pushSubscriptions.userId],
       set: { ...values, createdAt: new Date() },
     });
   // The newest are kept; the oldest is the browser least likely still in use.
@@ -91,13 +93,14 @@ export async function notifyUser(userId: string, message: PushMessage, endpoint?
     );
   if (targets.length === 0) return 0;
   const keys = await vapidKeys();
-  const payload = Buffer.from(JSON.stringify(message));
+  // The browser may hold several accounts; the message says whose note this is.
+  const payload = Buffer.from(JSON.stringify({ ...message, userId } satisfies PushMessage));
   const results = await Promise.all(
     targets.map(async (target) => {
       try {
         const result = await sendPush(target, payload, keys, contact());
         if (result === 'gone') {
-          // Only this user's: the browser may have been signed in to by someone else since.
+          // Only this user's row: each account on the browser learns of it for itself.
           await removeSubscription(target.userId, target.endpoint);
         }
         return result === 'sent';

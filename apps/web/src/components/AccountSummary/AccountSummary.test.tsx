@@ -11,13 +11,13 @@ describe('initials', () => {
 
 describe('AccountSummary', () => {
   it('shows the name with the email under it', () => {
-    render(<AccountSummary name="Ada" email="ada@example.com" />);
+    render(<AccountSummary id="ada" name="Ada" email="ada@example.com" />);
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByText('ada@example.com')).toBeInTheDocument();
   });
 
   it('shows the email alone when there is no name', () => {
-    render(<AccountSummary name="" email="ada@example.com" />);
+    render(<AccountSummary id="ada" name="" email="ada@example.com" />);
     expect(screen.getAllByText('ada@example.com')).toHaveLength(1);
   });
 });

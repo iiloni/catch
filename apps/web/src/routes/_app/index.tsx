@@ -4,6 +4,7 @@ import { ArrowDownUp, LayoutGrid, Lightbulb, Rows3 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { z } from 'zod';
+import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
@@ -114,6 +115,7 @@ function GalleryPage() {
             )}
             <ViewOptions sort={sort} onChange={setSort} />
             <SettingsButton />
+            <AccountSwitcher />
           </>
         }
       />

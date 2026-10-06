@@ -53,6 +53,48 @@ export function deleteOutbox(userId: string) {
   indexedDB.deleteDatabase(outboxName(userId));
 }
 
+/**
+ * How many writes an account that is not the one in use still has queued. Its outbox only
+ * runs while it is in use, so this reads the store directly.
+ */
+export function countQueuedWrites(userId: string): Promise<number> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(outboxName(userId));
+    // No outbox yet. Opening must not leave an empty database for the outbox to find.
+    request.onupgradeneeded = () => request.transaction?.abort();
+    request.onerror = () => resolve(0);
+    request.onsuccess = () => {
+      const outbox = request.result;
+      const finish = (count: number) => {
+        outbox.close();
+        resolve(count);
+      };
+      try {
+        const count = outbox.transaction('transactions').objectStore('transactions').count();
+        count.onsuccess = () => finish(count.result);
+        count.onerror = () => finish(0);
+      } catch {
+        finish(0);
+      }
+    };
+  });
+}
+
+/** Deletes the database of an account this page has not opened: one that is not in use. */
+export async function deleteLocalDatabase(userId: string) {
+  const name = databaseName(userId);
+  if (Capacitor.isNativePlatform()) await (await openNativeDatabase(name)).destroy();
+  else await removeBrowserDatabase(name);
+}
+
+/** The VFS keeps a database and its journals as files named after it. */
+async function removeBrowserDatabase(name: string) {
+  const root = await navigator.storage.getDirectory();
+  for await (const entryName of root.keys()) {
+    if (entryName.startsWith(name)) await root.removeEntry(entryName, { recursive: true });
+  }
+}
+
 class MemoryStorage implements StorageAdapter {
   private readonly entries = new Map<string, string>();
   get = async (key: string) => this.entries.get(key) ?? null;
@@ -76,11 +118,7 @@ async function openBrowserDatabase(name: string): Promise<LocalDatabase> {
     destroy: async () => {
       coordinator.dispose();
       await database.close?.();
-      // The VFS keeps the database and its journals as files named after it.
-      const root = await navigator.storage.getDirectory();
-      for await (const entryName of root.keys()) {
-        if (entryName.startsWith(name)) await root.removeEntry(entryName, { recursive: true });
-      }
+      await removeBrowserDatabase(name);
     },
   };
 }

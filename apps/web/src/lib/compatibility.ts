@@ -65,7 +65,19 @@ export async function observeProtocolResponse(response: Response) {
   throw new CompatibilityError(issue);
 }
 
-export const compatibleFetch: typeof fetch = async (input, init) => {
+export const compatibleFetch: typeof fetch = (input, init) => gatedFetch(input, init, true);
+
+/**
+ * A request sent with the token of an account that is signed in on this device but is not
+ * the one this page uses (ADR 0019). Its session ending says nothing about this page's.
+ */
+export const compatibleFetchAsOther: typeof fetch = (input, init) => gatedFetch(input, init, false);
+
+async function gatedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  ownSession: boolean,
+) {
   await ensureCompatible();
   const headers = new Headers(input instanceof Request ? input.headers : undefined);
   new Headers(init?.headers).forEach((value, key) => {
@@ -73,10 +85,10 @@ export const compatibleFetch: typeof fetch = async (input, init) => {
   });
   headers.set(API_PROTOCOL_HEADER, String(API_PROTOCOL_VERSION));
   const response = await fetch(input, { ...init, headers });
-  if (response.status === 401) updateSyncStatus({ signedOut: true });
+  if (response.status === 401 && ownSession) updateSyncStatus({ signedOut: true });
   await observeProtocolResponse(response);
   return response;
-};
+}
 
 function waitForSync(ready: () => boolean, signal?: AbortSignal | null) {
   return new Promise<void>((resolve, reject) => {

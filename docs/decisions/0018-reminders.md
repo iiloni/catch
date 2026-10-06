@@ -93,7 +93,8 @@ wins.
 
 **Each device opts in.** Settings > Notifications turns notifications on for the browser it
 is open in, and every subscribed device rings. Dismissing on one does not dismiss on the
-others. Signing out removes the device's subscription while the session still stands.
+others. Signing out removes the device's subscription while the session still stands. A
+device signed in to several accounts rings for all of them (ADR 0019).
 
 **Protocol 3.** A client with reminders needs the reminders shape and routes, which an older
 server cannot supply, so `API_PROTOCOL_VERSION` is 3 and the server supports 2 to 3 (ADR

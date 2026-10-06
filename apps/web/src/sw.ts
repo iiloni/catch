@@ -76,11 +76,16 @@ function pushMessage(event: PushEvent) {
       data && typeof data === 'object' ? (data as Record<string, unknown>)[name] : undefined;
     return typeof value === 'string' ? value : null;
   };
-  return { title: field('title') ?? 'Catch', body: field('body') ?? '', noteId: field('noteId') };
+  return {
+    title: field('title') ?? 'Catch',
+    body: field('body') ?? '',
+    noteId: field('noteId'),
+    userId: field('userId'),
+  };
 }
 
 self.addEventListener('push', (event) => {
-  const { title, body, noteId } = pushMessage(event);
+  const { title, body, noteId, userId } = pushMessage(event);
   // `renotify` is in browsers but not yet in TypeScript's types.
   const options: NotificationOptions & { renotify: boolean } = {
     body,
@@ -90,22 +95,54 @@ self.addEventListener('push', (event) => {
     tag: noteId ?? 'catch',
     // And alerts again when it does, which a replaced notification otherwise would not.
     renotify: true,
-    data: { noteId },
+    // Whose note it is: the browser may be signed in to several accounts (ADR 0019).
+    data: { noteId, userId },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+/**
+ * The window showing an account, when several are open: tabs can show different accounts
+ * (ADR 0019), and a reminder is best opened where its account already is.
+ */
+async function windowShowing(windows: WindowClient[], userId: string) {
+  const answers = await Promise.all(
+    windows.map(
+      (client) =>
+        new Promise<WindowClient | null>((resolve) => {
+          const channel = new MessageChannel();
+          // A page that is still loading, or from before it could answer, says nothing.
+          const timer = setTimeout(() => resolve(null), 300);
+          channel.port1.onmessage = (message) => {
+            clearTimeout(timer);
+            resolve(message.data === userId ? client : null);
+          };
+          client.postMessage({ type: 'WHICH_ACCOUNT' }, [channel.port2]);
+        }),
+    ),
+  );
+  return answers.find((client) => client !== null) ?? null;
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const noteId: unknown = event.notification.data?.noteId;
-  const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}` : '/';
+  const userId: unknown = event.notification.data?.userId;
+  // A page that loads with `account` makes that account the one in use before it starts.
+  const account = typeof userId === 'string' ? `&account=${encodeURIComponent(userId)}` : '';
+  const path = typeof noteId === 'string' ? `/?note=${encodeURIComponent(noteId)}${account}` : '/';
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       // Only the signed-in app listens for the message; a window at sign-in or setup does not.
       const outside = (client: WindowClient) =>
-        /^\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
-      const open = windows.find((client) => !outside(client)) ?? windows[0];
+        /^(\/u\/\d+)?\/(login|setup|share|capture)\b/.test(new URL(client.url).pathname);
+      const inside = windows.filter((client) => !outside(client));
+      const showing =
+        typeof userId === 'string' && inside.length > 1
+          ? await windowShowing(inside, userId).catch(() => null)
+          : null;
+      const open = showing ?? inside[0] ?? windows[0];
       if (!open) {
         await self.clients.openWindow(path);
         return;
@@ -116,7 +153,7 @@ self.addEventListener('notificationclick', (event) => {
         return;
       }
       // Navigating would reload the app; it opens the note itself.
-      if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId });
+      if (typeof noteId === 'string') open.postMessage({ type: 'OPEN_NOTE', noteId, userId });
     })(),
   );
 });

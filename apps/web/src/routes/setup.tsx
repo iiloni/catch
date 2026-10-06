@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { pagePath } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { setServerUrl } from '@/lib/serverUrl';
 
@@ -29,9 +30,11 @@ function SetupPage() {
     setServerUrl(url);
     // Reload so the auth client and sync pick up the new server.
     window.location.assign(
-      authReturnTo(
-        redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login',
-        window.location.hash,
+      pagePath(
+        authReturnTo(
+          redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login',
+          window.location.hash,
+        ),
       ),
     );
   }

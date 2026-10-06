@@ -1,7 +1,7 @@
 import { CloudAlert, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { clearAuthToken } from '@/lib/auth';
+import { clearAuthToken, getSignedInUser, pagePath } from '@/lib/auth';
 import { nativeReminders } from '@/lib/nativeReminders';
 import type { SyncStatus } from '@/lib/syncStatus';
 
@@ -46,10 +46,11 @@ function describe({ pending, offline, signedOut, sharedTab, incompatibility }: S
 
 function signInAgain() {
   // Keeps the device's notes and outbox: signing in as the same user picks them up again.
+  const userId = getSignedInUser()?.id;
   clearAuthToken();
   // The phone holds a copy of the ended session's token and rings its reminders.
   void nativeReminders
-    .clear()
+    .clear(userId)
     .catch(() => undefined)
     .finally(() => window.location.assign('/login'));
 }
@@ -79,7 +80,7 @@ export function SyncIndicator({ status }: { status: SyncStatus }) {
         <p className="text-muted-foreground text-sm">{body}</p>
         {status.incompatibility ? (
           <a
-            href="/settings/update"
+            href={pagePath('/settings/update')}
             className="self-end rounded-full px-3 py-2 font-medium text-sm underline"
           >
             View updates

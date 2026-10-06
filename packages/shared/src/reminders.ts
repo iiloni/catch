@@ -499,5 +499,7 @@ export const pushMessageSchema = z.object({
   noteId: z.uuid().nullable(),
   title: z.string(),
   body: z.string(),
+  /** Whose note it is, for a browser signed in to several accounts. The server adds it. */
+  userId: z.string().optional(),
 });
 export type PushMessage = z.infer<typeof pushMessageSchema>;
