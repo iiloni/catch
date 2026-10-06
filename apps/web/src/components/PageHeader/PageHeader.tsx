@@ -26,6 +26,7 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
+import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
 import { PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
@@ -165,6 +166,12 @@ export function TabPageHeader({
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
   const fittedTitle = useFittedTitle(title);
+
+  const pills = collapsed || Boolean(selection);
+  useEffect(() => {
+    headerPills.set(pills);
+    return () => headerPills.set(false);
+  }, [pills]);
 
   useEffect(() => {
     const stop = () => scrollAnimation.current?.stop();
