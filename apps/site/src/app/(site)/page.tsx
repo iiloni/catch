@@ -4,6 +4,7 @@ import { GetStarted } from '@/components/home/GetStarted';
 import { Hero } from '@/components/home/Hero';
 import { ImportKeep } from '@/components/home/ImportKeep';
 import { LikeKeep } from '@/components/home/LikeKeep';
+import { Motion } from '@/components/home/Motion';
 import { YoursToRun } from '@/components/home/YoursToRun';
 
 export default function HomePage() {
@@ -12,6 +13,7 @@ export default function HomePage() {
       <Hero />
       <LikeKeep />
       <Features />
+      <Motion />
       <YoursToRun />
       <Compare />
       <ImportKeep />

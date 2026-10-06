@@ -106,10 +106,21 @@ export function Features() {
         </p>
         <p>When it is done, send it back to the gallery or archive it.</p>
       </Feature>
-      <Feature title="Tags that nest, and color that means something." shot={shots.phoneNote} phone>
+      <Feature title="Tags that nest, and color that means something." shot={shots.desktopTags}>
         <p>
-          Tags can sit inside other tags, and a tag can carry an icon and a color that its notes
-          take on. Search filters by either.
+          Tags can sit inside other tags. A top-level tag carries an icon and a color, and the notes
+          filed under it take that color on, so the wall sorts itself at a glance.
+        </p>
+        <p>Search finds notes by their words and narrows by tag or color.</p>
+      </Feature>
+      <Feature title="Reminders that know where you are." shot={shots.phoneReminder} phone flip>
+        <p>
+          Remind yourself once or on a repeat, such as every weekday or the second Tuesday of the
+          month. A reminder can follow you across time zones or stay fixed to one.
+        </p>
+        <p>
+          Browsers get a notification. The Android app sets its own alarms, so they ring without a
+          connection, with Snooze and Done on the notification.
         </p>
       </Feature>
 

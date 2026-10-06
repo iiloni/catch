@@ -3,13 +3,16 @@
  * development stack: `./scripts/dev.sh screenshots`. Each run signs up a fresh account
  * and fills it with the notes below, so the pictures only change when the app does.
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { type Browser, type BrowserContext, chromium, devices, type Page } from '@playwright/test';
 import sharp from 'sharp';
 
 const root = path.join(import.meta.dirname, '../../..');
 const output = path.join(import.meta.dirname, '../src/screenshots');
+const recordings = path.join(import.meta.dirname, '../public/recordings');
 
 function stackUrl() {
   if (process.env.E2E_BASE_URL) return process.env.E2E_BASE_URL;
@@ -332,13 +335,140 @@ async function capture(context: BrowserContext, layout: Layout, theme: string) {
   await save(page, layout === 'phone' ? 'phone-note' : 'desktop-gallery', theme);
   await page.close();
 
+  if (layout === 'phone') {
+    const note = await openApp(context);
+    await card(note, 'Groceries').getByRole('button', { name: 'Open note' }).click();
+    await note.getByRole('dialog').getByRole('textbox').waitFor();
+    await note
+      .getByRole('toolbar', { name: 'Note actions' })
+      .getByRole('button', { name: 'Reminder' })
+      .click();
+    await save(note, 'phone-reminder', theme);
+    await note.close();
+
+    const search = await openApp(context);
+    await search.getByRole('link', { name: 'Search' }).click();
+    await search.getByLabel('Search notes').fill('lisbon');
+    await card(search, 'Lisbon weekend').waitFor();
+    await save(search, 'phone-search', theme);
+    await search.close();
+  } else {
+    const tags = await openApp(context, '/settings/tags');
+    await tags.getByText('Kitchen').first().waitFor();
+    await save(tags, 'desktop-tags', theme);
+    await tags.close();
+  }
+
   const deck = await openApp(context, '/deck');
   await deck.getByRole('heading', { name: 'Talk outline' }).waitFor({ timeout: 60_000 });
   await save(deck, `${layout}-deck`, theme);
   await deck.close();
 }
 
+/**
+ * Records one interaction on the phone layout as a short silent clip, for the page's
+ * motion section. Playwright films the whole visit, so the part between `start` and the
+ * end of `act` is cut out with FFmpeg, which must be installed.
+ */
+async function record(
+  browser: Browser,
+  storageState: Awaited<ReturnType<typeof createAccount>>,
+  theme: (typeof themes)[number],
+  name: string,
+  prepare: (page: Page) => Promise<void>,
+  act: (page: Page) => Promise<void>,
+) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'catch-recording-'));
+  const { viewport } = layouts.phone;
+  const context = await browser.newContext({
+    ...layouts.phone,
+    baseURL,
+    storageState,
+    colorScheme: theme,
+    locale: 'en-US',
+    recordVideo: { dir, size: viewport },
+  });
+  const began = Date.now();
+  const page = await openApp(context);
+  await card(page, 'Groceries').waitFor({ timeout: 60_000 });
+  await prepare(page);
+  await page.waitForTimeout(1500);
+  const start = (Date.now() - began) / 1000;
+  await act(page);
+  const end = (Date.now() - began) / 1000;
+  await context.close();
+  const video = await page.video()?.path();
+  if (!video) throw new Error('No video was recorded.');
+  const file = path.join(recordings, `${name}-${theme}`);
+  const cut = ['-y', '-loglevel', 'error', '-ss', String(start), '-to', String(end), '-i', video];
+  execFileSync('ffmpeg', [
+    ...cut,
+    '-an',
+    // H.264 plays everywhere, and OpenH264 is the encoder a stock FFmpeg always has.
+    '-c:v',
+    'libopenh264',
+    '-pix_fmt',
+    'yuv420p',
+    '-b:v',
+    '1800k',
+    '-movflags',
+    '+faststart',
+    `${file}.mp4`,
+  ]);
+  execFileSync('ffmpeg', [...cut, '-frames:v', '1', '-q:v', '3', `${file}.jpg`]);
+  rmSync(dir, { recursive: true, force: true });
+  console.log(path.relative(root, `${file}.mp4`));
+}
+
+const pause = (page: Page, ms: number) => page.waitForTimeout(ms);
+
+/** The clips, in the order the page lists them. Each leaves the account as it found it. */
+const clips: {
+  name: string;
+  prepare?: (page: Page) => Promise<void>;
+  act: (page: Page) => Promise<void>;
+}[] = [
+  {
+    name: 'open-note',
+    act: async (page) => {
+      await pause(page, 500);
+      await card(page, 'Lisbon weekend').getByRole('button', { name: 'Open note' }).tap();
+      await pause(page, 2200);
+      await page.getByRole('dialog').getByRole('button', { name: 'Close' }).tap();
+      await pause(page, 1600);
+    },
+  },
+  {
+    name: 'note-color',
+    prepare: async (page) => {
+      await card(page, 'Gift ideas').getByRole('button', { name: 'Open note' }).tap();
+      await page.getByRole('dialog').getByRole('textbox').waitFor();
+    },
+    act: async (page) => {
+      const toolbar = page.getByRole('toolbar', { name: 'Note actions' });
+      await pause(page, 400);
+      await toolbar.getByRole('button', { name: 'Background color' }).tap();
+      await pause(page, 1300);
+      await page.getByRole('button', { name: 'Cyan', exact: true }).tap();
+      await pause(page, 1300);
+      await page.getByRole('button', { name: 'Blue', exact: true }).tap();
+      await pause(page, 1300);
+    },
+  },
+  {
+    name: 'tabs',
+    act: async (page) => {
+      await pause(page, 1200);
+      await page.getByRole('link', { name: 'Deck' }).tap();
+      await pause(page, 1700);
+      await page.getByRole('link', { name: 'Gallery' }).tap();
+      await pause(page, 1500);
+    },
+  },
+];
+
 mkdirSync(output, { recursive: true });
+mkdirSync(recordings, { recursive: true });
 const browser = await chromium.launch();
 const storageState = await createAccount(browser);
 {
@@ -347,7 +477,9 @@ const storageState = await createAccount(browser);
   await seed(page);
   await context.close();
 }
+const only = process.argv[2];
 for (const layout of Object.keys(layouts) as Layout[]) {
+  if (only === 'recordings') break;
   for (const theme of themes) {
     const context = await browser.newContext({
       ...layouts[layout],
@@ -358,6 +490,19 @@ for (const layout of Object.keys(layouts) as Layout[]) {
     });
     await capture(context, layout, theme);
     await context.close();
+  }
+}
+for (const theme of themes) {
+  if (only === 'pictures') break;
+  for (const clip of clips) {
+    await record(
+      browser,
+      storageState,
+      theme,
+      clip.name,
+      clip.prepare ?? (async () => {}),
+      clip.act,
+    );
   }
 }
 await browser.close();
