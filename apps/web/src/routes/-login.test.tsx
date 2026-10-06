@@ -8,6 +8,10 @@ vi.mock('@/lib/auth', () => ({
   getSignedInUser: () => null,
   activateAccount: () => false,
 }));
+vi.mock('@/lib/webUpdates', () => ({
+  updateSignedOutPage: async () => {},
+  useWebUpdates: () => ({ reloading: false }),
+}));
 vi.mock('@/lib/serverUrl', () => ({ needsServerUrl: () => false }));
 vi.mock('@/components/BrandLockup/BrandLockup', () => ({ BrandLockup: () => <img alt="Catch" /> }));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({

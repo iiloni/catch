@@ -127,3 +127,20 @@ export async function reloadForWebUpdate() {
     });
   }
 }
+
+const TRIED_KEY = 'catch-signed-out-update';
+
+/**
+ * Outside the signed-in app nobody is asked to reload, and there is no work to lose, so a
+ * page there takes an update at once. A browser that last opened Catch long ago otherwise
+ * shows the sign-in page it cached then, which may be from before invites and ignore one.
+ */
+export async function updateSignedOutPage() {
+  if (!enabled()) return;
+  await checkForWebUpdates();
+  const { target } = updates.get();
+  // Once per build: a reload that did not bring it must not become a loop.
+  if (!target || sessionStorage.getItem(TRIED_KEY) === target) return;
+  sessionStorage.setItem(TRIED_KEY, target);
+  await reloadForWebUpdate();
+}

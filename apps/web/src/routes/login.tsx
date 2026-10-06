@@ -1,12 +1,13 @@
 import { INVITE_HEADER, inviteFromFragment, inviteFromText } from '@catch/shared';
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { accountPath, activateAccount, authClient, getAccounts, getSignedInUser } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { needsServerUrl } from '@/lib/serverUrl';
+import { updateSignedOutPage, useWebUpdates } from '@/lib/webUpdates';
 
 export const Route = createFileRoute('/login')({
   validateSearch: authRedirectSearchSchema,
@@ -31,6 +32,11 @@ function LoginPage() {
   const [pending, setPending] = useState(false);
   // Reached from the account list to add another, or after the session in use ended.
   const [signedIn] = useState(() => getAccounts()[0]);
+  // A sign-in page cached before invites existed would ignore the link that opened it.
+  const { reloading } = useWebUpdates();
+  useEffect(() => {
+    void updateSignedOutPage();
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,8 +111,8 @@ function LoginPage() {
           />
         )}
         {error && <p className="text-destructive text-sm">{error}</p>}
-        <Button type="submit" disabled={pending}>
-          {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+        <Button type="submit" disabled={pending || reloading}>
+          {reloading ? 'Updating Catch…' : mode === 'sign-in' ? 'Sign in' : 'Create account'}
         </Button>
         <Button
           type="button"
