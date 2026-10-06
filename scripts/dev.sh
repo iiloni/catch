@@ -213,7 +213,7 @@ case "$command" in
         echo "  also http://localhost:$site_port"
         "${compose[@]}" run --rm --no-deps \
             -p "$(env_value CATCH_DEV_BIND_ADDRESS | grep . || echo 127.0.0.1):$site_port:3000" \
-            -e "SITE_DEV_ORIGINS=$(env_value CATCH_PUBLIC_HOST),*.ts.net" \
+            -e "SITE_DEV_ORIGINS=$(env_value CATCH_PUBLIC_HOST),**.ts.net" \
             app pnpm --filter @catch/site dev --hostname 0.0.0.0 "$@"
         ;;
     screenshots)
