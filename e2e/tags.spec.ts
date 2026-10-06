@@ -111,6 +111,29 @@ test('selection actions pin notes and edit mixed tags on touch and desktop', asy
     ).toBeVisible();
 });
 
+test('selection pickers are cards as wide as a phone under the header', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'A wide screen hangs the pickers off their buttons.');
+  await signUp(page);
+  await seedNotes(page, ['One']);
+  await longPress(page, card(page, 'One').getByRole('button', { name: 'Open note' }));
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  const width = page.viewportSize()?.width ?? 0;
+  for (const name of ['Background color', 'Tags']) {
+    await toolbar.getByRole('button', { name, exact: true }).click();
+    const picker = await settledBox(page.locator('[data-slot="popover-content"]'));
+    const buttons = await settledBox(toolbar);
+    expect(picker.x).toBeCloseTo(12, 0);
+    expect(picker.x + picker.width).toBeCloseTo(width - 12, 0);
+    expect(picker.y).toBeGreaterThan(buttons.y + buttons.height);
+    expect(picker.y).toBeLessThan(buttons.y + buttons.height + 16);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-slot="popover-content"]')).toBeHidden();
+  }
+});
+
 test('desktop gallery cards assign secondary tags without opening the editor', async ({
   page,
   request,
