@@ -110,6 +110,61 @@ test('an empty quick note folds the gallery switcher away and creates nothing', 
   await expect(page.getByRole('article')).toHaveCount(0);
 });
 
+test('a saved quick note lands as its card, with no empty window in between', async ({ page }) => {
+  await signUp(page);
+  await seedNotes(page, ['Already here']);
+  await page.getByRole('button', { name: 'New note' }).click();
+  await expect(page.getByRole('textbox').and(page.locator('[contenteditable]'))).toBeFocused();
+  await page.keyboard.type('Landing note');
+  // Every frame of the window's exit: what it shows, and where its card face is.
+  const frames = page.evaluate(
+    () =>
+      new Promise<{ face: number; handle: number; body: number; left: number; top: number }[]>(
+        (resolve) => {
+          const samples: {
+            face: number;
+            handle: number;
+            body: number;
+            left: number;
+            top: number;
+          }[] = [];
+          const opacity = (element: Element | null) =>
+            element ? Number(getComputedStyle(element).opacity) : 0;
+          const sample = () => {
+            const popup = document.querySelector('section[aria-label="New note"]');
+            if (!popup) {
+              resolve(samples);
+              return;
+            }
+            const face = popup.querySelector('[data-quick-note-face]');
+            const box = face?.getBoundingClientRect();
+            samples.push({
+              face: opacity(face),
+              handle: opacity(popup.querySelector('[data-testid="quick-note-handle"]')),
+              body: opacity(popup.querySelector('[data-quick-note-body]')),
+              left: box?.left ?? Number.NaN,
+              top: box?.top ?? Number.NaN,
+            });
+            requestAnimationFrame(sample);
+          };
+          sample();
+        },
+      ),
+  );
+  await page.getByRole('button', { name: 'Save note' }).click();
+  const samples = await frames;
+  const landed = samples.at(-1);
+  if (!landed) throw new Error('The quick-note window was never sampled');
+  expect(landed).toMatchObject({ face: 1, handle: 0, body: 0 });
+  // The window is never left blank: its own contents or the card's face are always showing.
+  for (const sample of samples) expect(Math.max(sample.body, sample.face)).toBeGreaterThan(0);
+
+  const box = await card(page, 'Landing note').boundingBox();
+  if (!box) throw new Error('Missing the saved note card');
+  expect(Math.abs(landed.left - box.x)).toBeLessThan(1);
+  expect(Math.abs(landed.top - box.y)).toBeLessThan(1);
+});
+
 test('a quick note can go straight to the deck', async ({ page }) => {
   await signUp(page);
   await page.getByRole('button', { name: 'New note' }).click();

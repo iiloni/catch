@@ -14,6 +14,7 @@ import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker
 import { ColorSwatches } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { IconButton } from '@/components/IconButton/IconButton';
+import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { useNoteAttachments } from '@/lib/attachments';
@@ -23,8 +24,8 @@ import { useTagReadiness, useTags } from '@/lib/collections';
 import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
-import { springs } from '@/lib/motion';
-import { createNote, discardIfEmpty, setNoteColor, updateNote } from '@/lib/notes';
+import { animateSteady, curves, springs } from '@/lib/motion';
+import { createNote, discardIfEmpty, getNote, setNoteColor, updateNote } from '@/lib/notes';
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
@@ -108,20 +109,38 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
 
   const y = useMotionValue(0);
   const flight = useMotionValue(0);
-  const flightTarget = useRef<{ dx: number; dy: number; right: number; bottom: number } | null>(
-    null,
-  );
-  const flightX = useTransform(() => (flightTarget.current?.dx ?? 0) * flight.get());
-  const flightY = useTransform(() => (flightTarget.current?.dy ?? 0) * flight.get() + y.get());
+  const landing = useRef<{ card: HTMLElement; self: DOMRect; box: DOMRect } | null>(null);
+  // Measured on every frame of the flight: the new card is still sliding into its place in
+  // the grid when the window sets off, and a spot measured once would be where it was.
+  const flightTarget = useTransform(() => {
+    flight.get();
+    const to = landing.current;
+    if (!to) return null;
+    // The grid may stop rendering the card; the window then finishes where it last was.
+    if (to.card.isConnected) to.box = to.card.getBoundingClientRect();
+    return {
+      dx: to.box.left - to.self.left,
+      dy: to.box.top - to.self.top,
+      right: Math.max(0, to.self.width - to.box.width),
+      bottom: Math.max(0, to.self.height - to.box.height),
+    };
+  });
+  const flightX = useTransform(() => (flightTarget.get()?.dx ?? 0) * flight.get());
+  const flightY = useTransform(() => (flightTarget.get()?.dy ?? 0) * flight.get() + y.get());
   const borderRadius = useTransform(() => 28 - 12 * flight.get());
   const clipPath = useTransform(() => {
-    const target = flightTarget.current;
+    const target = flightTarget.get();
     const p = flight.get();
     // A clip path also cuts off the surface's own shadow; only the flight needs one.
     if (!target) return 'none';
     return `inset(0px ${target.right * p}px ${target.bottom * p}px 0px round ${borderRadius.get()}px)`;
   });
-  const contentOpacity = useTransform(flight, [0, 0.5], [1, 0]);
+  // The window lands looking like the card it becomes: its own contents fade out early in
+  // the flight and the saved note's card face fades in over them, so showing the real card
+  // at the end changes nothing on screen.
+  const [face, setFace] = useState<{ note: Note; width: number } | null>(null);
+  const contentOpacity = useTransform(flight, [0, 0.4], [1, 0]);
+  const faceOpacity = useTransform(flight, [0.3, 0.75], [0, 1]);
 
   useEffect(() => {
     quickNoteCanSave.set(blocksHaveContent(content) || attachments.length > 0);
@@ -216,26 +235,27 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       if (quickNote.get() === 'saved') quickNote.set('closed');
     }, 900);
 
+    const finish = () => {
+      showCard(id);
+      safeToRemove();
+    };
     // Wait for the new card to render, then fly into it if it is on screen.
     requestAnimationFrame(() =>
-      requestAnimationFrame(async () => {
+      requestAnimationFrame(() => {
         const card = findCard(id);
         const box = card?.getBoundingClientRect();
         const self = ref.current?.getBoundingClientRect();
+        const note = getNote(id);
         const visible = box && box.bottom > 0 && box.top < window.innerHeight;
-        if (box && self && visible) {
-          flightTarget.current = {
-            dx: box.left - self.left,
-            dy: box.top - self.top,
-            right: Math.max(0, self.width - box.width),
-            bottom: Math.max(0, self.height - box.height),
-          };
-          await animate(flight, 1, springs.smooth);
-        } else {
-          await shrinkIntoButton();
+        if (!card || !box || !self || !note || !visible) {
+          void shrinkIntoButton().then(finish);
+          return;
         }
-        showCard(id);
-        safeToRemove();
+        landing.current = { card, self, box };
+        setFace({ note, width: box.width });
+        // A frame later again, once the card's face is mounted on the window. A curve ends
+        // on time; a spring's promise waits out a tail nobody can see, holding the card back.
+        requestAnimationFrame(() => void animateSteady(flight, 1, curves.collapse).then(finish));
       }),
     );
   }, [isPresent]);
@@ -312,14 +332,16 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
         transformOrigin: 'calc(100% - 32px) calc(100% + 44px)',
       }}
     >
-      <div
+      <motion.div
         ref={handleRef}
         aria-hidden
         data-testid="quick-note-handle"
         className="flex shrink-0 cursor-grab touch-none justify-center pt-2.5 pb-1"
+        // A card has no handle, so it leaves with the rest of the window's contents.
+        style={{ opacity: contentOpacity }}
       >
         <span className="h-1 w-9 rounded-full bg-foreground/20" />
-      </div>
+      </motion.div>
       <motion.div
         data-quick-note-body
         className="flex min-h-0 flex-1 flex-col"
@@ -447,6 +469,16 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           </IconButton>
         </motion.footer>
       </motion.div>
+      {face && (
+        <motion.div
+          aria-hidden
+          data-quick-note-face
+          className="pointer-events-none absolute top-0 left-0"
+          style={{ width: face.width, opacity: faceOpacity }}
+        >
+          <NoteCardFace note={face.note} />
+        </motion.div>
+      )}
     </motion.section>
   );
 }
