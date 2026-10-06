@@ -639,6 +639,21 @@ test('an admin invites someone, and the link makes one account', async ({
     await second.context.close();
   }
 
+  // The Android app, or a page that lost the link's fragment, takes the link in the form.
+  const pasted = await browser.newContext();
+  try {
+    const guest = await pasted.newPage();
+    await guest.goto('/login');
+    await guest.getByRole('button', { name: 'Need an account? Sign up' }).click();
+    await guest.getByLabel('Email').fill(`pasted-${email}`);
+    await guest.getByLabel('Password').fill('password123');
+    await guest.getByLabel('Invite link').fill(link);
+    await guest.getByRole('button', { name: 'Create account' }).click();
+    await expect(guest.getByText('This invite has been used or has expired.')).toBeVisible();
+  } finally {
+    await pasted.close();
+  }
+
   await page.reload();
   await expect(page.getByText(`by ${email}`)).toBeVisible();
   await page.getByRole('button', { name: `Remove invite for ${who}` }).click();

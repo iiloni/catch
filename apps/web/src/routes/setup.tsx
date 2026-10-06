@@ -1,3 +1,4 @@
+import { inviteFromText } from '@catch/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
@@ -28,12 +29,14 @@ function SetupPage() {
       return;
     }
     setServerUrl(url);
+    // An invite link names its server, so the app takes one here and keeps the invite.
+    const invite = inviteFromText(url);
     // Reload so the auth client and sync pick up the new server.
     window.location.assign(
       pagePath(
         authReturnTo(
           redirect ? `/login?${new URLSearchParams({ redirect })}` : '/login',
-          window.location.hash,
+          invite ? `#invite=${invite}` : window.location.hash,
         ),
       ),
     );
@@ -54,6 +57,9 @@ function SetupPage() {
           placeholder="https://catch.example.com"
           aria-label="Server URL"
         />
+        <p className="text-muted-foreground text-sm">
+          Were you sent an invite link? Paste it here instead.
+        </p>
         {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit">Connect</Button>
       </form>

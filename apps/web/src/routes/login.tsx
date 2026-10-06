@@ -1,4 +1,4 @@
-import { INVITE_HEADER, inviteFromFragment } from '@catch/shared';
+import { INVITE_HEADER, inviteFromFragment, inviteFromText } from '@catch/shared';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
@@ -37,6 +37,13 @@ function LoginPage() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email'));
     const password = String(form.get('password'));
+    // The Android app, and a page the link's fragment did not survive to, take the link here.
+    const pasted = String(form.get('invite') ?? '').trim();
+    const token = invite ?? (pasted ? inviteFromText(pasted) : null);
+    if (pasted && !token) {
+      setError('That is not a whole invite link. Copy the link again and paste all of it.');
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -45,7 +52,7 @@ function LoginPage() {
           ? await authClient.signIn.email({ email, password })
           : await authClient.signUp.email(
               { email, password, name: String(form.get('name') ?? '') },
-              invite ? { headers: { [INVITE_HEADER]: invite } } : undefined,
+              token ? { headers: { [INVITE_HEADER]: token } } : undefined,
             );
       if (result.error) {
         setError(result.error.message ?? 'Something went wrong');
@@ -89,6 +96,14 @@ function LoginPage() {
           placeholder="Password"
           aria-label="Password"
         />
+        {mode === 'sign-up' && !invite && (
+          <Input
+            name="invite"
+            autoComplete="off"
+            placeholder="Invite link, if you were sent one"
+            aria-label="Invite link"
+          />
+        )}
         {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit" disabled={pending}>
           {mode === 'sign-in' ? 'Sign in' : 'Create account'}

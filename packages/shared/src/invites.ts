@@ -48,3 +48,10 @@ export function inviteFromFragment(fragment: string): string | null {
   const parsed = inviteTokenSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
+
+/** The token in what someone pasted where an invite is asked for: its link, or the token alone. */
+export function inviteFromText(text: string): string | null {
+  const value = text.trim();
+  const fragment = value.indexOf('#');
+  return inviteFromFragment(fragment === -1 ? `#invite=${value}` : value.slice(fragment));
+}
