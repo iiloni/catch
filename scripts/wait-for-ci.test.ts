@@ -156,6 +156,60 @@ test('an overall green run must include successful checks and both E2E projects'
   }
 });
 
+test('a documentation-only push that skipped E2E is tested on the release tag', async () => {
+  let time = 0;
+  let requests = 0;
+  const tagged = { ...run, id: 2, event: 'workflow_dispatch', head_branch: 'v0.2.2-preview' };
+  const url = await waitForCi(sha, {
+    runs: async () => ({
+      workflow_runs: [
+        ...(requests && time >= 30_000
+          ? [{ ...tagged, status: time < 90_000 ? 'in_progress' : 'completed' }]
+          : []),
+        run,
+      ],
+    }),
+    jobs: async (id) => ({ jobs: id === tagged.id ? jobs : jobs.slice(0, 1) }),
+    start: async () => {
+      assert.equal(time, 0);
+      requests++;
+    },
+    now: () => time,
+    sleep: async (ms) => {
+      time += ms;
+    },
+  });
+  assert.equal(url, tagged.html_url);
+  assert.equal(requests, 1);
+});
+
+test('a requested run that fails blocks the release instead of being requested again', async () => {
+  let time = 0;
+  let requests = 0;
+  await assert.rejects(
+    waitForCi(sha, {
+      runs: async () => ({
+        workflow_runs: [
+          ...(requests
+            ? [{ ...run, id: 2, event: 'workflow_dispatch', conclusion: 'failure' }]
+            : []),
+          run,
+        ],
+      }),
+      jobs: async () => ({ jobs: jobs.slice(0, 1) }),
+      start: async () => {
+        requests++;
+      },
+      now: () => time,
+      sleep: async (ms) => {
+        time += ms;
+      },
+    }),
+    /CI did not pass/,
+  );
+  assert.equal(requests, 1);
+});
+
 test('CI that never finishes times out without starting replacement checks', async () => {
   let time = 0;
   await assert.rejects(
