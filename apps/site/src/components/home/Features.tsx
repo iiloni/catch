@@ -34,7 +34,7 @@ function Feature({
       </div>
       <div className="reveal">
         {phone ? (
-          <PhoneFrame shot={shot} className="mx-auto w-64 sm:w-72" />
+          <PhoneFrame shot={shot} className="mx-auto w-60 sm:w-72" />
         ) : (
           <WindowFrame shot={shot} />
         )}

@@ -2,6 +2,7 @@
 
 import { useTheme } from 'fumadocs-ui/provider/base';
 import { useEffect, useRef, useState } from 'react';
+import { PhoneBody } from '@/components/Screenshot';
 import { cn } from '@/lib/utils';
 
 /** Recorded from the app by `scripts/screenshots.ts`, as `<name>-<theme>.mp4` and `.jpg`. */
@@ -101,12 +102,8 @@ export function Motion() {
           </div>
         </div>
 
-        <div
-          role="tabpanel"
-          className="mx-auto w-64 overflow-hidden rounded-[2.25rem] border-[6px] border-black bg-black shadow-2xl shadow-black/60 sm:w-80"
-        >
-          {/* 412 by 915, the phone the clips are recorded on. */}
-          <div className="aspect-[412/915]">
+        <div role="tabpanel">
+          <PhoneBody className="mx-auto w-64 sm:w-80">
             {mounted && (
               <video
                 key={source}
@@ -118,10 +115,10 @@ export function Motion() {
                 loop
                 playsInline
                 preload="metadata"
-                className="size-full rounded-[1.85rem] object-cover"
+                className="size-full object-cover"
               />
             )}
-          </div>
+          </PhoneBody>
         </div>
       </div>
     </section>

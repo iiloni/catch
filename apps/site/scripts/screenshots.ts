@@ -4,7 +4,7 @@
  * and fills it with the notes below, so the pictures only change when the app does.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { type Browser, type BrowserContext, chromium, devices, type Page } from '@playwright/test';
@@ -27,8 +27,44 @@ const baseURL = stackUrl();
 const themes = ['light', 'dark'] as const;
 const layouts = {
   desktop: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 },
-  phone: devices['Pixel 7'],
+  // The cover screen of a Galaxy Z Fold7: 1080 by 2520 pixels, 21:9.
+  phone: {
+    ...devices['Pixel 7'],
+    viewport: { width: 360, height: 840 },
+    screen: { width: 360, height: 840 },
+    deviceScaleFactor: 3,
+  },
 };
+/**
+ * The room a phone's status bar and gesture bar take. The Android app tells the page about
+ * them through these properties, and the site's phone frame draws its camera and gesture
+ * bar over the space they leave (`PhoneFrame`).
+ */
+const PHONE_INSETS = { top: 34, bottom: 18 };
+
+async function phoneContext(
+  browser: Browser,
+  storageState: Awaited<ReturnType<typeof createAccount>>,
+  theme: (typeof themes)[number],
+) {
+  const context = await browser.newContext({
+    ...layouts.phone,
+    baseURL,
+    storageState,
+    colorScheme: theme,
+    locale: 'en-US',
+  });
+  await context.addInitScript((insets) => {
+    const apply = () => {
+      const style = document.documentElement.style;
+      style.setProperty('--safe-area-inset-top', `${insets.top}px`);
+      style.setProperty('--safe-area-inset-bottom', `${insets.bottom}px`);
+    };
+    if (document.documentElement) apply();
+    document.addEventListener('DOMContentLoaded', apply);
+  }, PHONE_INSETS);
+  return context;
+}
 type Layout = keyof typeof layouts;
 
 /** Signs up through the API and returns the storage state every context starts from. */
@@ -367,8 +403,9 @@ async function capture(context: BrowserContext, layout: Layout, theme: string) {
 
 /**
  * Records one interaction on the phone layout as a short silent clip, for the page's
- * motion section. Playwright films the whole visit, so the part between `start` and the
- * end of `act` is cut out with FFmpeg, which must be installed.
+ * motion section. Chrome's screencast gives frames at the screen's full resolution, each
+ * with the time it was drawn, which FFmpeg (it must be installed) turns into a video.
+ * Playwright's own recorder films at a third of that.
  */
 async function record(
   browser: Browser,
@@ -379,30 +416,51 @@ async function record(
   act: (page: Page) => Promise<void>,
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'catch-recording-'));
-  const { viewport } = layouts.phone;
-  const context = await browser.newContext({
-    ...layouts.phone,
-    baseURL,
-    storageState,
-    colorScheme: theme,
-    locale: 'en-US',
-    recordVideo: { dir, size: viewport },
-  });
-  const began = Date.now();
+  const context = await phoneContext(browser, storageState, theme);
   const page = await openApp(context);
   await card(page, 'Groceries').waitFor({ timeout: 60_000 });
   await prepare(page);
   await page.waitForTimeout(1500);
-  const start = (Date.now() - began) / 1000;
+
+  const frames: { file: string; time: number }[] = [];
+  const cdp = await context.newCDPSession(page);
+  cdp.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
+    const file = path.join(dir, `${String(frames.length).padStart(5, '0')}.jpg`);
+    writeFileSync(file, Buffer.from(data, 'base64'));
+    frames.push({ file, time: metadata.timestamp ?? 0 });
+    void cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+  });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 95, everyNthFrame: 1 });
   await act(page);
-  const end = (Date.now() - began) / 1000;
+  await cdp.send('Page.stopScreencast');
   await context.close();
-  const video = await page.video()?.path();
-  if (!video) throw new Error('No video was recorded.');
+  if (frames.length < 2) throw new Error(`No frames were recorded for ${name}.`);
+
+  // A frame is only sent when the screen changes, so each one lasts until the next.
+  const list = path.join(dir, 'frames.txt');
+  writeFileSync(
+    list,
+    frames
+      .map(({ file, time }, index) => {
+        const next = frames[index + 1]?.time ?? time + 0.4;
+        return `file '${file}'\nduration ${Math.max(next - time, 0.001).toFixed(4)}`;
+      })
+      .join('\n'),
+  );
   const file = path.join(recordings, `${name}-${theme}`);
-  const cut = ['-y', '-loglevel', 'error', '-ss', String(start), '-to', String(end), '-i', video];
   execFileSync('ffmpeg', [
-    ...cut,
+    '-y',
+    '-loglevel',
+    'error',
+    '-f',
+    'concat',
+    '-safe',
+    '0',
+    '-i',
+    list,
+    // Two thirds of the screen's pixels: sharp at the size the page shows it, on any display.
+    '-vf',
+    'fps=60,scale=720:-2:flags=lanczos',
     '-an',
     // H.264 plays everywhere, and OpenH264 is the encoder a stock FFmpeg always has.
     '-c:v',
@@ -410,14 +468,15 @@ async function record(
     '-pix_fmt',
     'yuv420p',
     '-b:v',
-    '1800k',
+    '5M',
     '-movflags',
     '+faststart',
     `${file}.mp4`,
   ]);
-  execFileSync('ffmpeg', [...cut, '-frames:v', '1', '-q:v', '3', `${file}.jpg`]);
+  const first = frames[0];
+  if (first) await sharp(first.file).resize(720).jpeg({ quality: 82 }).toFile(`${file}.jpg`);
   rmSync(dir, { recursive: true, force: true });
-  console.log(path.relative(root, `${file}.mp4`));
+  console.log(path.relative(root, `${file}.mp4`), `${frames.length} frames`);
 }
 
 const pause = (page: Page, ms: number) => page.waitForTimeout(ms);
@@ -481,13 +540,16 @@ const only = process.argv[2];
 for (const layout of Object.keys(layouts) as Layout[]) {
   if (only === 'recordings') break;
   for (const theme of themes) {
-    const context = await browser.newContext({
-      ...layouts[layout],
-      baseURL,
-      storageState,
-      colorScheme: theme,
-      locale: 'en-US',
-    });
+    const context =
+      layout === 'phone'
+        ? await phoneContext(browser, storageState, theme)
+        : await browser.newContext({
+            ...layouts[layout],
+            baseURL,
+            storageState,
+            colorScheme: theme,
+            locale: 'en-US',
+          });
     await capture(context, layout, theme);
     await context.close();
   }

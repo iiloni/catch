@@ -1,4 +1,5 @@
 import type { StaticImageData } from 'next/image';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export type Shot = { light: StaticImageData; dark: StaticImageData; alt: string };
@@ -32,16 +33,37 @@ export function Screenshot({
   );
 }
 
+/**
+ * A phone with the proportions of a Galaxy Z Fold7's cover screen (21:9, thin even bezels,
+ * a centered camera), which is the screen `scripts/screenshots.ts` captures. Sizes are in
+ * `cqw`, so the frame keeps its shape at any width. The captures leave room for the status
+ * and gesture bars, where the camera and the gesture bar are drawn.
+ */
+export function PhoneBody({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn('@container', className)}>
+      <div className="relative rounded-[9cqw] bg-[#18191b] p-[2.2cqw] shadow-2xl shadow-black/30 ring-1 ring-white/15 ring-inset">
+        <div className="relative aspect-[360/840] overflow-hidden rounded-[7cqw] bg-black">
+          {children}
+          <span
+            aria-hidden
+            className="absolute top-[2.6cqw] left-1/2 size-[3.6cqw] -translate-x-1/2 rounded-full bg-black ring-1 ring-white/10"
+          />
+          <span
+            aria-hidden
+            className="absolute bottom-[1.6cqw] left-1/2 h-[1.1cqw] w-[30cqw] -translate-x-1/2 rounded-full bg-foreground/45"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PhoneFrame({ shot, eager, className }: Parameters<typeof Screenshot>[0]) {
   return (
-    <div
-      className={cn(
-        'overflow-hidden rounded-[2.25rem] border-[6px] border-(--brand-charcoal) bg-(--brand-charcoal) shadow-2xl shadow-black/25',
-        className,
-      )}
-    >
-      <Screenshot shot={shot} eager={eager} className="rounded-[1.85rem]" />
-    </div>
+    <PhoneBody className={className}>
+      <Screenshot shot={shot} eager={eager} />
+    </PhoneBody>
   );
 }
 
