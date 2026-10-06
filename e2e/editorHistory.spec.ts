@@ -48,7 +48,7 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
   await page.keyboard.insertText(' changed');
   const samples = await entrance;
   const floating = (page.viewportSize()?.width ?? 0) < 640;
-  expect(samples.some(({ x, y }) => (floating ? x > 5 : y < -5))).toBe(true);
+  expect(samples.some(({ x, y }) => (floating ? x < -5 : y < -5))).toBe(true);
   expect(samples.every(({ x, y }) => Math.abs(floating ? y : x) < 1)).toBe(true);
   expect(Math.abs(samples.at(-1)?.x ?? Number.POSITIVE_INFINITY)).toBeLessThan(1);
   expect(Math.abs(samples.at(-1)?.y ?? Number.POSITIVE_INFINITY)).toBeLessThan(1);
@@ -65,7 +65,7 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
     const dock = await page.locator('[data-note-toolbar]').last().boundingBox();
     if (!dock) throw new Error('Missing note dock');
     expect(box.y + box.height).toBeLessThan(dock.y);
-    expect(Math.abs(box.x + box.width - dock.x - dock.width)).toBeLessThan(2);
+    expect(Math.abs(box.x - dock.x)).toBeLessThan(2);
   }
 
   await undo.click();
