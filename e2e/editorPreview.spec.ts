@@ -39,6 +39,13 @@ for (const theme of ['light', 'dark'] as const) {
             ],
           },
           { id: 'last', type: 'checkListItem', content: 'Last item' },
+          {
+            id: 'code',
+            type: 'codeBlock',
+            props: { language: 'python' },
+            content:
+              'def greet(name):\n    return f"A line long enough to wrap on a phone, {name}, and then some more of it"',
+          },
         ],
       });
       await transaction.isPersisted.promise;
@@ -69,8 +76,9 @@ for (const theme of ['light', 'dark'] as const) {
           if (!body) throw new Error('Missing block content');
           const rect = body.getBoundingClientRect();
           const paragraph =
-            body.querySelector('.bn-inline-content, p, .note-preview-list > span:last-child') ??
-            body;
+            body.querySelector(
+              '.bn-inline-content, p, pre > code, .note-preview-list > span:last-child',
+            ) ?? body;
           const range = document.createRange();
           range.selectNodeContents(paragraph);
           const text = range.getBoundingClientRect();

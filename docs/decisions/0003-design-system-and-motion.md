@@ -265,6 +265,17 @@ returns to the quick note when the URL is empty or invalid, and a gradient squar
 when it is valid. Link capture never saves on outside dismissal or back. Bookmarklet and
 standalone share windows have the same icon-only close/save control in their form footer.
 
+**Code blocks.** A code block's surface is a tint of the note's text color rather than a
+fill, so it sits on every note color in both themes. Each block names its language in a
+picker at its top right that is always shown (BlockNote's own appears on hover only); a
+fence with a language or alias (` ```py `) sets it. Shiki highlights the code with a theme
+of CSS variables (`--code-token-*` in `styles.css`) instead of a fixed palette: like the
+note colors, the syntax colors share one lightness and chroma per theme and differ in hue.
+The highlighter and each grammar load on first use, and the languages offered are the short
+list in `lib/codeLanguages.ts`, because the service worker precaches every grammar so code
+is highlighted offline. A language outside the list (pasted or imported) keeps its name and
+shows as plain text. Cards and the opening preview show code in one color. Long lines wrap.
+
 **Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
 redo history. From 640 px it sits beside the back button, including in narrow split panes.

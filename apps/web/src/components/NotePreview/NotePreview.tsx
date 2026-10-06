@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
+import { codeLanguageName } from '@/lib/codeLanguages';
 import { cn } from '@/lib/utils';
 
 type Json = Record<string, unknown>;
@@ -142,11 +143,22 @@ function PreviewBlock({
       body = <blockquote className="border-current/30 border-l-2 pl-2 italic">{inline}</blockquote>;
       break;
     case 'codeBlock':
-      body = (
-        <pre className="overflow-hidden rounded bg-foreground/10 p-2 font-mono text-xs">
-          {inline}
-        </pre>
-      );
+      // Highlighting needs the editor's grammars, so previews show code in one color.
+      body =
+        variant === 'editor' ? (
+          <div data-content-type="codeBlock" className="note-code-block">
+            <div className="note-code-language">
+              <span>{codeLanguageName(props.language)}</span>
+            </div>
+            <pre>
+              <code>{text}</code>
+            </pre>
+          </div>
+        ) : (
+          <pre className="overflow-hidden rounded-md bg-(--code-background) p-2 font-mono text-xs">
+            {inline}
+          </pre>
+        );
       break;
     case 'image':
     case 'video':

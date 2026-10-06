@@ -59,6 +59,24 @@
   --glass-shadow: light-dark(oklch(0.3 0.025 70 / 0.18), oklch(0.08 0.01 70 / 0.55));
 
   /*
+   * Code blocks. Their surface is a tint, not a fill, because it sits on any note color.
+   * Syntax colors share one lightness and chroma per theme, like the note colors, so every
+   * token reads the same on each of them (`--code-token-*` are named by Shiki's theme in
+   * NoteEditor/codeHighlighter.ts).
+   */
+  --code-background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --code-foreground: var(--foreground);
+  --code-token-keyword: light-dark(oklch(0.48 0.14 45), oklch(0.82 0.11 70));
+  --code-token-string: light-dark(oklch(0.48 0.14 150), oklch(0.82 0.11 150));
+  --code-token-string-expression: light-dark(oklch(0.48 0.14 195), oklch(0.82 0.11 195));
+  --code-token-function: light-dark(oklch(0.48 0.14 250), oklch(0.82 0.11 245));
+  --code-token-constant: light-dark(oklch(0.48 0.14 300), oklch(0.82 0.11 300));
+  --code-token-parameter: var(--foreground);
+  --code-token-punctuation: color-mix(in oklab, var(--foreground) 75%, transparent);
+  --code-token-comment: var(--muted-foreground);
+  --code-token-link: var(--brand-link);
+
+  /*
    * System bar insets. Capacitor injects --safe-area-inset-* on Android (zero while the
    * keyboard is open); browsers provide env() on edge-to-edge displays.
    */
@@ -423,6 +441,104 @@
 .bn-container.note-editor [data-content-type="heading"] {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
+}
+
+/*
+ * Code blocks, in the editor and in the preview it opens from. BlockNote paints them black
+ * in both themes and shows its language picker only on hover.
+ */
+.note-code-block,
+.bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] {
+  position: relative;
+  /* Keeps blocks that follow each other apart. */
+  margin-block: 3px;
+  border-radius: var(--radius-md);
+  background: var(--code-background);
+  color: var(--code-foreground);
+}
+.note-code-block > pre,
+.bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre {
+  width: 100%;
+  margin: 0;
+  /* Room for the language above the first line. */
+  padding: 2.25rem 1rem 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  tab-size: 2;
+}
+.note-code-block > pre > code,
+.bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre > code {
+  font-family: inherit;
+  /* Long lines wrap: a sideways scroll would fight the page's swipes on a phone. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.note-code-block > .note-code-language,
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.375rem;
+  display: flex;
+  align-items: center;
+}
+.note-code-block > .note-code-language > span,
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select {
+  position: static;
+  height: 1.75rem;
+  padding-inline: 0.5rem 1.375rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.75rem;
+  opacity: 1;
+  transition: none;
+  appearance: none;
+  /* As wide as the chosen language, not the longest one in the list. */
+  field-sizing: content;
+}
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select:disabled {
+  cursor: default;
+}
+@media (hover: hover) {
+  .bn-container.note-editor
+    [data-content-type="codeBlock"]
+    > .note-code-language
+    > select:enabled:hover {
+    background: var(--code-background);
+    color: var(--foreground);
+  }
+}
+.bn-container.note-editor
+  [data-content-type="codeBlock"]
+  > .note-code-language
+  > select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  color: var(--foreground);
+}
+.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > select > option {
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+/* The select's arrow, drawn here because `appearance: none` removes the native one. */
+.note-code-language::after {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  width: 0.375rem;
+  height: 0.375rem;
+  border: solid var(--muted-foreground);
+  border-width: 0 1.5px 1.5px 0;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+.note-code-language:has(> select:disabled)::after {
+  display: none;
 }
 
 /* Cards keep a compact scale; the transition preview uses the editor's full geometry. */
