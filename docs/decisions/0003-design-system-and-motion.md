@@ -267,14 +267,23 @@ standalone share windows have the same icon-only close/save control in their for
 
 **Code blocks.** A code block's surface is a tint of the note's text color rather than a
 fill, so it sits on every note color in both themes. Each block names its language in a
-picker at its top right that is always shown (BlockNote's own appears on hover only); a
-fence with a language or alias (` ```py `) sets it. Shiki highlights the code with a theme
+button at its top right that is always shown (BlockNote's own picker appears on hover only)
+and opens the searchable list below; a fence with a language or alias (` ```py `) sets it. Shiki highlights the code with a theme
 of CSS variables (`--code-token-*` in `styles.css`) instead of a fixed palette: like the
 note colors, the syntax colors share one lightness and chroma per theme and differ in hue.
 The highlighter and each grammar load on first use, and the languages offered are the short
 list in `lib/codeLanguages.ts`, because the service worker precaches every grammar so code
 is highlighted offline. A language outside the list (pasted or imported) keeps its name and
 shows as plain text. Cards and the opening preview show code in one color. Long lines wrap.
+
+**Choosing from a list.** The app draws its own lists instead of native `<select>` menus
+and time inputs, which look different on every platform and, on Android, open a system
+dialog over the page. A list long enough to need searching (a code block's language, a
+tag's parent) opens in `SearchSelect`: a dialog with a search field over the options,
+centered with a mouse and floating above the keyboard on touch, where the field waits for
+a tap so the keyboard does not cover half the list. The search matches names and aliases,
+the closest first, and Enter takes the first. A handful of options (a user's role) is a
+dropdown menu, and a time of day is the reminder panel's clock face in a popover.
 
 **Undo and redo.** The note editor uses BlockNote's history through `EditorControls`.
 Its toolbar appears once an edit can be undone, and stays available while there is undo or

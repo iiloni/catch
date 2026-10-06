@@ -35,12 +35,12 @@ describe('primary tag color picker', () => {
       wrapper: TooltipProvider,
     });
     fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
-    expect(screen.getByLabelText('Parent tag')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Parent tag Top level' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Blue: Work' }));
     await screen.findByRole('button', { name: 'Back to parent tags' });
     fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
-    expect(screen.getByLabelText('Parent tag')).toHaveValue(root.id);
+    expect(screen.getByRole('button', { name: 'Parent tag Work' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Errands' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
     expect(onTagChange).toHaveBeenLastCalledWith('made');

@@ -32,7 +32,7 @@ describe('new tag button', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
     expect(tagFormOpen.get()).toBe(true);
-    expect(screen.getByLabelText('Parent tag')).toHaveValue(root.id);
+    expect(screen.getByRole('button', { name: 'Parent tag Work' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' Projects ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
     expect(createTag).toHaveBeenCalledWith('ada', {
@@ -43,6 +43,27 @@ describe('new tag button', () => {
     });
     expect(onCreated).toHaveBeenCalledWith('made');
     expect(tagFormOpen.get()).toBe(false);
+  });
+  it('picks the parent from a searchable list', () => {
+    render(<NewTagButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Parent tag Top level' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search tags' }), {
+      target: { value: 'wor' },
+    });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('option', { name: 'Work' }));
+    // The form stays open behind the list, with a branch's tag taking no color or icon.
+    expect(screen.getByRole('button', { name: 'Parent tag Work' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Color' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Projects' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
+    expect(createTag).toHaveBeenCalledWith('ada', {
+      name: 'Projects',
+      parentId: root.id,
+      icon: null,
+      color: null,
+    });
   });
   it('reports nothing when the form is cancelled', () => {
     const onCreated = vi.fn();

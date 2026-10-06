@@ -160,7 +160,25 @@ test('pickers make a new tag and assign it without leaving the note', async ({
   await page.getByRole('button', { name: 'Blue: Work', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Back to parent tags' })).toBeVisible();
   await newTag.click();
-  await expect(form.getByLabel('Parent tag')).toHaveValue(work);
+  // The parent is picked from a searchable list, which opens over the form and the note.
+  const parent = form.getByRole('button', { name: /^Parent tag/ });
+  await expect(parent).toHaveText('Work');
+  await parent.click();
+  const parents = page.getByRole('dialog', { name: 'Parent tag' });
+  await expect(parents.getByRole('option', { name: 'Work', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await parents.getByRole('combobox', { name: 'Search tags' }).fill('hom');
+  await expect(parents.getByRole('option')).toHaveCount(1);
+  await parents.getByRole('option', { name: 'Home', exact: true }).click();
+  await expect(parents).toBeHidden();
+  await expect(parent).toHaveText('Home');
+  await parent.click();
+  await parents.getByRole('combobox', { name: 'Search tags' }).fill('work');
+  await page.keyboard.press('Enter');
+  await expect(parent).toHaveText('Work');
+  await expect(form).toBeVisible();
   await form.getByLabel('Name', { exact: true }).fill('Catch');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toBeHidden();
