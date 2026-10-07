@@ -78,12 +78,12 @@ changes get merged.
 > Catch is not accepting external contributions at the moment. You are welcome to read the
 > code, run it and fork it under the license below.
 
-## AI development disclaimer
+## AI development notice
 
-Catch is developed with the help of AI coding tools. The maintainer directs the work and
-is responsible for the project. Automated checks and tests help catch mistakes, but they
-do not guarantee that the code is free of bugs or security issues. Keep backups of notes
-you care about.
+Catch is developed with the help of AI coding tools. The maintainer directs the work for
+both frontend and backend design and is responsible for the project. Code quality is
+validated through manual and automated testing, and supplemental AI review. As with all
+self-hosted projects, you are encouraged to maintain regular backups of your Catch service.
 
 ## More documentation
 
