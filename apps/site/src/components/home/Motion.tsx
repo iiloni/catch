@@ -9,19 +9,19 @@ import { cn } from '@/lib/utils';
 const clips = [
   {
     name: 'quick-note',
-    title: 'A new note flies to its place',
+    title: 'Creating a new note',
   },
   {
     name: 'open-note',
-    title: 'A note opens out of its card',
+    title: 'Opening a note',
   },
   {
     name: 'note-color',
-    title: 'The dock becomes the toolbar',
+    title: 'Using the note toolbar',
   },
   {
     name: 'search-filters',
-    title: 'Filters narrow the wall as you tick',
+    title: 'Filtering your search',
   },
 ] as const;
 
@@ -69,11 +69,8 @@ export function Motion() {
       <div className="relative mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-20 sm:py-28 lg:grid-cols-2">
         <div>
           <h2 className="text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-            Motion that shows where things went.
+            Motion that feels thoughtful.
           </h2>
-          <p className="mt-4 max-w-xl text-pretty text-lg text-(--brand-cream)/70">
-            Recorded from the app.
-          </p>
           <div role="tablist" aria-label="Recordings" className="mt-8 space-y-2">
             {clips.map((item, index) => (
               <button

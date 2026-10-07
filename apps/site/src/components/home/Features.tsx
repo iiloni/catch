@@ -63,17 +63,14 @@ export function Features() {
       <Feature title="Works offline." shot={shots.phoneGallery} phone>
         <p>Notes live on the device and sync when the signal comes back.</p>
       </Feature>
-      <Feature title="A deck for notes in progress." shot={shots.desktopDeck} flip>
-        <p>Give a note a status and it moves to a board: New, In progress, On hold.</p>
+      <Feature title="Notes on deck." shot={shots.desktopDeck} flip>
+        <p>A home for the notes that need your attention.</p>
       </Feature>
       <Feature title="Tags that nest." shot={shots.desktopTags}>
         <p>Tags sit inside tags, and a top-level tag gives its notes a color.</p>
       </Feature>
       <Feature title="Reminders that repeat." shot={shots.phoneReminder} phone flip>
-        <p>
-          Every weekday, or the second Tuesday of the month. On Android they ring without a
-          connection.
-        </p>
+        <p>Every weekday, or the second Tuesday of the month.</p>
       </Feature>
 
       <ul className="flex flex-wrap justify-center gap-3">
