@@ -94,13 +94,13 @@ export function SharePanel({ note, getContent, className }: Props) {
           setCopied(false);
           setError(null);
         }}
-        className="flex w-full rounded-full"
+        className="flex w-full rounded-xl"
       >
-        <ToggleGroupItem value="link" className="h-11 flex-1 rounded-full">
+        <ToggleGroupItem value="link" className="h-11 flex-1 rounded-lg">
           <Link2 aria-hidden />
           Catch link
         </ToggleGroupItem>
-        <ToggleGroupItem value="content" className="h-11 flex-1 rounded-full">
+        <ToggleGroupItem value="content" className="h-11 flex-1 rounded-lg">
           <FileText aria-hidden />
           Note content
         </ToggleGroupItem>
@@ -116,7 +116,7 @@ export function SharePanel({ note, getContent, className }: Props) {
           value={link}
           readOnly
           autoComplete="off"
-          className="h-11 font-mono"
+          className="h-11 rounded-xl font-mono"
           onFocus={(event) => event.target.select()}
         />
       )}
@@ -137,7 +137,7 @@ export function SharePanel({ note, getContent, className }: Props) {
       )}
       <div className="flex flex-wrap gap-2">
         <Button
-          className="h-11 flex-1 rounded-full"
+          className="h-11 flex-1 rounded-xl"
           disabled={pending || (type === 'content' && (!contentReady || !markdown.text))}
           onClick={() => void send()}
         >
@@ -147,7 +147,7 @@ export function SharePanel({ note, getContent, className }: Props) {
         {type === 'link' && link && (
           <Button
             variant="ghost"
-            className="h-11 rounded-full text-destructive hover:text-destructive"
+            className="h-11 rounded-xl text-destructive hover:text-destructive"
             disabled={pending}
             onClick={() => {
               haptics.warning();
