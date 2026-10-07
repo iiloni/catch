@@ -36,13 +36,14 @@ describe('GallerySwitcher', () => {
     // Bar spans x 0..400, y 100..150.
     mockBarRect({ left: 0, right: 400, top: 100, bottom: 150 });
     // Centers and the gaps between segments.
-    expect(galleryPageAt(50, 125)).toBe('/');
-    expect(galleryPageAt(100, 125)).toBe('/reminders');
-    expect(galleryPageAt(250, 125)).toBe('/archive');
-    expect(galleryPageAt(350, 125)).toBe('/trash');
+    expect(galleryPageAt(40, 125)).toBe('/');
+    expect(galleryPageAt(80, 125)).toBe('/reminders');
+    expect(galleryPageAt(200, 125)).toBe('/archive');
+    expect(galleryPageAt(280, 125)).toBe('/trash');
+    expect(galleryPageAt(360, 125)).toBe('/vault');
     // Forgiving vertically: above the bar and just below it still count.
-    expect(galleryPageAt(350, 60)).toBe('/trash');
-    expect(galleryPageAt(50, 160)).toBe('/');
+    expect(galleryPageAt(280, 60)).toBe('/trash');
+    expect(galleryPageAt(40, 160)).toBe('/');
     // Far away: no segment, so releasing leaves the bar open to tap.
     expect(galleryPageAt(150, 400)).toBeNull();
     expect(galleryPageAt(-100, 125)).toBeNull();

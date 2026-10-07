@@ -19,6 +19,7 @@ import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
 import { paneNoteId } from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { cn } from '@/lib/utils';
+import { isVaultNote, updateVaultNote } from '@/lib/vault';
 
 type Props = {
   note: Note;
@@ -119,8 +120,10 @@ export function NoteCard({
   const color = useNoteColor(note);
   const tagged = useResolvedNoteTags(note.id).length > 0;
   const selecting = selected !== undefined;
-  const actions = withActions && !selecting;
-  const canPin = actions && !note.deletedAt && !note.isArchived;
+  // A vault note's other actions (tags, the Deck, reminders, archive) do not apply to it.
+  const inVault = isVaultNote(note.id);
+  const actions = withActions && !selecting && !inVault;
+  const canPin = withActions && !selecting && !note.deletedAt && !note.isArchived;
   // The actions stay hidden until a pointer hovers the card or focus enters it, so they
   // (and their tooltips) are only built then; a grid of thousands of cards need not.
   const [armed, arm] = useReducer(() => true, false);
@@ -211,7 +214,10 @@ export function NoteCard({
       {canPin && (note.isPinned || revealed) && (
         <IconButton
           label={note.isPinned ? 'Unpin' : 'Pin'}
-          onClick={() => setNotePinned(note.id, !note.isPinned)}
+          onClick={() => {
+            if (inVault) void updateVaultNote(note.id, { isPinned: !note.isPinned });
+            else setNotePinned(note.id, !note.isPinned);
+          }}
           className={cn(
             'absolute top-1.5 right-1.5 size-7 [&_svg]:size-3.5',
             // Only pinned notes show the pin on touch; with a mouse it appears on hover.

@@ -23,6 +23,7 @@ import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
 import { getSyncStatus } from './syncStatus';
 import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
+import { forgetVaultKey } from './vaultKeyStore';
 
 /**
  * Several accounts can be signed in on one device (ADR 0019). A tab shows one of them: its
@@ -165,6 +166,7 @@ export async function signOutAccount(account: Account) {
     deleteLocalDatabase(id),
     deleteAttachmentFiles(id),
     clearIncomingShares(id),
+    forgetVaultKey(id),
   ]);
   for (const result of removed) {
     if (result.status === 'rejected') {

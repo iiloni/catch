@@ -1,6 +1,7 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { updateNote } from './notes';
+import { isVaultNote, updateVaultNote } from './vault';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -22,7 +23,11 @@ export function useNoteAutosave(noteId: string) {
     if (!content) return;
     pending.current = null;
     const current = ++generation.current;
-    updateNote(noteId, { content }).isPersisted.promise.then(
+    // A vault note is sealed before it is queued (ADR 0020).
+    const saved = isVaultNote(noteId)
+      ? updateVaultNote(noteId, { content }).then((write) => write.isPersisted.promise)
+      : updateNote(noteId, { content }).isPersisted.promise;
+    saved.then(
       () => {
         if (current === generation.current && !pending.current) setState('saved');
       },

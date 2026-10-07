@@ -12,7 +12,7 @@ import {
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { type ComponentProps, type PointerEvent, useEffect, useRef, useState } from 'react';
 import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
-import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
+import { ColorSwatches, ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
 import { NoteMovePicker, noteDestinationAt } from '@/components/NoteMovePicker/NoteMovePicker';
 import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
@@ -35,6 +35,7 @@ import { moveNoteToDeck, restoreNote, sendNoteToGallery, setNoteColor } from '@/
 import { useOpenNote } from '@/lib/openNote';
 import { setPrimaryTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
+import { isVaultNote, updateVaultNote } from '@/lib/vault';
 
 type Action = {
   id: string;
@@ -87,6 +88,8 @@ export function NoteDock() {
   useBackHandler(panel !== null, () => setPanel(null));
 
   const editable = note !== null && !note.deletedAt;
+  // Tags, files, the Deck and reminders are not for vault notes (ADR 0020).
+  const inVault = note !== null && isVaultNote(note.id);
   // The tag search and a reminder's fields also raise the keyboard; keep their panels mounted
   // while typing.
   const formOpen = tagFormOpen.use();
@@ -105,7 +108,7 @@ export function NoteDock() {
   const tags = useTags();
   const assignment = useNoteTagAssignments().get(note?.id ?? '');
   const showColumns = panel === 'columns' && showPanel;
-  const showAttachments = panel === 'attachments' && editable && isPresent;
+  const showAttachments = panel === 'attachments' && editable && isPresent && !inVault;
 
   useEffect(() => () => window.clearTimeout(hold.current?.timer), []);
   const noteId = note?.id;
@@ -305,6 +308,7 @@ export function NoteDock() {
         },
       },
     ];
+    if (inVault) actions = actions.filter((action) => action.id === 'color');
   }
 
   return (
@@ -341,16 +345,24 @@ export function NoteDock() {
             exit={{ height: 0, opacity: 0 }}
             transition={springs.smooth}
           >
-            <ColorTagSelector
-              key={paletteSession}
-              value={
-                assignment?.primaryTagId ? tagColor(tags, assignment.primaryTagId) : note.color
-              }
-              onChange={(color) => setNoteColor(note.id, color)}
-              primaryTagId={assignment?.primaryTagId}
-              onTagChange={(id) => setPrimaryTag(note.id, id)}
-              className="w-full pt-1 pb-1"
-            />
+            {inVault ? (
+              <ColorSwatches
+                value={note.color}
+                onChange={(color) => void updateVaultNote(note.id, { color })}
+                className="w-full p-2"
+              />
+            ) : (
+              <ColorTagSelector
+                key={paletteSession}
+                value={
+                  assignment?.primaryTagId ? tagColor(tags, assignment.primaryTagId) : note.color
+                }
+                onChange={(color) => setNoteColor(note.id, color)}
+                primaryTagId={assignment?.primaryTagId}
+                onTagChange={(id) => setPrimaryTag(note.id, id)}
+                className="w-full pt-1 pb-1"
+              />
+            )}
           </motion.div>
         )}
         {showTags && note && (

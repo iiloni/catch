@@ -7,6 +7,7 @@ import {
   createBoardColumnSchema,
   createNoteSchema,
   createTagSchema,
+  createVaultNoteSchema,
   type LinkPreview,
   linkPreviewSchema,
   MAX_NOTES_PER_REQUEST,
@@ -26,6 +27,9 @@ import {
   updateNoteSchema,
   updateNoteTagsSchema,
   updateTagSchema,
+  updateVaultNoteSchema,
+  vaultNoteSchema,
+  vaultSchema,
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
 import {
@@ -78,6 +82,7 @@ import {
   updateSyncStatus,
   useAwaitingSync,
 } from './syncStatus';
+import { forgetVaultKey } from './vaultKeyStore';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
@@ -244,8 +249,56 @@ export const remindersCollection = createCollection(
   ),
 );
 
+/**
+ * The user's vault (ADR 0020): its key as the server keeps it, sealed. Read only here; the
+ * vault's own requests change it (see `lib/vault.ts`).
+ */
+export const vaultCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'vault',
+      schema: vaultSchema,
+      getKey: (vault) => vault.userId,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/vault`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
+/** The vault's notes as ciphertext, which is also all the device's database keeps of them. */
+export const vaultNotesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'vault-notes',
+      schema: vaultNoteSchema,
+      getKey: (note) => note.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/vault-notes`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
+/** Settles once a change the vault's own requests made has synced back, or after a wait. */
+export const awaitVaultSync = (txid: number | null) =>
+  txid === null
+    ? Promise.resolve(false)
+    : vaultCollection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false);
+
 const writableCollections = {
   notes: notesCollection,
+  vaultNotes: vaultNotesCollection,
   tags: tagsCollection,
   noteTags: noteTagsCollection,
   boardColumns: boardColumnsCollection,
@@ -409,6 +462,17 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
     return mutation.type === 'delete'
       ? api.deleteReminder(key)
       : api.saveReminder(key, saveReminderSchema.parse(mutation.modified));
+  }
+  if (mutation.collection.id === vaultNotesCollection.id) {
+    switch (mutation.type) {
+      case 'insert':
+        return api.createVaultNote(createVaultNoteSchema.parse(mutation.modified));
+      case 'update':
+        // A note is sealed whole, so the latest `data` is the whole change.
+        return api.updateVaultNote(key, updateVaultNoteSchema.parse(mutation.modified));
+      case 'delete':
+        return api.deleteVaultNote(key);
+    }
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -591,6 +655,7 @@ export async function clearLocalData() {
   executor.dispose();
   await clearAttachmentFiles();
   if (user) await clearIncomingShares(user.id);
+  if (user) await forgetVaultKey(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
 }

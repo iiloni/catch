@@ -2,14 +2,14 @@ import { useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
 /** The Gallery and its quieter corners, switched between from the dock. */
-export const GALLERY_PAGES = ['/', '/reminders', '/archive', '/trash'] as const;
+export const GALLERY_PAGES = ['/', '/reminders', '/archive', '/trash', '/vault'] as const;
 export type GalleryPage = (typeof GALLERY_PAGES)[number];
 
-/** Whether Reminders, Archive or Trash was opened by pushing a history entry on top of the Gallery. */
+/** Whether Reminders, Archive, Trash or the Vault was opened by pushing a history entry on top of the Gallery. */
 let pushedFromGallery = false;
 
 /**
- * Moves between the Gallery, Reminders, Archive and Trash. Leaving the Gallery pushes a history entry,
+ * Moves between the Gallery, Reminders, Archive, Trash and the Vault. Leaving the Gallery pushes a history entry,
  * so the back gesture returns to it; returning goes back rather than pushing again, and
  * switching between the corners replaces.
  */

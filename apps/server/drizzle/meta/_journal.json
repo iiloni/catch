@@ -78,6 +78,13 @@
       "when": 1791179985213,
       "tag": "0010_push_subscription_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791330904791,
+      "tag": "0011_vault",
+      "breakpoints": true
     }
   ]
 }

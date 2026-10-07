@@ -342,6 +342,12 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   them, so `lib/push.ts` answers for both and callers need not know which they are on.
   `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
+- Vault notes (ADR 0020, `lib/vault.ts`) are sealed on the device: the `vault-notes`
+  collection, the device database, the outbox and the server hold only ciphertext, and the
+  opened notes and the key live in memory. A vault note is a `Note` to the UI but is not in
+  `notesCollection`; code that acts on a note it may be shown for checks `isVaultNote(id)` and
+  uses the vault's actions, which are asynchronous. Never send a vault note's content, links
+  or text to the server, or write it to `notesCollection`.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.

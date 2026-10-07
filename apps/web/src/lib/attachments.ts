@@ -14,6 +14,7 @@ import { forgetAttachmentBlob, getAttachmentBlob, storeAttachmentBlob } from './
 import { attachmentsCollection, notesCollection, useAttachments, write } from './collections';
 import { editorControls, editorNote } from './dockState';
 import type { ImportBatch } from './notes';
+import { isVaultNote } from './vault';
 
 export const useNoteAttachments = (noteId: string) =>
   useAttachments().filter((file) => file.noteId === noteId && !file.deletedAt);
@@ -58,6 +59,7 @@ async function storeAttachment(
   signal?: AbortSignal,
 ) {
   signal?.throwIfAborted();
+  if (isVaultNote(noteId)) throw new Error('Notes in the vault cannot hold files yet');
   const note = notesCollection.get(noteId);
   if (!note || note.deletedAt) throw new Error('This note is no longer editable');
   if (!file.size) throw new Error('The file is empty');

@@ -15,6 +15,7 @@ import { useLinkPreviews } from './collections';
 import { getServerUrl } from './serverUrl';
 import { usePersistentState } from './storage';
 import { createStore } from './store';
+import { isVaultNote } from './vault';
 
 /**
  * A link in a note with what the server found there. `preview` is undefined until the
@@ -34,14 +35,20 @@ export function noteLinks(
     .map((link) => ({ ...link, preview: previews.get(link.url) }));
 }
 
-/** The note's previewed links, or none while link previews are turned off. */
-export function useNoteLinks(note: Pick<Note, 'content' | 'hiddenLinks'>): ResolvedLink[] {
+/**
+ * The note's previewed links, or none while link previews are turned off. A vault note has
+ * none either: the server would have to be told the link to fetch its preview (ADR 0020).
+ */
+export function useNoteLinks(
+  note: Pick<Note, 'content' | 'hiddenLinks'> & Partial<Pick<Note, 'id'>>,
+): ResolvedLink[] {
   const previews = useLinkPreviews();
   const [enabled] = useShowLinkPreviews();
   const { content, hiddenLinks } = note;
+  const shown = enabled && !(note.id !== undefined && isVaultNote(note.id));
   return useMemo(
-    () => (enabled ? noteLinks({ content, hiddenLinks }, previews) : []),
-    [enabled, content, hiddenLinks, previews],
+    () => (shown ? noteLinks({ content, hiddenLinks }, previews) : []),
+    [shown, content, hiddenLinks, previews],
   );
 }
 
