@@ -233,17 +233,31 @@ or through `merge on pass` before merging.
 ## Deploying the site
 
 [`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
-Pages when `main` changes the site or its inputs, when a release tag is pushed (the
-changelog gains a version), and on request. It always builds `main` from a full clone,
-because the changelog is derived from tags and history, and fails if that changelog cannot
-be generated. Pull requests do not deploy; CI's `check` job builds the site for them.
+Workers with static assets when `main` changes the site or its inputs, when a release tag
+is pushed (the changelog gains a version), and on request. It always builds `main` from a
+full clone, because the changelog is derived from tags and history, and fails if that
+changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds the
+site for them.
 
 The job is skipped until the repository is connected to Cloudflare, once:
 
-1. In Cloudflare, create a Pages project with **Direct Upload** (not the Git integration)
-   and production branch `main`, and add `catchnotes.site` under its custom domains.
-2. Create an API token with the **Cloudflare Pages: Edit** permission for that account.
-3. In the repository's **Settings → Secrets and variables → Actions**, add the secrets
-   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and the variable
-   `CLOUDFLARE_PAGES_PROJECT` with the project's name.
-4. Run the workflow from the Actions tab (`gh workflow run site.yml`) and open the site.
+1. In Cloudflare, create an API token with **Account → Workers Scripts → Edit** for the
+   account that will host the site. The workflow uploads assets only; it does not manage DNS
+   or custom domains. See [Cloudflare's CI authentication guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+2. In the repository's **Settings → Secrets and variables → Actions**, add the secrets
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and set the variable
+   `CLOUDFLARE_SITE_ENABLED` to `true`. This replaces `CLOUDFLARE_PAGES_PROJECT`, which can
+   be removed if it was already set.
+3. Run the workflow from the Actions tab (`gh workflow run site.yml`). The first deploy
+   creates the `catch-site` Worker named in [`wrangler.jsonc`](../apps/site/wrangler.jsonc);
+   there is no Pages project to create and no Cloudflare Git integration to connect.
+4. In Cloudflare's **Workers & Pages**, select `catch-site`, then **Settings → Domains &
+   Routes → Add → Custom Domain**, and add `catchnotes.site`. Cloudflare creates the DNS
+   record and certificate. If the domain already points to a Pages project, remove that
+   project's custom domain and conflicting DNS record before attaching it to the Worker.
+   Open `https://catchnotes.site` once the certificate is active. See
+   [Cloudflare's custom domain guide](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+The Worker serves `apps/site/out` directly, with trailing-slash URLs matching Next.js's
+export and the exported `404.html` for missing pages. It has no Worker script or Next.js
+server. Pull requests still build without deploying.

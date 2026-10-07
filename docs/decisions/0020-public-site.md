@@ -48,10 +48,15 @@ product they describe.
   with tags, which a shallow CI clone and the development container lack: there the page
   links to the releases instead. A deploy sets `SITE_CHANGELOG=required`, so it fails rather
   than publish an empty changelog.
-- **Deployed from GitHub Actions to Cloudflare**, not by Cloudflare's Git integration, whose
-  clone has no tags. `.github/workflows/site.yml` builds on pushes to `main` that touch the
-  site or its inputs and uploads the export; it is skipped until the repository has the
-  Cloudflare credentials.
+- **Deployed from GitHub Actions to Cloudflare Workers with static assets**, not by
+  Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` builds
+  on pushes to `main` that touch the site or its inputs and uploads the export; it is skipped
+  until the repository has the Cloudflare credentials and enables `CLOUDFLARE_SITE_ENABLED`.
+  `apps/site/wrangler.jsonc`
+  names the `catch-site` Worker and serves the export directly, without a Worker script,
+  preserving trailing-slash URLs and the exported 404 page. The user attaches the custom
+  domain in Cloudflare; the workflow does not manage DNS. Workers replaces the original
+  Pages target while keeping the same static build.
 - **The Compose file runs the published image.** The page's quick start is "download two
   files, fill in four settings, start it", which the old default of building from source did
   not allow. `docker-compose.yml` now names `ghcr.io/iiloni/catch:stable` (overridden by
