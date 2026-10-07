@@ -27,6 +27,8 @@ For an in-app restore, ordinary API requests return 503 while it runs; clients w
 
 Older backups are migrated forward to the current schema. If you restore a database-only backup, the files already on this server remain; it cannot recreate missing originals. The result reports missing attachment files. A `pre-restore` backup can undo database changes, but is not an independent full attachment backup.
 
+<DocsScreenshot name="desktopRestore" caption="Read the confirmation before restoring: the backup replaces server data for everyone. Cancel leaves the server as it is." />
+
 ## Recover after a bad update without downgrading
 
 If the new app still runs and accepts the pre-update backup, you can restore that database-only `update` backup on the new version. Catch migrates its data forward again. This can recover data problems but does not undo the new code or its migration logic.

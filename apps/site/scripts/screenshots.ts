@@ -3,7 +3,7 @@
  * development stack: `./scripts/dev.sh screenshots`. Each run signs up a fresh account
  * and fills it with the notes below, so the pictures only change when the app does.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -75,8 +75,17 @@ async function createAccount(browser: Browser) {
     data: { email: `shots-${Date.now()}@example.com`, name: 'Robin', password: 'password123' },
   });
   if (!response.ok()) throw new Error(`Sign-up failed: ${response.status()}`);
+  const state = await signedInState(context, response);
+  await context.close();
+  return state;
+}
+
+async function signedInState(
+  context: BrowserContext,
+  response: Awaited<ReturnType<BrowserContext['request']['post']>>,
+) {
   const { user } = (await response.json()) as { user: unknown };
-  const state = {
+  return {
     cookies: await context.cookies(),
     origins: [
       {
@@ -88,6 +97,17 @@ async function createAccount(browser: Browser) {
       },
     ],
   };
+}
+
+/** Only the worktree's seeded admin is used; never pass a production URL to this script. */
+async function adminAccount(browser: Browser) {
+  const context = await browser.newContext({ baseURL });
+  const response = await context.request.post('/api/auth/sign-in/email', {
+    headers: { Origin: baseURL },
+    data: { email: 'admin@example.com', password: 'adminadmin' },
+  });
+  if (!response.ok()) throw new Error(`Admin sign-in failed: ${response.status()}`);
+  const state = await signedInState(context, response);
   await context.close();
   return state;
 }
@@ -401,6 +421,282 @@ async function capture(context: BrowserContext, layout: Layout, theme: string) {
   await deck.close();
 }
 
+/** Docs captures use the same real app and seeded notes as the marketing pictures. */
+async function captureDocs(context: BrowserContext, theme: string, only?: string) {
+  const scenes: { name: string; route?: string; prepare?: (page: Page) => Promise<void> }[] = [
+    {
+      name: 'docs-quick-note',
+      prepare: async (page) => {
+        await card(page, 'Groceries').waitFor({ timeout: 60_000 });
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        const editor = page
+          .getByRole('region', { name: 'New note', exact: true })
+          .getByRole('textbox');
+        await editor.waitFor();
+        await editor.click();
+        await page.keyboard.type('Call the plumber');
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('Kitchen tap, before Friday');
+        const formatting = page.getByRole('button', { name: 'Formatting', exact: true });
+        if (await formatting.isVisible()) await formatting.click();
+      },
+    },
+    ...(
+      [
+        ['docs-primary-tags', 'Background color'],
+        ['docs-secondary-tags', 'Tags'],
+        ['docs-attachments', 'Attach files'],
+        ['docs-move-note', 'Move note'],
+      ] as const
+    ).map(([name, action]) => ({
+      name,
+      prepare: async (page: Page) => {
+        await card(page, 'Groceries').getByRole('button', { name: 'Open note' }).click();
+        await page.getByRole('dialog').getByRole('textbox').waitFor();
+        await page
+          .getByRole('toolbar', { name: 'Note actions' })
+          .getByRole('button', { name: action, exact: true })
+          .click();
+      },
+    })),
+    { name: 'docs-import', route: '/settings/data' },
+    { name: 'docs-settings', route: '/settings/general' },
+    {
+      name: 'docs-link-capture',
+      prepare: async (page) => {
+        await card(page, 'Groceries').waitFor({ timeout: 60_000 });
+        await page.getByRole('button', { name: 'New note', exact: true }).click();
+        // Save link lives in the quick note's formatting toolbar.
+        const formatting = page.getByRole('button', { name: 'Formatting', exact: true });
+        if (await formatting.isVisible()) await formatting.click();
+        await page.getByRole('button', { name: 'Save link', exact: true }).click();
+        await page.getByRole('heading', { name: 'Add Rich Link' }).waitFor();
+        await page.getByLabel('URL', { exact: true }).fill('https://en.wikipedia.org/wiki/Lisbon');
+        await page.getByRole('button', { name: 'Fetch details' }).click();
+        await page.getByLabel('Title', { exact: true }).waitFor({ timeout: 45_000 });
+      },
+    },
+  ];
+  for (const scene of scenes) {
+    if (only && !scene.name.startsWith(only)) continue;
+    const page = await openApp(context, scene.route);
+    await scene.prepare?.(page);
+    await save(page, scene.name, theme);
+    await page.close();
+  }
+
+  if (!only || only.startsWith('docs-offline')) {
+    const page = await openApp(context);
+    // A wider phone keeps the full save-status label visible alongside the note actions.
+    await page.setViewportSize({ width: 430, height: 840 });
+    await card(page, 'Groceries').waitFor({ timeout: 60_000 });
+    const noteId = await card(page, 'Groceries').getAttribute('data-note-card');
+    if (!noteId) throw new Error('The offline demo note is missing.');
+    const original = await page.evaluate(async (id) => {
+      const file = 'notes';
+      const { getNote } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+      return getNote(id);
+    }, noteId);
+    if (!original) throw new Error('The offline demo note is missing.');
+    await card(page, 'Groceries').getByRole('button', { name: 'Open note' }).click();
+    const editor = page.getByRole('dialog').getByRole('textbox');
+    await editor.waitFor();
+    // Load the editor online first: Vite has no service worker for loading code offline.
+    await context.setOffline(true);
+    try {
+      await page.getByRole('dialog').getByText('Olive oil', { exact: true }).click();
+      await page.keyboard.press('End');
+      await page.keyboard.type(' (check the pantry)');
+      await page.getByText('Saved on this device', { exact: true }).waitFor();
+      await save(page, 'docs-offline-save', theme);
+      await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+      await page.getByRole('button', { name: /^Offline, .* waiting$/ }).click();
+      await page.getByText(/saved on this device will sync/).waitFor();
+      await save(page, 'docs-offline-queue', theme);
+    } finally {
+      await context.setOffline(false);
+      await page.waitForFunction(async () => {
+        const file = 'syncStatus';
+        const { getSyncStatus } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+        return getSyncStatus().pending === 0;
+      });
+      await page.evaluate(async (note) => {
+        const file = 'notes';
+        const { updateNote } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+        await updateNote(note.id, { content: note.content }).isPersisted.promise;
+      }, original);
+      await page.close();
+    }
+  }
+}
+
+async function captureAdmin(context: BrowserContext, theme: string, only?: string) {
+  if (!only || only === 'docs-users') {
+    const page = await openApp(context, '/settings/admin/users');
+    // Keep the capture focused on the two named seed accounts, not capture-run accounts.
+    await page.getByLabel('Search users').fill('user@example.com');
+    await page.getByRole('button', { name: 'Role for user@example.com: User' }).waitFor();
+    await page.getByRole('region', { name: 'Invites' }).waitFor();
+    await save(page, 'docs-users', theme);
+    await page.close();
+  }
+  if (only && !['docs-backups', 'docs-restore'].includes(only)) return;
+  const page = await openApp(context, '/settings/admin/backups');
+  await page.getByRole('button', { name: 'Back up now', disabled: false }).waitFor();
+  // Capture a real completed full backup, not a fabricated list. Runs only on the dev stack.
+  if (!(await page.getByText(/Made by hand/).count())) {
+    await page.getByRole('button', { name: 'Back up now' }).click();
+    await page
+      .getByText(/Made by hand/)
+      .first()
+      .waitFor({ timeout: 120_000 });
+  }
+  const schedule = await page.evaluate(async () => {
+    const file = 'serverBackups';
+    const { serverBackups } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+    return (await serverBackups.overview()).schedule;
+  });
+  try {
+    // Show all scheduling fields, then restore the existing worktree setting in finally.
+    if (!schedule.enabled) {
+      await page.getByRole('switch', { name: 'Back up every day' }).click();
+      await page.getByLabel('Backups to keep').waitFor();
+    }
+    if (!only || only === 'docs-backups') await save(page, 'docs-backups', theme);
+    if (!only || only === 'docs-restore') {
+      await page
+        .getByRole('button', { name: /Manage the backup from/ })
+        .first()
+        .click();
+      await page.getByRole('menuitem', { name: 'Restore', exact: true }).click();
+      await page.getByRole('heading', { name: 'Restore this backup?' }).waitFor();
+      await save(page, 'docs-restore', theme);
+      // Never confirm: documenting restore does not restore the development database.
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    }
+  } finally {
+    await page.evaluate(async (original) => {
+      const file = 'serverBackups';
+      const { serverBackups } = await import(/* @vite-ignore */ `/src/lib/${file}.ts`);
+      await serverBackups.saveSchedule(original);
+    }, schedule);
+    await page.close();
+  }
+}
+
+/**
+ * Native-only views: run `./scripts/dev.sh android --usb` first, then
+ * `./scripts/dev.sh screenshots android-docs` with the cover screen active and unlocked.
+ * ADB photographs the real display, including its system keyboard and Share menu.
+ */
+async function captureAndroid() {
+  const adb = (...args: string[]) => execFileSync('adb', args, { encoding: 'utf8' }).trim();
+  const pid = adb('shell', 'pidof', 'org.iloni.catchnotes.dev');
+  if (!/^\d+$/.test(pid)) throw new Error('Open Catch Dev on one connected Android device first.');
+  const port = '29223';
+  adb('forward', `tcp:${port}`, `localabstract:webview_devtools_remote_${pid}`);
+  const help = spawnSync('adb', ['shell', 'screencap', '--help'], { encoding: 'utf8' });
+  const display = `${help.stdout}${help.stderr}`.match(/defaults to (\d+)/)?.[1];
+  if (!display) throw new Error('Could not determine the active Android display.');
+  const night = adb('shell', 'cmd', 'uimode', 'night').match(/Night mode: (\w+)/)?.[1];
+  if (!night) throw new Error('Could not read the phone’s appearance setting.');
+  const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
+  const context = browser.contexts()[0];
+  const page = context?.pages().find((candidate) => candidate.url().startsWith(baseURL));
+  if (!context || !page) throw new Error('Catch Dev must load this worktree’s live-reload URL.');
+  const preference = await page.evaluate(() => localStorage.getItem('catch-theme'));
+  const email = `android-shots-${Date.now()}@example.com`;
+  const response = await context.request.post(`${baseURL}/api/auth/sign-up/email`, {
+    headers: { Origin: baseURL },
+    data: { email, name: 'Robin', password: 'password123' },
+  });
+  if (!response.ok()) throw new Error(`Native capture sign-up failed: ${response.status()}`);
+  await page.goto(`${baseURL}/login`);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('password123');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('heading', { name: 'Gallery', exact: true }).waitFor({ timeout: 60_000 });
+  await seed(page);
+
+  const photograph = async (name: string, theme: string) => {
+    await page.waitForTimeout(2000);
+    const file = path.join(output, `${name}-${theme}.webp`);
+    await sharp(
+      execFileSync('adb', ['exec-out', 'screencap', '-p', '-d', display ?? ''], {
+        maxBuffer: 16 * 1024 * 1024,
+      }),
+    )
+      .webp({ quality: 86 })
+      .toFile(file);
+    console.log(path.relative(root, file));
+  };
+
+  try {
+    for (const theme of themes) {
+      adb('shell', 'cmd', 'uimode', 'night', theme === 'dark' ? 'yes' : 'no');
+      await page.goto(`${baseURL}/settings/general`);
+      await page
+        .getByRole('button', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true })
+        .click();
+      await page.goto(`${baseURL}/setup`);
+      await page.getByRole('heading', { name: 'Connect to your server' }).waitFor();
+      await photograph('docs-android-setup', theme);
+
+      await page.goto(baseURL);
+      await card(page, 'Groceries').getByRole('button', { name: 'Open note' }).click();
+      const editor = page.getByRole('dialog').getByRole('textbox');
+      await editor.waitFor({ timeout: 60_000 });
+      const item = editor.getByText('Olive oil', { exact: true });
+      const box = await item.boundingBox();
+      if (!box) throw new Error('The native note editor is not visible.');
+      const ratio = await page.evaluate(() => devicePixelRatio);
+      // A real touch raises Android’s keyboard; a DOM focus alone does not always do so.
+      adb(
+        'shell',
+        'input',
+        'tap',
+        String(Math.round((box.x + box.width / 2) * ratio)),
+        String(Math.round((box.y + box.height / 2) * ratio)),
+      );
+      await page.waitForFunction(
+        () => Number.parseFloat(document.documentElement.style.getPropertyValue('--keyboard')) > 40,
+      );
+      await page.getByRole('button', { name: 'Bold', exact: true }).waitFor();
+      await photograph('docs-android-keyboard', theme);
+      adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+      await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+
+      // The shell’s real ACTION_SEND opens Android’s resolver with example text.
+      // Quotes must survive adb’s shell argument joining.
+      adb(
+        'shell',
+        'am',
+        'start',
+        '--user',
+        '0',
+        '-a',
+        'android.intent.action.SEND',
+        '-t',
+        'text/plain',
+        '--es',
+        'android.intent.extra.TEXT',
+        "'Weekend packing list: walking shoes, jacket, travel adapter.'",
+      );
+      await photograph('docs-android-share', theme);
+      adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+    }
+  } finally {
+    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+    adb('shell', 'cmd', 'uimode', 'night', night);
+    await page.goto(`${baseURL}/settings/general`);
+    const label = preference === '"dark"' ? 'Dark' : preference === '"light"' ? 'Light' : 'System';
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.goto(baseURL);
+    adb('forward', '--remove', `tcp:${port}`);
+    await browser.close();
+  }
+}
+
 const FPS = 60;
 // How much slower than life a clip is filmed. Chrome photographs a screen of this size only
 // five or six times a second, so the page runs slowly while it is filmed and the clip is
@@ -664,8 +960,13 @@ const clips: {
   },
 ];
 
+// `docs [scene-name]` captures only guide assets, leaving marketing assets untouched.
 mkdirSync(output, { recursive: true });
 mkdirSync(recordings, { recursive: true });
+if (process.argv[2] === 'android-docs') {
+  await captureAndroid();
+  process.exit(0);
+}
 const browser = await chromium.launch();
 const storageState = await createAccount(browser);
 {
@@ -675,6 +976,37 @@ const storageState = await createAccount(browser);
   await context.close();
 }
 const only = process.argv[2];
+if (only === 'docs') {
+  const admin = await adminAccount(browser);
+  for (const theme of themes) {
+    const context = await phoneContext(browser, storageState, theme);
+    await captureDocs(context, theme, process.argv[3]);
+    await context.close();
+    if (!process.argv[3] || process.argv[3] === 'docs-sign-in') {
+      const signedOut = await phoneContext(browser, { cookies: [], origins: [] }, theme);
+      const page = await signedOut.newPage();
+      await page.goto('/login');
+      await page.getByRole('button', { name: 'Sign in', exact: true }).waitFor();
+      // Clear Vite's seeded credentials by using the form, as a visitor can.
+      await page.getByLabel('Email', { exact: true }).fill('');
+      await page.getByLabel('Password', { exact: true }).fill('');
+      await page.getByLabel('Password', { exact: true }).blur();
+      await save(page, 'docs-sign-in', theme);
+      await signedOut.close();
+    }
+    const adminContext = await browser.newContext({
+      ...layouts.desktop,
+      baseURL,
+      storageState: admin,
+      colorScheme: theme,
+      locale: 'en-US',
+    });
+    await captureAdmin(adminContext, theme, process.argv[3]);
+    await adminContext.close();
+  }
+  await browser.close();
+  process.exit(0);
+}
 for (const layout of Object.keys(layouts) as Layout[]) {
   if (only === 'recordings') break;
   for (const theme of themes) {

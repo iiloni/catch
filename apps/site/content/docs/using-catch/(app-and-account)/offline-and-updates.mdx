@@ -31,6 +31,11 @@ If the control says **Signed out**, use its **Sign in** action and sign in as th
 
 With several accounts on a device, only accounts open in a tab sync. Switch back to an account with queued work to let it send.
 
+<DocsVisuals>
+<DocsScreenshot name="offlineSave" caption="An offline edit is Saved on this device. It still needs to sync before another device can see it." />
+<DocsScreenshot name="offlineQueue" caption="Open the cloud control to see how many locally saved changes are waiting for a connection." />
+</DocsVisuals>
+
 ## Avoid conflicting edits
 
 Edits to different note fields can both survive. If two devices change the same field, the last change to reach the server wins. The note's text is one field: an offline text edit sent later can replace text another device saved while you were away. There is no merge editor or saved revision history.
@@ -60,4 +65,4 @@ When a newer app in the same channel matches your server's published version, Se
 
 The updater follows the server's exact version rather than installing every new GitHub release. It does not change channels or downgrade the installed app. If channels differ, install the separate matching app from [GitHub releases](https://github.com/iiloni/catch/releases). Keep the original app until its pending work has synced.
 
-{/* Screenshot placeholder: Capture Saved on this device and the update-required message with queued changes retained. */}
+{/* Capture still needed: App update required and Server update required with real incompatible app/server builds and a retained queue. */}

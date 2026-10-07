@@ -15,6 +15,8 @@ Each completed backup has **Download**, **Restore** and **Delete** in its menu. 
 
 Under **Automatic backups**, enable **Back up every day**, choose **Time**, set **Backups to keep** and choose whether to **Include attachments**. The time is stored with a time zone; verify the zone shown beside the schedule. Retention accepts 1–365 scheduled backups and defaults to 7. Attachment inclusion defaults to on. The initial schedule is disabled, with 03:00 UTC as its time. A server off at the scheduled time catches up when it starts again.
 
+<DocsScreenshot name="desktopBackups" caption="Admin > Backups lists completed backups. Turning on Back up every day reveals the schedule, retention and attachment controls." />
+
 ## Understand backup kinds
 
 | Kind | Created by | Retention |
@@ -67,5 +69,3 @@ For off-server copies, schedule full backups and sync completed ZIPs from that d
 A checksum check finds damage but does not prove your entire recovery setup works. Restore a full backup on an isolated test installation at the same or a newer Catch version, using separate volumes and restricted access. Restored browser-push subscriptions are real: keep outbound notification delivery isolated during the drill.
 
 Verify an account, note text, tags and an original attachment. Keep a record of the tested version, credentials and restore steps. [Restore and recovery](/docs/running-a-server/restore) explains the operational effects. Deeper backup design remains in [ADR 0012](https://github.com/iiloni/catch/blob/main/docs/decisions/0012-server-backups.md).
-
-{/* Screenshot placeholder: Capture Admin > Backups with a completed backup and the automatic schedule visible. */}

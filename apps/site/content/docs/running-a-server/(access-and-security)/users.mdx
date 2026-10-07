@@ -19,6 +19,8 @@ The recipient opens the entire link in a browser. In the Android app, they paste
 
 If you deliberately want public sign-up, set `REGISTRATION=open` and run `docker compose up -d --wait`. Any person who can reach the server can then create an account. An invalid invite supplied with sign-up is still refused even when registration is open.
 
+<DocsScreenshot name="desktopUsers" caption="Admin > Users has a searchable account list with role controls, followed by Invites." />
+
 ## Manage users
 
 The Users page searches by name or email and lists names, email addresses, roles, creation dates and last login. A missing recorded login appears as **—**. The last-login value reflects successful sign-ins, not continuous activity or session refreshes.
