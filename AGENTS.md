@@ -12,6 +12,7 @@ longer holds, update it in the same change rather than working around it.
 | --- | --- |
 | `apps/web` | Vite + React SPA, TanStack Router (file routes in `src/routes`), TanStack DB, Tailwind v4 + shadcn/ui. Also the Capacitor Android project (`android/`). |
 | `apps/server` | Hono API on Node. Better Auth, Drizzle (Postgres), Electric shape proxy. Serves the built web app in production. |
+| `apps/site` | The public site at `catchnotes.site` (ADR 0020): Next.js and Fumadocs, built as static files. Marketing page, `/docs` (MDX in `content/docs`) and `/changelog`. Shares nothing with the app at runtime. |
 | `packages/shared` | Zod schemas, types and pure helpers used by both apps. Exported as TypeScript source (no build step). |
 | `e2e` | Playwright tests that drive the real app against the dev database. |
 | `docs/decisions` | Short architecture decision records. |
@@ -32,8 +33,16 @@ checkout's stack. Never hard-code container or project names.
   `BREAKING CHANGE:` footers are published in them.
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
+- `check`, `test`, `build` and `e2e` take turns across every worktree on the machine: a
+  second run waits for the first and prints what it is waiting for. Give these commands a
+  long timeout or run them in the background, and let a waiting one wait. Do not go around
+  the queue by calling `playwright test` or the container's `pnpm check` directly.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
+- `./scripts/dev.sh site`: run the public site with hot reload and print its URL. It is not
+  part of the stack and does not need it running; `check` lints, typechecks and builds it.
+- `./scripts/dev.sh screenshots` (host): recapture the site's app screenshots, in light and
+  dark, from this worktree's running stack. Commit the changed pictures.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
 - `./scripts/dev.sh backup <create|list|inspect|restore|...>`: the server backup tool against
   this worktree's stack. `scripts/backup.sh` and `scripts/update.sh` are the production host
@@ -86,10 +95,20 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   pass; require that check in branch protection so testing alone cannot permit merging.
   `merge on pass` means functionality and design are approved and authorizes merging
   once required checks pass.
+- A change confined to documentation (`docs/`, root and `branding/` Markdown, the PR
+  template, `LICENSE`, `.gitignore`, `cubic.yaml`; the list is `scripts/change-scope.ts`)
+  runs `check` and skips E2E, on its PR and on `main`. It still needs `merge on pass` to
+  pass `validation`. One other file in the change makes it code. Do not add `run e2e` to
+  such a PR.
 - After the user approves functionality and design for merging, mark the PR ready and add
   `merge on pass`. Fix failures with the label left in place, then merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.
   The local `./scripts/dev.sh check` requirement still applies.
+- Once the user approves the feature for `merge on pass`, shut down this worktree's dev
+  stack with `./scripts/dev.sh down` from this checkout. Approval means the user is done
+  manually testing the feature, so free those resources while CI runs. If failed tests
+  need local investigation or fixes, bring it back with `./scripts/dev.sh up`, then run
+  `./scripts/dev.sh down` again when the local work and checks are finished.
 - A PR does not have to be up to date with `main` to merge: its checks ran on GitHub's
   merge of the branch with `main` as it stood then, and a passing result stays valid when
   other PRs land. Do not update the branch just because `main` advanced, since every
@@ -258,10 +277,32 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Every Postgres query that touches user data filters by `userId`.
 - Keep comments for the *why*; do not narrate the code.
 
+### The public site
+
+- `apps/site` is a separate product from the app: do not import from `apps/web/src` or
+  `@catch/shared`, and do not add it to the production image. It reads brand colors from
+  `branding/catch-brand-tokens.json` and lockups from `apps/web/public/wordmark`; the other
+  tokens in its `global.css` are a copy of `apps/web/src/styles.css`, so change both.
+- Everything the marketing page says must be true of the released product. Check a claim
+  against the code before adding it, and say plainly what Catch lacks.
+- The comparison is data in `apps/site/src/lib/comparison.ts`. Take each cell about another
+  product from that product's own pages, list the page in `sources` and update `checkedOn`.
+- Pictures of the app come from `./scripts/dev.sh screenshots` (`apps/site/scripts/screenshots.ts`),
+  never from a mockup or an edited file. Add a screen there and to `src/lib/screenshots.ts`.
+- It is a static export: no server code, no request-time data, no image optimizer. A page
+  with dynamic segments needs `generateStaticParams`.
+- The changelog page renders the JSON of `scripts/changelog.ts` (ADR 0017), generated at
+  build time when Git history with tags is available. In the dev container and CI's check
+  job it is not, and the page shows a placeholder; run the site on the host
+  (`pnpm --filter @catch/site dev`) to see real releases.
+- Cloudflare resources, DNS and the deploy workflow's secrets are the user's to create.
+
 ## Gotchas
 
 - A new workspace package needs its own `node_modules` volume in `docker-compose.dev.yml`,
   or the container will install dependencies into the bind-mounted checkout.
+- `docker-compose.yml` runs the published image and has no `build:` for the app. The dev
+  override and `docker-compose.build.yml` (building a checkout in production) add one.
 
 - Electric rows skip the collection's Zod schema, so column types that need parsing (such as
   `timestamptz` into `Date`) go in the `parser` option in `collections.ts`.
@@ -342,7 +383,7 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   them, so `lib/push.ts` answers for both and callers need not know which they are on.
   `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
-- A note is shared by a link (ADR 0020, `lib/sharing.ts`). The owner's link is a row in the
+- A note is shared by a link (ADR 0021, `lib/sharing.ts`). The owner's link is a row in the
   `note-shares` collection; a note someone else shared is a row in `shared-notes`, a copy the
   server rewrites with `refreshSharedNote` in the transaction of every change a reader would
   see, so a new write that changes what a note shows must call it. Pages show those copies as
@@ -352,6 +393,20 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   account, so that page must not start a sync or assume a signed-in user. Android gives the app no
   `https` links (a server's host is not known at build time), so that page offers the app
   through the `catchnotes:` scheme in `lib/appLinks.ts`.
+- Vault notes (ADR 0020, `lib/vault.ts`) are sealed on the device: the `vault-notes`
+  collection, the device database, the outbox and the server hold only ciphertext, and the
+  opened notes and the key live in memory. A vault note is a `Note` to the UI but is not in
+  `notesCollection`: read and change notes through `lib/noteStore.ts` (`noteStore`,
+  `noteTagStore`), which sends each call to the right place by the note's id, and list a
+  page's notes with `useVaultView() ?? <the ordinary ones>`. The header's lock button
+  (`VaultToggle`) switches the pages between the two; they are never shown together. A vault
+  note's tags and its files' names are sealed inside it; its files are `attachments` rows
+  named "Vault file" holding ciphertext, read with `useNoteAttachments` and opened through
+  `lib/attachmentFiles.ts`. Never send a vault note's content, links, text or file names to
+  the server, or write them to `notesCollection`.
+- `reminders.note_id` and `attachments.note_id` have no foreign key, because the note may be
+  in `notes` or `vault_notes`. A route that deletes a note deletes its reminders and
+  attachment rows itself.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.

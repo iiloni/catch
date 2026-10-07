@@ -82,8 +82,22 @@
     {
       "idx": 11,
       "version": "7",
-      "when": 1791332224104,
-      "tag": "0011_note_sharing",
+      "when": 1791330904791,
+      "tag": "0011_vault",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791352345224,
+      "tag": "0012_vault_reminders_and_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791389921115,
+      "tag": "0013_note_sharing",
       "breakpoints": true
     }
   ]

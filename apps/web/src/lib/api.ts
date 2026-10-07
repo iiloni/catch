@@ -10,6 +10,7 @@ import type {
   CreateNoteShare,
   CreateNotes,
   CreateTag,
+  CreateVaultNote,
   InvitesResponse,
   LinkIntake,
   ListUsers,
@@ -22,6 +23,7 @@ import type {
   ResetUserPasswordResponse,
   SaveReminder,
   SaveReminderSettings,
+  SaveVault,
   SharedNoteView,
   TestPushResponse,
   TxidResponse,
@@ -32,6 +34,7 @@ import type {
   UpdateSharedNote,
   UpdateTag,
   UpdateUserRole,
+  UpdateVaultNote,
   UserActionResponse,
   UsersResponse,
   VersionInfo,
@@ -141,6 +144,17 @@ export const api = {
     request<TxidResponse>(`/board-columns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteBoardColumn: (id: string) =>
     request<TxidResponse>(`/board-columns/${id}`, { method: 'DELETE' }),
+  createVault: (body: SaveVault) =>
+    request<TxidResponse>('/vault', { method: 'POST', body: JSON.stringify(body) }),
+  saveVault: (body: SaveVault) =>
+    request<TxidResponse>('/vault', { method: 'PUT', body: JSON.stringify(body) }),
+  deleteVault: () => request<TxidResponse>('/vault', { method: 'DELETE' }),
+  createVaultNote: (body: CreateVaultNote) =>
+    request<TxidResponse>('/vault/notes', { method: 'POST', body: JSON.stringify(body) }),
+  updateVaultNote: (id: string, body: UpdateVaultNote) =>
+    request<TxidResponse>(`/vault/notes/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteVaultNote: (id: string) =>
+    request<TxidResponse>(`/vault/notes/${id}`, { method: 'DELETE' }),
   saveReminder: (noteId: string, body: SaveReminder) =>
     request<TxidResponse>(`/reminders/${noteId}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteReminder: (noteId: string) =>

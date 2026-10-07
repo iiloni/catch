@@ -12,14 +12,15 @@ import {
   saveReminderSchema,
   saveReminderSettingsSchema,
   snoozeMinutesSchema,
+  VAULT_REMINDER_TEXT,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { notes, reminderSettings, reminders } from '../db/schema';
+import { notes, reminderSettings, reminders, vaultNotes } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -66,11 +67,23 @@ export const reminderRoutes = new Hono<AppEnv>()
   // ones set on other devices while it was closed.
   .get('/alarms', async (c) => {
     const rows = await db
-      .select({ reminder: reminders, text: notes.searchText })
+      .select({ reminder: reminders, text: notes.searchText, sealed: vaultNotes.id })
       .from(reminders)
-      .innerJoin(notes, eq(notes.id, reminders.noteId))
-      .where(and(eq(reminders.userId, c.get('user')!.id), isNull(notes.deletedAt)));
-    const alarms = rows.flatMap(({ reminder, text }) => reminderAlarm(reminder, text) ?? []);
+      .leftJoin(notes, and(eq(notes.id, reminders.noteId), eq(notes.userId, reminders.userId)))
+      .leftJoin(
+        vaultNotes,
+        and(eq(vaultNotes.id, reminders.noteId), eq(vaultNotes.userId, reminders.userId)),
+      )
+      .where(
+        and(
+          eq(reminders.userId, c.get('user')!.id),
+          or(and(isNotNull(notes.id), isNull(notes.deletedAt)), isNotNull(vaultNotes.id)),
+        ),
+      );
+    const alarms = rows.flatMap(
+      ({ reminder, text, sealed }) =>
+        reminderAlarm(reminder, sealed ? VAULT_REMINDER_TEXT : (text ?? '')) ?? [],
+    );
     return c.json({ alarms } satisfies ReminderAlarms);
   })
   .put('/settings', zValidator('json', saveReminderSettingsSchema), async (c) => {
@@ -124,7 +137,13 @@ export const reminderRoutes = new Hono<AppEnv>()
         .select({ id: notes.id })
         .from(notes)
         .where(and(eq(notes.id, noteId), eq(notes.userId, userId)));
-      if (!note) return null;
+      const [sealed] = note
+        ? []
+        : await tx
+            .select({ id: vaultNotes.id })
+            .from(vaultNotes)
+            .where(and(eq(vaultNotes.id, noteId), eq(vaultNotes.userId, userId)));
+      if (!note && !sealed) return null;
       // Locked, so a zone change rescheduling the user's reminders is not overwritten by a
       // save that read the old zone.
       const [settings] = await tx

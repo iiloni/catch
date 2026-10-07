@@ -84,6 +84,14 @@ const SHAPES: Record<string, { table: string; columns: string[] }> = {
       'updated_at',
     ],
   },
+  vault: {
+    table: 'vaults',
+    columns: ['user_id', 'salt', 'iterations', 'password_key', 'recovery_key', 'updated_at'],
+  },
+  'vault-notes': {
+    table: 'vault_notes',
+    columns: ['id', 'user_id', 'data', 'created_at', 'updated_at'],
+  },
   'link-previews': {
     table: 'link_previews',
     columns: [

@@ -16,7 +16,7 @@ type Props = {
 const canShare = () => typeof navigator !== 'undefined' && 'share' in navigator;
 
 /**
- * A note's share link (ADR 0020): makes it, hands it over, and ends it. Anyone with the link
+ * A note's share link (ADR 0021): makes it, hands it over, and ends it. Anyone with the link
  * reads the note as it is now; someone with an account here can add it to their notes.
  */
 export function SharePanel({ note, className }: Props) {

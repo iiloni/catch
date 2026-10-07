@@ -10,7 +10,7 @@ type Props = {
 };
 
 /**
- * Marks a note that is shared (ADR 0020): someone else's in this gallery says whose it is,
+ * Marks a note that is shared (ADR 0021): someone else's in this gallery says whose it is,
  * and one of the user's own says it has a link. Nothing for any other note.
  */
 export function NoteShareBadge({ note, className }: Props) {

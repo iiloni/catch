@@ -22,6 +22,7 @@ import { shapeRoutes } from './routes/shapes';
 import { noteShareRoutes, sharedNoteRoutes, shareLinkRoutes } from './routes/sharing';
 import { noteTagRoutes, tagRoutes } from './routes/tags';
 import { updateRoutes } from './routes/updates';
+import { vaultRoutes } from './routes/vault';
 
 /** JSON bodies are read into memory whole. The largest real one is a batch of imported notes. */
 export const MAX_JSON_BODY_BYTES = 16 * 1024 * 1024;
@@ -66,7 +67,7 @@ export function createApp() {
           ...messages.map((message) =>
             message
               .replace(/([?&]access=)[^&\s]+/g, '$1[redacted]')
-              // A share link's token is all it takes to read the note (ADR 0020).
+              // A share link's token is all it takes to read the note (ADR 0021).
               .replace(/(\/(?:api\/shares|s)\/)[A-Za-z0-9_-]{43}/g, '$1[redacted]'),
           ),
         ),
@@ -140,6 +141,7 @@ export function createApp() {
     .route('/shared-notes', sharedNoteRoutes)
     .route('/shares', shareLinkRoutes)
     .route('/push', pushRoutes)
+    .route('/vault', vaultRoutes)
     .route('/updates', updateRoutes)
     .route('/shapes', shapeRoutes);
 

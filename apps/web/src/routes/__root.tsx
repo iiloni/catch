@@ -3,6 +3,7 @@ import {
   type ErrorComponentProps,
   Outlet,
   useNavigate,
+  useRouterState,
 } from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
 import { useEffect } from 'react';
@@ -14,6 +15,7 @@ import { parseAppLink, watchAppLinks } from '@/lib/appLinks';
 import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
+import { headerPills } from '@/lib/headerState';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
 import { watchNativeShares } from '@/lib/nativeShares';
 import { prepareShare } from '@/lib/receiveShare';
@@ -41,8 +43,9 @@ function RootError({ error, reset }: ErrorComponentProps) {
 
 // Toasts drop in at the top, clear of the dock and the controls that float above it.
 const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
-// A phone's header has no free middle, so there they sit below it instead of over its controls.
-const mobileToastOffset = { top: 'calc(var(--safe-top) + var(--header-height) + 0.75rem)' };
+// A phone's header has no free middle once it is glass pills, so there they sit below it
+// instead of over its controls. Under the flat header that spot is the large title's.
+const belowHeaderToastOffset = { top: 'calc(var(--safe-top) + var(--header-height) + 0.75rem)' };
 
 function Root() {
   const navigate = useNavigate();
@@ -128,11 +131,20 @@ function Root() {
   useApplyTheme();
   useSystemBarsStyle();
   useBackButton();
+  // An open note covers a phone's page, and its own top bar is always pills.
+  const noteOpen = useRouterState({
+    select: (state) => Boolean((state.location.search as { note?: string }).note),
+  });
+  const pills = headerPills.use() || noteOpen;
   return (
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
         <Outlet />
-        <Toaster position="top-center" offset={toastOffset} mobileOffset={mobileToastOffset} />
+        <Toaster
+          position="top-center"
+          offset={toastOffset}
+          mobileOffset={pills ? belowHeaderToastOffset : toastOffset}
+        />
       </TooltipProvider>
     </MotionConfig>
   );

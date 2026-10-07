@@ -33,12 +33,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
     && chown node:node /workspace
 CMD ["sh", "scripts/dev-entrypoint.sh"]
 
+# The image holds the server and the web app only: the public site (apps/site, ADR 0020)
+# is neither installed nor built here.
 FROM base AS build
 ARG CATCH_CHANNEL=dev
 COPY . .
 RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
     export PNPM_CONFIG_STORE_DIR=/pnpm-store \
-    && pnpm install --frozen-lockfile \
+    && pnpm install --frozen-lockfile --filter '@catch/server...' --filter '@catch/web...' \
     && pnpm --filter @catch/web build \
     && pnpm --filter @catch/server build \
     && pnpm --filter @catch/server deploy --prod --legacy /out

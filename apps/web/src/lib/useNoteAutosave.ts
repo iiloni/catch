@@ -1,6 +1,7 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { updateNote } from './notes';
+import { getNote, updateNote } from './notes';
+import { beforeVaultLock } from './vault';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -21,6 +22,8 @@ export function useNoteAutosave(noteId: string) {
     const content = pending.current;
     if (!content) return;
     pending.current = null;
+    // Deleted elsewhere, or in a vault that has since locked: there is nothing to save to.
+    if (!getNote(noteId)) return;
     const current = ++generation.current;
     updateNote(noteId, { content }).isPersisted.promise.then(
       () => {
@@ -43,6 +46,11 @@ export function useNoteAutosave(noteId: string) {
   );
 
   useEffect(() => flush, [flush]);
+  // A vault note must be saved while its key is still here to seal it with.
+  useEffect(() => {
+    beforeVaultLock.add(flush);
+    return () => void beforeVaultLock.delete(flush);
+  }, [flush]);
 
   return { state, save, flush };
 }

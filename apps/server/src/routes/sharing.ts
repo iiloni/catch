@@ -29,7 +29,7 @@ async function currentTxid(tx: Tx): Promise<number> {
 
 const noteParam = zValidator('param', z.object({ noteId: z.uuid() }));
 
-/** The owner's side: a note's link, made and removed through the outbox (ADR 0020). */
+/** The owner's side: a note's link, made and removed through the outbox (ADR 0021). */
 export const noteShareRoutes = new Hono<AppEnv>()
   .use(requireUser)
   .put('/:noteId', noteParam, zValidator('json', createNoteShareSchema), async (c) => {
@@ -147,7 +147,7 @@ async function firstPosition(tx: Tx, userId: string) {
 }
 
 /**
- * What a share link opens (ADR 0020). The token is the whole of the permission to read, so
+ * What a share link opens (ADR 0021). The token is the whole of the permission to read, so
  * reading takes no account: these routes sit outside `requireUser`, and only adding the
  * note to a gallery asks for one.
  */

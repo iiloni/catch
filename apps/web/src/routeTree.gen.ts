@@ -30,6 +30,7 @@ import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/g
 import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsTagsRouteImport } from './routes/_app/settings/tags'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
+import { Route as AppSettingsVaultRouteImport } from './routes/_app/settings/vault'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 
@@ -138,6 +139,11 @@ const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
   path: '/update',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsVaultRoute = AppSettingsVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
   id: '/backups',
   path: '/backups',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings/vault': typeof AppSettingsVaultRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings/vault': typeof AppSettingsVaultRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/tags': typeof AppSettingsTagsRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
+  '/_app/settings/vault': typeof AppSettingsVaultRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
+    | '/settings/vault'
     | '/settings/'
     | '/settings/admin/backups'
     | '/settings/admin/users'
@@ -267,6 +277,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
+    | '/settings/vault'
     | '/settings'
     | '/settings/admin/backups'
     | '/settings/admin/users'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/_app/settings/notifications'
     | '/_app/settings/tags'
     | '/_app/settings/update'
+    | '/_app/settings/vault'
     | '/_app/settings/'
     | '/_app/settings/admin/backups'
     | '/_app/settings/admin/users'
@@ -455,6 +467,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsUpdateRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/vault': {
+      id: '/_app/settings/vault'
+      path: '/vault'
+      fullPath: '/settings/vault'
+      preLoaderRoute: typeof AppSettingsVaultRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/admin/backups': {
       id: '/_app/settings/admin/backups'
       path: '/backups'
@@ -493,6 +512,7 @@ interface AppSettingsRouteChildren {
   AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsTagsRoute: typeof AppSettingsTagsRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
+  AppSettingsVaultRoute: typeof AppSettingsVaultRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
@@ -504,6 +524,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsTagsRoute: AppSettingsTagsRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
+  AppSettingsVaultRoute: AppSettingsVaultRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
 

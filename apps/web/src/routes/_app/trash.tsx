@@ -23,6 +23,7 @@ import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/trash')({
   component: TrashPage,
@@ -31,11 +32,13 @@ export const Route = createFileRoute('/_app/trash')({
 function TrashPage() {
   const { open } = useOpenNote();
   const [confirming, setConfirming] = useState(false);
-  const { data: notes = [], isLoading } = useLiveQuery({
+  const { data: plainNotes = [], isLoading } = useLiveQuery({
     query: (q) =>
       q.from({ note: notesCollection }).where(({ note }) => not(isNull(note.deletedAt))),
   });
-  const awaitingSync = useAwaitingSync(isLoading, notes.length);
+  const vault = useVaultView();
+  const notes = vault ? vault.filter((note) => note.deletedAt) : plainNotes;
+  const awaitingSync = useAwaitingSync(isLoading && !vault, notes.length);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
   const gutterShift = usePageGutterShift(PAGE_MAX);
@@ -49,7 +52,7 @@ function TrashPage() {
   return (
     <>
       <TabPageHeader
-        title="Trash"
+        title={vault ? 'Vault trash' : 'Trash'}
         leading={<BackToGallery />}
         trailing={
           notes.length > 0 && (

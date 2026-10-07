@@ -78,6 +78,7 @@ import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/li
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
+import { isVaultNote, openIfVaultNote, useVaultNote } from '@/lib/vault';
 import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
@@ -94,21 +95,29 @@ type Props = {
  * page narrows under the pane, so its cards move and a morph to or from them would chase them.
  */
 export function NoteEditorOverlay({ noteId }: Props) {
-  const { close } = useOpenNote();
+  const { open, close } = useOpenNote();
   const { data: matches = [], isReady } = useLiveQuery(
     (q) => q.from({ note: notesCollection }).where(({ note }) => eq(note.id, noteId ?? '')),
     [noteId],
   );
-  // A note someone shared opens like one of the user's own, to be read (ADR 0020).
+  // A note in the unlocked vault is not in the notes collection; locking the vault closes it.
+  const vaultNote = useVaultNote(noteId);
+  // A note someone shared opens like one of the user's own, to be read (ADR 0021).
   const shared = useSharedNotes().notes;
   const sharedReady = useSharedNotesReady();
-  const note = matches[0] ?? shared.find((candidate) => candidate.id === noteId);
+  const note = matches[0] ?? vaultNote ?? shared.find((candidate) => candidate.id === noteId);
 
   // A deleted or unknown note id in the URL closes the editor. So does a shared note whose
-  // owner stops sharing it or moves it to the trash while it is open.
+  // owner stops sharing it or moves it to the trash while it is open. One this editor never
+  // showed may be a vault note asked for from outside, by its reminder or a reload: that
+  // enters the vault, asking for its password if need be, and opens the note there.
+  const shown = useRef<string | null>(null);
+  if (note) shown.current = note.id;
   useEffect(() => {
-    if (noteId && isReady && sharedReady && !note) close();
-  }, [noteId, isReady, sharedReady, note, close]);
+    if (!noteId || !isReady || !sharedReady || note) return;
+    if (shown.current !== noteId) openIfVaultNote(noteId, () => open(noteId));
+    close();
+  }, [noteId, isReady, sharedReady, note, open, close]);
 
   return (
     <AnimatePresence>
@@ -753,7 +762,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
                     </>
                   )}
-                  {editable && (
+                  {editable && !isVaultNote(note.id) && (
                     <Popover>
                       <PopoverTrigger asChild>
                         <IconButton

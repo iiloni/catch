@@ -5,18 +5,53 @@ import {
   attachmentSchema,
   attachmentUrl,
   MAX_ATTACHMENT_BYTES,
+  type Note,
   removeAttachmentBlocks,
+  VAULT_FILE_NAME,
+  VAULT_FILE_TYPE,
+  type VaultFile,
 } from '@catch/shared';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
-import { forgetAttachmentBlob, getAttachmentBlob, storeAttachmentBlob } from './attachmentFiles';
+import {
+  forgetAttachmentBlob,
+  getAttachmentBlob,
+  openSealedFile,
+  storeAttachmentBlob,
+  storeSealedBlob,
+} from './attachmentFiles';
+import { getAuthToken } from './auth';
 import { attachmentsCollection, notesCollection, useAttachments, write } from './collections';
+import { compatibleFetch } from './compatibility';
 import { editorControls, editorNote } from './dockState';
 import type { ImportBatch } from './notes';
+import { getServerUrl } from './serverUrl';
+import { makeThumbnail } from './thumbnails';
+import {
+  changeVaultNote,
+  changeVaultNoteFiles,
+  getSealedFiles,
+  getVaultFiles,
+  getVaultNote,
+  isVaultNote,
+  vaultFileKey,
+  vaultFileNote,
+  vaultNotes,
+} from './vault';
+import { sealedFileSize, sealFile } from './vaultCrypto';
 
-export const useNoteAttachments = (noteId: string) =>
-  useAttachments().filter((file) => file.noteId === noteId && !file.deletedAt);
+/**
+ * A note's files. A vault note's are the ones sealed inside it (ADR 0020): the rows that
+ * hold their bytes say nothing of what they are, beyond whether one has been removed.
+ */
+export function useNoteAttachments(noteId: string) {
+  const rows = useAttachments();
+  vaultNotes.use();
+  if (!isVaultNote(noteId)) return rows.filter((file) => file.noteId === noteId && !file.deletedAt);
+  const removed = new Set(rows.filter((row) => row.deletedAt).map((row) => row.id));
+  return getVaultFiles(noteId).filter((file) => !removed.has(file.id));
+}
 
 export function useRemovedAttachmentIds(noteId: string | undefined) {
   const files = useAttachments();
@@ -58,6 +93,7 @@ async function storeAttachment(
   signal?: AbortSignal,
 ) {
   signal?.throwIfAborted();
+  if (isVaultNote(noteId)) return { attachment: await storeVaultFile(noteId, file), batch: null };
   const note = notesCollection.get(noteId);
   if (!note || note.deletedAt) throw new Error('This note is no longer editable');
   if (!file.size) throw new Error('The file is empty');
@@ -94,6 +130,71 @@ async function storeAttachment(
   };
 }
 
+/** The row that holds a sealed file's bytes. The server learns its size and its note. */
+const sealedRow = (id: string, note: { id: string; userId: string }, size: number): Attachment => ({
+  id,
+  noteId: note.id,
+  userId: note.userId,
+  name: VAULT_FILE_NAME,
+  mimeType: VAULT_FILE_TYPE,
+  size,
+  kind: 'file',
+  status: 'pending',
+  sourceId: null,
+  createdAt: new Date(),
+  deletedAt: null,
+});
+
+/**
+ * Adds a file to a vault note: sealed here, with a thumbnail made here, since the server
+ * can read neither. What the file is called and what it is go inside the note.
+ */
+async function storeVaultFile(noteId: string, file: File): Promise<Attachment> {
+  const key = vaultFileKey();
+  const note = getVaultNote(noteId);
+  if (!key || !note || note.deletedAt) throw new Error('This note is no longer editable');
+  if (!file.size) throw new Error('The file is empty');
+  if (sealedFileSize(file.size) > MAX_ATTACHMENT_BYTES)
+    throw new Error('Choose a file smaller than 100 MB');
+  const mimeType = file.type.split(';')[0] || 'application/octet-stream';
+  const kind = attachmentKind(mimeType);
+  const id = uuidv7();
+  const thumbnail = await makeThumbnail(file, kind);
+  const entry: VaultFile = {
+    id,
+    name: file.name.slice(0, 255) || 'Attachment',
+    mimeType,
+    size: file.size,
+    kind,
+    createdAt: new Date(),
+    thumbnailId: thumbnail ? uuidv7() : null,
+    sealId: id,
+  };
+  const rows = [sealedRow(id, note, sealedFileSize(file.size))];
+  await storeSealedBlob(id, await sealFile(key, note.userId, id, 'content', file), true);
+  if (thumbnail && entry.thumbnailId) {
+    rows.push(sealedRow(entry.thumbnailId, note, sealedFileSize(thumbnail.size)));
+    await storeSealedBlob(
+      entry.thumbnailId,
+      await sealFile(key, note.userId, id, 'thumbnail', thumbnail),
+      true,
+    );
+  }
+  // The vault may have locked, or the note gone, while the file was being sealed.
+  if (!getVaultNote(noteId) || getVaultNote(noteId)?.deletedAt) {
+    for (const row of rows) await forgetAttachmentBlob(row.id);
+    throw new Error('This note is no longer editable');
+  }
+  const transaction = write(() => {
+    attachmentsCollection.insert(rows);
+    changeVaultNoteFiles(noteId, (files) => [...files, entry]);
+  });
+  transaction.isPersisted.promise.catch(() => toast.error(`${entry.name} could not be uploaded`));
+  const added = getVaultFiles(noteId).find((item) => item.id === id);
+  if (!added) throw new Error('This note is no longer editable');
+  return added;
+}
+
 export async function attachFiles(
   noteId: string,
   files: readonly File[],
@@ -115,6 +216,18 @@ export async function attachFiles(
 export function renameAttachment(id: string, name: string) {
   const value = name.trim();
   if (!value || value.length > 255) return;
+  const vaultNote = vaultFileNote(id);
+  if (vaultNote) {
+    write(() =>
+      changeVaultNoteFiles(vaultNote, (files) =>
+        files.map((file) => (file.id === id ? { ...file, name: value } : file)),
+      ),
+    );
+    return;
+  }
+  // A sealed file's row never carries its name: with the vault locked there is nothing to rename.
+  const row = attachmentsCollection.get(id);
+  if (!row || !notesCollection.has(row.noteId)) return;
   write(() =>
     attachmentsCollection.update(id, (draft) => {
       draft.name = value;
@@ -125,6 +238,10 @@ export function renameAttachment(id: string, name: string) {
 export function removeAttachment(attachment: Attachment) {
   const controls = editorNote.get()?.id === attachment.noteId ? editorControls.get() : null;
   controls?.removeAttachment(attachment.id);
+  if (isVaultNote(attachment.noteId)) {
+    removeVaultFile(attachment, controls?.getContent());
+    return;
+  }
   const transaction = write(() => {
     attachmentsCollection.update(attachment.id, (draft) => {
       draft.deletedAt = new Date();
@@ -143,13 +260,38 @@ export function removeAttachment(attachment: Attachment) {
   );
 }
 
+function removeVaultFile(attachment: Attachment, content: Note['content'] | undefined) {
+  const noteId = attachment.noteId;
+  const thumbnailId = getSealedFiles(noteId).find((file) => file.id === attachment.id)?.thumbnailId;
+  const rows = [attachment.id, ...(thumbnailId ? [thumbnailId] : [])].filter((id) =>
+    attachmentsCollection.has(id),
+  );
+  const transaction = write(() => {
+    if (rows.length > 0) {
+      attachmentsCollection.update(rows, (drafts) => {
+        for (const draft of drafts) draft.deletedAt = new Date();
+      });
+    }
+    changeVaultNoteFiles(noteId, (files) => files.filter((file) => file.id !== attachment.id));
+    changeVaultNote(noteId, (draft) => {
+      draft.content = removeAttachmentBlocks(content ?? draft.content, attachment.id);
+      draft.updatedAt = new Date();
+    });
+  });
+  void transaction.isPersisted.promise.then(
+    async () => {
+      for (const id of rows) await forgetAttachmentBlob(id);
+    },
+    () => {},
+  );
+}
+
 export async function downloadAttachment(attachment: Attachment) {
-  const local = await getAttachmentBlob(attachment.id);
+  const local = vaultFileNote(attachment.id)
+    ? await openSealedFile(attachment.id)
+    : await getAttachmentBlob(attachment.id);
   let blob = local;
   if (!blob) {
-    const { getAuthToken } = await import('./auth');
-    const { getServerUrl } = await import('./serverUrl');
-    const { compatibleFetch } = await import('./compatibility');
     const response = await compatibleFetch(
       `${getServerUrl()}/api/attachments/${attachment.id}/content?download=true`,
       { headers: { Authorization: `Bearer ${getAuthToken() ?? ''}` } },

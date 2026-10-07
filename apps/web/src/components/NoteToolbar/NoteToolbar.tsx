@@ -35,6 +35,7 @@ import {
 import { isSharedNote, removeSharedNote } from '@/lib/sharing';
 import { setPrimaryTag, useNoteColor } from '@/lib/tags';
 import { cn } from '@/lib/utils';
+import { isVaultNote } from '@/lib/vault';
 
 type Props = {
   note: Note;
@@ -45,7 +46,7 @@ type Props = {
 
 /**
  * Actions for one note. Trashed notes can only be restored or deleted, and a note someone
- * else shared (ADR 0020) only archived or removed.
+ * else shared (ADR 0021) only archived or removed.
  */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
@@ -167,20 +168,23 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             />
           </PopoverContent>
         </Popover>
-        <Popover open={sharing} onOpenChange={setSharing}>
-          <PopoverTrigger asChild>
-            <IconButton label="Share" onClick={() => haptics.toggle()}>
-              <Share2 className={cn(isShared && 'fill-current')} />
-            </IconButton>
-          </PopoverTrigger>
-          <PopoverContent
-            aria-label="Share"
-            className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <SharePanel note={note} />
-          </PopoverContent>
-        </Popover>
+        {/* A link would hand the server a vault note to read, which it must never have. */}
+        {!isVaultNote(note.id) && (
+          <Popover open={sharing} onOpenChange={setSharing}>
+            <PopoverTrigger asChild>
+              <IconButton label="Share" onClick={() => haptics.toggle()}>
+                <Share2 className={cn(isShared && 'fill-current')} />
+              </IconButton>
+            </PopoverTrigger>
+            <PopoverContent
+              aria-label="Share"
+              className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SharePanel note={note} />
+            </PopoverContent>
+          </Popover>
+        )}
         {note.isArchived ? (
           <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
             <ArchiveRestore />

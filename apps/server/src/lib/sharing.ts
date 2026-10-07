@@ -60,7 +60,7 @@ export async function sharedSnapshot(tx: Tx, noteId: string) {
 }
 
 /**
- * Rewrites the copies of a note in the galleries it was added to (ADR 0020). Call it in the
+ * Rewrites the copies of a note in the galleries it was added to (ADR 0021). Call it in the
  * transaction of any change to what a reader sees: the note's content, color or trash, its
  * primary tag, or its files. Returns the links each reader has yet to get a preview of, to
  * queue once the transaction commits. A note nobody added costs one indexed lookup.

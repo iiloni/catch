@@ -63,9 +63,11 @@ commit messages, but choose release versions explicitly.
   A release reuses successful CI for its exact tagged commit, requiring `check` and both
   E2E projects to have succeeded. It waits up to 30 minutes for queued or running CI.
   If no run appears within a minute, it requests CI on the release tag; this covers an
-  intermediate commit in a batch push that only tested the tip. Without a previous pass,
-  failed or canceled CI blocks release until CI is rerun successfully. No release runs
-  its own copy of E2E.
+  intermediate commit in a batch push that only tested the tip. It does the same at once
+  for a commit whose only run is green without E2E, which is what a documentation-only
+  push to main leaves behind (see [CI](ci.md#documentation-only-changes)). Without a
+  previous pass, failed or canceled CI blocks release until CI is rerun successfully. No
+  release runs its own copy of E2E.
 - `tag-release.yml`: manual channel and version-bump inputs call `scripts/release.sh`,
   create its annotated tag on GitHub, then dispatch `release.yml` on that tag. Requests
   queue without cancellation and fetch full history and tags before choosing the next version.
@@ -360,12 +362,8 @@ the output with `./scripts/release.sh changelog <tag>` and edit the release on G
 
 Keep a standalone deployment directory on the server, for example `~/services/catch/`,
 with `compose.yaml` and an owner-only `.env`. The server does not need a Git checkout.
-Copy the generic `docker-compose.yml` and `.env.example` there as a starting point, then
-replace the app's `build:` block with:
-
-```yaml
-image: ${CATCH_IMAGE:?Set CATCH_IMAGE}
-```
+Copy the generic `docker-compose.yml` and `.env.example` there as a starting point. The
+Compose file runs `ghcr.io/iiloni/catch:stable` unless `CATCH_IMAGE` names another image.
 
 Choose an exact release or channel alias in the server's `.env`:
 

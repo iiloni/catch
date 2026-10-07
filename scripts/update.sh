@@ -50,6 +50,22 @@ if [[ -f Dockerfile && -d apps/server ]]; then
     git pull "$@"
 fi
 
+# A checkout that neither builds its source nor names an image would start whatever
+# `stable` is, which can be older than the source just pulled and than the database.
+if [[ -f Dockerfile && -d apps/server ]] \
+    && [[ -z "${COMPOSE_FILE:-}${CATCH_IMAGE:-}" ]] \
+    && ! grep -qsE '^(COMPOSE_FILE|CATCH_IMAGE)=' .env; then
+    cat >&2 <<'MESSAGE'
+
+This checkout no longer builds Catch by default: docker-compose.yml runs the published
+image. Choose one in .env, then run this again:
+
+  COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml   # keep building this source
+  CATCH_IMAGE=ghcr.io/iiloni/catch:stable                    # run the published image
+MESSAGE
+    exit 1
+fi
+
 echo
 echo "Pulling images..."
 docker compose pull --ignore-buildable

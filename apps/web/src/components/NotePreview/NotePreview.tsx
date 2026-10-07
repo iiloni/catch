@@ -17,7 +17,7 @@ type Props = {
    */
   variant?: Variant;
   /**
-   * The preview is all its reader gets, as on a share link's page (ADR 0020): links open
+   * The preview is all its reader gets, as on a share link's page (ADR 0021): links open
    * and tables are drawn, where a card or an opening editor leaves both to the editor.
    */
   reading?: boolean;

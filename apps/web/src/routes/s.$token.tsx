@@ -19,7 +19,7 @@ import { currentPath, getAuthToken } from '@/lib/auth';
 import { getServerUrl } from '@/lib/serverUrl';
 
 /**
- * What a share link opens (ADR 0020): the note as it is now, to read. It asks for no
+ * What a share link opens (ADR 0021): the note as it is now, to read. It asks for no
  * account, so nothing here may assume one; someone signed in can add the note to their
  * gallery, where it keeps following its owner's changes.
  */

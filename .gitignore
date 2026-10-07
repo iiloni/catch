@@ -11,3 +11,9 @@ coverage/
 .tanstack/
 test-results/
 playwright-report/
+.next/
+.wrangler/
+apps/site/out/
+.source/
+next-env.d.ts
+apps/site/src/generated/

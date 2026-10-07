@@ -6,7 +6,7 @@ import { type Note, noteColorSchema, noteContentSchema, notePositionSchema } fro
 export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
 /**
- * A note's share link (ADR 0020), at most one, so the note's id is its key. The device makes
+ * A note's share link (ADR 0021), at most one, so the note's id is its key. The device makes
  * the token, so a link can be made offline and copied again later.
  */
 export const noteShareSchema = z.object({

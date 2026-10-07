@@ -31,6 +31,20 @@ run side by side. See [WORKTREES.md](WORKTREES.md).
 `./scripts/dev.sh help` lists every command, including `logs`, `psql`, `shell`, `seed` and
 `reset`.
 
+## The public site
+
+The site at `catchnotes.site` lives in `apps/site`: the marketing page, the documentation
+(`content/docs`) and the changelog. It is not part of the stack, so start it when you work
+on it:
+
+```bash
+./scripts/dev.sh site          # prints its URL; hot reload is on
+./scripts/dev.sh screenshots   # recapture its pictures of the app from the running stack
+```
+
+`./scripts/dev.sh check` builds it with everything else. [ADR 0020](docs/decisions/0020-public-site.md)
+explains how it is put together.
+
 ## Check your changes
 
 ```bash

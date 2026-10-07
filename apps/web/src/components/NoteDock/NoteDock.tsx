@@ -241,7 +241,7 @@ export function NoteDock() {
       },
     ];
   } else if (note && shared) {
-    // Someone else's note is read here (ADR 0020): all there is to do is put it away.
+    // Someone else's note is read here (ADR 0021): all there is to do is put it away.
     actions = [
       {
         id: 'remove',

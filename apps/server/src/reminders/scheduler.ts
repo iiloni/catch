@@ -1,8 +1,13 @@
-import { advanceReminder, reminderFireTime, reminderZone } from '@catch/shared';
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import {
+  advanceReminder,
+  reminderFireTime,
+  reminderZone,
+  VAULT_REMINDER_TEXT,
+} from '@catch/shared';
+import { and, asc, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import { isRestoring } from '../backups/service';
 import { db } from '../db/client';
-import { notes, reminderSettings, reminders } from '../db/schema';
+import { notes, reminderSettings, reminders, vaultNotes } from '../db/schema';
 import { notifyUser } from '../push';
 import { reminderMessage } from './message';
 
@@ -34,18 +39,29 @@ async function fireBatch(now: Date) {
     .select({
       reminder: reminders,
       text: notes.searchText,
+      sealed: vaultNotes.id,
       userTimeZone: reminderSettings.timeZone,
     })
     .from(reminders)
-    .innerJoin(notes, eq(notes.id, reminders.noteId))
+    .leftJoin(notes, and(eq(notes.id, reminders.noteId), eq(notes.userId, reminders.userId)))
+    .leftJoin(
+      vaultNotes,
+      and(eq(vaultNotes.id, reminders.noteId), eq(vaultNotes.userId, reminders.userId)),
+    )
     .leftJoin(reminderSettings, eq(reminderSettings.userId, reminders.userId))
     // A note in the trash keeps its reminder as it is: restored within a day of the time, it
-    // still rings; later, it moves on silently.
-    .where(and(lte(reminders.fireAt, now), isNull(notes.deletedAt)))
+    // still rings; later, it moves on silently. The trash of the vault is sealed from the
+    // server, so a device takes a vault note's reminder off when it trashes the note.
+    .where(
+      and(
+        lte(reminders.fireAt, now),
+        or(and(isNotNull(notes.id), isNull(notes.deletedAt)), isNotNull(vaultNotes.id)),
+      ),
+    )
     .orderBy(asc(reminders.fireAt))
     .limit(BATCH);
 
-  for (const { reminder: read, text, userTimeZone } of due) {
+  for (const { reminder: read, text, sealed, userTimeZone } of due) {
     const rings = await db.transaction(async (tx) => {
       // Read again under a lock, and moved on from what is there now: a save since the
       // batch was read may have changed the schedule and left its time as it was, and
@@ -69,7 +85,9 @@ async function fireBatch(now: Date) {
       return rings;
     });
     if (!rings) continue;
-    await notifyUser(read.userId, reminderMessage(read.noteId, text)).catch((error: unknown) =>
+    // The server cannot read a vault note, so its notification only says there is one.
+    const words = sealed ? VAULT_REMINDER_TEXT : (text ?? '');
+    await notifyUser(read.userId, reminderMessage(read.noteId, words)).catch((error: unknown) =>
       console.error('Could not send a reminder', error),
     );
   }

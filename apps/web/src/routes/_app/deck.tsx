@@ -8,11 +8,13 @@ import { ColumnManager } from '@/components/NoteBoard/ColumnManager';
 import { NoteBoard } from '@/components/NoteBoard/NoteBoard';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/deck')({
   component: DeckPage,
@@ -25,7 +27,7 @@ function DeckPage() {
   const { data: columns = [], isLoading: columnsLoading } = useLiveQuery({
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
-  const { data: notes = [], isLoading } = useLiveQuery({
+  const { data: plainNotes = [], isLoading } = useLiveQuery({
     query: (q) =>
       q
         .from({ note: notesCollection })
@@ -33,7 +35,12 @@ function DeckPage() {
           and(isNull(note.deletedAt), eq(note.isArchived, false), not(isNull(note.status))),
         ),
   });
-  const awaitingSync = useAwaitingSync(isLoading || columnsLoading, columns.length);
+  // Inside the vault the board holds its notes; the columns are the same ones.
+  const vault = useVaultView();
+  const notes = vault
+    ? vault.filter((note) => !note.deletedAt && !note.isArchived && note.status !== null)
+    : plainNotes;
+  const awaitingSync = useAwaitingSync((isLoading && !vault) || columnsLoading, columns.length);
   const selection = useNoteSelection(
     [...notes].sort((a, b) => comparePositions(a.position, b.position)),
   );
@@ -41,19 +48,22 @@ function DeckPage() {
   return (
     <>
       <TabPageHeader
-        title="Deck"
+        title={vault ? 'Vault deck' : 'Deck'}
         selection={selectionHeader(selection, 'deck')}
         trailing={
-          <motion.button
-            type="button"
-            aria-label="Edit columns"
-            onClick={() => setManaging(true)}
-            whileTap={{ scale: 0.9 }}
-            transition={springs.snappy}
-            className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <Columns3Cog className="size-[22px]" aria-hidden />
-          </motion.button>
+          <>
+            <VaultToggle />
+            <motion.button
+              type="button"
+              aria-label="Edit columns"
+              onClick={() => setManaging(true)}
+              whileTap={{ scale: 0.9 }}
+              transition={springs.snappy}
+              className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <Columns3Cog className="size-[22px]" aria-hidden />
+            </motion.button>
+          </>
         }
       />
       <ColumnManager columns={columns} open={managing} onOpenChange={setManaging} />

@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { SHARE_PATH, shareTokenSchema } from '@catch/shared';
 
 /**
- * The Android app's own address scheme (ADR 0020). Android only hands an `https` link to an
+ * The Android app's own address scheme (ADR 0021). Android only hands an `https` link to an
  * app whose build names the link's host, and a Catch server's host is its owner's to choose,
  * so a web page passes its link to the app through this instead.
  */

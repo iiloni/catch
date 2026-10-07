@@ -26,8 +26,10 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
+import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
+import { pageBounceY } from '@/lib/scrollBounce';
 import { PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
@@ -154,17 +156,40 @@ export function TabPageHeader({
   const [collapsed, setCollapsed] = useState(() => scrollY.get() >= TITLE_COLLAPSE_AT);
   useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= TITLE_COLLAPSE_AT));
   // The expanded title follows the page; only the move into the corner is animated.
+  // That includes the page's bounce off its top edge; off the bottom, the title is in its corner.
   const titleScrollY = useTransform(
-    scrollY,
-    [0, TITLE_COLLAPSE_AT],
-    [TITLE_REST_Y, TITLE_REST_Y - TITLE_COLLAPSE_AT],
+    () =>
+      TITLE_REST_Y -
+      Math.min(Math.max(scrollY.get(), 0), TITLE_COLLAPSE_AT) +
+      Math.max(pageBounceY.get(), 0),
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
+  // The title turns the corner instead of cutting it: with five controls on a phone, a
+  // straight line between its two places runs through the leftmost one. So it moves aside
+  // before it rises into the row, and drops out of the row before it moves back.
+  const lead = { ...slide, delay: 0 };
+  const follow = { ...slide, delay: 0.1 };
+  const across = collapsed ? lead : follow;
+  const titleSlide = {
+    ...slide,
+    y: collapsed ? follow : lead,
+    left: across,
+    x: across,
+    marginLeft: across,
+    fontSize: across,
+    paddingInline: across,
+  };
   const branded = !leading && !collapsed && !selection;
   // What sits in the left corner stays over the page's edge while a note pane slides.
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
   const fittedTitle = useFittedTitle(title);
+
+  const pills = collapsed || Boolean(selection);
+  useEffect(() => {
+    headerPills.set(pills);
+    return () => headerPills.set(false);
+  }, [pills]);
 
   useEffect(() => {
     const stop = () => scrollAnimation.current?.stop();
@@ -248,7 +273,7 @@ export function TabPageHeader({
                 paddingInline: collapsed ? 14 : 0,
                 opacity: selection ? 0 : 1,
               }}
-              transition={slide}
+              transition={titleSlide}
             >
               <motion.span
                 aria-hidden

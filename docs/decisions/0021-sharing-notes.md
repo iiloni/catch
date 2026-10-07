@@ -1,4 +1,4 @@
-# 0020: Sharing a note with a link
+# 0021: Sharing a note with a link
 
 Status: accepted (2026-10-06)
 

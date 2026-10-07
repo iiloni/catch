@@ -5,7 +5,7 @@ import { noteSharesCollection, sharedNotesCollection, useSharedNotes, write } fr
 import { getServerUrl } from './serverUrl';
 
 /**
- * Whether a note is someone else's, added to this gallery from their share link (ADR 0020).
+ * Whether a note is someone else's, added to this gallery from their share link (ADR 0021).
  * Such a note is read here, not edited: only its pin, archive and place are the user's.
  */
 export function isSharedNote(note: Pick<Note, 'userId'>) {

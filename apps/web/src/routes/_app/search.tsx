@@ -16,6 +16,7 @@ import {
 } from '@/components/SearchFilters/SearchFilters';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import {
   boardColumnsCollection,
   notesCollection,
@@ -36,6 +37,7 @@ import { READING_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/search')({
   component: SearchPage,
@@ -53,12 +55,27 @@ function SearchPage() {
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
   const gutterShift = usePageGutterShift(READING_MAX);
-  const { data: own = [] } = useLiveQuery({
+  const [showArchived, setShowArchived] = usePersistentState(
+    'catch-search-show-archived',
+    z.boolean(),
+    true,
+  );
+  const { data: plainNotes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
-  // Notes other people shared are found with the user's own (ADR 0020).
+  // Search runs on the device, so inside the vault it reads the vault's opened notes.
+  const vault = useVaultView();
+  // Notes other people shared are found with the user's own (ADR 0021).
   const shared = useSharedNotes().notes;
-  const notes = useMemo(() => [...own, ...shared], [own, shared]);
+  const stored = useMemo(
+    () => (vault ? vault.filter((note) => !note.deletedAt) : [...plainNotes, ...shared]),
+    [vault, plainNotes, shared],
+  );
+  // Filtered ahead of the counts, so a tag's number is the notes its filter would show.
+  const notes = useMemo(
+    () => (showArchived ? stored : stored.filter((note) => !note.isArchived)),
+    [stored, showArchived],
+  );
   const { data: columns = [] } = useLiveQuery({
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
@@ -155,13 +172,19 @@ function SearchPage() {
               color={color}
               counts={counts}
               untaggedCount={untaggedCount}
+              showArchived={showArchived}
               onFilterChange={setFilter}
               onColorChange={setColor}
+              onShowArchivedChange={setShowArchived}
             />
           </SearchFilterPanel>
         )}
       </AnimatePresence>
-      <TabPageHeader title="Search" selection={selectionHeader(selection, place)} />
+      <TabPageHeader
+        title={vault ? 'Search the vault' : 'Search'}
+        selection={selectionHeader(selection, place)}
+        trailing={<VaultToggle />}
+      />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
         <ActiveSearchFilters
           tags={tags}
@@ -219,7 +242,8 @@ function SearchPage() {
                   </section>
                 ) : (
                   <p className="px-1 text-sm text-muted-foreground">
-                    Search words, browse a tag, or filter by color. Archived notes are included.
+                    Search words, browse a tag, or filter by color. Archived notes are{' '}
+                    {showArchived ? 'included' : 'hidden'}.
                   </p>
                 )
               ) : results.length > 0 ? (
@@ -256,7 +280,9 @@ function SearchPage() {
                 </section>
               ) : (
                 <EmptyState icon={SearchX} title="No matching notes">
-                  Try fewer words or remove a filter.
+                  {showArchived
+                    ? 'Try fewer words or remove a filter.'
+                    : 'Try fewer words, remove a filter or show archived notes.'}
                 </EmptyState>
               )}
             </SearchView>
