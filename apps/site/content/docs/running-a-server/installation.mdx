@@ -1,0 +1,103 @@
+---
+title: Install Catch
+description: Download the Compose files, set credentials and start the published image.
+---
+
+## Requirements
+
+You need:
+
+- Docker Engine and the Docker Compose plugin, with support for `docker compose up --wait` and `pull --ignore-buildable`.
+- A Linux host compatible with the release images, published for `linux/amd64` and `linux/arm64`.
+- Persistent disk space for Postgres, Electric, attachments and backups.
+- An HTTPS hostname and a reverse proxy. Clients need HTTP/2 at that proxy for sync connections to share the browser's connection pool.
+- Access to the image registries. GitHub access is also used for release metadata, APK updates and Electric's fallback source build. Browser push and link previews need their own outbound access.
+
+<Callout title="Sizing and version requirements need measurements">
+  The repository does not specify a tested minimum CPU count, RAM size, disk size or minimum Docker/Compose version. Size storage for your attachments and retained backups as well as the database, monitor actual use, and check that the commands above are available. Do not treat an invented minimum as a capacity guarantee.
+</Callout>
+
+## Download the deployment files
+
+Create a directory that will hold your Compose file, `.env` and helper scripts:
+
+```bash
+mkdir -p ~/services/catch
+cd ~/services/catch
+curl -fsSL -o compose.yaml https://raw.githubusercontent.com/iiloni/catch/main/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/iiloni/catch/main/.env.example
+curl -fsSLO https://raw.githubusercontent.com/iiloni/catch/main/scripts/backup.sh
+curl -fsSLO https://raw.githubusercontent.com/iiloni/catch/main/scripts/update.sh
+chmod 600 .env
+chmod +x backup.sh update.sh
+```
+
+Review the downloaded files before running them. These links use `main`; if you need a matching historical configuration, replace `main` in all four URLs with the chosen release tag, such as `v0.3.2`, after checking that release's files exist. Version numbers in this guide are examples, not claims about the latest release.
+
+The current `docker-compose.yml` already has an `image:` line for the **app** service. You do not replace a Catch `build:` block to install it. Older copies that build Catch from source need that app block replaced with:
+
+```yaml
+image: ${CATCH_IMAGE:-ghcr.io/iiloni/catch:stable}
+```
+
+Keep the rest of the app service. Electric has both `image:` and `build:` entries: its build is a fallback for the same upstream version, not a block you should convert to the Catch image.
+
+## Set your public address and credentials
+
+Generate three independent values:
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+Edit `.env` and replace the placeholders below with those values:
+
+```dotenv
+BETTER_AUTH_URL=https://notes.example.com
+BETTER_AUTH_SECRET=REPLACE_WITH_FIRST_RANDOM_VALUE
+POSTGRES_PASSWORD=REPLACE_WITH_SECOND_RANDOM_VALUE
+ELECTRIC_SECRET=REPLACE_WITH_THIRD_RANDOM_VALUE
+CATCH_IMAGE=ghcr.io/iiloni/catch:stable
+REGISTRATION=closed
+CATCH_BIND_ADDRESS=127.0.0.1
+CATCH_PORT=3000
+```
+
+This bind address is for a reverse proxy running on the same host. For a proxy in Docker, use the shared-network setup in [HTTPS and reverse proxies](/docs/running-a-server/https) instead.
+
+Do not leave `change-me` credentials. `BETTER_AUTH_SECRET` must be at least 32 characters. Preserve your credentials securely alongside off-server backups. Changing `POSTGRES_PASSWORD` in `.env` alone does not change the password inside an already initialized Postgres volume.
+
+The Compose file names its project `catch`. For a second installation, set a distinct `COMPOSE_PROJECT_NAME` before starting it, and use distinct hostname, port and storage. Named volumes are isolated by project; bind-mounted directories need separate paths too.
+
+## Start and verify
+
+From the deployment directory:
+
+```bash
+docker compose config --quiet
+docker compose pull --ignore-buildable
+docker compose up -d --wait
+curl --fail http://127.0.0.1:3000/api/health
+docker compose ps
+```
+
+`pull --ignore-buildable` skips services with a build configuration; the subsequent startup pulls or builds Electric as needed. See Docker's [pull reference](https://docs.docker.com/reference/cli/docker/compose/pull/). Its first fallback build can take longer and needs GitHub access.
+
+The app runs migrations before serving requests and waits for Postgres. The health endpoint confirms the app answers, but is not a complete end-to-end sync or backup check. Inspect `docker compose logs --tail=100 app postgres electric` if startup fails.
+
+Set up [HTTPS](/docs/running-a-server/https), then create the [first admin account](/docs/running-a-server/users) before letting the public reach the installation. Restrict access at the proxy, firewall or private network until that account exists.
+
+## Keep the data volumes
+
+| Volume | Contents |
+| --- | --- |
+| `postgres_data` | Accounts, notes, settings, tags, reminders and attachment metadata. |
+| `attachment_data` | Original attachment files and generated previews. |
+| `electric_data` | Electric's persistent sync state. |
+| `backup_data` | Whole-server backups and database-only recovery backups. |
+
+`docker compose down` keeps named volumes. `docker compose down -v` removes them and is not an ordinary restart or update command. Bind mounts can replace attachment and backup volumes; see [Configuration](/docs/running-a-server/configuration).
+
+Configure [backups](/docs/running-a-server/backups) before relying on the installation. You can leave the app running with `docker compose up -d`; the downloaded `update.sh` handles later image updates.

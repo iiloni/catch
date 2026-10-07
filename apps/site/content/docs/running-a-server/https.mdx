@@ -1,0 +1,86 @@
+---
+title: HTTPS and reverse proxies
+description: Expose the app securely without exposing Postgres or Electric.
+---
+
+Catch's container serves HTTP on port 3000. Put an HTTPS reverse proxy in front and set `BETTER_AUTH_URL` to the public HTTPS origin, for example `https://notes.example.com`.
+
+Use a dedicated hostname at `/`; the app's API, service worker and download URLs use root paths. A subpath deployment is not configured by the supplied files.
+
+## Proxy requirements
+
+- Serve HTTPS with a certificate accepted by users' browsers and Android devices.
+- Offer HTTP/2 to clients. Catch keeps several sync requests open; HTTP/1.1's connection limit can delay page loads and writes.
+- Forward the whole site, including `/api`, long-poll sync requests, file uploads and downloads.
+- Preserve authorization and Catch's request headers. Do not cache authenticated API/shape responses or strip the server's private cache controls.
+- Let `/sw.js` and `/build.json` retain their update cache rules.
+- Allow uploads large enough for attachment files and whole-server backup ZIPs. A proxy's body limit can reject them before Catch sees them; Catch separately limits ordinary JSON API requests to 16 MiB.
+
+The examples below are configuration starting points, not tested recipes for every proxy version. Adapt network addresses, certificates and limits to your environment, then test login, writes, sync, uploads and downloads.
+
+## Caddy on the Docker host
+
+Set in `.env`:
+
+```dotenv
+BETTER_AUTH_URL=https://notes.example.com
+CATCH_BIND_ADDRESS=127.0.0.1
+CATCH_PORT=3000
+```
+
+With Caddy installed on that same host, a Caddyfile can use:
+
+```text
+notes.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+Point the hostname's DNS to the server and configure Caddy's certificate issuance for your network. Caddy's [reverse proxy documentation](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) and [automatic HTTPS documentation](https://caddyserver.com/docs/automatic-https) explain forwarding and certificates. Caddy inside another container cannot use this loopback upstream to reach Catch; use a shared Docker network instead.
+
+## Traefik on a shared Docker network
+
+If your Traefik already uses an external Docker network named `proxy`, remove the app's host `ports:` block and add these entries to **app**, adapting the hostname and your certificate resolver:
+
+```yaml
+services:
+  app:
+    networks: [default, proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.catch.rule=Host(`notes.example.com`)
+      - traefik.http.routers.catch.tls=true
+      - traefik.http.routers.catch.tls.certresolver=letsencrypt
+      - traefik.http.services.catch.loadbalancer.server.port=3000
+
+networks:
+  default: {}
+  proxy:
+    name: proxy
+    external: true
+```
+
+Merge these into your file; keep the existing services, environments and volumes. The external network must already exist. Use unique router/service names if Traefik routes several Catch installations. Only the app joins `proxy`; Postgres and Electric stay on the private default network.
+
+## Trust the actual proxy address
+
+Catch uses the socket peer address for auth rate limiting. Behind a proxy, that is usually the proxy rather than the visitor. `TRUSTED_PROXIES` allows Catch to use that proxy's `X-Forwarded-For` to distinguish visitors.
+
+For a host proxy, the peer may be the Compose network's gateway. Discover the app's network and inspect it:
+
+```bash
+docker inspect "$(docker compose ps -q app)" --format '{{json .NetworkSettings.Networks}}'
+# Use the network name shown above:
+docker network inspect YOUR_COMPOSE_NETWORK
+```
+
+Set the real proxy peer address in `.env`, then recreate the app. Do not blindly copy an example gateway such as `172.18.0.1`. Prefer a specific address to a broad range; anything trusted can affect which client address is used. With several proxies, trust only the hops you control and make sure the edge sanitizes forwarded headers. Without this setting, visitors behind one proxy share a rate-limit bucket.
+
+## Verify before opening access
+
+```bash
+curl --fail https://notes.example.com/api/health
+```
+
+Create the first account through restricted access, sign in on another device, write a note and verify it syncs. Test an attachment and a backup download. Check the browser's network panel for HTTP/2. HTTPS being reachable does not prove the proxy is configured correctly for every operation.

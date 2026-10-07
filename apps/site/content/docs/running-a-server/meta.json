@@ -1,0 +1,15 @@
+{
+  "title": "Running a server",
+  "pages": [
+    "index",
+    "installation",
+    "configuration",
+    "https",
+    "users",
+    "updates",
+    "backups",
+    "restore",
+    "security",
+    "troubleshooting"
+  ]
+}
