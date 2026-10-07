@@ -43,6 +43,15 @@ import {
   unarchiveNotes,
 } from '@/lib/notes';
 import { setPrimaryTags } from '@/lib/tags';
+import { cn } from '@/lib/utils';
+
+/**
+ * On a phone a picker is a card as wide as the screen under the header, inset like the
+ * header's toolbars, rather than a popover hanging off its button: the width leaves the
+ * popover nowhere to go but between the insets.
+ */
+const PICKER_INSET = 12;
+const PICKER_WIDTH = 'w-[calc(100vw-1.5rem)]';
 
 type Place = 'gallery' | 'deck' | 'archive' | 'trash';
 
@@ -122,7 +131,12 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
         <PopoverTrigger asChild>
           <ToolbarButton label="Background color" icon={Palette} onClick={haptics.toggle} />
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={10} className="w-auto rounded-3xl p-3">
+        <PopoverContent
+          align="end"
+          sideOffset={10}
+          collisionPadding={PICKER_INSET}
+          className={cn(PICKER_WIDTH, 'rounded-3xl p-3 sm:w-auto')}
+        >
           {/* The selection stays, so a color can be tried and changed again. */}
           <ColorTagSelector
             value={sharedColor}
@@ -139,9 +153,9 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
         <PopoverContent
           align="end"
           sideOffset={10}
-          collisionPadding={16}
+          collisionPadding={PICKER_INSET}
           sticky="always"
-          className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+          className={cn(PICKER_WIDTH, 'rounded-3xl p-1 pb-2 sm:w-80')}
         >
           <TagPicker noteIds={ids} />
         </PopoverContent>

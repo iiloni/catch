@@ -104,11 +104,17 @@ export async function waitForCi(
     const passed = await passedCi(sha, input, options.jobs);
     if (passed) return passed;
     const runs = matchingRuns(sha, input);
-    if (runs.length && runs.every((run) => run.status === 'completed')) {
+    const finished = runs.length > 0 && runs.every((run) => run.status === 'completed');
+    // A green run without all three jobs is a documentation-only push, which skips E2E
+    // (scripts/change-scope.ts). It is no failure and no proof either, so the commit is
+    // tested on its tag like one that never had a run.
+    const untested = finished && runs.every((run) => run.conclusion === 'success');
+    if (finished && !(untested && options.start)) {
       throw new Error(`CI did not pass for ${sha}. Fix or rerun CI: ${runs[0].html_url}`);
     }
     // Allow the push event to create its CI run before requesting one on the release tag.
-    if (!runs.length && !requested && options.start && now() - startedAt >= 60_000) {
+    const unseen = !runs.length && now() - startedAt >= 60_000;
+    if ((untested || unseen) && !requested && options.start) {
       await options.start();
       requested = true;
     }

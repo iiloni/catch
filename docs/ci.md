@@ -13,8 +13,12 @@ and checks and both E2E projects succeed in the same run. A PR with only `run e2
 has a failing `validation` check after successful E2E, with a message that approval is
 required. A PR with neither label also has a failing `validation` check; its ordinary
 `check` job still reports whether development checks passed. Skipped E2E jobs do not satisfy
-the gate. Main pushes and manual CI requests always request the full suite. Release CI
+the gate. Main pushes and manual CI requests request the full suite. Release CI
 continues to reuse only a verified full pass for the exact main/tag commit.
+
+A change confined to documentation is the exception: it runs `check` and skips E2E, on
+its PR and on the push to `main` that follows. See
+[Documentation-only changes](#documentation-only-changes).
 
 Optional [AI code review](ai-reviews.md) is requested separately with the `ai review`
 label. It can run while a PR is a draft, is advisory, and does not authorize merging.
@@ -126,7 +130,7 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    and rely on the mandatory full suite before merge; do not run full local E2E as a
    routine finishing check. An explicit user request can also justify an early full run.
 2. Once functionality and design are approved for merging after tests pass, mark the PR
-   ready and add `merge on pass`:
+   ready and add `merge on pass` (for a documentation-only change this runs no E2E):
 
    ```bash
    gh pr ready <number>
@@ -167,6 +171,36 @@ requested E2E, or remove and reapply `run e2e`. Full merge validation also requi
 that event's original label state. Label changes trigger CI, so unrelated label edits can
 also rerun E2E while either test-requesting label is present.
 
+## Documentation-only changes
+
+A change needs no E2E when every file it touches is one the app, its image and its tests
+never load. [`scripts/change-scope.ts`](../scripts/change-scope.ts) holds the list:
+
+- `docs/**`
+- Markdown in the repository root (`README.md`, `AGENTS.md`, `DEPLOYMENT.md`, ...) and
+  under `branding/`
+- `.github/pull_request_template.md`, `LICENSE`, `.gitignore` and `cubic.yaml`
+
+Everything else counts as code, including Markdown anywhere else (an importer fixture is
+test input), workflows, scripts and the files CI itself runs from. A change that mixes the
+two is code. A renamed file counts under both its old and its new path, and a change the
+workflow cannot read counts as code. Add a path to the list only when nothing that runs
+reads it.
+
+For such a change:
+
+- `check` still runs: lint, type checks, unit tests and builds.
+- `merge on pass` does not start E2E, and `validation` passes on `check` alone. The label
+  is still required, because it records approval, so an unlabeled documentation PR fails
+  `validation` like any other.
+- `run e2e` still starts the full suite, and `validation` then waits for it.
+- The push to `main` skips E2E as well. That run is green without being a full pass, so a
+  release tagged on that commit requests the full suite on its tag and waits for it
+  (see [releases](releases.md)). Manual CI requests and merge groups always run everything.
+
+The change is read from GitHub's merge commit for a PR (against its base) and from the
+pushed range for `main`, so a PR is judged on everything it changes, not its last commit.
+
 ## What gets merged
 
 PR checkout uses GitHub's temporary merge commit, combining the PR branch with its base.
@@ -195,3 +229,35 @@ queued PRs. See [merge queues](https://docs.github.com/en/repositories/configuri
 Local work still must pass `./scripts/dev.sh check` before finishing. Local E2E should be
 targeted; full E2E runs on GitHub through `run e2e` when early coverage is justified,
 or through `merge on pass` before merging.
+
+## Deploying the site
+
+[`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
+Workers with static assets when `main` changes the site or its inputs, when a release tag
+is pushed (the changelog gains a version), and on request. It always builds `main` from a
+full clone, because the changelog is derived from tags and history, and fails if that
+changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds the
+site for them.
+
+The job is skipped until the repository is connected to Cloudflare, once:
+
+1. In Cloudflare, create an API token with **Account → Workers Scripts → Edit** for the
+   account that will host the site. The workflow uploads assets only; it does not manage DNS
+   or custom domains. See [Cloudflare's CI authentication guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+2. In the repository's **Settings → Secrets and variables → Actions**, add the secrets
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and set the variable
+   `CLOUDFLARE_SITE_ENABLED` to `true`. This replaces `CLOUDFLARE_PAGES_PROJECT`, which can
+   be removed if it was already set.
+3. Run the workflow from the Actions tab (`gh workflow run site.yml`). The first deploy
+   creates the `catch-site` Worker named in [`wrangler.jsonc`](../apps/site/wrangler.jsonc);
+   there is no Pages project to create and no Cloudflare Git integration to connect.
+4. In Cloudflare's **Workers & Pages**, select `catch-site`, then **Settings → Domains &
+   Routes → Add → Custom Domain**, and add `catchnotes.site`. Cloudflare creates the DNS
+   record and certificate. If the domain already points to a Pages project, remove that
+   project's custom domain and conflicting DNS record before attaching it to the Worker.
+   Open `https://catchnotes.site` once the certificate is active. See
+   [Cloudflare's custom domain guide](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+The Worker serves `apps/site/out` directly, with trailing-slash URLs matching Next.js's
+export and the exported `404.html` for missing pages. It has no Worker script or Next.js
+server. Pull requests still build without deploying.

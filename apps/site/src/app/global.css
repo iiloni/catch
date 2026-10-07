@@ -1,0 +1,286 @@
+@import "tailwindcss";
+/* Fumadocs reads the shadcn tokens below, so the docs and the marketing pages share them. */
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
+
+/*
+ * The app's theme (apps/web/src/styles.css), kept in step by hand: warm graphite neutrals,
+ * frosted glass and the note colors. Brand colors are not written here; the root layout sets
+ * them from branding/catch-brand-tokens.json.
+ */
+:root {
+  color-scheme: light;
+  --radius: 0.75rem;
+  --background: light-dark(oklch(0.965 0.008 85), oklch(0.205 0.01 70));
+  --foreground: light-dark(oklch(0.24 0.016 70), oklch(0.95 0.007 85));
+  --card: light-dark(oklch(1 0 0), oklch(0.255 0.012 70));
+  --card-foreground: var(--foreground);
+  --popover: light-dark(oklch(1 0 0), oklch(0.275 0.012 70));
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: light-dark(oklch(0.93 0.009 85), oklch(0.3 0.012 70));
+  --secondary-foreground: var(--foreground);
+  --muted: var(--secondary);
+  --muted-foreground: light-dark(oklch(0.52 0.014 70), oklch(0.72 0.01 85));
+  --accent: light-dark(oklch(0.93 0.012 85), oklch(0.32 0.015 70));
+  --accent-foreground: var(--foreground);
+  --destructive: light-dark(oklch(0.56 0.2 27), oklch(0.72 0.16 22));
+  --border: light-dark(oklch(0.885 0.01 85), oklch(0.34 0.012 70));
+  --input: var(--border);
+  --ring: var(--brand);
+
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-ring: var(--brand);
+  --sidebar-primary-foreground: var(--brand-foreground);
+
+  --brand: var(--brand-amber-primary);
+  --brand-foreground: #452904;
+  --brand-link: light-dark(#955000, #ffd278);
+  --brand-gradient: linear-gradient(
+    63.435deg,
+    var(--brand-amber-light) 0%,
+    var(--brand-amber-primary) 55%,
+    var(--brand-amber-deep) 100%
+  );
+
+  --glass: light-dark(oklch(0.99 0.005 85 / 0.66), oklch(0.29 0.012 70 / 0.6));
+  --glass-border: light-dark(oklch(0 0 0 / 0.07), oklch(1 0 0 / 0.1));
+  --glass-highlight: light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.08));
+  --glass-shadow: light-dark(oklch(0.3 0.025 70 / 0.18), oklch(0.08 0.01 70 / 0.55));
+}
+
+/* Fumadocs switches theme with a class; the tokens follow `color-scheme`, as in the app. */
+:root.dark {
+  color-scheme: dark;
+}
+
+[data-note-color] {
+  --note-bg: light-dark(oklch(0.925 0.06 var(--note-hue, 0)), oklch(0.35 0.07 var(--note-hue, 0)));
+  --note-accent: light-dark(
+    oklch(from var(--note-bg) 0.5 calc(c * 2) h),
+    oklch(from var(--note-bg) 0.78 calc(c * 1.5) h)
+  );
+}
+[data-note-color="default"] {
+  --note-bg: var(--card);
+}
+[data-note-color="red"] {
+  --note-hue: 25;
+}
+[data-note-color="orange"] {
+  --note-hue: 50;
+}
+[data-note-color="amber"] {
+  --note-hue: 72;
+}
+[data-note-color="yellow"] {
+  --note-bg: light-dark(oklch(0.95 0.085 100), oklch(0.39 0.075 90));
+}
+[data-note-color="lime"] {
+  --note-hue: 125;
+}
+[data-note-color="green"] {
+  --note-hue: 150;
+}
+[data-note-color="mint"] {
+  --note-hue: 168;
+}
+[data-note-color="teal"] {
+  --note-hue: 190;
+}
+[data-note-color="cyan"] {
+  --note-hue: 215;
+}
+[data-note-color="blue"] {
+  --note-hue: 245;
+}
+[data-note-color="dark-blue"] {
+  --note-hue: 270;
+}
+[data-note-color="violet"] {
+  --note-hue: 292;
+}
+[data-note-color="purple"] {
+  --note-hue: 312;
+}
+[data-note-color="magenta"] {
+  --note-hue: 334;
+}
+[data-note-color="pink"] {
+  --note-hue: 355;
+}
+
+@theme {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, sans-serif;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-note: var(--note-bg);
+  --color-note-accent: var(--note-accent);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-link: var(--brand-link);
+}
+
+@utility glass {
+  background-color: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 10px 30px -10px var(--glass-shadow);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--popover);
+    backdrop-filter: none;
+  }
+}
+
+@utility bg-brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+/* The gradient as ink. On a light page it starts deeper, where the pale amber would not read. */
+@utility text-brand-gradient {
+  background-image: linear-gradient(
+    63.435deg,
+    light-dark(var(--brand-amber-deep), var(--brand-amber-light)) 0%,
+    light-dark(var(--brand-shadow), var(--brand-amber-deep)) 100%
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Screenshots and the wordmark come in a light and a dark version. */
+.dark .only-light,
+:root:not(.dark) .only-dark {
+  display: none;
+}
+
+.lift {
+  transition: transform 200ms ease;
+}
+
+/* Motion is restrained (ADR 0020): things arrive once, and only for people who want it. */
+@media (prefers-reduced-motion: no-preference) {
+  .lift:hover {
+    transform: translateY(-3px);
+  }
+
+  /* The mark's gentle drop: the hero's screens land with a small overshoot. */
+  .drop-in {
+    animation: drop-in 900ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+  }
+  .drop-in-late {
+    animation-delay: 220ms;
+  }
+
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) rotate(-1.5deg);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+/*
+ * The header floats over the page as a glass pill, like the app's dock. Fumadocs draws it
+ * (`#nd-nav` on the marketing pages, `#nd-subnav` above the docs on a phone), so this
+ * restyles its elements rather than replacing them. The radius is half the bar's height:
+ * a pill while closed, a rounded sheet once the phone menu opens inside it.
+ */
+#nd-nav {
+  top: 0.75rem;
+  margin-top: 0.75rem;
+  padding-inline: 0.75rem;
+}
+
+#nd-nav > div,
+#nd-subnav {
+  @apply glass;
+  border-radius: 1.75rem;
+}
+
+#nd-nav > div {
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+/*
+ * Fumadocs folds the links into a menu below 1024px, where the pill still has room for
+ * them. These are its own classes for the row of controls and for the menu button.
+ */
+@media (width >= 44rem) {
+  #nd-nav .max-lg\:hidden {
+    display: flex;
+  }
+
+  #nd-nav .lg\:hidden {
+    display: none;
+  }
+}
+
+/* Tailwind leaves buttons with the arrow, which reads as dead on the theme switch. */
+button:not(:disabled),
+[role="button"] {
+  cursor: pointer;
+}
+
+#nd-subnav {
+  top: calc(var(--fd-docs-row-1) + 0.5rem);
+  margin: 0.5rem 0.75rem 0;
+}

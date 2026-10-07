@@ -391,6 +391,8 @@
 @media (max-width: 600px) {
   [data-sonner-toaster][data-y-position] {
     width: auto;
+    /* A toast on screen follows the header as it turns into pills and back. */
+    transition: top 300ms var(--ease-emphasized);
   }
 }
 /* Wide screens center toasts over the page, not across an open note's pane. */
