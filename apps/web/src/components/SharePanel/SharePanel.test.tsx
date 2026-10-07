@@ -70,7 +70,9 @@ describe('SharePanel', () => {
     fireEvent.click(button);
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalledWith({ text: 'Pack the tent' }));
     expect(shareNote).not.toHaveBeenCalled();
-    expect(screen.getByText('A Markdown copy, without files or future updates.')).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByText('A Markdown copy, without files or future updates.')).toBeVisible(),
+    );
   });
 
   it('shares the current editor content before autosave updates the note', async () => {
@@ -105,7 +107,7 @@ describe('SharePanel', () => {
     await screen.findByRole('button', { name: 'Copied' });
     fireEvent.click(screen.getByRole('tab', { name: 'Catch link' }));
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeVisible());
     await waitFor(() =>
       expect(screen.queryByRole('textbox', { name: 'Note content' })).not.toBeInTheDocument(),
     );
