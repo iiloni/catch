@@ -10,13 +10,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { parseAppLink, watchAppLinks } from '@/lib/appLinks';
 import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
 import { watchNativeShares } from '@/lib/nativeShares';
 import { prepareShare } from '@/lib/receiveShare';
-import { needsServerUrl } from '@/lib/serverUrl';
+import { getServerUrl, needsServerUrl } from '@/lib/serverUrl';
 import { pendingIncomingShares } from '@/lib/shareInbox';
 import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
@@ -108,6 +109,22 @@ function Root() {
       stopNative();
     };
   }, [navigate]);
+  useEffect(
+    () =>
+      watchAppLinks((address) => {
+        const link = parseAppLink(address, getServerUrl());
+        if (!link) return;
+        if (link.kind === 'elsewhere') {
+          toast.error(`This note is on ${link.host}, not the server this app is connected to.`);
+          return;
+        }
+        // The app reads the note from its own server, so it needs one first.
+        if (needsServerUrl())
+          void navigate({ to: '/setup', search: { redirect: `/s/${link.token}` } });
+        else void navigate({ to: '/s/$token', params: { token: link.token } });
+      }),
+    [navigate],
+  );
   useApplyTheme();
   useSystemBarsStyle();
   useBackButton();

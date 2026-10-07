@@ -80,7 +80,11 @@ updated. Update the server first. No existing shape's columns change, so no coll
 - A reader gets previews for the links in a shared note like for their own (ADR 0006).
 - The reader's attachment quota is not charged for a shared note's files; they are the
   owner's.
-- The Android app opens no links (ADR 0015), so a share link opens in the phone's browser,
-  where it can be read and, signed in there, added. Someone on a different Catch server
-  reads the public page like anyone else.
+- Android hands an `https` link only to an app whose build names the link's host, and a
+  Catch server's host is its owner's to choose, so a share link opens in the phone's
+  browser. The page there offers "Open in the Catch app", which passes the link through the
+  app's own `catchnotes:` scheme (`lib/appLinks.ts`); the app shows the same page from the
+  server it is connected to, signed in. Tapping it without the app installed does nothing.
+- Someone on a different Catch server reads the public page like anyone else; their app
+  refuses the link, since it reads only from its own server.
 - Removing a shared note from a gallery has no undo: the link adds it again.

@@ -4,6 +4,7 @@ import {
   type SharedNoteView,
   sharedAttachmentPath,
   sharedNoteViewSchema,
+  shareLink,
   shareTokenSchema,
 } from '@catch/shared';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
@@ -13,6 +14,7 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
 import { Button } from '@/components/ui/button';
 import { ApiError, api } from '@/lib/api';
+import { canOfferApp, openInAppLink } from '@/lib/appLinks';
 import { currentPath, getAuthToken } from '@/lib/auth';
 import { getServerUrl } from '@/lib/serverUrl';
 
@@ -104,6 +106,12 @@ function SharedNotePage() {
           />
         )}
       </header>
+      {note && canOfferApp() && (
+        // The phone's browser opens a link even with the app installed (see `appLinks.ts`).
+        <Button asChild variant="outline" className="rounded-full">
+          <a href={openInAppLink(shareLink(getServerUrl(), token))}>Open in the Catch app</a>
+        </Button>
+      )}
       {error && (
         <p role="alert" className="text-destructive text-sm">
           {error}

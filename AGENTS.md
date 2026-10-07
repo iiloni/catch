@@ -349,7 +349,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   `Note`s whose `userId` is their owner's: `isSharedNote` tells them apart, and anything that
   edits a note must leave them alone (the note actions in `lib/notes.ts` already route a pin,
   archive or move to the copy). `/s/<token>` and `GET /api/shares/:token` are read with no
-  account, so that page must not start a sync or assume a signed-in user.
+  account, so that page must not start a sync or assume a signed-in user. Android gives the app no
+  `https` links (a server's host is not known at build time), so that page offers the app
+  through the `catchnotes:` scheme in `lib/appLinks.ts`.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.
