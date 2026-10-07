@@ -362,7 +362,8 @@ test('a shared note is read from its link and added to another gallery', async (
     releaseSync();
   }
   const dialog = reader.getByRole('dialog');
-  await expect(dialog.getByText('Pack the tent')).toBeVisible();
+  // The opening card ghost repeats this text outside the live note's scroll area.
+  await expect(dialog.locator('[data-note-scroll]').getByText('Pack the tent')).toBeVisible();
   await expect(dialog.getByText(/Read only$/)).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Move to trash' })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Close' }).click();
