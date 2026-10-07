@@ -16,6 +16,7 @@ import {
 } from '@/components/SearchFilters/SearchFilters';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import {
   boardColumnsCollection,
   notesCollection,
@@ -35,6 +36,7 @@ import { READING_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/search')({
   component: SearchPage,
@@ -57,9 +59,15 @@ function SearchPage() {
     z.boolean(),
     true,
   );
-  const { data: stored = [] } = useLiveQuery({
+  const { data: plainNotes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
+  // Search runs on the device, so inside the vault it reads the vault's opened notes.
+  const vault = useVaultView();
+  const stored = useMemo(
+    () => (vault ? vault.filter((note) => !note.deletedAt) : plainNotes),
+    [vault, plainNotes],
+  );
   // Filtered ahead of the counts, so a tag's number is the notes its filter would show.
   const notes = useMemo(
     () => (showArchived ? stored : stored.filter((note) => !note.isArchived)),
@@ -169,7 +177,11 @@ function SearchPage() {
           </SearchFilterPanel>
         )}
       </AnimatePresence>
-      <TabPageHeader title="Search" selection={selectionHeader(selection, place)} />
+      <TabPageHeader
+        title={vault ? 'Search the vault' : 'Search'}
+        selection={selectionHeader(selection, place)}
+        trailing={<VaultToggle />}
+      />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
         <ActiveSearchFilters
           tags={tags}

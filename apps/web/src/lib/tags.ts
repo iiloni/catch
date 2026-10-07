@@ -1,6 +1,7 @@
 import {
   type Note,
   type NoteColor,
+  type NoteTags,
   normalizeSecondaryTags,
   type Tag,
   tagColor,
@@ -9,13 +10,26 @@ import {
 } from '@catch/shared';
 import { uuidv7 } from 'uuidv7';
 import {
-  notesCollection,
   noteTagsCollection,
   tagsCollection,
   useNoteTagAssignments,
   useTags,
   write,
 } from './collections';
+import { noteStore, noteTagStore } from './noteStore';
+import { getVaultNoteTags, vaultNotes } from './vault';
+
+/**
+ * Every note's tags, with who owns the note: the synced assignments, and those sealed inside
+ * the notes of an unlocked vault. A locked vault's notes keep what they had; a tag they
+ * name that has since gone is ignored when they are next opened.
+ */
+function allAssignments(): NoteTags[] {
+  return [
+    ...noteTagsCollection.values(),
+    ...vaultNotes.get().flatMap((note) => getVaultNoteTags(note.id) ?? []),
+  ];
+}
 
 export function createTag(userId: string, input: Omit<Tag, 'id' | 'userId'>) {
   const id = uuidv7();
@@ -34,10 +48,10 @@ export function updateTag(id: string, changes: UpdateTag) {
     if (changes.color && changes.color !== previousColor) tagPlainColorNotes(id, changes.color);
     if (changes.parentId !== undefined) {
       const tags = [...tagsCollection.values()];
-      for (const assignment of noteTagsCollection.values()) {
+      for (const assignment of allAssignments()) {
         const normalized = normalizeSecondaryTags(tags, assignment.secondaryTagIds);
         if (normalized.length !== assignment.secondaryTagIds.length)
-          noteTagsCollection.update(assignment.id, (draft) => {
+          noteTagStore.set(assignment, (draft) => {
             draft.secondaryTagIds = normalized;
           });
       }
@@ -46,9 +60,9 @@ export function updateTag(id: string, changes: UpdateTag) {
 }
 
 function tagPlainColorNotes(tagId: string, color: NonNullable<Tag['color']>) {
-  for (const note of notesCollection.values()) {
-    if (note.color !== color || noteTagsCollection.get(note.id)?.primaryTagId) continue;
-    notesCollection.update(note.id, (draft) => {
+  for (const note of [...noteStore.values(false), ...noteStore.values(true)]) {
+    if (note.color !== color || noteTagStore.get(note.id)?.primaryTagId) continue;
+    noteStore.update(note.id, (draft) => {
       draft.color = 'default';
     });
     assignPrimaryTag(note.id, tagId);
@@ -57,13 +71,13 @@ function tagPlainColorNotes(tagId: string, color: NonNullable<Tag['color']>) {
 export function deleteTag(id: string) {
   const removed = tagSubtreeIds([...tagsCollection.values()], id);
   return write(() => {
-    for (const assignment of noteTagsCollection.values()) {
+    for (const assignment of allAssignments()) {
       if (
         !removed.has(assignment.primaryTagId ?? '') &&
         !assignment.secondaryTagIds.some((tagId) => removed.has(tagId))
       )
         continue;
-      noteTagsCollection.update(assignment.id, (draft) => {
+      noteTagStore.set(assignment, (draft) => {
         if (removed.has(draft.primaryTagId ?? '')) draft.primaryTagId = null;
         draft.secondaryTagIds = draft.secondaryTagIds.filter((tagId) => !removed.has(tagId));
       });
@@ -75,20 +89,17 @@ export function deleteTag(id: string) {
 
 /** Called inside write, so a color and its primary assignment are one optimistic edit. */
 export function assignPrimaryTag(id: string, primaryTagId: string | null) {
-  const note = notesCollection.get(id);
+  const note = noteStore.get(id);
   if (!note) return;
-  const current = noteTagsCollection.get(id);
-  if (current) {
-    noteTagsCollection.update(id, (draft) => {
-      draft.primaryTagId = primaryTagId;
-      draft.secondaryTagIds = normalizeSecondaryTags(
-        [...tagsCollection.values()],
-        draft.secondaryTagIds.filter((tagId) => tagId !== primaryTagId),
-      );
-    });
-  } else if (primaryTagId) {
-    noteTagsCollection.insert({ id, userId: note.userId, primaryTagId, secondaryTagIds: [] });
-  }
+  // A note with no tags yet needs no row to say it has no primary.
+  if (!noteTagStore.get(id) && !primaryTagId) return;
+  noteTagStore.set(note, (draft) => {
+    draft.primaryTagId = primaryTagId;
+    draft.secondaryTagIds = normalizeSecondaryTags(
+      [...tagsCollection.values()],
+      draft.secondaryTagIds.filter((tagId) => tagId !== primaryTagId),
+    );
+  });
 }
 export function setPrimaryTag(
   id: string,
@@ -96,7 +107,7 @@ export function setPrimaryTag(
   color: NoteColor = 'default',
 ) {
   return write(() => {
-    notesCollection.update(id, (draft) => {
+    noteStore.update(id, (draft) => {
       draft.color = color;
       draft.updatedAt = new Date();
     });
@@ -104,27 +115,17 @@ export function setPrimaryTag(
   });
 }
 export function setSecondaryTag(id: string, tagId: string, selected: boolean) {
-  const note = notesCollection.get(id);
+  const note = noteStore.get(id);
   if (!note) return;
   return write(() => {
-    const current = noteTagsCollection.get(id);
-    if (current?.primaryTagId === tagId) return;
-    if (current) {
-      noteTagsCollection.update(id, (draft) => {
-        const others = draft.secondaryTagIds.filter((value) => value !== tagId);
-        draft.secondaryTagIds = normalizeSecondaryTags(
-          [...tagsCollection.values()],
-          selected ? [...others, tagId] : others,
-        );
-      });
-    } else {
-      noteTagsCollection.insert({
-        id,
-        userId: note.userId,
-        primaryTagId: null,
-        secondaryTagIds: selected ? [tagId] : [],
-      });
-    }
+    if (noteTagStore.get(id)?.primaryTagId === tagId) return;
+    noteTagStore.set(note, (draft) => {
+      const others = draft.secondaryTagIds.filter((value) => value !== tagId);
+      draft.secondaryTagIds = normalizeSecondaryTags(
+        [...tagsCollection.values()],
+        selected ? [...others, tagId] : others,
+      );
+    });
   });
 }
 export function useNoteColor(note: Pick<Note, 'id' | 'color'>): NoteColor {
@@ -135,7 +136,7 @@ export function useNoteColor(note: Pick<Note, 'id' | 'color'>): NoteColor {
 
 export function setPrimaryTags(ids: readonly string[], primaryTagId: string) {
   return write(() => {
-    notesCollection.update([...ids], (drafts) => {
+    noteStore.update([...ids], (drafts) => {
       for (const draft of drafts) {
         draft.color = 'default';
         draft.updatedAt = new Date();

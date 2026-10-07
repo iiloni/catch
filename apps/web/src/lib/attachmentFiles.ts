@@ -11,6 +11,32 @@ const listeners = new Set<() => void>();
 const accessUrls = new Map<string, { url: string; expires: number }>();
 const requests = new Map<string, Promise<string>>();
 
+/**
+ * A file the vault sealed (ADR 0020). Its attachment holds ciphertext, here as on the
+ * server, so it is opened in memory each time and never stored or streamed as it is.
+ */
+export type SealedFile = {
+  /** The attachment that holds the bytes: a thumbnail is one of its own. */
+  id: string;
+  open: (sealed: Blob) => Promise<Blob>;
+};
+/** Undefined for a file that is not sealed; null for a sealed one with no thumbnail. */
+type SealedFiles = (id: string, preview: boolean) => SealedFile | null | undefined;
+let sealedFiles: SealedFiles = () => undefined;
+const openedUrls = new Map<string, string>();
+
+/** The vault says which files are sealed and how to open them, while it is unlocked. */
+export function setSealedFiles(lookup: SealedFiles) {
+  sealedFiles = lookup;
+}
+
+/** Forgets every sealed file opened so far. The vault calls this as it locks. */
+export function closeSealedFiles() {
+  for (const url of openedUrls.values()) URL.revokeObjectURL(url);
+  openedUrls.clear();
+  for (const listener of listeners) listener();
+}
+
 export function refreshAttachmentUrls() {
   for (const listener of listeners) listener();
 }
@@ -20,6 +46,48 @@ export async function copyAttachmentFiles(sourceId: string, id: string) {
     const blob = await getAttachmentBlob(sourceId, preview);
     if (blob) await storeAttachmentBlob(id, blob, false, preview);
   }
+}
+
+/** Keeps a sealed file's ciphertext on the device: to upload, or to open offline. */
+export async function storeSealedBlob(id: string, blob: Blob, pending = false) {
+  await transact('readwrite', (store) =>
+    store.put({ id, blob, pending, preview: false, savedAt: Date.now() } satisfies StoredFile),
+  );
+  for (const listener of listeners) listener();
+  void navigator.storage?.persist?.().catch(() => {});
+}
+
+export async function copySealedBlob(sourceId: string, id: string) {
+  const blob = await getAttachmentBlob(sourceId);
+  if (blob) await storeSealedBlob(id, blob);
+}
+
+/**
+ * A sealed file, opened. A thumbnail is kept on the device once fetched, as other notes'
+ * are; a file itself is fetched again unless the user asked to keep it offline.
+ */
+export async function openSealedFile(id: string, preview = false): Promise<Blob | null> {
+  const file = sealedFiles(id, preview);
+  if (!file) return null;
+  let sealed = await getAttachmentBlob(file.id);
+  if (!sealed) {
+    sealed = await (await authorizedFetch(`${file.id}/content`)).blob();
+    if (preview) await storeSealedBlob(file.id, sealed);
+  }
+  return file.open(sealed);
+}
+
+async function resolveSealedUrl(id: string, preview: boolean): Promise<string> {
+  const key = keyFor(id, preview);
+  const known = openedUrls.get(key);
+  if (known) return known;
+  const blob = await openSealedFile(id, preview);
+  if (!blob) throw new Error('Could not load attachment');
+  // The vault may have locked while the file was being opened.
+  if (sealedFiles(id, preview) === undefined) throw new Error('The vault is locked');
+  const url = openedUrls.get(key) ?? URL.createObjectURL(blob);
+  openedUrls.set(key, url);
+  return url;
 }
 
 function openFiles() {
@@ -101,6 +169,9 @@ export async function forgetAttachmentBlob(id: string) {
     if (url) URL.revokeObjectURL(url);
     objectUrls.delete(key);
     accessUrls.delete(key);
+    const opened = openedUrls.get(key);
+    if (opened) URL.revokeObjectURL(opened);
+    openedUrls.delete(key);
   }
   for (const listener of listeners) listener();
 }
@@ -136,6 +207,7 @@ async function authorizedFetch(path: string) {
 }
 
 async function resolveUrl(id: string, preview: boolean) {
+  if (sealedFiles(id, preview) !== undefined) return resolveSealedUrl(id, preview);
   const key = keyFor(id, preview);
   if (objectUrls.has(key)) return objectUrls.get(key)!;
   const local = await getAttachmentBlob(id, preview);
@@ -215,6 +287,10 @@ export function useAttachmentUrl(url: string, preview = false) {
 }
 
 export async function keepAttachmentOffline(id: string) {
+  if (sealedFiles(id, false)) {
+    await storeSealedBlob(id, await (await authorizedFetch(`${id}/content`)).blob());
+    return;
+  }
   const response = await authorizedFetch(`${id}/content`);
   await storeAttachmentBlob(id, await response.blob());
 }

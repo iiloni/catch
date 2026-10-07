@@ -30,6 +30,33 @@ describe('api', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects unauthenticated vault reads and writes', async () => {
+    const json = { 'Content-Type': 'application/json' };
+    const id = '0199a0a0-0000-7000-8000-000000000000';
+    expect((await request('/api/shapes/vault?offset=-1')).status).toBe(401);
+    expect((await request('/api/shapes/vault-notes?offset=-1')).status).toBe(401);
+    expect((await request('/api/vault', { method: 'DELETE' })).status).toBe(401);
+    expect(
+      (
+        await request('/api/vault/notes', {
+          method: 'POST',
+          headers: json,
+          body: JSON.stringify({ id, data: 'AAAA' }),
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await request(`/api/vault/notes/${id}`, {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({ data: 'AAAA' }),
+        })
+      ).status,
+    ).toBe(401);
+    expect((await request(`/api/vault/notes/${id}`, { method: 'DELETE' })).status).toBe(401);
+  });
+
   it('rejects unauthenticated administrative reads and writes', async () => {
     expect((await request('/api/admin/users')).status).toBe(401);
     expect(

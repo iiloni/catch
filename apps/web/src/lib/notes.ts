@@ -7,27 +7,24 @@ import {
   type NoteColor,
   positionBetween,
   positionsBetween,
+  type VaultFile,
 } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
-import { copyAttachmentFiles } from './attachmentFiles';
-import {
-  attachmentsCollection,
-  notesCollection,
-  noteTagsCollection,
-  tagsCollection,
-  write,
-} from './collections';
-
+import { copyAttachmentFiles, copySealedBlob } from './attachmentFiles';
+import { attachmentsCollection, notesCollection, tagsCollection, write } from './collections';
+import { noteStore, noteTagStore } from './noteStore';
 import { assignPrimaryTag, setPrimaryTag } from './tags';
+import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
 
 type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
 >;
 
-function firstExistingPosition() {
+/** Vault notes are arranged among themselves, as the other notes are. */
+function firstExistingPosition(vault = false) {
   let first: string | null = null;
-  for (const note of notesCollection.values()) {
+  for (const note of noteStore.values(vault)) {
     if (first === null || note.position < first) first = note.position;
   }
   return first;
@@ -42,8 +39,8 @@ function lastExistingPosition() {
 }
 
 /** A position ahead of every note, so new notes land first, as in Keep. */
-function firstPosition() {
-  return positionBetween(null, firstExistingPosition());
+function firstPosition(vault = false) {
+  return positionBetween(null, firstExistingPosition(vault));
 }
 
 /**
@@ -57,38 +54,44 @@ export function createNote(input: {
   content: Note['content'];
   color?: NoteColor;
   status?: string | null;
+  /** Make it a vault note, sealed before it is stored. The vault must be unlocked. */
+  vault?: boolean;
 }) {
+  const vault = input.vault ?? false;
   const now = new Date();
   const id = input.id ?? uuidv7();
   const linkedTag = input.color
     ? [...tagsCollection.values()].find((tag) => tag.color === input.color)
     : undefined;
   const transaction = write(() => {
-    notesCollection.insert({
-      id,
-      userId: input.userId,
-      content: input.content,
-      color: linkedTag ? 'default' : (input.color ?? 'default'),
-      status: input.status ?? null,
-      isPinned: false,
-      isArchived: false,
-      position: firstPosition(),
-      hiddenLinks: [],
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    });
+    noteStore.insert(
+      {
+        id,
+        userId: input.userId,
+        content: input.content,
+        color: linkedTag ? 'default' : (input.color ?? 'default'),
+        status: input.status ?? null,
+        isPinned: false,
+        isArchived: false,
+        position: firstPosition(vault),
+        hiddenLinks: [],
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      },
+      vault,
+    );
     if (linkedTag) assignPrimaryTag(id, linkedTag.id);
   });
   return { id, transaction };
 }
 
 /** The note as this device has it now, local writes included. Not a subscription. */
-export const getNote = (id: string): Note | undefined => notesCollection.get(id);
+export const getNote = (id: string): Note | undefined => noteStore.get(id);
 
 export function updateNote(id: string, changes: NoteChanges) {
   return write(() =>
-    notesCollection.update(id, (draft) => {
+    noteStore.update(id, (draft) => {
       Object.assign(draft, changes);
       draft.updatedAt = new Date();
     }),
@@ -102,7 +105,7 @@ export function updateNote(id: string, changes: NoteChanges) {
 export function moveNote(id: string, others: readonly Note[], index: number) {
   const position = positionForMove(others, index);
   return write(() =>
-    notesCollection.update(id, (draft) => {
+    noteStore.update(id, (draft) => {
       draft.position = position;
     }),
   );
@@ -135,7 +138,7 @@ export function moveDeckNotes(
   const order = new Map(ids.map((id, i) => [id, i]));
   const now = new Date();
   return write(() =>
-    notesCollection.update([...ids], (drafts) => {
+    noteStore.update([...ids], (drafts) => {
       for (const draft of drafts) {
         if (draft.status !== status) {
           draft.status = status;
@@ -154,7 +157,7 @@ export function moveDeckNotes(
 export function hideLinkPreview(id: string, url: string) {
   const setHidden = (hidden: boolean) =>
     write(() =>
-      notesCollection.update(id, (draft) => {
+      noteStore.update(id, (draft) => {
         const others = draft.hiddenLinks.filter((link) => link !== url);
         draft.hiddenLinks = hidden ? [...others, url] : others;
       }),
@@ -172,7 +175,7 @@ export function setNoteColor(id: string, color: NoteColor) {
 export const setNotePinned = (id: string, isPinned: boolean) => updateNote(id, { isPinned });
 
 export function setNoteArchived(id: string, isArchived: boolean) {
-  const isPinned = notesCollection.get(id)?.isPinned ?? false;
+  const isPinned = noteStore.get(id)?.isPinned ?? false;
   // Archiving unpins, as in Keep.
   const transaction = updateNote(id, isArchived ? { isArchived, isPinned: false } : { isArchived });
   if (isArchived) {
@@ -192,7 +195,7 @@ export const sendNoteToGallery = (id: string) => updateNote(id, { status: null }
 export function sendNotesToGallery(notes: readonly Note[]) {
   const now = new Date();
   const transaction = write(() =>
-    notesCollection.update(
+    noteStore.update(
       notes.map((note) => note.id),
       (drafts) => {
         for (const draft of drafts) {
@@ -215,10 +218,16 @@ export function sendNotesToGallery(notes: readonly Note[]) {
 
 export const restoreNote = (id: string) => updateNote(id, { deletedAt: null });
 
-export const deleteNoteForever = (id: string) => write(() => notesCollection.delete(id));
+export const deleteNoteForever = (id: string) => write(() => noteStore.delete(id));
 
 export function trashNote(id: string) {
-  const transaction = updateNote(id, { deletedAt: new Date() });
+  const now = new Date();
+  const transaction = write(() =>
+    noteStore.update(id, (draft) => {
+      draft.deletedAt = now;
+      draft.updatedAt = now;
+    }),
+  );
   toast('Moved to trash', {
     action: { label: 'Undo', onClick: () => restoreNote(id) },
   });
@@ -233,7 +242,7 @@ export function setNotesColor(ids: readonly string[], color: NoteColor) {
   const now = new Date();
   const root = [...tagsCollection.values()].find((tag) => tag.color === color);
   return write(() => {
-    notesCollection.update([...ids], (drafts) => {
+    noteStore.update([...ids], (drafts) => {
       for (const draft of drafts) {
         draft.color = root ? 'default' : color;
         draft.updatedAt = now;
@@ -263,7 +272,7 @@ function undoFor(notes: readonly Note[]) {
 export function archiveNotes(notes: readonly Note[]) {
   const now = new Date();
   const transaction = write(() =>
-    notesCollection.update(
+    noteStore.update(
       notes.map((note) => note.id),
       (drafts) => {
         for (const draft of drafts) {
@@ -284,7 +293,7 @@ export function archiveNotes(notes: readonly Note[]) {
 export function unarchiveNotes(notes: readonly Note[]) {
   const now = new Date();
   const transaction = write(() =>
-    notesCollection.update(
+    noteStore.update(
       notes.map((note) => note.id),
       (drafts) => {
         for (const draft of drafts) {
@@ -304,7 +313,7 @@ export function unarchiveNotes(notes: readonly Note[]) {
 export function restoreNotes(notes: readonly Note[]) {
   const now = new Date();
   const transaction = write(() =>
-    notesCollection.update(
+    noteStore.update(
       notes.map((note) => note.id),
       (drafts) => {
         for (const draft of drafts) {
@@ -321,12 +330,12 @@ export function restoreNotes(notes: readonly Note[]) {
 }
 
 export const deleteNotesForever = (ids: readonly string[]) =>
-  write(() => notesCollection.delete([...ids]));
+  write(() => noteStore.delete([...ids]));
 
 export function trashNotes(ids: readonly string[]) {
   const now = new Date();
   const transaction = write(() =>
-    notesCollection.update([...ids], (drafts) => {
+    noteStore.update([...ids], (drafts) => {
       for (const draft of drafts) {
         draft.deletedAt = now;
         draft.updatedAt = now;
@@ -351,19 +360,55 @@ export function trashNotes(ids: readonly string[]) {
  */
 export function duplicateNotes(notes: readonly Note[]) {
   const now = new Date();
-  const positions = positionsBetween(null, firstExistingPosition(), notes.length);
+  // A page shows one kind of note, so the copies are of that kind too.
+  const vault = notes.some((note) => isVaultNote(note.id));
+  const positions = positionsBetween(null, firstExistingPosition(vault), notes.length);
   const copies = notes.map((note, index) => ({
     ...note,
     id: uuidv7(),
     content: structuredClone(note.content),
-    position: positions[index] ?? firstPosition(),
+    position: positions[index] ?? firstPosition(vault),
     createdAt: now,
     updatedAt: now,
     deletedAt: note.deletedAt ? now : null,
   }));
+  // A vault note's files are sealed inside it: each copy holds the same bytes, sealed as
+  // they were, under ids of its own.
+  const sealedFiles = new Map<string, VaultFile[]>();
   const files = copies.flatMap((copy, index) => {
     const original = notes[index];
     if (!original) return [];
+    if (vault) {
+      const row = (sourceId: string, id: string) => {
+        const source = attachmentsCollection.get(sourceId);
+        return source && !source.deletedAt
+          ? [
+              {
+                ...source,
+                id,
+                noteId: copy.id,
+                sourceId,
+                status: 'pending' as const,
+                createdAt: now,
+              },
+            ]
+          : [];
+      };
+      const rows: ReturnType<typeof row> = [];
+      const kept: VaultFile[] = [];
+      const ids = new Map<string, string>();
+      for (const file of getSealedFiles(original.id)) {
+        const bytes = row(file.id, uuidv7());
+        if (!bytes[0]) continue;
+        const thumbnail = file.thumbnailId ? row(file.thumbnailId, uuidv7()) : [];
+        rows.push(...bytes, ...thumbnail);
+        ids.set(file.id, bytes[0].id);
+        kept.push({ ...file, id: bytes[0].id, thumbnailId: thumbnail[0]?.id ?? null });
+      }
+      copy.content = mapAttachmentBlocks(copy.content, ids);
+      sealedFiles.set(copy.id, kept);
+      return rows;
+    }
     const attachments = [...attachmentsCollection.values()].filter(
       (file) => file.noteId === original.id && !file.deletedAt,
     );
@@ -379,22 +424,25 @@ export function duplicateNotes(notes: readonly Note[]) {
     }));
   });
   const transaction = write(() => {
-    notesCollection.insert(copies);
+    if (!vault) notesCollection.insert(copies);
     for (const [index, copy] of copies.entries()) {
       const original = notes[index];
-      const assignments = original ? noteTagsCollection.get(original.id) : undefined;
-      if (assignments)
-        noteTagsCollection.insert({
-          ...assignments,
-          id: copy.id,
-          secondaryTagIds: [...assignments.secondaryTagIds],
-        });
+      const assignments = original ? noteTagStore.get(original.id) : undefined;
+      const tags = assignments && {
+        primaryTagId: assignments.primaryTagId,
+        secondaryTagIds: [...assignments.secondaryTagIds],
+      };
+      // A vault note's tags are sealed in with it, so they go in as it does.
+      if (vault) insertVaultNote(copy, tags, sealedFiles.get(copy.id));
+      else if (tags) noteTagStore.set(copy, (draft) => Object.assign(draft, tags));
     }
   });
   // Queue copies after their notes exist; pending originals reach the server first.
   if (files.length) write(() => attachmentsCollection.insert(files));
   // Cached originals and thumbnails let copies preview before the server is reachable.
-  for (const file of files) void copyAttachmentFiles(file.sourceId, file.id).catch(() => {});
+  for (const file of files) {
+    void (vault ? copySealedBlob : copyAttachmentFiles)(file.sourceId, file.id).catch(() => {});
+  }
   toast(plural(notes.length, 'Note copied', 'notes copied'));
   return { ids: copies.map((copy) => copy.id), transaction };
 }
@@ -404,7 +452,7 @@ export function duplicateNotes(notes: readonly Note[]) {
  * note. Returns whether it was discarded.
  */
 export function discardIfEmpty(id: string) {
-  const note = notesCollection.get(id);
+  const note = noteStore.get(id);
   if (
     !note ||
     note.deletedAt ||
@@ -412,7 +460,7 @@ export function discardIfEmpty(id: string) {
     [...attachmentsCollection.values()].some((file) => file.noteId === id && !file.deletedAt)
   )
     return false;
-  write(() => notesCollection.delete(id));
+  write(() => noteStore.delete(id));
   toast('Empty note discarded');
   return true;
 }

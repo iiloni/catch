@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes, noteTags } from '../db/schema';
+import { attachments, notes, noteTags, reminders } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 import { lockTagTree } from '../lib/tagTreeLock';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
@@ -150,19 +150,25 @@ export const notesRoutes = new Hono<AppEnv>()
   .delete('/:id', idParam, async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
-    const files = await db
-      .select({ id: attachments.id })
-      .from(attachments)
-      .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)));
     const result = await db.transaction(async (tx) => {
       const deleted = await tx
         .delete(notes)
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
-      return deleted.length > 0 ? currentTxid(tx) : null;
+      if (deleted.length === 0) return null;
+      // Reminders and attachments have no foreign key to follow the note out (see the schema).
+      await tx
+        .delete(reminders)
+        .where(and(eq(reminders.noteId, id), eq(reminders.userId, user.id)));
+      // Only the files of a note deleted here: the id may be a vault note's, whose files
+      // must outlive a request that deleted nothing.
+      const files = await tx
+        .delete(attachments)
+        .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)))
+        .returning({ id: attachments.id });
+      return { txid: await currentTxid(tx), files: files.map((file) => file.id) };
     });
-    await deleteFiles(files.map((file) => file.id));
+    await deleteFiles(result?.files ?? []);
     // Already gone, perhaps deleted by an earlier try of this same queued write.
-    if (result === null) return c.json({ txid: null });
-    return c.json({ txid: result });
+    return c.json({ txid: result?.txid ?? null });
   });

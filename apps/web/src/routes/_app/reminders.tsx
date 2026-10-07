@@ -14,6 +14,7 @@ import { useOpenNote } from '@/lib/openNote';
 import { isReminderPast, reminderTime } from '@/lib/reminders';
 import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/reminders')({
   component: RemindersPage,
@@ -25,9 +26,12 @@ function RemindersPage() {
   const { data: notes = [], isLoading } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
-  const reminded = notes.filter((note) => reminders.has(note.id));
+  const vault = useVaultView();
+  const reminded = (vault ? vault.filter((note) => !note.deletedAt) : notes).filter((note) =>
+    reminders.has(note.id),
+  );
   const remindersReady = useRemindersReady();
-  const awaitingSync = useAwaitingSync(isLoading || !remindersReady, reminded.length);
+  const awaitingSync = useAwaitingSync((isLoading && !vault) || !remindersReady, reminded.length);
 
   const upcoming: { note: Note; at: number }[] = [];
   const past: { note: Note; at: number }[] = [];
@@ -52,7 +56,7 @@ function RemindersPage() {
   return (
     <>
       <TabPageHeader
-        title="Reminders"
+        title={vault ? 'Vault reminders' : 'Reminders'}
         leading={<BackToGallery />}
         selection={selectionHeader(selection, place)}
       />

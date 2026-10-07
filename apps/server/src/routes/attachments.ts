@@ -22,7 +22,7 @@ import {
 } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes } from '../db/schema';
+import { attachments, notes, vaultNotes } from '../db/schema';
 import { env } from '../env';
 import { requireUser } from '../lib/requireUser';
 
@@ -89,7 +89,14 @@ export const attachmentRoutes = new Hono<AppEnv>()
           body.sourceId ? undefined : isNull(notes.deletedAt),
         ),
       );
-    if (!note) return c.json({ error: 'Note not found' }, 404);
+    // A vault note's files are sealed on the device, and are only bytes here (ADR 0020).
+    const [sealed] = note
+      ? []
+      : await db
+          .select({ id: vaultNotes.id })
+          .from(vaultNotes)
+          .where(and(eq(vaultNotes.id, body.noteId), eq(vaultNotes.userId, userId)));
+    if (!note && !sealed) return c.json({ error: 'Note not found' }, 404);
     const [existing] = await db.select().from(attachments).where(owned(body.id, userId));
     if (existing) {
       if (

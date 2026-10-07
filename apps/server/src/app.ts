@@ -21,6 +21,7 @@ import { reminderRoutes } from './routes/reminders';
 import { shapeRoutes } from './routes/shapes';
 import { noteTagRoutes, tagRoutes } from './routes/tags';
 import { updateRoutes } from './routes/updates';
+import { vaultRoutes } from './routes/vault';
 
 /** JSON bodies are read into memory whole. The largest real one is a batch of imported notes. */
 export const MAX_JSON_BODY_BYTES = 16 * 1024 * 1024;
@@ -131,6 +132,7 @@ export function createApp() {
     .route('/link-previews', linkPreviewRoutes)
     .route('/reminders', reminderRoutes)
     .route('/push', pushRoutes)
+    .route('/vault', vaultRoutes)
     .route('/updates', updateRoutes)
     .route('/shapes', shapeRoutes);
 

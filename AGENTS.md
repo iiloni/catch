@@ -383,6 +383,20 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   them, so `lib/push.ts` answers for both and callers need not know which they are on.
   `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
+- Vault notes (ADR 0020, `lib/vault.ts`) are sealed on the device: the `vault-notes`
+  collection, the device database, the outbox and the server hold only ciphertext, and the
+  opened notes and the key live in memory. A vault note is a `Note` to the UI but is not in
+  `notesCollection`: read and change notes through `lib/noteStore.ts` (`noteStore`,
+  `noteTagStore`), which sends each call to the right place by the note's id, and list a
+  page's notes with `useVaultView() ?? <the ordinary ones>`. The header's lock button
+  (`VaultToggle`) switches the pages between the two; they are never shown together. A vault
+  note's tags and its files' names are sealed inside it; its files are `attachments` rows
+  named "Vault file" holding ciphertext, read with `useNoteAttachments` and opened through
+  `lib/attachmentFiles.ts`. Never send a vault note's content, links, text or file names to
+  the server, or write them to `notesCollection`.
+- `reminders.note_id` and `attachments.note_id` have no foreign key, because the note may be
+  in `notes` or `vault_notes`. A route that deletes a note deletes its reminders and
+  attachment rows itself.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.
