@@ -140,17 +140,24 @@ test('the vault button can be hidden before setup and its preference survives re
   await showButton.click();
   await page.reload();
   await expect(showButton).not.toBeChecked();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
 
-  for (const path of ['/', '/deck', '/search']) {
-    await page.goto(path);
-    await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
+  for (const title of ['Gallery', 'Deck', 'Search']) {
+    if (title !== 'Gallery') {
+      await page.getByRole('link', { name: title, exact: true }).click();
+    }
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
   }
 
   await page.goto('/settings/vault');
   await showButton.click();
-  for (const path of ['/', '/deck', '/search']) {
-    await page.goto(path);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  for (const title of ['Gallery', 'Deck', 'Search']) {
+    if (title !== 'Gallery') {
+      await page.getByRole('link', { name: title, exact: true }).click();
+    }
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open the vault' })).toBeVisible();
   }
 });
@@ -166,7 +173,7 @@ test('a hidden vault still opens from Settings and keeps its leave button', asyn
   await gate(page).getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(gate(page)).toBeHidden();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Vault', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Vault', exact: true })).toBeVisible();
   await leave(page);
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
