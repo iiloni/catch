@@ -103,7 +103,14 @@ export function TagBadge({
       </motion.span>
     );
   const trigger = (
-    <TooltipTrigger asChild>
+    <TooltipTrigger
+      asChild
+      // A picker that opens moves focus to its first control, which may be this badge, and a
+      // tooltip nobody asked for then covers it. Focus from the keyboard still shows it.
+      onFocus={(event) => {
+        if (!event.currentTarget.matches(':focus-visible')) event.preventDefault();
+      }}
+    >
       <motion.button
         type="button"
         data-note-color={root.color ?? 'default'}

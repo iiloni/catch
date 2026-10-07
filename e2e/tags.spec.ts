@@ -111,6 +111,69 @@ test('selection actions pin notes and edit mixed tags on touch and desktop', asy
     ).toBeVisible();
 });
 
+test("opening the color picker does not show its tag badge's tooltip", async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const home = await addTag(request, headers, 'Home', null, 'yellow');
+  await seedNotes(page, ['One']);
+  const noteId = await card(page, 'One').getAttribute('data-note-card');
+  expect(
+    (
+      await request.patch(`/api/note-tags/${noteId}`, {
+        headers,
+        data: { primaryTagId: home, secondaryTagIds: [] },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect(card(page, 'One')).toHaveAttribute('data-note-color', 'yellow');
+  if (isMobile) {
+    await longPress(page, card(page, 'One').getByRole('button', { name: 'Open note' }));
+  } else {
+    const cell = page
+      .locator('[data-note-cell]')
+      .filter({ has: page.getByRole('heading', { name: 'One', exact: true }) });
+    await cell.hover();
+    await cell.getByRole('button', { name: 'Select note', exact: true }).click();
+  }
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Background color', exact: true })
+    .click();
+  const picker = page.locator('[data-slot="popover-content"]');
+  await settledBox(picker);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  // The badge still explains itself when asked.
+  await picker.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('tooltip')).toHaveText('Home');
+});
+
+test('selection pickers are cards as wide as a phone under the header', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'A wide screen hangs the pickers off their buttons.');
+  await signUp(page);
+  await seedNotes(page, ['One']);
+  await longPress(page, card(page, 'One').getByRole('button', { name: 'Open note' }));
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  const width = page.viewportSize()?.width ?? 0;
+  for (const name of ['Background color', 'Tags']) {
+    await toolbar.getByRole('button', { name, exact: true }).click();
+    const picker = await settledBox(page.locator('[data-slot="popover-content"]'));
+    const buttons = await settledBox(toolbar);
+    expect(picker.x).toBeCloseTo(12, 0);
+    expect(picker.x + picker.width).toBeCloseTo(width - 12, 0);
+    expect(picker.y).toBeGreaterThan(buttons.y + buttons.height);
+    expect(picker.y).toBeLessThan(buttons.y + buttons.height + 16);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-slot="popover-content"]')).toBeHidden();
+  }
+});
+
 test('desktop gallery cards assign secondary tags without opening the editor', async ({
   page,
   request,
@@ -244,13 +307,13 @@ test('card actions and tag popovers stay inside narrow and short viewports', asy
   const noteCard = card(page, 'Viewport bounds');
   const picker = page.getByRole('region', { name: 'Secondary tags' });
   const popup = page.locator('[data-slot="popover-content"]').filter({ has: picker });
-  const assertBounds = async () => {
+  const assertBounds = async (inset = 16) => {
     const box = await settledBox(popup);
     const viewport = page.viewportSize();
-    expect(box.x).toBeGreaterThanOrEqual(15);
-    expect(box.y).toBeGreaterThanOrEqual(15);
-    expect(box.x + box.width).toBeLessThanOrEqual((viewport?.width ?? 0) - 15);
-    expect(box.y + box.height).toBeLessThanOrEqual((viewport?.height ?? 0) - 15);
+    expect(box.x).toBeGreaterThanOrEqual(inset - 1);
+    expect(box.y).toBeGreaterThanOrEqual(inset - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual((viewport?.width ?? 0) - inset + 1);
+    expect(box.y + box.height).toBeLessThanOrEqual((viewport?.height ?? 0) - inset + 1);
     await expect(picker.getByRole('textbox', { name: 'Find tags' })).toBeInViewport({ ratio: 1 });
     const scroll = picker.locator('[data-slot="scroll-area-viewport"]');
     expect(await scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
@@ -295,7 +358,7 @@ test('card actions and tag popovers stay inside narrow and short viewports', asy
     .getByRole('toolbar', { name: 'Selected notes' })
     .getByRole('button', { name: 'Tags', exact: true })
     .click();
-  await assertBounds();
+  await assertBounds(12);
 });
 
 test('secondary tag search keeps focus and selection usable above the keyboard', async ({
