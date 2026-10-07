@@ -31,15 +31,40 @@ jobs:
       actions: read
     outputs:
       run_checks: ${{ steps.ci.outputs.run_checks }}
-      run_e2e: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass') || contains(github.event.pull_request.labels.*.name, 'run e2e') }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+      # `run e2e` always tests. Otherwise a change confined to documentation skips E2E, and
+      # a PR waits for `merge on pass`.
+      run_e2e: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A PR's merge commit and the base it is compared with below.
+          fetch-depth: 2
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter catch
+      # Only a PR or a push has a change to read; a manual or release request tests the
+      # commit, whatever last changed in it. Anything unreadable counts as code.
+      - name: Decide whether the change is documentation only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=
+          case "$EVENT_NAME" in
+            pull_request) base='HEAD^1' ;;
+            push) git fetch --quiet --depth=1 origin "$BEFORE" && base="$BEFORE" || true ;;
+          esac
+          docs_only=false
+          if [[ -n "$base" ]]; then
+            docs_only=$(git diff --name-only --no-renames "$base" HEAD | node scripts/change-scope.ts)
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "Documentation only: $docs_only"
       - name: Decide whether to reuse full CI
         id: ci
         env:
@@ -191,6 +216,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           E2E_REQUESTED: ${{ needs.reuse.outputs.run_e2e }}
+          DOCS_ONLY: ${{ needs.reuse.outputs.docs_only }}
           MERGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'merge on pass') }}
           REUSE_RESULT: ${{ needs.reuse.result }}
           RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}

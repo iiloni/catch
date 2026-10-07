@@ -1,6 +1,9 @@
 **/node_modules
 **/dist
 **/dev-dist
+**/.next
+**/.source
+apps/site/out
 apps/web/android
 .git
 .env*

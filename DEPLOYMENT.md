@@ -27,25 +27,7 @@ curl -fsSL -o .env https://raw.githubusercontent.com/iiloni/catch/main/.env.exam
 chmod 600 .env
 ```
 
-`docker-compose.yml` is written to build Catch from source. To run the published release
-instead, open it and replace these three lines under `app:`
-
-```yaml
-    build:
-      context: .
-      target: production
-```
-
-with this one:
-
-```yaml
-    image: ghcr.io/iiloni/catch:stable
-```
-
-`stable` follows the latest stable release. Use `preview` for preview releases, or an exact
-version such as `0.3.2` to stay on it until you choose to move.
-
-Then open `.env` and set these four values:
+Open `.env` and set these four values:
 
 | Setting | Value |
 | --- | --- |
@@ -59,6 +41,10 @@ Then start Catch:
 ```bash
 docker compose up -d
 ```
+
+This runs the latest stable release. To follow preview releases, or to stay on an exact
+version until you choose to move, set `CATCH_IMAGE` in `.env` to
+`ghcr.io/iiloni/catch:preview` or to a version such as `ghcr.io/iiloni/catch:0.3.2`.
 
 The server listens on port 3000. Point your reverse proxy at it, with HTTP/2 enabled so sync
 streams share connections with page loads and writes.
@@ -83,6 +69,7 @@ All settings go in `.env`, and `.env.example` describes each one. Run
 
 | Setting | Default | What it does |
 | --- | --- | --- |
+| `CATCH_IMAGE` | `ghcr.io/iiloni/catch:stable` | The image to run: a channel (`:stable`, `:preview`) or an exact version. |
 | `CATCH_PORT` | `3000` | The port Catch listens on. |
 | `CATCH_BIND_ADDRESS` | `0.0.0.0` | The address it listens on. `127.0.0.1` accepts connections from the same machine only. |
 | `REGISTRATION` | `closed` | `open` lets anyone sign up without an invite. |
@@ -137,7 +124,7 @@ to move to another server.
 ```
 
 This backs up the database, pulls the newer image, restarts Catch and waits until it is
-healthy. With an exact version in `docker-compose.yml`, change it to the new one first. The server also backs up its database by itself before a new version changes it.
+healthy. With an exact version in `CATCH_IMAGE`, change it to the new one first. The server also backs up its database by itself before a new version changes it.
 
 Release notes are on the [releases page](https://github.com/iiloni/catch/releases). When a
 release needs the server updated before the Android app, or the other way round, its notes
@@ -153,14 +140,18 @@ channels.
 ## Building from source
 
 To build Catch yourself instead of running a published image, clone the repository, copy
-`.env.example` to `.env` and leave `docker-compose.yml` as it is:
+`.env.example` to `.env` and add `docker-compose.build.yml` to the Compose files in it:
 
 ```bash
 git clone https://github.com/iiloni/catch.git
 cd catch
 cp .env.example .env   # then set the four values above
+echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml' >> .env
 docker compose up -d --build
 ```
+
+With that line in `.env`, every `docker compose` command and the helper scripts build this
+checkout. Without it they run the published image.
 
 The helper scripts are in `scripts/` there, and `./scripts/update.sh` pulls the source and
 rebuilds.

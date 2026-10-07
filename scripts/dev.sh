@@ -25,6 +25,10 @@ compose=(
     -f "$repo_root/docker-compose.dev.yml"
 )
 
+# Worktree ports are allocated below 28000 (scripts/worktree.sh), so the site's port is the
+# stack's, moved clear of that range.
+SITE_PORT_OFFSET=4000
+
 env_value() {
     awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file"
 }
@@ -42,6 +46,24 @@ confirm() {
     local answer
     read -r -p "$1 [y/N] " answer
     [[ "$answer" == "y" || "$answer" == "Y" ]]
+}
+
+# Tests and builds from several worktrees at once exhaust the machine, so these commands
+# take turns across all of them. The lock lives in the Git common directory, which every
+# worktree shares, and is held until this script exits.
+wait_for_turn() {
+    if ! command -v flock >/dev/null; then
+        echo "flock not found; running $1 without waiting for other worktrees." >&2
+        return
+    fi
+    local lock
+    lock=$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)/catch-e2e.lock
+    exec 9>>"$lock"
+    if ! flock -n 9; then
+        echo "Waiting for another Catch run to finish: $(cat "$lock")"
+        flock 9
+    fi
+    echo "$1 in $repo_root since $(date +%H:%M)" >"$lock"
 }
 
 has_yes_flag() {
@@ -129,25 +151,20 @@ case "$command" in
         "${compose[@]}" exec -T -e "CATCH_SEED_PROFILE=${1:-demo}" app pnpm db:seed
         ;;
     check)
+        wait_for_turn check
         "${compose[@]}" exec -T app pnpm check
         ;;
     test)
+        wait_for_turn test
         "${compose[@]}" exec -T app pnpm test "$@"
         ;;
     build)
+        wait_for_turn build
         "${compose[@]}" exec -T -e "CATCH_CHANNEL=${1:-dev}" app pnpm build
         ;;
     e2e)
         # Playwright runs on the host (it needs a browser) against this stack.
-        # All worktrees share the Git common directory, so only one suite runs
-        # on this machine at a time. Keep the lock until Playwright exits.
-        command -v flock >/dev/null || { echo "flock is required for e2e runs." >&2; exit 1; }
-        common_dir=$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)
-        exec 9>"$common_dir/catch-e2e.lock"
-        if ! flock -n 9; then
-            echo "Another Catch e2e run is active; waiting for it to finish..."
-            flock 9
-        fi
+        wait_for_turn e2e
         # HMR timestamps give direct imports in tests a second copy of module state.
         # Start with a fresh Vite process and wait for the API before signing up users.
         "${compose[@]}" up -d --no-deps --wait --force-recreate app
@@ -201,6 +218,23 @@ case "$command" in
                 --live-reload --host "$host" --port "$port" "${forward[@]}" "${cap_args[@]}" --flavor dev
         fi
         ;;
+    site)
+        # The public site (apps/site, ADR 0020) runs on demand, in a container of its own,
+        # so a stack that is not working on it does not carry a second dev server.
+        site_port=$(($(env_value CATCH_PORT) + SITE_PORT_OFFSET))
+        echo "Site: http://$(env_value CATCH_PUBLIC_HOST):$site_port"
+        echo "  also http://localhost:$site_port"
+        "${compose[@]}" run --rm --no-deps \
+            -p "$(env_value CATCH_DEV_BIND_ADDRESS | grep . || echo 127.0.0.1):$site_port:3000" \
+            -e "SITE_DEV_ORIGINS=$(env_value CATCH_PUBLIC_HOST),**.ts.net" \
+            app pnpm --filter @catch/site dev --hostname 0.0.0.0 "$@"
+        ;;
+    screenshots)
+        # Like e2e, the browser runs on the host against this stack.
+        [[ -x "$repo_root/node_modules/.bin/playwright" ]] || pnpm --dir "$repo_root" install
+        E2E_BASE_URL="http://localhost:$(env_value CATCH_PORT)" \
+            pnpm --dir "$repo_root/apps/site" screenshots "$@"
+        ;;
     shell)
         "${compose[@]}" exec app bash
         ;;
@@ -242,13 +276,16 @@ Usage: ./scripts/dev.sh <command>
   generate            Generate a migration from the Drizzle schema
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
+                      check, test, build and e2e take turns across worktrees
   test [args]         Unit tests (in the container)
   build [channel]     Build all packages (in the container; dev by default, or stable, preview)
-  e2e [args]          Playwright tests from the host (one suite across worktrees)
+  e2e [args]          Playwright tests from the host
   android [--static] [--usb]
                       Start the stack and install Catch Dev on a connected Android device
                       --static: fresh bundled APK without live reload; API uses this dev stack
                       --usb: reach the dev server via adb instead of Tailscale (either mode)
+  site                Run the public site (apps/site) with hot reload and print its URL
+  screenshots         Recapture the site's app screenshots from this stack (on the host)
   shell               Open a shell in the app container
   backup <command>    Server backups: create, list, inspect, restore, ... (backup help)
   psql [args]         Open psql against this worktree's database

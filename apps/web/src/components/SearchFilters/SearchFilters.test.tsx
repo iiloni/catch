@@ -49,8 +49,10 @@ describe('search filters', () => {
           ])
         }
         untaggedCount={3}
+        showArchived
         onFilterChange={onFilterChange}
         onColorChange={onColorChange}
+        onShowArchivedChange={vi.fn()}
       />,
       { wrapper: TooltipProvider },
     );
@@ -82,8 +84,10 @@ describe('search filters', () => {
         color="blue"
         counts={new Map()}
         untaggedCount={1}
+        showArchived
         onFilterChange={onFilterChange}
         onColorChange={vi.fn()}
+        onShowArchivedChange={vi.fn()}
       />,
       { wrapper: TooltipProvider },
     );
@@ -102,8 +106,10 @@ describe('search filters', () => {
       tags,
       counts: new Map<string, number>(),
       untaggedCount: 0,
+      showArchived: true,
       onFilterChange: vi.fn(),
       onColorChange: vi.fn(),
+      onShowArchivedChange: vi.fn(),
     };
     const rendered = render(
       <SearchFilters {...props} filter={{ ids: [], match: 'any', untagged: true }} color="green" />,
@@ -140,8 +146,10 @@ describe('search filters', () => {
         color={null}
         counts={new Map()}
         untaggedCount={0}
+        showArchived
         onFilterChange={vi.fn()}
         onColorChange={onColorChange}
+        onShowArchivedChange={vi.fn()}
       />,
     );
     const swatch = screen.getByRole('button', { name: 'Blue' });
@@ -154,8 +162,10 @@ describe('search filters', () => {
       tags,
       counts: new Map<string, number>(),
       untaggedCount: 0,
+      showArchived: true,
       onFilterChange: vi.fn(),
       onColorChange: vi.fn(),
+      onShowArchivedChange: vi.fn(),
     };
     const element = (
       <SearchFilters {...props} filter={{ ids: [], match: 'any', untagged: false }} color={null} />
@@ -180,8 +190,10 @@ describe('search filters', () => {
         color={null}
         counts={new Map()}
         untaggedCount={0}
+        showArchived
         onFilterChange={onFilterChange}
         onColorChange={vi.fn()}
+        onShowArchivedChange={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Tags' }));
@@ -200,6 +212,28 @@ describe('search filters', () => {
       'true',
     );
     expect(onFilterChange).not.toHaveBeenCalled();
+  });
+  it('offers archived notes as a switch on either tab', () => {
+    const onShowArchivedChange = vi.fn();
+    const props = {
+      tags,
+      filter: { ids: [], match: 'any', untagged: false } as const,
+      color: null,
+      counts: new Map<string, number>(),
+      untaggedCount: 0,
+      onFilterChange: vi.fn(),
+      onColorChange: vi.fn(),
+      onShowArchivedChange,
+    };
+    const rendered = render(<SearchFilters {...props} showArchived />);
+    const toggle = screen.getByRole('switch', { name: 'Show archived notes' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(onShowArchivedChange).toHaveBeenLastCalledWith(false);
+    rendered.rerender(<SearchFilters {...props} showArchived={false} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Tags' }));
+    expect(screen.getByRole('switch', { name: 'Show archived notes' })).not.toBeChecked();
+    expect(props.onFilterChange).not.toHaveBeenCalled();
   });
   it('browses roots without treating a child as a separate top-level topic', () => {
     const onSelect = vi.fn();
