@@ -54,14 +54,24 @@ function SearchPage() {
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
   const gutterShift = usePageGutterShift(READING_MAX);
+  const [showArchived, setShowArchived] = usePersistentState(
+    'catch-search-show-archived',
+    z.boolean(),
+    true,
+  );
   const { data: plainNotes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
   // Search runs on the device, so inside the vault it reads the vault's opened notes.
   const vault = useVaultView();
-  const notes = useMemo(
+  const stored = useMemo(
     () => (vault ? vault.filter((note) => !note.deletedAt) : plainNotes),
     [vault, plainNotes],
+  );
+  // Filtered ahead of the counts, so a tag's number is the notes its filter would show.
+  const notes = useMemo(
+    () => (showArchived ? stored : stored.filter((note) => !note.isArchived)),
+    [stored, showArchived],
   );
   const { data: columns = [] } = useLiveQuery({
     query: (q) => q.from({ column: boardColumnsCollection }),
@@ -159,8 +169,10 @@ function SearchPage() {
               color={color}
               counts={counts}
               untaggedCount={untaggedCount}
+              showArchived={showArchived}
               onFilterChange={setFilter}
               onColorChange={setColor}
+              onShowArchivedChange={setShowArchived}
             />
           </SearchFilterPanel>
         )}
@@ -227,7 +239,8 @@ function SearchPage() {
                   </section>
                 ) : (
                   <p className="px-1 text-sm text-muted-foreground">
-                    Search words, browse a tag, or filter by color. Archived notes are included.
+                    Search words, browse a tag, or filter by color. Archived notes are{' '}
+                    {showArchived ? 'included' : 'hidden'}.
                   </p>
                 )
               ) : results.length > 0 ? (
@@ -264,7 +277,9 @@ function SearchPage() {
                 </section>
               ) : (
                 <EmptyState icon={SearchX} title="No matching notes">
-                  Try fewer words or remove a filter.
+                  {showArchived
+                    ? 'Try fewer words or remove a filter.'
+                    : 'Try fewer words, remove a filter or show archived notes.'}
                 </EmptyState>
               )}
             </SearchView>

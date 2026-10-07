@@ -1,5 +1,5 @@
 import { NOTE_COLORS, type NoteColor, type Tag } from '@catch/shared';
-import { Palette, Slash, Tags, X } from 'lucide-react';
+import { Archive, Palette, Slash, Tags, X } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -23,6 +23,7 @@ import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
+import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { usePersistentState } from '@/lib/storage';
@@ -182,7 +183,7 @@ function FilterTabView({
       exit="leave"
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
       className={cn(
-        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-6.25rem))] overflow-x-hidden overflow-y-auto overscroll-contain',
+        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-9.5rem))] overflow-x-hidden overflow-y-auto overscroll-contain',
         !isPresent && 'absolute inset-x-0 bottom-0',
       )}
     >
@@ -198,8 +199,10 @@ export function SearchFilters({
   color,
   counts,
   untaggedCount,
+  showArchived,
   onFilterChange,
   onColorChange,
+  onShowArchivedChange,
 }: {
   tags: readonly Tag[];
   awaitingTags?: boolean;
@@ -207,12 +210,15 @@ export function SearchFilters({
   color: NoteColor | null;
   counts: ReadonlyMap<string, number>;
   untaggedCount: number;
+  showArchived: boolean;
   onFilterChange: (filter: TagSearchFilter) => void;
   onColorChange: (color: NoteColor | null) => void;
+  onShowArchivedChange: (showArchived: boolean) => void;
 }) {
   const [tab, setTab] = usePersistentState('catch-search-filter-tab', filterTabSchema, 'colors');
   const [direction, setDirection] = useState(1);
   const layoutId = useId();
+  const archivedId = useId();
   const selected = new Set(filter.ids);
   function selectTab(next: FilterTab) {
     if (next === tab) return;
@@ -260,7 +266,7 @@ export function SearchFilters({
                         )}
                       </AnimatePresence>
                     )}
-                    className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-16rem),16rem)]"
+                    className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-19.25rem),16rem)]"
                     renderTag={(tag, path) => (
                       <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
                         <span
@@ -376,6 +382,21 @@ export function SearchFilters({
           </FilterTabView>
         </AnimatePresence>
       </FilterTabContents>
+      <label
+        htmlFor={archivedId}
+        className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5"
+      >
+        <Archive className="size-4 text-muted-foreground" aria-hidden />
+        <span className="flex-1">Show archived notes</span>
+        <Switch
+          id={archivedId}
+          checked={showArchived}
+          onCheckedChange={(checked) => {
+            haptics.toggle();
+            onShowArchivedChange(checked);
+          }}
+        />
+      </label>
       <LayoutGroup id={layoutId}>
         <div
           role="tablist"

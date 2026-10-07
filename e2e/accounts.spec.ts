@@ -44,6 +44,10 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await accounts.getByRole('button', { name: first, exact: true }).click();
   await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
+  // Raw pointer gestures do not wait for the toast covering the phone's avatar to leave.
+  const switchedToast = page.locator('[data-sonner-toast]', { hasText: `Switched to ${first}` });
+  await switchedToast.getByRole('button', { name: 'Close toast' }).click();
+  await expect(switchedToast).toBeHidden();
   await expect(page).toHaveURL(/\/u\/1\/$/);
   await expect(card(page, 'First account note')).toBeVisible();
   await expect(card(page, 'Second account note')).toBeHidden();
