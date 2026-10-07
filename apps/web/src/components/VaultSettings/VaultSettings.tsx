@@ -241,13 +241,13 @@ function ChangeVaultPassword({ open, onClose }: { open: boolean; onClose: () => 
             <Button
               type="button"
               variant="ghost"
-              className="rounded-full"
+              className="rounded-xl"
               disabled={pending}
               onClick={close}
             >
               Cancel
             </Button>
-            <Button type="submit" className="rounded-full" disabled={pending}>
+            <Button type="submit" className="rounded-xl" disabled={pending}>
               {pending ? 'Changing…' : 'Change password'}
             </Button>
           </div>
@@ -299,13 +299,13 @@ function DeleteVault({
         </DialogDescription>
         <div className="flex justify-end gap-2">
           <DialogClose asChild>
-            <Button variant="ghost" className="rounded-full" disabled={pending}>
+            <Button variant="ghost" className="rounded-xl" disabled={pending}>
               Cancel
             </Button>
           </DialogClose>
           <Button
             variant="destructive"
-            className="rounded-full"
+            className="rounded-xl"
             disabled={pending}
             onClick={() => void confirm()}
           >
