@@ -1,5 +1,5 @@
 {
-  "title": "App and account",
+  "title": "App and Account",
   "defaultOpen": true,
   "pages": ["offline-and-updates", "settings-and-accounts"]
 }
