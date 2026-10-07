@@ -13,8 +13,12 @@ and checks and both E2E projects succeed in the same run. A PR with only `run e2
 has a failing `validation` check after successful E2E, with a message that approval is
 required. A PR with neither label also has a failing `validation` check; its ordinary
 `check` job still reports whether development checks passed. Skipped E2E jobs do not satisfy
-the gate. Main pushes and manual CI requests always request the full suite. Release CI
+the gate. Main pushes and manual CI requests request the full suite. Release CI
 continues to reuse only a verified full pass for the exact main/tag commit.
+
+A change confined to documentation is the exception: it runs `check` and skips E2E, on
+its PR and on the push to `main` that follows. See
+[Documentation-only changes](#documentation-only-changes).
 
 Optional [AI code review](ai-reviews.md) is requested separately with the `ai review`
 label. It can run while a PR is a draft, is advisory, and does not authorize merging.
@@ -126,7 +130,7 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    and rely on the mandatory full suite before merge; do not run full local E2E as a
    routine finishing check. An explicit user request can also justify an early full run.
 2. Once functionality and design are approved for merging after tests pass, mark the PR
-   ready and add `merge on pass`:
+   ready and add `merge on pass` (for a documentation-only change this runs no E2E):
 
    ```bash
    gh pr ready <number>
@@ -166,6 +170,36 @@ requested E2E, or remove and reapply `run e2e`. Full merge validation also requi
 `merge on pass`. Rerunning an older unlabeled event uses
 that event's original label state. Label changes trigger CI, so unrelated label edits can
 also rerun E2E while either test-requesting label is present.
+
+## Documentation-only changes
+
+A change needs no E2E when every file it touches is one the app, its image and its tests
+never load. [`scripts/change-scope.ts`](../scripts/change-scope.ts) holds the list:
+
+- `docs/**`
+- Markdown in the repository root (`README.md`, `AGENTS.md`, `DEPLOYMENT.md`, ...) and
+  under `branding/`
+- `.github/pull_request_template.md`, `LICENSE`, `.gitignore` and `cubic.yaml`
+
+Everything else counts as code, including Markdown anywhere else (an importer fixture is
+test input), workflows, scripts and the files CI itself runs from. A change that mixes the
+two is code. A renamed file counts under both its old and its new path, and a change the
+workflow cannot read counts as code. Add a path to the list only when nothing that runs
+reads it.
+
+For such a change:
+
+- `check` still runs: lint, type checks, unit tests and builds.
+- `merge on pass` does not start E2E, and `validation` passes on `check` alone. The label
+  is still required, because it records approval, so an unlabeled documentation PR fails
+  `validation` like any other.
+- `run e2e` still starts the full suite, and `validation` then waits for it.
+- The push to `main` skips E2E as well. That run is green without being a full pass, so a
+  release tagged on that commit requests the full suite on its tag and waits for it
+  (see [releases](releases.md)). Manual CI requests and merge groups always run everything.
+
+The change is read from GitHub's merge commit for a PR (against its base) and from the
+pushed range for `main`, so a PR is judged on everything it changes, not its last commit.
 
 ## What gets merged
 
