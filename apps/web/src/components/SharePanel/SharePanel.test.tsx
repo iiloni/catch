@@ -64,7 +64,7 @@ describe('SharePanel', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
     const button = screen.getByRole('button', { name: 'Copy content' });
     await waitFor(() => expect(button).toBeEnabled());
-    expect(screen.getByLabelText('Note content')).toHaveValue('Pack the tent');
+    expect(await screen.findByLabelText('Note content')).toHaveValue('Pack the tent');
     fireEvent.click(button);
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalledWith({ text: 'Pack the tent' }));
     expect(shareNote).not.toHaveBeenCalled();
@@ -104,6 +104,6 @@ describe('SharePanel', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Catch link' }));
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeVisible();
-    expect(screen.queryByLabelText('Note content')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByLabelText('Note content')).not.toBeInTheDocument());
   });
 });
