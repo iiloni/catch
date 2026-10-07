@@ -88,20 +88,6 @@ export function Compare() {
         ))}
         .
       </p>
-
-      <div className="reveal mx-auto mt-12 max-w-3xl rounded-3xl border border-border p-7">
-        <h3 className="text-xl font-semibold">When Catch is the wrong choice</h3>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
-          <li>You have no server, and no friend with one.</li>
-          <li>You want an iPhone app from the App Store.</li>
-          <li>
-            You need end-to-end encryption. Whoever runs a Catch server can read its notes;
-            Notesnook encrypts them.
-          </li>
-          <li>You share lists with other people. Keep lets several people edit one note.</li>
-          <li>You rely on Keep's drawings.</li>
-        </ul>
-      </div>
     </Section>
   );
 }

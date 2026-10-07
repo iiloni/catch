@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PhoneBody } from '@/components/Screenshot';
 import { cn } from '@/lib/utils';
 
-/** Recorded from the app by `scripts/screenshots.ts`, as `<name>-<theme>.mp4` and `.jpg`. */
+/** Recorded from the app by `scripts/screenshots.ts`, as `<name>-<theme>` in `.webm`, `.mp4` and `.jpg`. */
 const clips = [
   {
     name: 'quick-note',
@@ -20,8 +20,8 @@ const clips = [
     title: 'The dock becomes the toolbar',
   },
   {
-    name: 'tabs',
-    title: 'Pages slide the way you went',
+    name: 'search-filters',
+    title: 'Filters narrow the wall as you tick',
   },
 ] as const;
 
@@ -104,7 +104,6 @@ export function Motion() {
               <video
                 key={source}
                 ref={video}
-                src={`${source}.mp4`}
                 poster={`${source}.jpg`}
                 aria-label={clip.title}
                 muted
@@ -117,7 +116,10 @@ export function Motion() {
                 playsInline
                 preload="metadata"
                 className="size-full object-cover"
-              />
+              >
+                <source src={`${source}.webm`} type="video/webm" />
+                <source src={`${source}.mp4`} type="video/mp4" />
+              </video>
             )}
           </PhoneBody>
         </div>

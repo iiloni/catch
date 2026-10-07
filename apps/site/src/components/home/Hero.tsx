@@ -14,7 +14,7 @@ export function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-balance text-5xl font-extrabold tracking-tight sm:text-7xl">
-            Catch it before it's gone.
+            <span className="text-brand-gradient">Catch</span> it before it's gone.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground sm:text-xl">
             Quick, colorful notes for the browser and Android. They work offline and sync through

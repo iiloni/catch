@@ -401,11 +401,60 @@ async function capture(context: BrowserContext, layout: Layout, theme: string) {
   await deck.close();
 }
 
+const FPS = 60;
+// How much slower than life a clip is filmed. Chrome photographs a screen of this size only
+// five or six times a second, so the page runs slowly while it is filmed and the clip is
+// sped back up: every frame of an animation is in it.
+const SLOW = 14;
+
+/**
+ * Slows the page's own clocks, which run the animations written in script. `slowPage` turns
+ * it on once the page is ready; animations in CSS are slowed through Chrome instead.
+ */
+declare global {
+  interface Window {
+    slowPage(rate: number): void;
+  }
+}
+
+function dilateTime() {
+  const realNow = performance.now.bind(performance);
+  const realDate = Date.now.bind(Date);
+  let rate = 1;
+  let since = realNow();
+  let base = since;
+  let dateSince = realDate();
+  let dateBase = dateSince;
+  const now = () => base + (realNow() - since) / rate;
+  performance.now = now;
+  Date.now = () => Math.round(dateBase + (realDate() - dateSince) / rate);
+  const frame = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (callback) => frame(() => callback(now()));
+  for (const name of ['setTimeout', 'setInterval'] as const) {
+    const real = window[name].bind(window) as (
+      handler: TimerHandler,
+      ms?: number,
+      ...rest: unknown[]
+    ) => number;
+    Object.assign(window, {
+      [name]: (handler: TimerHandler, ms?: number, ...rest: unknown[]) =>
+        real(handler, (ms ?? 0) * rate, ...rest),
+    });
+  }
+  Object.assign(window, {
+    slowPage: (next: number) => {
+      base = now();
+      dateBase = Date.now();
+      since = realNow();
+      dateSince = realDate();
+      rate = next;
+    },
+  });
+}
+
 /**
  * Records one interaction on the phone layout as a short silent clip, for the page's
- * motion section. Chrome's screencast gives frames at the screen's full resolution, each
- * with the time it was drawn, which FFmpeg (it must be installed) turns into a video.
- * Playwright's own recorder films at a third of that.
+ * motion section. FFmpeg (it must be installed) turns the frames into the videos.
  */
 async function record(
   browser: Browser,
@@ -418,6 +467,7 @@ async function record(
 ) {
   const dir = mkdtempSync(path.join(tmpdir(), 'catch-recording-'));
   const context = await phoneContext(browser, storageState, theme);
+  await context.addInitScript(dilateTime);
   const page = await openApp(context);
   await card(page, 'Groceries').waitFor({ timeout: 60_000 });
   await prepare(page);
@@ -425,52 +475,86 @@ async function record(
 
   const frames: { file: string; time: number }[] = [];
   const cdp = await context.newCDPSession(page);
-  cdp.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
-    const file = path.join(dir, `${String(frames.length).padStart(5, '0')}.jpg`);
-    writeFileSync(file, Buffer.from(data, 'base64'));
-    frames.push({ file, time: metadata.timestamp ?? 0 });
-    void cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
-  });
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 95, everyNthFrame: 1 });
+  await cdp.send('Animation.enable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 / SLOW });
+  await page.evaluate((rate) => window.slowPage(rate), SLOW);
+  // Photographs one after another: unlike a screencast, they have every pixel of the screen.
+  let filming = true;
+  const filmed = (async () => {
+    while (filming) {
+      const asked = performance.now();
+      // The clip is measured from the top of the document, and a page may be scrolled.
+      const { cssVisualViewport: view } = await cdp.send('Page.getLayoutMetrics');
+      const { data } = await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        optimizeForSpeed: true,
+        // Without a scale Chrome answers in CSS pixels, a third of the screen's.
+        clip: {
+          x: view.pageX,
+          y: view.pageY,
+          ...layouts.phone.viewport,
+          scale: layouts.phone.deviceScaleFactor,
+        },
+      });
+      const file = path.join(dir, `${String(frames.length).padStart(5, '0')}.png`);
+      writeFileSync(file, data, 'base64');
+      frames.push({ file, time: (asked + performance.now()) / 2000 });
+    }
+  })();
   await act(page);
-  await cdp.send('Page.stopScreencast');
+  filming = false;
+  await filmed;
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+  await page.evaluate(() => window.slowPage(1));
   await restore(page);
   await context.close();
   if (frames.length < 2) throw new Error(`No frames were recorded for ${name}.`);
 
-  // A frame is only sent when the screen changes, so each one lasts until the next.
+  // Each frame lasts until the next was taken.
   const list = path.join(dir, 'frames.txt');
   writeFileSync(
     list,
     frames
       .map(({ file, time }, index) => {
-        const next = frames[index + 1]?.time ?? time + 0.4;
-        return `file '${file}'\nduration ${Math.max(next - time, 0.001).toFixed(4)}`;
+        const next = frames[index + 1]?.time ?? time + 0.05 * SLOW;
+        return `file '${file}'\nduration ${Math.max((next - time) / SLOW, 0.0005).toFixed(5)}`;
       })
       .join('\n'),
   );
   const file = path.join(recordings, `${name}-${theme}`);
+  const input = ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list];
+  // VP9 at the screen's own size for the browsers that play it, which is nearly all of them.
   execFileSync('ffmpeg', [
-    '-y',
-    '-loglevel',
-    'error',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    list,
-    // Two thirds of the screen's pixels: sharp at the size the page shows it, on any display.
+    ...input,
     '-vf',
-    'fps=60,scale=720:-2:flags=lanczos',
+    `fps=${FPS}`,
     '-an',
-    // H.264 plays everywhere, and OpenH264 is the encoder a stock FFmpeg always has.
+    '-c:v',
+    'libvpx-vp9',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    '24',
+    '-b:v',
+    '0',
+    '-row-mt',
+    '1',
+    '-cpu-used',
+    '3',
+    `${file}.webm`,
+  ]);
+  // H.264 for the rest. OpenH264 is the encoder a stock FFmpeg always has.
+  execFileSync('ffmpeg', [
+    ...input,
+    '-vf',
+    `fps=${FPS},scale=720:-2:flags=lanczos`,
+    '-an',
     '-c:v',
     'libopenh264',
     '-pix_fmt',
     'yuv420p',
     '-b:v',
-    '5M',
+    '6M',
     '-movflags',
     '+faststart',
     `${file}.mp4`,
@@ -478,10 +562,12 @@ async function record(
   const first = frames[0];
   if (first) await sharp(first.file).resize(720).jpeg({ quality: 82 }).toFile(`${file}.jpg`);
   rmSync(dir, { recursive: true, force: true });
-  console.log(path.relative(root, `${file}.mp4`), `${frames.length} frames`);
+  console.log(path.relative(root, `${file}.webm`), `${frames.length} frames`);
 }
 
 const pause = (page: Page, ms: number) => page.waitForTimeout(ms);
+/** A pause of this long in the finished clip. */
+const roll = (page: Page, ms: number) => page.waitForTimeout(ms * SLOW);
 const quickNote = { title: 'Call the plumber', body: 'Kitchen tap, before Friday' };
 
 /** The clips, in the order the page lists them. Each leaves the account as it found it. */
@@ -505,19 +591,19 @@ const clips: {
       }
     },
     act: async (page) => {
-      await pause(page, 500);
-      await page.getByRole('button', { name: 'New note' }).tap();
-      await page
+      const editor = page
         .getByRole('region', { name: 'New note', exact: true })
-        .getByRole('textbox')
-        .waitFor();
-      await pause(page, 700);
-      await page.keyboard.type(quickNote.title, { delay: 55 });
+        .getByRole('textbox');
+      await roll(page, 500);
+      await page.getByRole('button', { name: 'New note' }).tap();
+      await editor.waitFor();
+      await roll(page, 700);
+      await page.keyboard.type(quickNote.title, { delay: 55 * SLOW });
       await page.keyboard.press('Enter');
-      await page.keyboard.type(quickNote.body, { delay: 45 });
-      await pause(page, 600);
+      await page.keyboard.type(quickNote.body, { delay: 45 * SLOW });
+      await roll(page, 600);
       await page.getByRole('button', { name: 'Save note' }).tap();
-      await pause(page, 2400);
+      await roll(page, 2400);
     },
     // The next recording starts from the same wall, so the note written here goes again.
     restore: async (page) => {
@@ -533,11 +619,11 @@ const clips: {
   {
     name: 'open-note',
     act: async (page) => {
-      await pause(page, 500);
+      await roll(page, 500);
       await card(page, 'Lisbon weekend').getByRole('button', { name: 'Open note' }).tap();
-      await pause(page, 2200);
+      await roll(page, 2200);
       await page.getByRole('dialog').getByRole('button', { name: 'Close' }).tap();
-      await pause(page, 1600);
+      await roll(page, 1600);
     },
   },
   {
@@ -548,23 +634,32 @@ const clips: {
     },
     act: async (page) => {
       const toolbar = page.getByRole('toolbar', { name: 'Note actions' });
-      await pause(page, 400);
+      await roll(page, 400);
       await toolbar.getByRole('button', { name: 'Background color' }).tap();
-      await pause(page, 1300);
+      await roll(page, 1300);
       await page.getByRole('button', { name: 'Cyan', exact: true }).tap();
-      await pause(page, 1300);
+      await roll(page, 1300);
       await page.getByRole('button', { name: 'Blue', exact: true }).tap();
-      await pause(page, 1300);
+      await roll(page, 1300);
     },
   },
   {
-    name: 'tabs',
+    name: 'search-filters',
+    prepare: async (page) => {
+      await page.getByRole('link', { name: 'Search' }).tap();
+      await page.getByRole('region', { name: 'Browse tags' }).waitFor();
+    },
     act: async (page) => {
-      await pause(page, 1200);
-      await page.getByRole('link', { name: 'Deck' }).tap();
-      await pause(page, 1700);
-      await page.getByRole('link', { name: 'Gallery' }).tap();
-      await pause(page, 1500);
+      const tag = (name: string) => page.getByRole('checkbox', { name, exact: true });
+      await roll(page, 600);
+      await page.getByRole('button', { name: 'Filter notes' }).tap();
+      await roll(page, 1300);
+      await page.getByRole('tab', { name: 'Tags' }).tap();
+      await roll(page, 1300);
+      await tag('Travel').tap();
+      await roll(page, 1500);
+      await tag('Home').tap();
+      await roll(page, 1800);
     },
   },
 ];
