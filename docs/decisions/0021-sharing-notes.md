@@ -58,6 +58,8 @@ and holds the exact token's share row until insertion finishes, so a revoked lin
 join its replacement. Snapshot reads and publication are serialized with owner writes,
 including the first reader joining and tag tree color changes. The client waits for the
 accepted copy to sync before navigating to its editor.
+Its cached React view is initialized from the collection before the first render, so a
+ready collection cannot briefly appear empty and close the newly opened note.
 Tag tree changes and Deck column deletion share the existing owner-level tag tree lock
 before taking row locks, covering their entire note sets, including unshared color notes.
 

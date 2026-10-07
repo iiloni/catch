@@ -13,7 +13,6 @@ import {
   type LinkPreview,
   linkPreviewSchema,
   MAX_NOTES_PER_REQUEST,
-  type Note,
   type NoteShare,
   type NoteTags,
   noteSchema,
@@ -23,10 +22,8 @@ import {
   type ReminderAlarm,
   reminderAlarm,
   reminderSchema,
-  type SharedNote,
   saveReminderSchema,
   sharedAttachments,
-  sharedNoteAsNote,
   sharedNoteSchema,
   type Tag,
   type TxidResponse,
@@ -84,6 +81,7 @@ import {
 import { mergeQueuedWrites } from './mergeQueuedWrites';
 import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
+import { createSharedNotesView } from './sharedNotesView';
 import { clearIncomingShares } from './shareInbox';
 import {
   addPendingWrite,
@@ -1020,41 +1018,19 @@ export function useNoteShares(): ReadonlyMap<string, NoteShare> {
   return useSyncExternalStore(subscribeToShares, () => sharesByNote);
 }
 
-type SharedNotes = {
-  /** The notes as the gallery shows them, leaving out any in their owner's trash. */
-  notes: readonly Note[];
-  byId: ReadonlyMap<string, SharedNote>;
-};
-let sharedNotes: SharedNotes = { notes: [], byId: new Map() };
-const sharedNoteListeners = new Set<() => void>();
-let sharedNotesSubscribed = false;
-function subscribeToSharedNotes(listener: () => void) {
-  sharedNoteListeners.add(listener);
-  if (!sharedNotesSubscribed) {
-    sharedNotesSubscribed = true;
-    sharedNotesCollection.subscribeChanges(
-      () => {
-        const rows = [...sharedNotesCollection.values()];
-        sharedNotes = {
-          notes: rows.filter((row) => row.isAvailable).map(sharedNoteAsNote),
-          byId: new Map(rows.map((row) => [row.noteId, row])),
-        };
-        for (const notify of sharedNoteListeners) notify();
-      },
-      { includeInitialState: true },
-    );
-  }
-  return () => {
-    sharedNoteListeners.delete(listener);
-  };
-}
+const sharedNotesView = createSharedNotesView(
+  () => sharedNotesCollection.values(),
+  (update) => {
+    sharedNotesCollection.subscribeChanges(update, { includeInitialState: true });
+  },
+);
 
 /**
  * Other people's notes in the user's gallery (ADR 0021), shaped like the user's own so the
  * same pages and cards show them. `isSharedNote` tells them apart.
  */
-export function useSharedNotes(): SharedNotes {
-  return useSyncExternalStore(subscribeToSharedNotes, () => sharedNotes);
+export function useSharedNotes() {
+  return useSyncExternalStore(sharedNotesView.subscribe, sharedNotesView.getSnapshot);
 }
 
 /** Whether the shared notes have synced: until then, one that is not here may yet arrive. */
