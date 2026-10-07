@@ -58,6 +58,8 @@ and holds the exact token's share row until insertion finishes, so a revoked lin
 join its replacement. Snapshot reads and publication are serialized with owner writes,
 including the first reader joining and tag tree color changes. The client waits for the
 accepted copy to sync before navigating to its editor.
+Tag tree changes and Deck column deletion share the existing owner-level tag tree lock
+before taking row locks, covering their entire note sets, including unshared color notes.
 
 **Shared notes are shown as notes.** The client turns a copy into a `Note` whose `userId` is
 its owner's (`sharedNoteAsNote`), so the gallery, archive and search show it with the same
@@ -101,8 +103,7 @@ content or queued write format; protocol and collection versions stay unchanged.
 - Two more shapes per client, eight in all. Over HTTP/1.1 that is more than a browser's six
   connections per origin, as ADR 0018 already found; production needs HTTP/2.
 - A reader's copy shows the owner's name as it was at the note's last change.
-- A tag's color changing does not refresh the copies of the notes under it; they catch up
-  at each note's next change.
+- Tag color, hierarchy and deletion changes refresh reader copies in the same transaction.
 - A reader gets previews for the links in a shared note like for their own (ADR 0006).
 - The reader's attachment quota is not charged for a shared note's files; they are the
   owner's.

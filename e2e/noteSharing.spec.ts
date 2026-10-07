@@ -195,21 +195,35 @@ test('a share link is read without an account and added by one, until it is ende
 
   // Reader colors follow the owner's tag tree as well as direct note color writes.
   const tag = noteId();
-  await alice.context.post('/api/tags', {
-    headers: alice.headers,
-    data: { id: tag, name: 'Trips', color: 'yellow' },
-  });
-  await alice.context.patch(`/api/note-tags/${id}`, {
-    headers: alice.headers,
-    data: { primaryTagId: tag },
-  });
+  expect(
+    (
+      await alice.context.post('/api/tags', {
+        headers: alice.headers,
+        data: { id: tag, name: 'Trips', color: 'yellow', parentId: null, icon: null },
+      })
+    ).ok(),
+  ).toBeTruthy();
+  expect(
+    (
+      await alice.context.patch(`/api/note-tags/${id}`, {
+        headers: alice.headers,
+        data: { primaryTagId: tag },
+      })
+    ).ok(),
+  ).toBeTruthy();
   expect(await bobsCopy()).toMatchObject({ color: 'yellow' });
-  await alice.context.patch(`/api/tags/${tag}`, {
-    headers: alice.headers,
-    data: { color: 'green' },
-  });
+  expect(
+    (
+      await alice.context.patch(`/api/tags/${tag}`, {
+        headers: alice.headers,
+        data: { color: 'green' },
+      })
+    ).ok(),
+  ).toBeTruthy();
   expect(await bobsCopy()).toMatchObject({ color: 'green' });
-  await alice.context.delete(`/api/tags/${tag}`, { headers: alice.headers });
+  expect(
+    (await alice.context.delete(`/api/tags/${tag}`, { headers: alice.headers })).ok(),
+  ).toBeTruthy();
   expect(await bobsCopy()).toMatchObject({ color: 'default' });
 
   // Undo uses the original link and arrangement, but gets fresh content from the owner.
@@ -336,8 +350,12 @@ test('a shared note is read from its link and added to another gallery', async (
     await route.continue();
   });
   await heldPoll;
+  const acceptedResponse = reader.waitForResponse(
+    (response) => response.url().includes('/accept') && response.request().method() === 'POST',
+  );
   await reader.getByRole('button', { name: 'Add to my notes' }).click();
   try {
+    expect((await acceptedResponse).ok()).toBeTruthy();
     await expect(reader.getByRole('button', { name: 'Adding…' })).toBeVisible();
     await expect(reader).toHaveURL(link);
   } finally {

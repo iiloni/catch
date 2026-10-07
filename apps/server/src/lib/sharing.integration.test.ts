@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { DEFAULT_BOARD_STATUS } from '@catch/shared';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -10,7 +11,9 @@ import type { Db } from '../db/client';
 import { migrationsFolder } from '../db/migrations';
 import * as schema from '../db/schema';
 import { attachmentRoutes } from '../routes/attachments';
+import { boardColumnRoutes } from '../routes/boardColumns';
 import { shareLinkRoutes } from '../routes/sharing';
+import { tagRoutes } from '../routes/tags';
 import { lockSharedNote, refreshSharedNote } from './sharing';
 
 const fixture = vi.hoisted(() => ({ db: null as Db | null }));
@@ -58,7 +61,9 @@ describe.skipIf(!serverUrl)('shared note transaction ordering', () => {
         await next();
       })
       .route('/shares', shareLinkRoutes)
-      .route('/attachments', attachmentRoutes);
+      .route('/attachments', attachmentRoutes)
+      .route('/columns', boardColumnRoutes)
+      .route('/tags', tagRoutes);
   }, 30_000);
 
   afterAll(async () => {
@@ -71,6 +76,8 @@ describe.skipIf(!serverUrl)('shared note transaction ordering', () => {
   beforeEach(async () => {
     await database.delete(schema.attachments);
     await database.delete(schema.notes);
+    await database.delete(schema.tags);
+    await database.delete(schema.boardColumns);
     await database.insert(schema.notes).values({
       id: NOTE,
       userId: 'owner',
@@ -96,7 +103,7 @@ describe.skipIf(!serverUrl)('shared note transaction ordering', () => {
   const accept = () => app.request(`/shares/${TOKEN}/accept`, { method: 'POST' });
   const copy = async () => (await database.select().from(schema.sharedNotes))[0];
 
-  async function holdNote(change?: (tx: Tx) => Promise<void>) {
+  async function holdNote(change?: (tx: Tx) => Promise<void>, noteId = NOTE) {
     let entered!: (tx: Tx) => void;
     let failed!: (error: unknown) => void;
     let release!: () => void;
@@ -108,7 +115,7 @@ describe.skipIf(!serverUrl)('shared note transaction ordering', () => {
       release = resolve;
     });
     const transaction = database.transaction(async (tx) => {
-      await lockSharedNote(tx, NOTE, 'owner');
+      await lockSharedNote(tx, noteId, 'owner');
       await change?.(tx);
       entered(tx);
       await released;
@@ -170,6 +177,64 @@ describe.skipIf(!serverUrl)('shared note transaction ordering', () => {
     expect((await pending).status).toBe(200);
     expect((await copy())?.content).toEqual(paragraph('New text'));
   });
+
+  it('serializes column deletion with a tag edit across shared and unshared notes', async () => {
+    const second = '0199a0a0-0000-7000-8000-00000000000c';
+    const unshared = '0199a0a0-0000-7000-8000-00000000000d';
+    const tag = '0199a0a0-0000-7000-8000-00000000000f';
+    await database
+      .insert(schema.boardColumns)
+      .values({ userId: 'owner', id: 'trip', name: 'Trip', color: 'blue', position: 'a0' });
+    await database.update(schema.notes).set({ status: 'trip' });
+    await database
+      .insert(schema.notes)
+      .values(
+        [second, unshared].map((id) => ({ id, userId: 'owner', status: 'trip', position: 'a1' })),
+      );
+    await database
+      .insert(schema.noteShares)
+      .values({ noteId: second, userId: 'owner', token: 'b'.repeat(43) });
+    await database.insert(schema.tags).values({ id: tag, userId: 'owner', name: 'Trips' });
+
+    // The tag transaction holds the first linked note and waits for the second. Column
+    // deletion must wait at the account lock before locking any of its three note rows.
+    const held = await holdNote(undefined, second);
+    const edit = app.request(`/tags/${tag}`, {
+      method: 'PATCH',
+      headers: { 'Test-User': 'owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Travel' }),
+    });
+    let deletion: Promise<Response> | undefined;
+    try {
+      await waitingForNote();
+      deletion = Promise.resolve(
+        app.request('/columns/trip', {
+          method: 'DELETE',
+          headers: { 'Test-User': 'owner' },
+        }),
+      );
+      await vi.waitFor(
+        async () => {
+          const [row] = await connection`
+          SELECT count(*)::int AS waiting FROM pg_stat_activity
+          WHERE datname = ${name} AND wait_event_type = 'Lock' AND wait_event = 'advisory'`;
+          expect(row?.waiting).toBeGreaterThan(0);
+        },
+        { timeout: 5000, interval: 20 },
+      );
+    } finally {
+      await held.finish();
+    }
+    expect((await edit).status).toBe(200);
+    expect((await deletion)?.status).toBe(200);
+    expect((await database.select().from(schema.notes)).map((note) => note.status)).toEqual([
+      DEFAULT_BOARD_STATUS,
+      DEFAULT_BOARD_STATUS,
+      DEFAULT_BOARD_STATUS,
+    ]);
+    expect((await database.select().from(schema.tags))[0]?.name).toBe('Travel');
+    expect(await database.select().from(schema.boardColumns)).toEqual([]);
+  }, 15_000);
 
   it.each([false, true])(
     'an attachment rename cannot overwrite a concurrent owner edit (trashed: %s)',
