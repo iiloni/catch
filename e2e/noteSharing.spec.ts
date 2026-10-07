@@ -137,7 +137,9 @@ test('a share link is read without an account and added by one, until it is ende
   expect(await (await accept(bob)).json()).toEqual({ noteId: id, txid: null });
   expect((await (await read(bob.context, bob.headers)).json()).viewer).toBe('member');
 
-  // Electric sends each value as Postgres writes it, so JSON and booleans arrive as text.
+  // Electric sends each value as Postgres writes it, so JSON and booleans arrive as text: a
+  // boolean is `true` in a shape's first rows and `t` in the changes that follow.
+  const bool = (value: unknown) => ['true', 't'].includes(String(value));
   const bobsCopy = async () => {
     const rows = await syncedRows(bob.context, bob.headers, 'shared-notes');
     const row = rows.find((candidate) => candidate.note_id === id);
@@ -146,8 +148,8 @@ test('a share link is read without an account and added by one, until it is ende
         ownerName: row.owner_name,
         color: row.color,
         content: JSON.parse(String(row.content)),
-        isAvailable: String(row.is_available) === 'true',
-        isPinned: String(row.is_pinned) === 'true',
+        isAvailable: bool(row.is_available),
+        isPinned: bool(row.is_pinned),
       }
     );
   };

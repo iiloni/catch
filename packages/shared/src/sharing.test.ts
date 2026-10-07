@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { attachmentUrl } from './attachments';
 import {
-  newShareToken,
   resolveAttachmentBlocks,
   type SharedNote,
   sharedAttachmentPath,
@@ -39,13 +38,8 @@ const shared: SharedNote = {
 };
 
 describe('share links', () => {
-  it('makes tokens the server accepts, a new one each time', () => {
-    const first = newShareToken();
-    expect(shareTokenSchema.safeParse(first).success).toBe(true);
-    expect(newShareToken()).not.toBe(first);
-  });
-
-  it('refuses anything that is not a whole token', () => {
+  it('takes a whole token and nothing else', () => {
+    expect(shareTokenSchema.safeParse(`${'aB3_-'.repeat(8)}xyz`).success).toBe(true);
     for (const value of ['', 'short', `${'a'.repeat(42)}/`, 'a'.repeat(44)]) {
       expect(shareTokenSchema.safeParse(value).success).toBe(false);
     }

@@ -1,4 +1,4 @@
-import { type Note, newShareToken, shareLink } from '@catch/shared';
+import { type Note, shareLink } from '@catch/shared';
 import { toast } from 'sonner';
 import { getSignedInUser } from './auth';
 import { noteSharesCollection, sharedNotesCollection, useSharedNotes, write } from './collections';
@@ -11,6 +11,14 @@ import { getServerUrl } from './serverUrl';
 export function isSharedNote(note: Pick<Note, 'userId'>) {
   const user = getSignedInUser();
   return user !== null && note.userId !== user.id;
+}
+
+/** 32 random bytes in base64url, as `shareTokenSchema` takes them. */
+export function newShareToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
 /** The link a note is shared at, for its token. */

@@ -94,13 +94,6 @@ export function sharedAttachmentPath(token: string, id: string) {
   return `/api/shares/${token}/attachments/${id}/content`;
 }
 
-export function newShareToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-}
-
 /**
  * A shared note as the gallery shows it. `userId` stays its owner's, which is how the app
  * tells it from the user's own notes (see `isSharedNote`).

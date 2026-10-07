@@ -14,7 +14,6 @@ import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ShareRouteImport } from './routes/share'
-import { Route as STokenRouteImport } from './routes/s.$token'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppDeckRouteImport } from './routes/_app/deck'
@@ -22,6 +21,7 @@ import { Route as AppRemindersRouteImport } from './routes/_app/reminders'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
+import { Route as STokenRouteImport } from './routes/s.$token'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
@@ -55,11 +55,6 @@ const SetupRoute = SetupRouteImport.update({
 const ShareRoute = ShareRouteImport.update({
   id: '/share',
   path: '/share',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const STokenRoute = STokenRouteImport.update({
-  id: '/s/$token',
-  path: '/s/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -96,6 +91,11 @@ const AppTrashRoute = AppTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
   getParentRoute: () => AppRoute,
+} as any)
+const STokenRoute = STokenRouteImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
@@ -155,13 +155,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
-  '/s/$token': typeof STokenRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/reminders': typeof AppRemindersRoute
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
+  '/s/$token': typeof STokenRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
@@ -178,12 +178,12 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
-  '/s/$token': typeof STokenRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/reminders': typeof AppRemindersRoute
   '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
+  '/s/$token': typeof STokenRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
@@ -203,13 +203,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
-  '/s/$token': typeof STokenRoute
   '/_app/archive': typeof AppArchiveRoute
   '/_app/deck': typeof AppDeckRoute
   '/_app/reminders': typeof AppRemindersRoute
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/trash': typeof AppTrashRoute
+  '/s/$token': typeof STokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
@@ -230,13 +230,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
-    | '/s/$token'
     | '/archive'
     | '/deck'
     | '/reminders'
     | '/search'
     | '/settings'
     | '/trash'
+    | '/s/$token'
     | '/settings/account'
     | '/settings/admin'
     | '/settings/data'
@@ -253,12 +253,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
-    | '/s/$token'
     | '/archive'
     | '/deck'
     | '/reminders'
     | '/search'
     | '/trash'
+    | '/s/$token'
     | '/'
     | '/settings/account'
     | '/settings/admin'
@@ -277,13 +277,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
-    | '/s/$token'
     | '/_app/archive'
     | '/_app/deck'
     | '/_app/reminders'
     | '/_app/search'
     | '/_app/settings'
     | '/_app/trash'
+    | '/s/$token'
     | '/_app/'
     | '/_app/settings/account'
     | '/_app/settings/admin'
@@ -343,13 +343,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShareRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/s/$token': {
-      id: '/s/$token'
-      path: '/s/$token'
-      fullPath: '/s/$token'
-      preLoaderRoute: typeof STokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app/': {
       id: '/_app/'
       path: '/'
@@ -398,6 +391,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/trash'
       preLoaderRoute: typeof AppTrashRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/s/$token': {
+      id: '/s/$token'
+      path: '/s/$token'
+      fullPath: '/s/$token'
+      preLoaderRoute: typeof STokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/settings/': {
       id: '/_app/settings/'
