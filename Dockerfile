@@ -38,11 +38,14 @@ CMD ["sh", "scripts/dev-entrypoint.sh"]
 FROM base AS build
 ARG CATCH_CHANNEL=dev
 COPY . .
+# The full install above validates workspace patches. The server-only deploy below excludes
+# the web app, so allow its SQLite patch to be unused during that narrowed install.
 RUN --mount=type=cache,id=catch-pnpm-store,target=/pnpm-store \
     export PNPM_CONFIG_STORE_DIR=/pnpm-store \
     && pnpm install --frozen-lockfile --filter '@catch/server...' --filter '@catch/web...' \
     && pnpm --filter @catch/web build \
     && pnpm --filter @catch/server build \
+    && printf '\nallowUnusedPatches: true\n' >> pnpm-workspace.yaml \
     && pnpm --filter @catch/server deploy --prod --legacy /out
 
 FROM runtime AS production
