@@ -104,6 +104,11 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   `merge on pass`. Fix failures with the label left in place, then merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.
   The local `./scripts/dev.sh check` requirement still applies.
+- Once the user approves the feature for `merge on pass`, shut down this worktree's dev
+  stack with `./scripts/dev.sh down` from this checkout. Approval means the user is done
+  manually testing the feature, so free those resources while CI runs. If failed tests
+  need local investigation or fixes, bring it back with `./scripts/dev.sh up`, then run
+  `./scripts/dev.sh down` again when the local work and checks are finished.
 - A PR does not have to be up to date with `main` to merge: its checks ran on GitHub's
   merge of the branch with `main` as it stood then, and a passing result stays valid when
   other PRs land. Do not update the branch just because `main` advanced, since every
