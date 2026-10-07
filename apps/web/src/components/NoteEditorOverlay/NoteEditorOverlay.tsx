@@ -782,7 +782,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                         data-share-panel
                         className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
                       >
-                        <SharePanel note={note} />
+                        <SharePanel note={note} getContent={controls?.getContent} />
                       </PopoverContent>
                     </Popover>
                   )}

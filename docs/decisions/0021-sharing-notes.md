@@ -21,6 +21,18 @@ write arrives. The token is stored as it is, not hashed: it has to sync back to 
 and a database that leaks holds the notes themselves. A note keeps the first link it was
 given, so two devices sharing one note offline converge on one row.
 
+**The share panel chooses a link or a content copy.** Its segmented control offers Catch
+link and Note content. Content uses BlockNote's Markdown exporter on the device, including
+unsaved editor text. Device-only attachment references become filenames; files themselves
+are not sent. This copy grants no live access and creates no share link. The panel explains
+that a link includes future updates, while a content copy does not include files or updates.
+
+Android opens the system Sharesheet through a local `OutgoingShares` Capacitor plugin
+(`ACTION_SEND`, `text/plain`). Mobile browsers and PWAs use Web Share when available, with
+Markdown prepared before the tap so transient user activation is retained. Desktop and
+mobile browsers without Web Share copy to the clipboard instead. Dismissing a browser
+share sheet is quiet; real failures remain visible in the panel.
+
 **Readers see the note as it is now, and cannot change it.** A reader with an account on
 the server can add the note to their gallery, where it keeps following its owner's edits.
 Only the owner edits. Giving readers edits would mean every write to a note, its files, tags
@@ -74,6 +86,8 @@ development, adding the token to `shared-notes` moves that collection's `schemaV
 to 2; migration 0014 fills existing copies from their share links. This remains part of
 the unpublished protocol 4 contract. Accepting a share still allows an empty body; Undo
 may supply the reader's pin, archive and position, and replay leaves an existing copy alone.
+Sharing Markdown and selecting the outgoing transport change no API, shape, persisted
+content or queued write format; protocol and collection versions stay unchanged.
 
 ## Consequences
 

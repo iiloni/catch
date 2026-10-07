@@ -257,11 +257,19 @@ test('a shared note is read from its link and added to another gallery', async (
   page,
   browser,
 }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async () => {
+        throw new DOMException('Dismissed', 'AbortError');
+      },
+    });
+  });
   await signUp(page);
   await seedNotes(page, [{ title: 'Trip plan', body: 'Pack the tent' }]);
 
   await noteAction(page, 'Trip plan', 'Share');
-  await page.getByRole('button', { name: 'Create link' }).click();
+  await page.getByRole('button', { name: /^(Create link|Share link)$/ }).click();
   const link = await page.getByLabel('Share link').inputValue();
   expect(link).toMatch(/\/s\/[A-Za-z0-9_-]{43}$/);
   // The link works once the queued write has reached the server.
@@ -322,4 +330,46 @@ test('a shared note is read from its link and added to another gallery', async (
   await reader.goto(link);
   await expect(reader.getByRole('heading', { name: 'This note is not shared' })).toBeVisible();
   await reader.context().close();
+});
+
+test('note content shares a Markdown copy without making a Catch link', async ({
+  page,
+  isMobile,
+}) => {
+  await page.addInitScript(() => {
+    const sent: string[] = [];
+    Object.defineProperty(window, 'sentNoteContent', { value: sent });
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (data: ShareData) => {
+        sent.push(data.text ?? data.url ?? '');
+      },
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          sent.push(text);
+        },
+      },
+    });
+  });
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Trip plan', body: 'Pack the tent' }]);
+  await noteAction(page, 'Trip plan', 'Share');
+  await page.getByRole('radio', { name: 'Note content', exact: true }).click();
+  await expect(page.getByLabel('Note content', { exact: true })).toHaveValue(
+    /### Trip plan[\s\S]*Pack the tent/,
+  );
+  await page
+    .getByRole('button', { name: isMobile ? 'Share content' : 'Copy content', exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, 'sentNoteContent')))
+    .toEqual(['### Trip plan\n\nPack the tent']);
+  await page.getByRole('radio', { name: 'Catch link', exact: true }).click();
+  await expect(page.getByLabel('Share link')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: isMobile ? 'Share link' : 'Create link', exact: true }),
+  ).toBeEnabled();
 });

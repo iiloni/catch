@@ -2,25 +2,30 @@ import type { NoteShare } from '@catch/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNoteShares } from '@/lib/collections';
+import { shareOrCopy, usesSystemShare } from '@/lib/outgoingShares';
 import { shareNote, stopSharingNote } from '@/lib/sharing';
 import { SharePanel } from './SharePanel';
 
 vi.mock('@/lib/collections', () => ({ useNoteShares: vi.fn() }));
+vi.mock('@/lib/outgoingShares', () => ({ shareOrCopy: vi.fn(), usesSystemShare: vi.fn() }));
 vi.mock('@/lib/sharing', () => ({
   noteShareLink: (token: string) => `https://catch.example/s/${token}`,
   shareNote: vi.fn(),
   stopSharingNote: vi.fn(),
 }));
 
-const note = { id: '0199a0a0-0000-7000-8000-000000000001', userId: 'me' };
-const token = 'aB3_-'.repeat(8) + 'xyz';
+const note = {
+  id: '0199a0a0-0000-7000-8000-000000000001',
+  userId: 'me',
+  content: [{ type: 'paragraph', content: 'Pack the tent' }],
+};
+const token = `${'aB3_-'.repeat(8)}xyz`;
 const share: NoteShare = { noteId: note.id, userId: 'me', token, createdAt: new Date() };
-const writeText = vi.fn();
 
 beforeEach(() => {
   vi.resetAllMocks();
-  writeText.mockResolvedValue(undefined);
-  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  vi.mocked(shareOrCopy).mockResolvedValue('copied');
+  vi.mocked(usesSystemShare).mockReturnValue(false);
   vi.mocked(useNoteShares).mockReturnValue(new Map());
 });
 
@@ -31,7 +36,9 @@ describe('SharePanel', () => {
     expect(screen.queryByLabelText('Share link')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     expect(shareNote).toHaveBeenCalledWith(note);
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`https://catch.example/s/${token}`));
+    await waitFor(() =>
+      expect(shareOrCopy).toHaveBeenCalledWith({ url: `https://catch.example/s/${token}` }),
+    );
   });
 
   it('shows a shared note its link, to copy again or to end', async () => {
@@ -45,10 +52,58 @@ describe('SharePanel', () => {
   });
 
   it('says so when the link cannot be copied', async () => {
-    writeText.mockRejectedValue(new Error('denied'));
+    vi.mocked(shareOrCopy).mockRejectedValue(new Error('denied'));
     vi.mocked(useNoteShares).mockReturnValue(new Map([[note.id, share]]));
     render(<SharePanel note={note} />);
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy');
+  });
+
+  it('copies Markdown content without creating a share link', async () => {
+    render(<SharePanel note={note} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    const button = screen.getByRole('button', { name: 'Copy content' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.getByLabelText('Note content')).toHaveValue('Pack the tent');
+    fireEvent.click(button);
+    await waitFor(() => expect(shareOrCopy).toHaveBeenCalledWith({ text: 'Pack the tent' }));
+    expect(shareNote).not.toHaveBeenCalled();
+    expect(screen.getByText('A Markdown copy, without files or future updates.')).toBeVisible();
+  });
+
+  it('shares the current editor content before autosave updates the note', async () => {
+    render(
+      <SharePanel note={note} getContent={() => [{ type: 'paragraph', content: 'Just typed' }]} />,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    const button = screen.getByRole('button', { name: 'Copy content' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    expect(shareOrCopy).toHaveBeenCalledWith({ text: 'Just typed' });
+  });
+
+  it('opens the mobile share menu for a newly created link', async () => {
+    vi.mocked(usesSystemShare).mockReturnValue(true);
+    vi.mocked(shareOrCopy).mockResolvedValue('shared');
+    vi.mocked(shareNote).mockReturnValue(`https://catch.example/s/${token}`);
+    render(<SharePanel note={note} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+    expect(shareOrCopy).toHaveBeenCalledWith({ url: `https://catch.example/s/${token}` });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Share link' })).toBeEnabled());
+    expect(screen.queryByText('Copied')).not.toBeInTheDocument();
+  });
+
+  it('switches back to the link without keeping the content warning or copied state', async () => {
+    vi.mocked(useNoteShares).mockReturnValue(new Map([[note.id, share]]));
+    render(<SharePanel note={note} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    const button = screen.getByRole('button', { name: 'Copy content' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await screen.findByRole('button', { name: 'Copied' });
+    fireEvent.click(screen.getByRole('radio', { name: 'Catch link' }));
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeVisible();
+    expect(screen.queryByLabelText('Note content')).not.toBeInTheDocument();
   });
 });

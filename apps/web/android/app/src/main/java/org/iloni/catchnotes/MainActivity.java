@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdatesPlugin.class);
         registerPlugin(KeyboardInsetsPlugin.class);
         registerPlugin(IncomingSharesPlugin.class);
+        registerPlugin(OutgoingSharesPlugin.class);
         registerPlugin(RemindersPlugin.class);
         super.onCreate(savedInstanceState);
         // The page scrollbar is drawn by the WebView separately from nested CSS scrollers.
