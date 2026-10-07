@@ -1,7 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { VaultGate, VaultRecoveryCode } from '@/components/VaultGate/VaultGate';
-import { hasSeenVault, startVault, vaultMode, vaultPrompt, vaultStatus } from '@/lib/vault';
+import { noteStore } from '@/lib/noteStore';
+import { useOpenNote } from '@/lib/openNote';
+import {
+  hasSeenVault,
+  isVaultNote,
+  startVault,
+  vaultMode,
+  vaultPrompt,
+  vaultStatus,
+} from '@/lib/vault';
 
 /**
  * The way into the vault, for the whole app: the dialog that sets it up or unlocks it when
@@ -26,6 +35,20 @@ export function VaultEntry() {
     vaultMode.set(true);
     vaultPrompt.set(false);
   }, [asked, status, recoveryCode]);
+
+  // The pages now show the other kind of note, so one left open from before (as it can be
+  // in the pane beside the page) closes. A note opened by entering, from its reminder, stays.
+  const mode = vaultMode.use();
+  const { close } = useOpenNote();
+  const previous = useRef(mode);
+  useEffect(() => {
+    if (previous.current === mode) return;
+    previous.current = mode;
+    const id = new URLSearchParams(window.location.search).get('note');
+    if (!id) return;
+    const belongs = mode ? isVaultNote(id) : noteStore.has(id) && !isVaultNote(id);
+    if (!belongs) close();
+  }, [mode, close]);
 
   const open = asked || recoveryCode !== null;
 
