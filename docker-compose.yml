@@ -1,13 +1,14 @@
 # Self-hosted deployment. Copy .env.example to .env and set BETTER_AUTH_SECRET,
 # BETTER_AUTH_URL (your public URL), POSTGRES_PASSWORD and ELECTRIC_SECRET first.
+# It runs the published image; docker-compose.build.yml builds this checkout instead.
 # Development uses this file plus docker-compose.dev.yml through scripts/dev.sh.
 name: catch
 
 services:
   app:
-    build:
-      context: .
-      target: production
+    # `stable` follows the latest stable release. Set CATCH_IMAGE in .env for the preview
+    # channel (`:preview`) or an exact version (`:0.3.2`).
+    image: ${CATCH_IMAGE:-ghcr.io/iiloni/catch:stable}
     restart: unless-stopped
     ports:
       - '${CATCH_BIND_ADDRESS:-0.0.0.0}:${CATCH_PORT:-3000}:3000'

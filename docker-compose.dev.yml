@@ -2,7 +2,10 @@
 # ./scripts/dev.sh, which supplies the worktree's generated .env.worktree.
 services:
   app:
+    # Built here, so it must not take the published image's name.
+    image: !reset null
     build:
+      context: .
       target: development
     restart: 'no'
     user: '${CATCH_UID:-1000}:${CATCH_GID:-1000}'
@@ -42,6 +45,7 @@ services:
       - web_node_modules:/workspace/apps/web/node_modules
       - server_node_modules:/workspace/apps/server/node_modules
       - shared_node_modules:/workspace/packages/shared/node_modules
+      - site_node_modules:/workspace/apps/site/node_modules
       - pnpm_store:/pnpm-store
       - pnpm_cache:/pnpm-cache
 
@@ -50,6 +54,7 @@ volumes:
   web_node_modules:
   server_node_modules:
   shared_node_modules:
+  site_node_modules:
   pnpm_cache:
   # Shared by every worktree as a download cache; created by scripts/dev.sh.
   pnpm_store:

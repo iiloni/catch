@@ -25,6 +25,10 @@ compose=(
     -f "$repo_root/docker-compose.dev.yml"
 )
 
+# Worktree ports are allocated below 28000 (scripts/worktree.sh), so the site's port is the
+# stack's, moved clear of that range.
+SITE_PORT_OFFSET=4000
+
 env_value() {
     awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file"
 }
@@ -214,6 +218,23 @@ case "$command" in
                 --live-reload --host "$host" --port "$port" "${forward[@]}" "${cap_args[@]}" --flavor dev
         fi
         ;;
+    site)
+        # The public site (apps/site, ADR 0020) runs on demand, in a container of its own,
+        # so a stack that is not working on it does not carry a second dev server.
+        site_port=$(($(env_value CATCH_PORT) + SITE_PORT_OFFSET))
+        echo "Site: http://$(env_value CATCH_PUBLIC_HOST):$site_port"
+        echo "  also http://localhost:$site_port"
+        "${compose[@]}" run --rm --no-deps \
+            -p "$(env_value CATCH_DEV_BIND_ADDRESS | grep . || echo 127.0.0.1):$site_port:3000" \
+            -e "SITE_DEV_ORIGINS=$(env_value CATCH_PUBLIC_HOST),**.ts.net" \
+            app pnpm --filter @catch/site dev --hostname 0.0.0.0 "$@"
+        ;;
+    screenshots)
+        # Like e2e, the browser runs on the host against this stack.
+        [[ -x "$repo_root/node_modules/.bin/playwright" ]] || pnpm --dir "$repo_root" install
+        E2E_BASE_URL="http://localhost:$(env_value CATCH_PORT)" \
+            pnpm --dir "$repo_root/apps/site" screenshots "$@"
+        ;;
     shell)
         "${compose[@]}" exec app bash
         ;;
@@ -263,6 +284,8 @@ Usage: ./scripts/dev.sh <command>
                       Start the stack and install Catch Dev on a connected Android device
                       --static: fresh bundled APK without live reload; API uses this dev stack
                       --usb: reach the dev server via adb instead of Tailscale (either mode)
+  site                Run the public site (apps/site) with hot reload and print its URL
+  screenshots         Recapture the site's app screenshots from this stack (on the host)
   shell               Open a shell in the app container
   backup <command>    Server backups: create, list, inspect, restore, ... (backup help)
   psql [args]         Open psql against this worktree's database

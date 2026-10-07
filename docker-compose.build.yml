@@ -1,0 +1,10 @@
+# Builds Catch from this checkout instead of running the published image. Turn it on by
+# adding this line to .env, so every `docker compose` command and the helper scripts use it:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+services:
+  app:
+    image: catch:source
+    build:
+      context: .
+      target: production

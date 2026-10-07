@@ -12,6 +12,7 @@ longer holds, update it in the same change rather than working around it.
 | --- | --- |
 | `apps/web` | Vite + React SPA, TanStack Router (file routes in `src/routes`), TanStack DB, Tailwind v4 + shadcn/ui. Also the Capacitor Android project (`android/`). |
 | `apps/server` | Hono API on Node. Better Auth, Drizzle (Postgres), Electric shape proxy. Serves the built web app in production. |
+| `apps/site` | The public site at `catchnotes.site` (ADR 0020): Next.js and Fumadocs, built as static files. Marketing page, `/docs` (MDX in `content/docs`) and `/changelog`. Shares nothing with the app at runtime. |
 | `packages/shared` | Zod schemas, types and pure helpers used by both apps. Exported as TypeScript source (no build step). |
 | `e2e` | Playwright tests that drive the real app against the dev database. |
 | `docs/decisions` | Short architecture decision records. |
@@ -38,6 +39,10 @@ checkout's stack. Never hard-code container or project names.
   the queue by calling `playwright test` or the container's `pnpm check` directly.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
+- `./scripts/dev.sh site`: run the public site with hot reload and print its URL. It is not
+  part of the stack and does not need it running; `check` lints, typechecks and builds it.
+- `./scripts/dev.sh screenshots` (host): recapture the site's app screenshots, in light and
+  dark, from this worktree's running stack. Commit the changed pictures.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
 - `./scripts/dev.sh backup <create|list|inspect|restore|...>`: the server backup tool against
   this worktree's stack. `scripts/backup.sh` and `scripts/update.sh` are the production host
@@ -267,10 +272,32 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - Every Postgres query that touches user data filters by `userId`.
 - Keep comments for the *why*; do not narrate the code.
 
+### The public site
+
+- `apps/site` is a separate product from the app: do not import from `apps/web/src` or
+  `@catch/shared`, and do not add it to the production image. It reads brand colors from
+  `branding/catch-brand-tokens.json` and lockups from `apps/web/public/wordmark`; the other
+  tokens in its `global.css` are a copy of `apps/web/src/styles.css`, so change both.
+- Everything the marketing page says must be true of the released product. Check a claim
+  against the code before adding it, and say plainly what Catch lacks.
+- The comparison is data in `apps/site/src/lib/comparison.ts`. Take each cell about another
+  product from that product's own pages, list the page in `sources` and update `checkedOn`.
+- Pictures of the app come from `./scripts/dev.sh screenshots` (`apps/site/scripts/screenshots.ts`),
+  never from a mockup or an edited file. Add a screen there and to `src/lib/screenshots.ts`.
+- It is a static export: no server code, no request-time data, no image optimizer. A page
+  with dynamic segments needs `generateStaticParams`.
+- The changelog page renders the JSON of `scripts/changelog.ts` (ADR 0017), generated at
+  build time when Git history with tags is available. In the dev container and CI's check
+  job it is not, and the page shows a placeholder; run the site on the host
+  (`pnpm --filter @catch/site dev`) to see real releases.
+- Cloudflare resources, DNS and the deploy workflow's secrets are the user's to create.
+
 ## Gotchas
 
 - A new workspace package needs its own `node_modules` volume in `docker-compose.dev.yml`,
   or the container will install dependencies into the bind-mounted checkout.
+- `docker-compose.yml` runs the published image and has no `build:` for the app. The dev
+  override and `docker-compose.build.yml` (building a checkout in production) add one.
 
 - Electric rows skip the collection's Zod schema, so column types that need parsing (such as
   `timestamptz` into `Date`) go in the `parser` option in `collections.ts`.
