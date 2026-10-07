@@ -29,7 +29,7 @@ import { createNote, discardIfEmpty, getNote, setNoteColor, updateNote } from '@
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
-import { isVaultMode } from '@/lib/vault';
+import { beforeVaultLock, isVaultMode, vaultStatus } from '@/lib/vault';
 import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 
 type Destination = 'gallery' | 'deck';
@@ -166,8 +166,14 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     }
   }, [suspended, exit]);
 
+  // Which kind of note this window writes is settled when it opens. Read at save time
+  // instead, a vault that locked in between would have its words saved as an ordinary note.
+  const inVault = useRef(isVaultMode());
+  const locked = useRef(false);
+
   function create() {
     const { content, color, destination } = latest.current;
+    if (inVault.current && (locked.current || vaultStatus.get() !== 'unlocked')) return null;
     // Remembered rather than fetched, so notes can be created offline.
     const user = getSignedInUser();
     if (!user) return null;
@@ -184,10 +190,27 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       content,
       color,
       status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
-      // Written while the pages show the vault, a note belongs in it.
-      vault: isVaultMode(),
+      vault: inVault.current,
     }).id;
   }
+
+  // A vault about to lock takes its key with it: seal what has been typed while it can
+  // still be sealed, and close, since nothing typed afterwards could be saved.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `create` reads refs only
+  useEffect(() => {
+    if (!inVault.current) return;
+    const save = () => {
+      if (blocksHaveContent(latest.current.content) || draft.current) {
+        const id = create();
+        if (id) discardIfEmpty(id);
+      }
+      locked.current = true;
+      exit.current = { kind: 'instant' };
+      quickNote.set('closed');
+    };
+    beforeVaultLock.add(save);
+    return () => void beforeVaultLock.delete(save);
+  }, []);
 
   function ensureNote() {
     if (!draft.current) {
@@ -452,7 +475,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
                     controls={controls}
                     // Capturing a link has the server read its page, which a vault note's
                     // links are kept from (ADR 0020).
-                    onLink={isVaultMode() ? undefined : captureLink}
+                    onLink={inVault.current ? undefined : captureLink}
                     attachmentsOpen={attachmentPanel}
                     onAttachments={() => {
                       ensureNote();

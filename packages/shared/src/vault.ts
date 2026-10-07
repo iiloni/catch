@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { attachmentSchema } from './attachments';
 import { noteColorSchema, noteContentSchema, notePositionSchema, noteStatusSchema } from './notes';
+import { reminderSchema } from './reminders';
 
 /**
  * The vault (ADR 0020): notes encrypted on the device, so the server stores and syncs only
@@ -104,6 +105,11 @@ export const vaultNotePayloadSchema = z.object({
   primaryTagId: z.uuid({ version: 'v7' }).nullable(),
   secondaryTagIds: z.array(z.uuid({ version: 'v7' })),
   files: z.array(vaultFileSchema),
+  /**
+   * The reminder a note in the trash had. The server cannot see that a vault note is
+   * trashed and would ring for it, so the device takes the reminder off and keeps it here.
+   */
+  reminder: reminderSchema.nullable().default(null),
 });
 export type VaultNotePayload = z.infer<typeof vaultNotePayloadSchema>;
 

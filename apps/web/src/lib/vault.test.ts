@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { Note, Vault, VaultFile, VaultNote } from '@catch/shared';
+import type { Note, Reminder, Vault, VaultFile, VaultNote } from '@catch/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The collections as plain maps: what the device's database and the outbox would be given.
@@ -26,10 +26,12 @@ const store = vi.hoisted(() => {
   return {
     vault: collection<Vault>((row) => row.userId),
     notes: collection<VaultNote>((row) => row.id),
+    reminders: collection<Reminder>((row) => row.noteId),
   };
 });
 
 vi.mock('./collections', () => ({
+  remindersCollection: store.reminders,
   vaultCollection: store.vault,
   vaultNotesCollection: store.notes,
   awaitVaultSync: async () => true,
@@ -128,6 +130,7 @@ describe('the vault', () => {
     if (vaultStatus.get() === 'unlocked') await lockVault();
     store.vault.rows.clear();
     store.notes.rows.clear();
+    store.reminders.rows.clear();
     vaultPrompt.set(false);
     vi.mocked(rememberVaultKey).mockClear();
     vi.mocked(forgetVaultKey).mockClear();
@@ -190,6 +193,37 @@ describe('the vault', () => {
     });
     expect(getVaultNoteTags(id)?.primaryTagId).toBe(TAG);
     expect(getSealedFiles(id)).toEqual([file]);
+  });
+
+  it('takes a trashed note’s reminder off, and puts it back when the note is restored', async () => {
+    const id = add('dentist');
+    const reminder: Reminder = {
+      noteId: id,
+      userId: 'user-1',
+      kind: 'time',
+      startsAt: '2026-10-08T09:00',
+      timeZone: 'Europe/Lisbon',
+      floating: true,
+      recurrence: null,
+      nextAt: '2026-10-08T09:00',
+      snoozedUntil: null,
+      firedAt: null,
+    };
+    store.reminders.insert(reminder);
+    changeVaultNote(id, (draft) => {
+      draft.deletedAt = new Date();
+    });
+    // The server cannot tell the note is in the trash, so it must not hold a reminder to ring.
+    expect(store.reminders.has(id)).toBe(false);
+    expect(JSON.stringify([...store.notes.values()])).not.toContain('Lisbon');
+
+    // The reminder waits sealed in the note, so it survives a lock.
+    await lockVault();
+    await unlockVault('correct horse', false);
+    changeVaultNote(id, (draft) => {
+      draft.deletedAt = null;
+    });
+    expect(store.reminders.get(id)).toEqual(reminder);
   });
 
   it('deletes a note for good', () => {

@@ -69,8 +69,11 @@ export const reminderRoutes = new Hono<AppEnv>()
     const rows = await db
       .select({ reminder: reminders, text: notes.searchText, sealed: vaultNotes.id })
       .from(reminders)
-      .leftJoin(notes, eq(notes.id, reminders.noteId))
-      .leftJoin(vaultNotes, eq(vaultNotes.id, reminders.noteId))
+      .leftJoin(notes, and(eq(notes.id, reminders.noteId), eq(notes.userId, reminders.userId)))
+      .leftJoin(
+        vaultNotes,
+        and(eq(vaultNotes.id, reminders.noteId), eq(vaultNotes.userId, reminders.userId)),
+      )
       .where(
         and(
           eq(reminders.userId, c.get('user')!.id),

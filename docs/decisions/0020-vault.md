@@ -57,7 +57,8 @@ SQLite database and the outbox therefore hold ciphertext too. `lib/vault.ts` hol
 and the opened notes in memory only, and hands the rest of the app ordinary `Note` objects.
 Creating a vault and changing how its key is sealed are plain requests that need a
 connection. Creating one where one exists is a 409: two devices setting up at once would
-otherwise seal notes under different keys.
+otherwise seal notes under different keys. Changing the password of a vault since deleted
+and set up again is a 409 too, told apart by its recovery copy, which names the vault.
 
 **A note is sealed whole.** `data` holds the content, color, status, pin, position, whether
 it is archived or in the trash, its tags and the names and types of its files, so the server
@@ -78,7 +79,9 @@ both. Search runs on the device (ADR 0002) and so covers the open notes without 
 notification reads "Vault note". The server therefore knows when a vault note is due.
 `reminders.note_id` lost its foreign key to `notes` for this; the routes that delete a note
 of either kind delete its reminder. Opening such a notification enters the vault first,
-asking for the password if it is locked.
+asking for the password if it is locked. The server cannot see that a vault note is in the
+trash and would ring for it, so trashing one takes its reminder off and keeps it sealed in
+the note, and restoring the note puts it back.
 
 **Files are sealed on the device and stored as ordinary attachments.** A vault note's file
 is a row in `attachments` named "Vault file" of type `application/octet-stream`, whose bytes
@@ -99,6 +102,10 @@ cost: Web Crypto measured about 1 GB/s on a 2019 laptop, and phones have hardwar
 
 ## Consequences
 
+- A device still holding writes for a vault that was deleted and set up again elsewhere
+  sends them into the new vault, where they cannot be opened. They are counted as
+  unreadable and go when the vault is deleted. Likewise a file whose note was saved over by
+  an older copy on another device stays on the server, unseen, until the note is deleted.
 - The server sees how many vault notes a user has, their sizes and when each changed, which
   notes have files and how large, and when a note's reminder is due.
 - A script running in the app's origin while the vault is unlocked can read its notes, as

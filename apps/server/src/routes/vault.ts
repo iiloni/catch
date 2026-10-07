@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, reminders, vaultNotes, vaults } from '../db/schema';
+import { attachments, notes, reminders, vaultNotes, vaults } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -51,14 +51,20 @@ export const vaultRoutes = new Hono<AppEnv>()
     const userId = c.get('user')!.id;
     const body = c.req.valid('json');
     const txid = await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(vaults)
-        .set(body)
+      const [existing] = await tx
+        .select({ recoveryKey: vaults.recoveryKey })
+        .from(vaults)
         .where(eq(vaults.userId, userId))
-        .returning({ userId: vaults.userId });
-      return updated.length > 0 ? currentTxid(tx) : null;
+        .for('update');
+      if (!existing) return 'none' as const;
+      // The recovery copy names the vault. A device that still holds one since deleted and
+      // set up again would otherwise seal its old key over the new vault's, losing its notes.
+      if (existing.recoveryKey !== body.recoveryKey) return 'replaced' as const;
+      await tx.update(vaults).set(body).where(eq(vaults.userId, userId));
+      return currentTxid(tx);
     });
-    if (txid === null) return c.json({ error: 'Vault not found' }, 404);
+    if (txid === 'none') return c.json({ error: 'Vault not found' }, 404);
+    if (txid === 'replaced') return c.json({ error: 'The vault was replaced' }, 409);
     return c.json({ txid });
   })
   // Deletes the vault and, through the foreign key, every note in it.
@@ -99,6 +105,9 @@ export const vaultRoutes = new Hono<AppEnv>()
         .from(vaults)
         .where(eq(vaults.userId, userId));
       if (!vault) return 'no-vault' as const;
+      // Notes of both kinds share reminders and attachments by id, so an id is one or the other.
+      const [plain] = await tx.select({ id: notes.id }).from(notes).where(eq(notes.id, body.id));
+      if (plain) return 'taken' as const;
       const createdAt = body.createdAt && body.createdAt > now ? now : body.createdAt;
       const inserted = await tx
         .insert(vaultNotes)

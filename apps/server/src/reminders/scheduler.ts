@@ -43,8 +43,11 @@ async function fireBatch(now: Date) {
       userTimeZone: reminderSettings.timeZone,
     })
     .from(reminders)
-    .leftJoin(notes, eq(notes.id, reminders.noteId))
-    .leftJoin(vaultNotes, eq(vaultNotes.id, reminders.noteId))
+    .leftJoin(notes, and(eq(notes.id, reminders.noteId), eq(notes.userId, reminders.userId)))
+    .leftJoin(
+      vaultNotes,
+      and(eq(vaultNotes.id, reminders.noteId), eq(vaultNotes.userId, reminders.userId)),
+    )
     .leftJoin(reminderSettings, eq(reminderSettings.userId, reminders.userId))
     // A note in the trash keeps its reminder as it is: restored within a day of the time, it
     // still rings; later, it moves on silently. The trash of the vault is sealed from the

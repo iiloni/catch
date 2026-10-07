@@ -37,6 +37,7 @@ const payload: VaultNotePayload = {
   primaryTagId: null,
   secondaryTagIds: [],
   files: [],
+  reminder: null,
 };
 
 describe('vault keys', () => {

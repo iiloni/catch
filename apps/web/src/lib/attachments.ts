@@ -225,6 +225,9 @@ export function renameAttachment(id: string, name: string) {
     );
     return;
   }
+  // A sealed file's row never carries its name: with the vault locked there is nothing to rename.
+  const row = attachmentsCollection.get(id);
+  if (!row || !notesCollection.has(row.noteId)) return;
   write(() =>
     attachmentsCollection.update(id, (draft) => {
       draft.name = value;

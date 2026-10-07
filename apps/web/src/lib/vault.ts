@@ -1,4 +1,12 @@
-import type { Attachment, Note, NoteTags, Vault, VaultFile, VaultNotePayload } from '@catch/shared';
+import type {
+  Attachment,
+  Note,
+  NoteTags,
+  Reminder,
+  Vault,
+  VaultFile,
+  VaultNotePayload,
+} from '@catch/shared';
 import { useEffect } from 'react';
 import { ApiError, api } from './api';
 import { closeSealedFiles, setSealedFiles } from './attachmentFiles';
@@ -6,6 +14,7 @@ import { getSignedInUser } from './auth';
 import {
   awaitVaultSync,
   publishVaultAssignments,
+  remindersCollection,
   vaultCollection,
   vaultNotesCollection,
 } from './collections';
@@ -55,7 +64,12 @@ const AUTO_LOCK_MS = 5 * 60_000;
 
 type Bytes = Uint8Array<ArrayBuffer>;
 type Tags = Pick<NoteTags, 'primaryTagId' | 'secondaryTagIds'>;
-type Entry = { note: Note; tags: Tags; files: readonly VaultFile[] };
+type Entry = {
+  note: Note;
+  tags: Tags;
+  files: readonly VaultFile[];
+  reminder: Reminder | null;
+};
 
 let key: Bytes | null = null;
 /** The same key as Web Crypto holds it, for sealing files. */
@@ -216,9 +230,10 @@ const fromPayload = (
   },
   tags: { primaryTagId: payload.primaryTagId, secondaryTagIds: payload.secondaryTagIds },
   files: payload.files,
+  reminder: payload.reminder,
 });
 
-const toPayload = ({ note, tags, files }: Entry): VaultNotePayload => ({
+const toPayload = ({ note, tags, files, reminder }: Entry): VaultNotePayload => ({
   v: 1,
   content: note.content,
   color: note.color,
@@ -231,6 +246,7 @@ const toPayload = ({ note, tags, files }: Entry): VaultNotePayload => ({
   primaryTagId: tags.primaryTagId,
   secondaryTagIds: tags.secondaryTagIds,
   files: [...files],
+  reminder,
 });
 
 /** Opens every note the collection holds with the key, and publishes them. */
@@ -438,7 +454,10 @@ async function resealVault(id: string, vault: Vault, raw: Bytes, password: strin
   try {
     await awaitVaultSync((await api.saveVault({ ...sealed, recoveryKey: vault.recoveryKey })).txid);
   } catch (error) {
-    throw requestFailure(error);
+    throw requestFailure(
+      error,
+      'This vault was deleted and set up again on another device. Reload to use the new one.',
+    );
   }
 }
 
@@ -503,6 +522,25 @@ export function inVaultFor(id: string, then: () => void) {
   return true;
 }
 
+/**
+ * As `inVaultFor`, for an id found in the address when the app starts: the device's copy of
+ * the vault may still be loading, so this waits a while for the note to turn up in it.
+ */
+export function openIfVaultNote(id: string, then: () => void) {
+  if (inVaultFor(id, then) || !hasSeenVault()) return;
+  startVault();
+  const done = () => {
+    subscription.unsubscribe();
+    window.clearTimeout(timer);
+  };
+  const subscription = vaultNotesCollection.subscribeChanges(() => {
+    if (!vaultNotesCollection.has(id)) return;
+    done();
+    inVaultFor(id, then);
+  });
+  const timer = window.setTimeout(done, 10_000);
+}
+
 function unlocked() {
   const id = userId();
   if (!id || !key) throw new VaultError('The vault is locked.');
@@ -542,7 +580,7 @@ function store(entry: Entry, exists: boolean) {
 /** Adds a note to the vault, with its tags and files if it has any. */
 export function insertVaultNote(note: Note, tags?: Tags, files: readonly VaultFile[] = []) {
   store(
-    { note, tags: tags ?? { primaryTagId: null, secondaryTagIds: [] }, files },
+    { note, tags: tags ?? { primaryTagId: null, secondaryTagIds: [] }, files, reminder: null },
     vaultNotesCollection.has(note.id),
   );
 }
@@ -556,7 +594,21 @@ export function changeVaultNote(id: string, change: (draft: Note) => void) {
   if (!entry) throw new VaultError('This note is no longer in the vault.');
   const note = { ...entry.note };
   change(note);
-  store({ ...entry, note }, true);
+  let reminder = entry.reminder;
+  // The server holds back a trashed note's reminder, but cannot see that a vault note is in
+  // the trash. So the reminder comes off as the note goes in, kept sealed in the note, and
+  // goes back on when the note comes out.
+  if (!entry.note.deletedAt && note.deletedAt) {
+    const row = remindersCollection.get(id);
+    if (row) {
+      reminder = { ...row };
+      remindersCollection.delete(id);
+    }
+  } else if (entry.note.deletedAt && !note.deletedAt && reminder) {
+    if (!remindersCollection.has(id)) remindersCollection.insert({ ...reminder });
+    reminder = null;
+  }
+  store({ ...entry, note, reminder }, true);
 }
 
 export function changeVaultNoteTags(id: string, change: (draft: Tags) => void) {

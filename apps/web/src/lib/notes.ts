@@ -12,13 +12,7 @@ import {
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
 import { copyAttachmentFiles, copySealedBlob } from './attachmentFiles';
-import {
-  attachmentsCollection,
-  notesCollection,
-  remindersCollection,
-  tagsCollection,
-  write,
-} from './collections';
+import { attachmentsCollection, notesCollection, tagsCollection, write } from './collections';
 import { noteStore, noteTagStore } from './noteStore';
 import { assignPrimaryTag, setPrimaryTag } from './tags';
 import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
@@ -226,25 +220,14 @@ export const restoreNote = (id: string) => updateNote(id, { deletedAt: null });
 
 export const deleteNoteForever = (id: string) => write(() => noteStore.delete(id));
 
-/**
- * The server holds back a trashed note's reminder, but cannot see that a vault note is in
- * the trash, so trashing one takes its reminder off.
- */
-function dropVaultReminders(ids: readonly string[]) {
-  for (const id of ids) {
-    if (isVaultNote(id) && remindersCollection.has(id)) remindersCollection.delete(id);
-  }
-}
-
 export function trashNote(id: string) {
   const now = new Date();
-  const transaction = write(() => {
+  const transaction = write(() =>
     noteStore.update(id, (draft) => {
       draft.deletedAt = now;
       draft.updatedAt = now;
-    });
-    dropVaultReminders([id]);
-  });
+    }),
+  );
   toast('Moved to trash', {
     action: { label: 'Undo', onClick: () => restoreNote(id) },
   });
@@ -351,15 +334,14 @@ export const deleteNotesForever = (ids: readonly string[]) =>
 
 export function trashNotes(ids: readonly string[]) {
   const now = new Date();
-  const transaction = write(() => {
+  const transaction = write(() =>
     noteStore.update([...ids], (drafts) => {
       for (const draft of drafts) {
         draft.deletedAt = now;
         draft.updatedAt = now;
       }
-    });
-    dropVaultReminders(ids);
-  });
+    }),
+  );
   toast(plural(ids.length, 'Moved to trash', 'notes moved to trash'), {
     action: {
       label: 'Undo',

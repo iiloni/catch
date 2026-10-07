@@ -69,7 +69,7 @@ import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/li
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
-import { useVaultNote } from '@/lib/vault';
+import { openIfVaultNote, useVaultNote } from '@/lib/vault';
 import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
@@ -86,7 +86,7 @@ type Props = {
  * page narrows under the pane, so its cards move and a morph to or from them would chase them.
  */
 export function NoteEditorOverlay({ noteId }: Props) {
-  const { close } = useOpenNote();
+  const { open, close } = useOpenNote();
   const { data: matches = [], isReady } = useLiveQuery(
     (q) => q.from({ note: notesCollection }).where(({ note }) => eq(note.id, noteId ?? '')),
     [noteId],
@@ -95,10 +95,16 @@ export function NoteEditorOverlay({ noteId }: Props) {
   const vaultNote = useVaultNote(noteId);
   const note = matches[0] ?? vaultNote;
 
-  // A deleted or unknown note id in the URL closes the editor.
+  // A deleted or unknown note id in the URL closes the editor. One this editor never showed
+  // may be a vault note asked for from outside, by its reminder or a reload: that enters
+  // the vault, asking for its password if need be, and opens the note there.
+  const shown = useRef<string | null>(null);
+  if (note) shown.current = note.id;
   useEffect(() => {
-    if (noteId && isReady && !note) close();
-  }, [noteId, isReady, note, close]);
+    if (!noteId || !isReady || note) return;
+    if (shown.current !== noteId) openIfVaultNote(noteId, () => open(noteId));
+    close();
+  }, [noteId, isReady, note, open, close]);
 
   return (
     <AnimatePresence>

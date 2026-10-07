@@ -150,10 +150,6 @@ export const notesRoutes = new Hono<AppEnv>()
   .delete('/:id', idParam, async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
-    const files = await db
-      .select({ id: attachments.id })
-      .from(attachments)
-      .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)));
     const result = await db.transaction(async (tx) => {
       const deleted = await tx
         .delete(notes)
@@ -164,13 +160,15 @@ export const notesRoutes = new Hono<AppEnv>()
       await tx
         .delete(reminders)
         .where(and(eq(reminders.noteId, id), eq(reminders.userId, user.id)));
-      await tx
+      // Only the files of a note deleted here: the id may be a vault note's, whose files
+      // must outlive a request that deleted nothing.
+      const files = await tx
         .delete(attachments)
-        .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)));
-      return currentTxid(tx);
+        .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)))
+        .returning({ id: attachments.id });
+      return { txid: await currentTxid(tx), files: files.map((file) => file.id) };
     });
-    await deleteFiles(files.map((file) => file.id));
+    await deleteFiles(result?.files ?? []);
     // Already gone, perhaps deleted by an earlier try of this same queued write.
-    if (result === null) return c.json({ txid: null });
-    return c.json({ txid: result });
+    return c.json({ txid: result?.txid ?? null });
   });
