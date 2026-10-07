@@ -1,4 +1,5 @@
 import type {
+  AcceptShare,
   AcceptShareResponse,
   AdminUser,
   AttachmentAccess,
@@ -173,8 +174,11 @@ export const api = {
   // What a share link shows. It needs no account, and says what the reader may do if they have one.
   sharedNote: (token: string, signal?: AbortSignal) =>
     request<SharedNoteView>(`/shares/${token}`, { method: 'GET', cache: 'no-store', signal }),
-  acceptShare: (token: string) =>
-    request<AcceptShareResponse>(`/shares/${token}/accept`, { method: 'POST' }),
+  acceptShare: (token: string, body: AcceptShare = {}) =>
+    request<AcceptShareResponse>(`/shares/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   reportTimeZone: (body: ReportTimeZone) =>
     request<{ timeZone: string }>('/reminders/time-zone', {
       method: 'PUT',

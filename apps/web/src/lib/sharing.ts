@@ -50,11 +50,23 @@ export function stopSharingNote(noteId: string) {
   toast('Sharing stopped');
 }
 
-/** Takes someone else's note out of the user's gallery. Its link adds it again. */
+/**
+ * Takes someone else's note out of the user's gallery. Undo adds it again by its link, where
+ * it was, unless its owner stopped sharing it meanwhile.
+ */
 export function removeSharedNote(noteId: string) {
-  if (!sharedNotesCollection.has(noteId)) return;
+  const shared = sharedNotesCollection.get(noteId);
+  if (!shared) return;
   write(() => sharedNotesCollection.delete(noteId));
-  toast('Removed from your notes');
+  toast('Removed from your notes', {
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        if (!sharedNotesCollection.has(noteId))
+          write(() => sharedNotesCollection.insert({ ...shared }));
+      },
+    },
+  });
 }
 
 /** Who shared a note in the user's gallery, or undefined for a note of their own. */

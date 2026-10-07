@@ -1,5 +1,6 @@
 import {
   type AcceptShareResponse,
+  acceptShareSchema,
   createNoteShareSchema,
   positionBetween,
   type SharedNoteView,
@@ -216,6 +217,18 @@ export const shareLinkRoutes = new Hono<AppEnv>()
   .post('/:token/accept', requireUser, tokenParam, async (c) => {
     const { token } = c.req.valid('param');
     const userId = c.get('user')!.id;
+    // Older clients send no body; undoing a removal says where the note was.
+    const text = await c.req.text();
+    let input: unknown = {};
+    if (text) {
+      try {
+        input = JSON.parse(text);
+      } catch {
+        return c.json({ error: 'Invalid request' }, 400);
+      }
+    }
+    const body = acceptShareSchema.safeParse(input);
+    if (!body.success) return c.json({ error: 'Invalid request' }, 400);
     const result = await db.transaction(async (tx) => {
       const share = await sharedByToken(tx, token);
       const snapshot = share && (await sharedSnapshot(tx, share.noteId));
@@ -226,9 +239,11 @@ export const shareLinkRoutes = new Hono<AppEnv>()
         .insert(sharedNotes)
         .values({
           ...snapshot,
+          ...body.data,
           userId,
           noteId: share.noteId,
-          position: await firstPosition(tx, userId),
+          token,
+          position: body.data.position ?? (await firstPosition(tx, userId)),
         })
         .onConflictDoNothing()
         .returning({ noteId: sharedNotes.noteId });

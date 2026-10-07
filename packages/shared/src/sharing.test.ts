@@ -15,6 +15,7 @@ const fileId = '0199a0a0-0000-7000-8000-000000000002';
 const shared: SharedNote = {
   noteId,
   userId: 'reader',
+  token: 'a'.repeat(43),
   ownerId: 'owner',
   ownerName: 'Ada',
   content: [{ type: 'paragraph', content: 'Hello' }],

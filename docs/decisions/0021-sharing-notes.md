@@ -30,8 +30,9 @@ it is wanted.
 
 **A reader's gallery holds a copy the server keeps current.** `shared_notes` has a row per
 reader and note with the note's content, shown color, files and owner's name, beside the
-reader's own pin, archive and position. `refreshSharedNote` rewrites those rows in the
-transaction of every change a reader would see: the note's content, color or trash, its
+reader's own pin, archive and position, plus the link token used to add it again on Undo.
+`refreshSharedNote` rewrites those rows in the transaction of every change a reader would
+see: the note's content, color or trash, its
 primary tag (which gives it its color, ADR 0016), and its files. A copy rather than a shape
 that reaches into `notes`, because every shape is pinned to the signed-in user's rows by
 `user_id = $1` and nothing else; a shape of other people's notes would need Electric's
@@ -67,8 +68,12 @@ Protocol 4, with the server's range 2–4. The change adds routes, two shapes an
 and alters nothing an older client uses, so protocol 2 and 3 clients keep working against a
 new server and simply have no sharing. A protocol 4 client syncs the two new shapes and so
 needs a server that has them; an older server refuses it with the usual 426 until it is
-updated. Update the server first. No existing shape's columns change, so no collection's
-`schemaVersion` moves, and no queued write changes format.
+updated. Update the server first. No released shape's columns change and no existing
+queued write changes format. During
+development, adding the token to `shared-notes` moves that collection's `schemaVersion`
+to 2; migration 0014 fills existing copies from their share links. This remains part of
+the unpublished protocol 4 contract. Accepting a share still allows an empty body; Undo
+may supply the reader's pin, archive and position, and replay leaves an existing copy alone.
 
 ## Consequences
 
@@ -87,4 +92,7 @@ updated. Update the server first. No existing shape's columns change, so no coll
   server it is connected to, signed in. Tapping it without the app installed does nothing.
 - Someone on a different Catch server reads the public page like anyone else; their app
   refuses the link, since it reads only from its own server.
-- Removing a shared note from a gallery has no undo: the link adds it again.
+- Removing a shared note offers Undo, restoring its pin, archive and position through the
+  outbox, including offline. The server adds it again by its original token with the
+  owner's current content. If the owner ended that link, Undo is rejected and the
+  optimistic copy is rolled back; a new link never revives an old permission.

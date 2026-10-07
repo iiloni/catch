@@ -193,6 +193,37 @@ test('a share link is read without an account and added by one, until it is ende
   });
   expect((await (await read(anonymous)).json()).content).toEqual(paragraph('Trip plan, revised'));
 
+  // Undo uses the original link and arrangement, but gets fresh content from the owner.
+  await bob.context.delete(`/api/shared-notes/${id}`, { headers: bob.headers });
+  const latest = paragraph('Trip plan, edited while removed');
+  await alice.context.patch(`/api/notes/${id}`, {
+    headers: alice.headers,
+    data: { content: latest },
+  });
+  const placement = { isPinned: true, isArchived: true, position: 'a5' };
+  const restore = () =>
+    bob.context.post(`/api/shares/${token}/accept`, {
+      headers: bob.headers,
+      data: placement,
+    });
+  expect((await restore()).ok()).toBeTruthy();
+  expect(await (await restore()).json()).toEqual({ noteId: id, txid: null });
+  const [restored] = await syncedRows(bob.context, bob.headers, 'shared-notes');
+  expect(restored).toMatchObject({ token, position: placement.position });
+  expect(bool(restored.is_archived)).toBe(true);
+  expect(await bobsCopy()).toMatchObject({
+    content: latest,
+    isPinned: true,
+  });
+  expect(
+    (
+      await bob.context.post(`/api/shares/${token}/accept`, {
+        headers: bob.headers,
+        data: { isPinned: 'yes' },
+      })
+    ).status(),
+  ).toBe(400);
+
   // In its owner's trash the note is shared as nothing, and comes back when restored.
   await alice.context.patch(`/api/notes/${id}`, {
     headers: alice.headers,
@@ -206,7 +237,7 @@ test('a share link is read without an account and added by one, until it is ende
   });
   expect((await read(anonymous)).status()).toBe(200);
   expect(await bobsCopy()).toMatchObject({
-    content: paragraph('Trip plan, revised'),
+    content: latest,
     isAvailable: true,
   });
 
@@ -275,6 +306,13 @@ test('a shared note is read from its link and added to another gallery', async (
       content: [{ type: 'heading', props: { level: 3 }, content: 'Trip plan, revised' }],
     }).isPersisted.promise;
   });
+  await expect(card(reader, 'Trip plan, revised')).toBeVisible();
+
+  await noteAction(reader, 'Trip plan, revised', 'Remove from my notes');
+  await expect(card(reader, 'Trip plan, revised')).toHaveCount(0);
+  await reader.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(card(reader, 'Trip plan, revised')).toBeVisible();
+  await reader.reload();
   await expect(card(reader, 'Trip plan, revised')).toBeVisible();
 
   // And leaves when its owner stops sharing it.

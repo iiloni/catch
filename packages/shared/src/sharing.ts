@@ -40,6 +40,8 @@ export const sharedNoteSchema = z.object({
   noteId: z.uuid({ version: 'v7' }),
   /** Whose gallery this is in. */
   userId: z.string(),
+  /** The link it was added by, which adds it again when its removal is undone. */
+  token: shareTokenSchema,
   ownerId: z.string(),
   ownerName: z.string(),
   content: noteContentSchema,
@@ -59,6 +61,10 @@ export const updateSharedNoteSchema = sharedNoteSchema
   .pick({ isPinned: true, isArchived: true, position: true })
   .partial();
 export type UpdateSharedNote = z.infer<typeof updateSharedNoteSchema>;
+
+/** Adding a note by its link. Undoing a removal says where the note was. */
+export const acceptShareSchema = updateSharedNoteSchema;
+export type AcceptShare = z.infer<typeof acceptShareSchema>;
 
 /**
  * What a share link shows. `viewer` says what the reader may do next: a `guest` is not signed

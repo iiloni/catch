@@ -71,6 +71,7 @@ const SHAPES: Record<string, { table: string; columns: string[] }> = {
     columns: [
       'user_id',
       'note_id',
+      'token',
       'owner_id',
       'owner_name',
       'content',

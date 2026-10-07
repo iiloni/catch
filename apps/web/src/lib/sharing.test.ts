@@ -1,15 +1,77 @@
-import { shareTokenSchema } from '@catch/shared';
-import { describe, expect, it, vi } from 'vitest';
-import { isSharedNote, newShareToken, noteShareLink } from './sharing';
+import { type SharedNote, shareTokenSchema } from '@catch/shared';
+import { toast } from 'sonner';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { isSharedNote, newShareToken, noteShareLink, removeSharedNote } from './sharing';
 
+const copies = vi.hoisted(() => new Map<string, SharedNote>());
 vi.mock('./collections', () => ({
   noteSharesCollection: {},
-  sharedNotesCollection: {},
+  sharedNotesCollection: {
+    get: (id: string) => copies.get(id),
+    has: (id: string) => copies.has(id),
+    delete: (id: string) => copies.delete(id),
+    insert: (copy: SharedNote) => copies.set(copy.noteId, copy),
+  },
   useSharedNotes: vi.fn(),
-  write: vi.fn(),
+  write: (fn: () => void) => fn(),
 }));
+vi.mock('sonner', () => ({ toast: vi.fn() }));
 vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
+
+describe('removeSharedNote', () => {
+  const copy: SharedNote = {
+    noteId: '0199a0a0-0000-7000-8000-000000000001',
+    userId: 'user-1',
+    token: 'a'.repeat(43),
+    ownerId: 'ada',
+    ownerName: 'Ada',
+    content: [],
+    color: 'default',
+    attachments: [],
+    isAvailable: true,
+    isPinned: true,
+    isArchived: true,
+    position: 'a3',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  beforeEach(() => {
+    copies.clear();
+    vi.mocked(toast).mockClear();
+  });
+
+  function undo() {
+    const action = vi.mocked(toast).mock.calls[0]?.[1]?.action;
+    if (!action || typeof action !== 'object' || !('onClick' in action))
+      throw new Error('Missing Undo action');
+    expect(action.label).toBe('Undo');
+    action.onClick({} as React.MouseEvent<HTMLButtonElement>);
+  }
+
+  it('restores the copy with its original link and arrangement', () => {
+    copies.set(copy.noteId, copy);
+    removeSharedNote(copy.noteId);
+    expect(copies.has(copy.noteId)).toBe(false);
+    undo();
+    expect(copies.get(copy.noteId)).toEqual(copy);
+  });
+
+  it('leaves a copy already added again alone', () => {
+    copies.set(copy.noteId, copy);
+    removeSharedNote(copy.noteId);
+    const current = { ...copy, isPinned: false, position: 'a0' };
+    copies.set(copy.noteId, current);
+    undo();
+    expect(copies.get(copy.noteId)).toEqual(current);
+  });
+
+  it('does nothing if the copy has already gone', () => {
+    removeSharedNote(copy.noteId);
+    expect(toast).not.toHaveBeenCalled();
+  });
+});
 
 describe('share links', () => {
   it('makes tokens the server accepts, a new one each time', () => {

@@ -1,5 +1,6 @@
 import {
   type Attachment,
+  acceptShareSchema,
   attachmentSchema,
   blocksToPlainText,
   boardColumnSchema,
@@ -296,7 +297,7 @@ export const sharedNotesCollection = createCollection(
         parser: { timestamptz: (value: string) => new Date(value) },
       },
     }),
-    1,
+    2,
   ),
 );
 
@@ -523,7 +524,12 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
     if (mutation.type === 'delete') return api.deleteNoteShare(key);
   }
   if (mutation.collection.id === sharedNotesCollection.id) {
-    // Adding one takes its link, which is a request of its own (`api.acceptShare`).
+    // Only a removal undone adds one here: the link's page adds it by a request of its own.
+    // Either way it is added by its link, which the server takes again and again.
+    if (mutation.type === 'insert') {
+      const { token, ...place } = sharedNoteSchema.parse(mutation.modified);
+      return api.acceptShare(token, acceptShareSchema.parse(place));
+    }
     if (mutation.type === 'update')
       return api.updateSharedNote(key, updateSharedNoteSchema.parse(mutation.changes));
     if (mutation.type === 'delete') return api.deleteSharedNote(key);

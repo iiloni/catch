@@ -345,6 +345,8 @@ export const sharedNotes = pgTable(
     noteId: uuid()
       .notNull()
       .references(() => noteShares.noteId, { onDelete: 'cascade' }),
+    /** The link the reader added it by, theirs to add it by again after removing it. */
+    token: text().notNull(),
     ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
