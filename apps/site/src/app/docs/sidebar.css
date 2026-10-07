@@ -1,0 +1,65 @@
+/* Both sidebars use the same page-tree structure; keep the hierarchy visible in each. */
+:where(#nd-sidebar, #nd-sidebar-mobile) {
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--brand-link);
+    outline-offset: 2px;
+  }
+
+  a[data-active="true"] {
+    color: var(--brand-link);
+    font-weight: 600;
+  }
+
+  .docs-site-nav-divider {
+    margin-block: 0 0.75rem;
+    border: 0;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .docs-guide-selector {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+    margin-block-end: 0.75rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 0.625rem;
+    background: var(--secondary);
+
+    a {
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      color: var(--muted-foreground);
+      text-align: center;
+      font-weight: 600;
+
+      &:hover {
+        color: var(--foreground);
+      }
+
+      &[aria-current="true"] {
+        background: var(--card);
+        color: var(--foreground);
+        box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent);
+      }
+    }
+  }
+
+  [data-radix-scroll-area-viewport] > div > div[data-state] {
+    margin-block: 0.875rem 0.25rem;
+
+    > button {
+      background: transparent;
+      color: var(--foreground);
+      font-family: var(--font-display);
+      font-size: 0.9375rem;
+      font-weight: 600;
+    }
+
+    > div[id] > div > a[data-active="true"]::before {
+      width: 3px;
+      background: var(--brand-link);
+    }
+  }
+}

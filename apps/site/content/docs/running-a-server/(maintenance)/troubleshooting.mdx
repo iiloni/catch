@@ -1,0 +1,74 @@
+---
+title: Troubleshooting
+description: Check startup, sync, authentication, files and backups.
+---
+
+Start from your deployment directory. Capture the versions and the operation that failed before changing data:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 app postgres electric
+curl --fail https://notes.example.com/api/health
+```
+
+Do not publish full configuration, tokens, invite fragments or backup contents. The health check only shows that the app answers; test the affected feature too.
+
+## The app will not start
+
+Read app logs for environment validation, database connections, migrations and pre-update backups. `BETTER_AUTH_SECRET` needs at least 32 characters, URLs must be valid, and booleans must be `true` or `false`. Check Postgres is healthy and both app and Electric use its actual password.
+
+Changing `POSTGRES_PASSWORD` in `.env` does not rotate an existing database password. Restore the expected setting or deliberately change the database role's password too; deleting the database volume to fix a credential typo loses data.
+
+If a pre-migration backup fails, Catch refuses to migrate/start. Check free space, the backup mount and UID 1000 write permission. Fix the cause before retrying. `UPDATE_BACKUPS=false` bypasses protection rather than repairing the backup failure.
+
+If images cannot be fetched, check registry/network access. Electric's fallback build needs GitHub and takes longer. Choose a Catch image that has a published release.
+
+## The browser works but Android cannot connect
+
+Confirm the entered address is the server's public HTTPS origin and `/api/health` works from the phone's network. Check DNS, certificate trust, proxy routing and `BETTER_AUTH_URL`. Released Android apps block plain HTTP.
+
+Do not add `TRUSTED_ORIGINS=*` as a workaround. Catch already permits its native app origins. An invite must be pasted whole; its fragment is part of the token, not an ordinary shortened server address.
+
+## Sign-up, sign-in or invitations fail
+
+After the first account, closed registration requires an invite. Used, expired, removed or malformed links fail. Create a fresh one in **Settings > Admin > Users** and copy the whole link while its dialog is open.
+
+If several visitors are rate-limited together, configure `TRUSTED_PROXIES` for the actual proxy peer. Keep rate limiting enabled. Check whether a password was reset or changed, which ends other sessions. A user with a forgotten password needs an admin reset; there is no email recovery.
+
+## Notes do not sync or loading is slow
+
+Check the affected client's cloud indicator and **Settings > Update**. **App update required** needs newer client code; **Server update required** needs a server upgrade. Queued notes stay local during the mismatch. Clearing local data or signing out deletes pending work and does not fix compatibility.
+
+Verify HTTP/2 on the client-facing proxy and that authenticated API responses are not cached or buffered in a way that delays sync. Check Electric's logs and its connection to Postgres, including matching `ELECTRIC_SECRET`. The app's health response alone does not test Electric.
+
+Offline, only one tab per account can queue writes. Work in that tab. With several accounts, pending changes send only while their account is open. Search runs on each device's synced copy, so incomplete sync can mean incomplete results.
+
+## Uploads or attachments fail
+
+Check file size (100 MiB maximum), account attachment quota, server free space and attachment-directory permissions. A 413 can come from Catch's quota/body limits or from a smaller proxy upload limit. Allow enough proxy capacity for backups as well as files.
+
+A pending upload means the original has not finished reaching the server. A thumbnail on another device does not guarantee that original is cached offline. After a database-only restore, missing originals cannot be reconstructed from the metadata; recover a full backup or the original file storage.
+
+If originals open but video posters are absent, inspect preview-generation errors. Keep Postgres and app backup-client major versions compatible if changing infrastructure; the supplied image and Compose file use version 17 tools/database.
+
+## Link previews are missing
+
+Check `LINK_PREVIEWS`, the user's **Settings > General > Link previews** and outbound connectivity. Catch rejects private/local target addresses. Some websites supply no usable metadata or refuse fetching. The saved URL remains usable even without a preview; it is not an archived copy of that page.
+
+## Reminders do not appear
+
+On the device, enable **Settings > Notifications > Reminder notifications** and use **Test > Send**. Check OS/browser permission. iPhone/iPad need the installed Home Screen app; unsupported browsers show a message in Settings.
+
+For browser delivery, check the server is running, has outbound push-service access and has a valid `PUSH_CONTACT` or HTTPS public URL. Browser reminders cannot ring locally while the server is down.
+
+For native Android, open Catch online to receive the current reminder list, then check notification and exact-alarm permissions in Android settings. Reminders changed elsewhere can be delayed by Android's background scheduling or battery saving. A disabled/ended session cannot refresh its list.
+
+## Backups or restore fail
+
+Check mount persistence, UID 1000 permissions and free space. Full backups include original attachments without compression, so budget for multiple copies. Large uploads can hit the proxy's limits before reaching Catch.
+
+Run `./backup.sh inspect BACKUP_NAME.zip`. Refusal due to newer migrations needs a compatible newer app or the deliberate empty-database downgrade procedure, not repeated retries on an older live schema. See [Restore and recovery](/docs/running-a-server/restore).
+
+## Escalate a reproducible problem
+
+Record the app and server versions, image selection, proxy type, relevant sanitized logs and steps to reproduce. Use [GitHub issues](https://github.com/iiloni/catch/issues). State whether you use the supplied Compose file or customized services. Keep private data and credentials out of the report.

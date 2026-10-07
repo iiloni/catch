@@ -1,0 +1,92 @@
+---
+title: Configuration
+description: Environment variables, defaults and how to apply changes.
+---
+
+Run Compose commands from your deployment directory. Its `.env` supplies variables for interpolation into `compose.yaml`; it is not automatically forwarded wholesale to the app container.
+
+After changing a forwarded setting, run:
+
+```bash
+docker compose config --quiet
+docker compose up -d --wait
+```
+
+That recreates affected containers. `docker compose restart` alone does not apply new environment values. Avoid pasting full `docker compose config` output into a public issue: it contains secrets.
+
+## Deployment values in .env
+
+These are the values the supplied Compose file reads. Defaults below are Compose defaults, not the sample values you may have downloaded in `.env.example`.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CATCH_IMAGE` | `ghcr.io/iiloni/catch:stable` | Published Catch image. Use a channel, exact tag or digest; see [Updates](/docs/running-a-server/updates). |
+| `BETTER_AUTH_URL` | `http://localhost:3000` | Public origin of the server. Set your actual HTTPS address; Android, auth and notification setup depend on it. |
+| `BETTER_AUTH_SECRET` | None; required | Authentication and signed-download secret, at least 32 characters. Generate independently and preserve securely. |
+| `POSTGRES_PASSWORD` | `catch` | Password for the `catch` database role, also used in the app and Electric connection URLs. Replace before first startup; later rotation needs a database password change too. |
+| `ELECTRIC_SECRET` | `change-me` | Shared secret between Catch and Electric. Replace before exposure. |
+| `REGISTRATION` | `closed` | `closed` requires an invite after the first account. `open` allows anyone who can reach the server to create an account. |
+| `AUTH_RATE_LIMIT` | `true` | Enable auth rate limiting in production. Keep enabled on deployed servers. Accepts `true` or `false`. |
+| `TRUSTED_PROXIES` | Empty | Comma-separated IP addresses or CIDR ranges whose forwarded client addresses Catch trusts. Configure only your actual proxies. |
+| `ATTACHMENT_QUOTA_MB` | `10240` | Nonnegative integer, counted in units of 1,048,576 bytes per account: default 10 GiB. `0` removes the total attachment limit. The 100 MiB per-file limit remains. |
+| `LINK_PREVIEWS` | `true` | `false` stops server page fetching for preview details; notes retain plain link cards. Accepts `true` or `false`. |
+| `PUSH_CONTACT` | Empty; uses the HTTPS origin of `BETTER_AUTH_URL` | Contact for browser push services, a `mailto:` address or HTTPS URL. Set explicitly if using a non-HTTPS server URL; client Web Push still needs a secure context. |
+| `CATCH_BIND_ADDRESS` | `0.0.0.0` | Host interface for the app's published port. Use `127.0.0.1` for a host-local proxy. |
+| `CATCH_PORT` | `3000` | Published host port. The supplied container still listens on 3000. |
+| `CATCH_ATTACHMENTS_MOUNT` | `attachment_data` | Named volume or host directory mounted at `/data/attachments`. A host directory must be writable by UID 1000. |
+| `CATCH_BACKUPS_MOUNT` | `backup_data` | Named volume or host directory mounted at `/data/backups`. Use storage on another disk for disk-loss protection; make it writable by UID 1000. |
+| `UPDATE_BACKUPS` | `true` | Make a database-only backup before pending migrations or a recorded release-version change at startup. A failed backup stops startup. Accepts `true` or `false`. |
+| `UPDATE_BACKUPS_KEPT` | `10` | Positive integer: update backups retained by the server's pre-migration backup process. |
+
+Boolean settings accept the exact strings `true` and `false`; registration accepts `open` and `closed`. Invalid values can stop startup.
+
+## Advanced app-container values
+
+These are recognized by the app but are not all exposed through `.env` by the supplied Compose file. To customize one, edit `services.app.environment` in your Compose file. Coordinate service URLs, mounts and ports with the corresponding service definitions.
+
+| Variable | App default / supplied deployment value | Meaning |
+| --- | --- | --- |
+| `DATABASE_URL` | Required / `postgres://catch:<password>@postgres:5432/catch` | Postgres connection URL. Supplied from `POSTGRES_PASSWORD`. |
+| `ELECTRIC_URL` | Required / `http://electric:3000` | Internal Electric URL. Keep it private. |
+| `TRUSTED_ORIGINS` | Empty | Comma-separated extra origins allowed by auth/CORS, such as a separately hosted client. Standard deployment needs no extra origins; the native app origins are built in. |
+| `PORT` | `3000` | App's internal HTTP port. If changed, update the published container port, health check and proxy upstream too. |
+| `ATTACHMENTS_DIR` | `/data/attachments` | Attachment directory inside the container. Coordinate with its persistent mount. |
+| `BACKUPS_DIR` | `/data/backups` | Backup directory inside the container. Coordinate with its persistent mount. |
+| `WEB_DIST_DIR` | Unset in app source / `/app/web` in the image | Built web app to serve. Preserve the image's setting for ordinary deployments. |
+| `MIGRATIONS_DIR` | Source-discovered / `/app/drizzle` in the image | SQL migrations used by startup and restore. Preserve the image's setting. |
+| `NODE_ENV` | `development` in app source / `production` in the image | Runtime mode: `development`, `production` or `test`. Production enables auth rate limiting when `AUTH_RATE_LIMIT=true`. |
+| `CATCH_VERSION` | Unset in source / embedded release version | Build identity recorded in metadata and backups. Do not spoof it to select a release; select `CATCH_IMAGE`. |
+| `CATCH_CHANNEL` | `dev` in source / embedded release channel | Build identity: `stable`, `preview` or `dev`. It does not change the installed build. |
+
+For example, forwarding an extra origin requires an explicit Compose entry:
+
+```yaml
+services:
+  app:
+    environment:
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+```
+
+Merge that into the existing app environment map; do not replace its required settings. Add only origins you intend to trust.
+
+## Postgres and Electric
+
+The supplied Compose file sets Postgres's `POSTGRES_USER=catch` and `POSTGRES_DB=catch`; `POSTGRES_PASSWORD` comes from `.env`. Electric receives its own `DATABASE_URL` pointing to the same database with `?sslmode=disable` on the private Compose network, plus the same `ELECTRIC_SECRET`.
+
+Changing database names/users, using external services, or enabling database TLS requires editing both connection URLs and the service settings. Do not upgrade Postgres's major version by editing its image alone: the supplied configuration uses Postgres 17 and the app image includes matching backup tools. A full database-major migration procedure is not established in this repository.
+
+## Compose and host helper variables
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | `catch`, from the Compose file | Override the project and named-volume prefix for another deployment. Changing it on an existing deployment points to different named volumes. |
+| `COMPOSE_FILE` | Compose's discovered file | Standard Compose override. A source build uses `docker-compose.yml:docker-compose.build.yml` on Linux; ordinary published-image deployments leave it unset. |
+| `CATCH_COMPOSE_DIR` | Helpers search beside their script and one directory above | Host environment variable used by `backup.sh` and `update.sh` to find the deployment. Export it or prefix the command when scripts live elsewhere. |
+
+```bash
+CATCH_COMPOSE_DIR=/srv/catch /usr/local/bin/backup.sh list
+```
+
+The scripts do not source `.env` as a shell script. Putting `CATCH_COMPOSE_DIR` only in `.env` does not direct their initial directory search. Other Docker/Compose controls are documented in [Docker's environment-variable reference](https://docs.docker.com/compose/how-tos/environment-variables/envvars/).
+
+Daily backup time, time zone, attachment inclusion and retention are stored in the database and edited under **Settings > Admin > Backups**, not in environment variables. There are no operator settings for semantic search or AI summaries in the current app.

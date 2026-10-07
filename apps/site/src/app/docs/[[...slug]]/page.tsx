@@ -2,6 +2,8 @@ import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layo
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { DocsRecording } from '@/components/DocsRecording';
+import { DocsScreenshot, DocsVisuals } from '@/components/DocsVisuals';
 import { source } from '@/lib/source';
 
 type Props = { params: Promise<{ slug?: string[] }> };
@@ -15,7 +17,9 @@ export default async function Page({ params }: Props) {
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <Body components={defaultMdxComponents} />
+        <Body
+          components={{ ...defaultMdxComponents, DocsRecording, DocsScreenshot, DocsVisuals }}
+        />
       </DocsBody>
     </DocsPage>
   );
