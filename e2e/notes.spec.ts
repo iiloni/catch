@@ -400,10 +400,10 @@ test('toasts close from their button, or with a swipe by touch or mouse', async 
   const x = bounds.x + bounds.width / 2;
   const y = bounds.y + bounds.height / 2;
   if (isMobile) {
-    // A phone's header is full of controls, so toasts sit below it.
+    // The header is not pills at the top of the page, so the toast sits in its row.
     const header = await page.locator('[data-page-header]').boundingBox();
     if (!header) throw new Error('Missing header');
-    expect(bounds.y).toBeGreaterThanOrEqual(header.y + header.height);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(header.y + header.height);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     for (const dy of [10, 30, 60]) {
@@ -420,6 +420,25 @@ test('toasts close from their button, or with a swipe by touch or mouse', async 
     await page.mouse.up();
   }
   await expect(toast).toHaveCount(0, dismissed);
+});
+
+test('a toast sits below the header once it is pills', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Wide headers leave their middle free, so toasts never move');
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 30 }, (_, index) => `Note ${index + 1}`),
+  );
+  await page.evaluate(() => window.scrollTo({ top: 200, behavior: 'instant' }));
+  await expect(page.getByRole('button', { name: 'Scroll to top' })).toBeEnabled();
+
+  await noteAction(page, 'Note 20', 'Move to trash');
+  const message = page.locator('[data-sonner-toast]').getByText('Moved to trash');
+  await message.hover({ trial: true });
+  const bounds = await message.boundingBox();
+  const header = await page.locator('[data-page-header]').boundingBox();
+  if (!bounds || !header) throw new Error('Missing toast or header');
+  expect(bounds.y).toBeGreaterThanOrEqual(header.y + header.height);
 });
 
 test('archive from the note header, undo restoring the pin, and unarchive', async ({ page }) => {
