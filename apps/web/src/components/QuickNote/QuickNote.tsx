@@ -82,6 +82,15 @@ export function QuickNote() {
   );
 }
 
+/** Where the window sits once its opening spring has settled, whether or not it has yet. */
+function restingBox(element: HTMLElement) {
+  const { transform } = element.style;
+  element.style.transform = 'none';
+  const box = element.getBoundingClientRect();
+  element.style.transform = transform;
+  return box;
+}
+
 function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspended: boolean }) {
   const [isPresent, safeToRemove] = usePresence();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -126,7 +135,10 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     };
   });
   const flightX = useTransform(() => (flightTarget.get()?.dx ?? 0) * flight.get());
-  const flightY = useTransform(() => (flightTarget.get()?.dy ?? 0) * flight.get() + y.get());
+  // A swipe's offset is not part of where the window rests, so the flight sheds it.
+  const flightY = useTransform(
+    () => (flightTarget.get()?.dy ?? 0) * flight.get() + y.get() * (1 - flight.get()),
+  );
   const borderRadius = useTransform(() => 28 - 12 * flight.get());
   const clipPath = useTransform(() => {
     const target = flightTarget.get();
@@ -244,7 +256,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       requestAnimationFrame(() => {
         const card = findCard(id);
         const box = card?.getBoundingClientRect();
-        const self = ref.current?.getBoundingClientRect();
+        const self = ref.current ? restingBox(ref.current) : undefined;
         const note = getNote(id);
         const visible = box && box.bottom > 0 && box.top < window.innerHeight;
         if (!card || !box || !self || !note || !visible) {
@@ -252,6 +264,9 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           return;
         }
         landing.current = { card, self, box };
+        // Saved straight after opening, the window is still springing to its size. The
+        // flight is measured from where it rests, so it has to be there when it lands.
+        animate(scale, 1, { duration: 0.15 });
         setFace({ note, width: box.width });
         // A frame later again, once the card's face is mounted on the window. A curve ends
         // on time; a spring's promise waits out a tail nobody can see, holding the card back.

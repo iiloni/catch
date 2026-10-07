@@ -6,18 +6,27 @@ import {
   userRoleSchema,
   usersResponseSchema,
 } from '@catch/shared';
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { UserActions } from '@/components/UserActions/UserActions';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { ApiError, api } from '@/lib/api';
 import { formatDateTime, formatTime, useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
 
 const PAGE_SIZE = 25;
+
+const ROLE_NAMES: Record<UserRole, string> = { user: 'User', admin: 'Admin' };
 
 type Props = {
   currentUserId: string;
@@ -184,21 +193,15 @@ export function UserManagement({ currentUserId, onAccessDenied }: Props) {
                         {account.email}
                       </td>
                       <td className="px-3 py-3">
-                        <select
-                          aria-label={`Role for ${account.email}`}
-                          value={account.role}
+                        <RoleMenu
+                          account={account}
                           disabled={self || saving !== null}
                           title={self ? 'You cannot change your own role' : undefined}
-                          onChange={(event) => {
-                            const role = userRoleSchema.parse(event.target.value);
+                          onChange={(role) => {
                             haptics.selection();
                             void changeRole(account, role);
                           }}
-                          className="h-11 w-full rounded-lg border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                        />
                       </td>
                       <td className="hidden px-3 py-3 text-muted-foreground text-xs @lg:table-cell">
                         <time
@@ -298,5 +301,46 @@ function LastLogin({ value }: { value: AdminUser['lastLoginAt'] }) {
       {date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}{' '}
       <span className="@md:block">{formatTime(date)}</span>
     </time>
+  );
+}
+
+function RoleMenu({
+  account,
+  disabled,
+  title,
+  onChange,
+}: {
+  account: AdminUser;
+  disabled: boolean;
+  title?: string;
+  onChange: (role: UserRole) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Role for ${account.email}: ${ROLE_NAMES[account.role]}`}
+        disabled={disabled}
+        title={title}
+        className="flex h-11 w-full items-center justify-between gap-1 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50"
+      >
+        {ROLE_NAMES[account.role]}
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-36">
+        <DropdownMenuRadioGroup
+          value={account.role}
+          onValueChange={(value) => {
+            const role = userRoleSchema.parse(value);
+            if (role !== account.role) onChange(role);
+          }}
+        >
+          {userRoleSchema.options.map((role) => (
+            <DropdownMenuRadioItem key={role} value={role}>
+              {ROLE_NAMES[role]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

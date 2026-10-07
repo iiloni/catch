@@ -33,6 +33,10 @@ checkout's stack. Never hard-code container or project names.
   `BREAKING CHANGE:` footers are published in them.
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
+- `check`, `test`, `build` and `e2e` take turns across every worktree on the machine: a
+  second run waits for the first and prints what it is waiting for. Give these commands a
+  long timeout or run them in the background, and let a waiting one wait. Do not go around
+  the queue by calling `playwright test` or the container's `pnpm check` directly.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh site`: run the public site with hot reload and print its URL. It is not
@@ -91,6 +95,11 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   pass; require that check in branch protection so testing alone cannot permit merging.
   `merge on pass` means functionality and design are approved and authorizes merging
   once required checks pass.
+- A change confined to documentation (`docs/`, root and `branding/` Markdown, the PR
+  template, `LICENSE`, `.gitignore`, `cubic.yaml`; the list is `scripts/change-scope.ts`)
+  runs `check` and skips E2E, on its PR and on `main`. It still needs `merge on pass` to
+  pass `validation`. One other file in the change makes it code. Do not add `run e2e` to
+  such a PR.
 - After the user approves functionality and design for merging, mark the PR ready and add
   `merge on pass`. Fix failures with the label left in place, then merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.

@@ -8,6 +8,10 @@ vi.mock('@/lib/auth', () => ({
   getSignedInUser: () => null,
   activateAccount: () => false,
 }));
+vi.mock('@/lib/webUpdates', () => ({
+  updateSignedOutPage: async () => {},
+  useWebUpdates: () => ({ reloading: false }),
+}));
 vi.mock('@/lib/serverUrl', () => ({ needsServerUrl: () => false }));
 vi.mock('@/components/BrandLockup/BrandLockup', () => ({ BrandLockup: () => <img alt="Catch" /> }));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -49,3 +53,35 @@ it.each(['sign-in', 'sign-up'])(
     expect(submit).toBeEnabled();
   },
 );
+
+it('signs up with an invite link pasted into the form', async () => {
+  const LoginPage = Route.options.component;
+  if (!LoginPage) throw new Error('Login component missing');
+  await act(async () => {
+    render(<LoginPage />);
+  });
+  expect(screen.queryByLabelText('Invite link')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Need an account? Sign up' }));
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } });
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } });
+  const submit = screen.getByRole('button', { name: 'Create account' });
+
+  fireEvent.change(screen.getByLabelText('Invite link'), {
+    target: { value: 'https://catch.example.com/login#invite=cut-short' },
+  });
+  fireEvent.click(submit);
+  expect(await screen.findByText(/not a whole invite link/)).toBeInTheDocument();
+  expect(auth.signUp).not.toHaveBeenCalled();
+
+  const token = 'aB3_-'.repeat(8) + 'xyz';
+  fireEvent.change(screen.getByLabelText('Invite link'), {
+    target: { value: ` https://catch.example.com/login#invite=${token} ` },
+  });
+  auth.signUp.mockResolvedValueOnce({ error: { message: 'Stop here' } });
+  fireEvent.click(submit);
+  await screen.findByText('Stop here');
+  expect(auth.signUp).toHaveBeenCalledWith(
+    { email: 'new@example.com', password: 'password123', name: '' },
+    { headers: { 'X-Catch-Invite': token } },
+  );
+});

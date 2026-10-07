@@ -351,19 +351,24 @@ test('admins can open Users from either settings navigation and edit roles', asy
   await expect(page).toHaveURL(/\/settings\/admin\/users$/);
   const table = page.getByRole('table', { name: 'Users' });
   await expect(table).toBeVisible();
-  await expect(table.getByRole('combobox', { name: 'Role for admin@example.com' })).toBeDisabled();
+  await expect(
+    table.getByRole('button', { name: 'Role for admin@example.com: Admin' }),
+  ).toBeDisabled();
 
   await page.getByRole('searchbox', { name: 'Search users' }).fill(target.email);
-  const role = table.getByRole('combobox', { name: `Role for ${target.email}` });
-  await expect(role).toHaveValue('user');
-  await role.selectOption('admin');
-  await expect(role).toHaveValue('admin');
+  const role = table.getByRole('button', { name: `Role for ${target.email}` });
+  await expect(role).toHaveText('User');
+  await role.click();
+  await page.getByRole('menuitemradio', { name: 'Admin' }).click();
+  await expect(role).toHaveText('Admin');
   await expect(role).toBeEnabled();
   await page.reload();
   await page.getByRole('searchbox', { name: 'Search users' }).fill(target.email);
-  await expect(role).toHaveValue('admin');
-  await role.selectOption('user');
-  await expect(role).toHaveValue('user');
+  await expect(role).toHaveText('Admin');
+  await role.click();
+  await expect(page.getByRole('menuitemradio', { name: 'Admin' })).toBeChecked();
+  await page.getByRole('menuitemradio', { name: 'User' }).click();
+  await expect(role).toHaveText('User');
   await page.getByRole('searchbox', { name: 'Search users' }).fill('no-such-user@example.invalid');
   await expect(page.getByText('No users match this search.')).toBeVisible();
 });
@@ -632,6 +637,21 @@ test('an admin invites someone, and the link makes one account', async ({
     await expect(second.guest.getByText('This invite has been used or has expired.')).toBeVisible();
   } finally {
     await second.context.close();
+  }
+
+  // The Android app, or a page that lost the link's fragment, takes the link in the form.
+  const pasted = await browser.newContext();
+  try {
+    const guest = await pasted.newPage();
+    await guest.goto('/login');
+    await guest.getByRole('button', { name: 'Need an account? Sign up' }).click();
+    await guest.getByLabel('Email').fill(`pasted-${email}`);
+    await guest.getByLabel('Password').fill('password123');
+    await guest.getByLabel('Invite link').fill(link);
+    await guest.getByRole('button', { name: 'Create account' }).click();
+    await expect(guest.getByText('This invite has been used or has expired.')).toBeVisible();
+  } finally {
+    await pasted.close();
   }
 
   await page.reload();

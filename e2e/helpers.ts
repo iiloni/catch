@@ -196,6 +196,9 @@ export async function settledBox(locator: Locator) {
  */
 export async function longPress(page: Page, locator: Locator) {
   const box = await settledBox(locator);
+  // A card under a page slide's snapshots has settled, but the touch would land on them:
+  // the press never reaches the card, and the click that ends it opens the note.
+  await waitForPageTransition(page);
   const released = page.evaluate(
     () =>
       new Promise<void>((resolve) => {

@@ -48,6 +48,24 @@ confirm() {
     [[ "$answer" == "y" || "$answer" == "Y" ]]
 }
 
+# Tests and builds from several worktrees at once exhaust the machine, so these commands
+# take turns across all of them. The lock lives in the Git common directory, which every
+# worktree shares, and is held until this script exits.
+wait_for_turn() {
+    if ! command -v flock >/dev/null; then
+        echo "flock not found; running $1 without waiting for other worktrees." >&2
+        return
+    fi
+    local lock
+    lock=$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)/catch-e2e.lock
+    exec 9>>"$lock"
+    if ! flock -n 9; then
+        echo "Waiting for another Catch run to finish: $(cat "$lock")"
+        flock 9
+    fi
+    echo "$1 in $repo_root since $(date +%H:%M)" >"$lock"
+}
+
 has_yes_flag() {
     local argument
     for argument in "$@"; do
@@ -133,25 +151,20 @@ case "$command" in
         "${compose[@]}" exec -T -e "CATCH_SEED_PROFILE=${1:-demo}" app pnpm db:seed
         ;;
     check)
+        wait_for_turn check
         "${compose[@]}" exec -T app pnpm check
         ;;
     test)
+        wait_for_turn test
         "${compose[@]}" exec -T app pnpm test "$@"
         ;;
     build)
+        wait_for_turn build
         "${compose[@]}" exec -T -e "CATCH_CHANNEL=${1:-dev}" app pnpm build
         ;;
     e2e)
         # Playwright runs on the host (it needs a browser) against this stack.
-        # All worktrees share the Git common directory, so only one suite runs
-        # on this machine at a time. Keep the lock until Playwright exits.
-        command -v flock >/dev/null || { echo "flock is required for e2e runs." >&2; exit 1; }
-        common_dir=$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)
-        exec 9>"$common_dir/catch-e2e.lock"
-        if ! flock -n 9; then
-            echo "Another Catch e2e run is active; waiting for it to finish..."
-            flock 9
-        fi
+        wait_for_turn e2e
         # HMR timestamps give direct imports in tests a second copy of module state.
         # Start with a fresh Vite process and wait for the API before signing up users.
         "${compose[@]}" up -d --no-deps --wait --force-recreate app
@@ -263,9 +276,10 @@ Usage: ./scripts/dev.sh <command>
   generate            Generate a migration from the Drizzle schema
   seed [demo|basic]   Re-run idempotent seeding
   check               Lint, typecheck, unit tests and build (in the container)
+                      check, test, build and e2e take turns across worktrees
   test [args]         Unit tests (in the container)
   build [channel]     Build all packages (in the container; dev by default, or stable, preview)
-  e2e [args]          Playwright tests from the host (one suite across worktrees)
+  e2e [args]          Playwright tests from the host
   android [--static] [--usb]
                       Start the stack and install Catch Dev on a connected Android device
                       --static: fresh bundled APK without live reload; API uses this dev stack
