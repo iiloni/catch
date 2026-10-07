@@ -7,6 +7,7 @@ import {
   showLinkInNote,
   useNoteLinks,
 } from '@/lib/linkPreviews';
+import { isSharedNote } from '@/lib/sharing';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -69,7 +70,7 @@ function LinkList({ note, links, variant, className }: Props & { links: Resolved
             <LinkPreviewCard
               link={link}
               noteId={note.id}
-              readOnly={Boolean(note.deletedAt)}
+              readOnly={Boolean(note.deletedAt) || isSharedNote(note)}
               onShowInNote={() => showLinkInNote(link.url)}
             />
           </li>

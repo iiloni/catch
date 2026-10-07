@@ -11,6 +11,7 @@ export * from './position';
 export * from './protocol';
 export * from './releases';
 export * from './reminders';
+export * from './sharing';
 export * from './sync';
 export * from './tags';
 export * from './users';

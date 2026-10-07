@@ -29,6 +29,16 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
+            <!-- A web page hands its link to the app through this scheme (ADR 0021): Android
+                 gives an https link only to an app built for that host, and a server's host
+                 is its owner's to choose. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="catchnotes" android:host="open" />
+            </intent-filter>
+
         </activity>
 
         <!-- Reminders ring from here with the app closed (ADR 0018). -->

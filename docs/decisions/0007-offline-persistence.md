@@ -24,6 +24,16 @@ again. `lib/localStore.ts` opens the right database; `lib/collections.ts` wraps 
 collections. If the database cannot open (no OPFS, for example), collections fall back to
 memory and the app works online as before.
 
+The browser coordinator routes leader operations to the adapter registered for each
+collection. Collections may have different schema versions; the persistence package's
+default coordinator wiring selects the last-created adapter for every collection, which
+can reset another collection's cached rows or race its table creation. Routing preserves
+one coordinator and database-wide writer lock across tabs, while each collection uses
+its own schema version for both reads and leader operations.
+We patch the SQLite core's schema reset to delete that collection's sync metadata in the
+same transaction as its cached rows. Otherwise Electric resumes after the removed rows
+instead of fetching a new snapshot. Other collections and the outbox stay intact.
+
 **HTTP development uses short polls.** With six or more collections, live long polls occupy all six
 HTTP/1.1 browser connections to the dev server. Lazy pages, HMR and writes then wait for a
 20-second sync timeout. `lib/shapeFetch.ts` makes live requests to an HTTP development

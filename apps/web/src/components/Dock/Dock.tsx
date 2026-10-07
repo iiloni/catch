@@ -53,6 +53,7 @@ import {
   useWideSettings,
 } from '@/lib/settings';
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
+import { isSharedNote } from '@/lib/sharing';
 import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
@@ -272,7 +273,7 @@ function FloatingNoteToolbars() {
 
   return (
     <>
-      {note && !note.deletedAt && (
+      {note && !note.deletedAt && !isSharedNote(note) && (
         <HistoryToolbar
           controls={controls}
           floating

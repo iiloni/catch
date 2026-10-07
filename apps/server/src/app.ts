@@ -19,6 +19,7 @@ import { notesRoutes } from './routes/notes';
 import { pushRoutes } from './routes/push';
 import { reminderRoutes } from './routes/reminders';
 import { shapeRoutes } from './routes/shapes';
+import { noteShareRoutes, sharedNoteRoutes, shareLinkRoutes } from './routes/sharing';
 import { noteTagRoutes, tagRoutes } from './routes/tags';
 import { updateRoutes } from './routes/updates';
 import { vaultRoutes } from './routes/vault';
@@ -63,7 +64,12 @@ export function createApp() {
     app.use(
       logger((...messages) =>
         console.log(
-          ...messages.map((message) => message.replace(/([?&]access=)[^&\s]+/g, '$1[redacted]')),
+          ...messages.map((message) =>
+            message
+              .replace(/([?&]access=)[^&\s]+/g, '$1[redacted]')
+              // A share link's token is all it takes to read the note (ADR 0021).
+              .replace(/(\/(?:api\/shares|s)\/)[A-Za-z0-9_-]{43}/g, '$1[redacted]'),
+          ),
         ),
       ),
     );
@@ -131,6 +137,9 @@ export function createApp() {
     .route('/board-columns', boardColumnRoutes)
     .route('/link-previews', linkPreviewRoutes)
     .route('/reminders', reminderRoutes)
+    .route('/note-shares', noteShareRoutes)
+    .route('/shared-notes', sharedNoteRoutes)
+    .route('/shares', shareLinkRoutes)
     .route('/push', pushRoutes)
     .route('/vault', vaultRoutes)
     .route('/updates', updateRoutes)

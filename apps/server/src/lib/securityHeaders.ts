@@ -51,6 +51,7 @@ export function securityHeaders({ app, https }: { app: string | null; https: boo
       'x-content-type-options': 'nosniff',
       'x-frame-options': 'DENY',
       'referrer-policy': 'same-origin',
+      'x-robots-tag': /^\/(?:s|api\/shares)\//.test(c.req.path) ? 'noindex' : null,
       // Browsers ignore this over plain HTTP, but a proxy in front may not be the one adding it.
       'strict-transport-security': https ? 'max-age=31536000' : null,
     };

@@ -13,6 +13,7 @@ function isExempt(method: string, path: string) {
   return (
     ['/api/health', '/api/compatibility', '/api/updates', '/api/updates/releases'].includes(path) ||
     /^\/api\/attachments\/[^/]+\/content$/.test(path) ||
+    /^\/api\/shares\/[^/]+\/attachments\/[^/]+\/content$/.test(path) ||
     /^\/api\/link-previews\/assets\/[^/]+$/.test(path) ||
     /^\/api\/admin\/backups\/[^/]+\/download$/.test(path)
   );

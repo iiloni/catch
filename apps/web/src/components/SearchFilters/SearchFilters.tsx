@@ -20,6 +20,7 @@ import {
 import { createPortal } from 'react-dom';
 import { z } from 'zod';
 import { COLOR_NAMES } from '@/components/ColorPicker/ColorPicker';
+import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
@@ -217,7 +218,6 @@ export function SearchFilters({
 }) {
   const [tab, setTab] = usePersistentState('catch-search-filter-tab', filterTabSchema, 'colors');
   const [direction, setDirection] = useState(1);
-  const layoutId = useId();
   const archivedId = useId();
   const selected = new Set(filter.ids);
   function selectTab(next: FilterTab) {
@@ -397,59 +397,27 @@ export function SearchFilters({
           }}
         />
       </label>
-      <LayoutGroup id={layoutId}>
-        <div
-          role="tablist"
-          aria-label="Filter type"
-          className="grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-foreground/5 p-1"
-          onKeyDown={(event) => {
-            const next =
-              event.key === 'Home'
-                ? 'colors'
-                : event.key === 'End'
-                  ? 'tags'
-                  : event.key === 'ArrowLeft' || event.key === 'ArrowRight'
-                    ? tab === 'colors'
-                      ? 'tags'
-                      : 'colors'
-                    : null;
-            if (!next) return;
-            event.preventDefault();
-            selectTab(next);
-            document.getElementById(`search-filter-tab-${next}`)?.focus();
-          }}
-        >
-          {(['colors', 'tags'] as const).map((value) => (
-            <button
-              key={value}
-              id={`search-filter-tab-${value}`}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              aria-controls={`search-filter-view-${value}`}
-              tabIndex={tab === value ? 0 : -1}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => selectTab(value)}
-              className="relative flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {tab === value && (
-                <motion.span
-                  layoutId="filter-tab"
-                  aria-hidden
-                  className="absolute inset-0 rounded-lg bg-foreground/8 shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                  transition={springs.snappy}
-                />
-              )}
-              {value === 'colors' ? (
-                <Palette className="relative size-4" aria-hidden />
-              ) : (
-                <Tags className="relative size-4" aria-hidden />
-              )}
-              <span className="relative">{value === 'colors' ? 'Colors' : 'Tags'}</span>
-            </button>
-          ))}
-        </div>
-      </LayoutGroup>
+      <SegmentedTabs<FilterTab>
+        label="Filter type"
+        value={tab}
+        onValueChange={selectTab}
+        options={[
+          {
+            value: 'colors',
+            id: 'search-filter-tab-colors',
+            controls: 'search-filter-view-colors',
+            label: 'Colors',
+            icon: <Palette className="relative size-4" aria-hidden />,
+          },
+          {
+            value: 'tags',
+            id: 'search-filter-tab-tags',
+            controls: 'search-filter-view-tags',
+            label: 'Tags',
+            icon: <Tags className="relative size-4" aria-hidden />,
+          },
+        ]}
+      />
     </div>
   );
 }

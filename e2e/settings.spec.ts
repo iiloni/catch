@@ -329,7 +329,7 @@ test('mobile settings scroll normally and keep short pulls open', async ({ page,
   await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
 });
 
-test('settings pages load promptly while all seven collections keep syncing over HTTP', async ({
+test('settings pages load promptly while all nine collections keep syncing over HTTP', async ({
   page,
   isMobile,
 }) => {
@@ -356,10 +356,12 @@ test('settings pages load promptly while all seven collections keep syncing over
         collections.tagsCollection,
         collections.noteTagsCollection,
         collections.remindersCollection,
+        collections.noteSharesCollection,
+        collections.sharedNotesCollection,
       ].map((collection) => collection.preload()),
     );
   });
-  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(7);
+  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(9);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Appearance', exact: true })).toBeVisible({

@@ -2,11 +2,12 @@ import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Archive } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useMemo } from 'react';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
-import { notesCollection } from '@/lib/collections';
+import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
@@ -20,12 +21,14 @@ export const Route = createFileRoute('/_app/archive')({
 
 function ArchivePage() {
   const { open } = useOpenNote();
-  const { data: notes = [], isLoading } = useLiveQuery({
+  const { data: own = [], isLoading } = useLiveQuery({
     query: (q) =>
       q
         .from({ note: notesCollection })
         .where(({ note }) => and(isNull(note.deletedAt), eq(note.isArchived, true))),
   });
+  const shared = useSharedNotes().notes;
+  const notes = useMemo(() => [...own, ...shared.filter((note) => note.isArchived)], [own, shared]);
   const vault = useVaultView();
   const shown = vault ? vault.filter((note) => !note.deletedAt && note.isArchived) : notes;
   const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);

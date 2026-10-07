@@ -38,4 +38,15 @@ describe('security headers', () => {
     const res = await app.request('/api/file');
     expect(res.headers.get('content-security-policy')).toBe('sandbox');
   });
+
+  it('keeps public share pages, metadata and files out of search indexes', async () => {
+    for (const path of [
+      '/s/token',
+      '/api/shares/token',
+      '/api/shares/token/attachments/id/content',
+    ]) {
+      expect((await app.request(path)).headers.get('x-robots-tag')).toBe('noindex');
+    }
+    expect((await app.request('/settings')).headers.has('x-robots-tag')).toBe(false);
+  });
 });

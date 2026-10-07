@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Change only for incompatible API/sync contracts; see docs/decisions/0013-api-compatibility.md. */
-export const API_PROTOCOL_VERSION = 3;
+export const API_PROTOCOL_VERSION = 4;
 export const API_PROTOCOL_HEADER = 'X-Catch-Protocol';
 
 export const protocolRangeSchema = z
@@ -9,7 +9,8 @@ export const protocolRangeSchema = z
   .refine(({ min, max }) => min <= max, 'Invalid protocol range');
 export type ProtocolRange = z.infer<typeof protocolRangeSchema>;
 
-// Protocol 3 added reminders (ADR 0018) and changed nothing a protocol 2 client uses.
+// Protocols 3 and 4 added reminders (ADR 0018) and shared notes (ADR 0021), and changed
+// nothing a protocol 2 client uses.
 export const SUPPORTED_API_PROTOCOLS: ProtocolRange = { min: 2, max: API_PROTOCOL_VERSION };
 
 export type CompatibilityIssue = 'client-too-old' | 'server-too-old';
