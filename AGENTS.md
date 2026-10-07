@@ -32,6 +32,10 @@ checkout's stack. Never hard-code container or project names.
   `BREAKING CHANGE:` footers are published in them.
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
+- `check`, `test`, `build` and `e2e` take turns across every worktree on the machine: a
+  second run waits for the first and prints what it is waiting for. Give these commands a
+  long timeout or run them in the background, and let a waiting one wait. Do not go around
+  the queue by calling `playwright test` or the container's `pnpm check` directly.
 - `./scripts/dev.sh generate`: create a migration after editing `apps/server/src/db/schema.ts`.
   Commit the generated SQL and journal.
 - `./scripts/dev.sh logs app`, `psql`, `shell`, `seed`, `reset -y`: see `./scripts/dev.sh help`.
