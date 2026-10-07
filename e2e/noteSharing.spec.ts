@@ -237,8 +237,10 @@ test('a shared note is read from its link and added to another gallery', async (
   await expect
     .poll(async () => (await page.request.get(link.replace('/s/', '/api/shares/'))).status())
     .toBe(200);
+  // Escape closes the panel; on a phone a second one only dismisses the button's tooltip.
   await page.keyboard.press('Escape');
-  await page.keyboard.press('Escape');
+  await expect(page.getByLabel('Share link')).toBeHidden();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await expect(
     card(page, 'Trip plan').getByRole('img', { name: 'Shared with a link' }),
   ).toBeVisible();
