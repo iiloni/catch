@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { enterVault, leaveVault, vaultMode } from '@/lib/vault';
+import { useShowVaultButton } from '@/lib/vaultPreferences';
 
 /**
  * Enters and leaves the vault (ADR 0020). Inside, the Gallery, the Deck and Search show the
@@ -10,8 +11,12 @@ import { enterVault, leaveVault, vaultMode } from '@/lib/vault';
  */
 export function VaultToggle() {
   const inside = vaultMode.use();
+  const [shown] = useShowVaultButton();
   const label = inside ? 'Leave the vault' : 'Open the vault';
   const Icon = inside ? LockKeyholeOpen : LockKeyhole;
+
+  // A reminder or Settings can still open a hidden vault; keep the way out available.
+  if (!shown && !inside) return null;
 
   return (
     <motion.button

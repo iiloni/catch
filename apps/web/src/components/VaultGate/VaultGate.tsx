@@ -185,7 +185,7 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
         />
         <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />
         <FormError>{error}</FormError>
-        <Button type="submit" disabled={pending} className="h-11 rounded-full">
+        <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Creating…' : 'Create vault'}
         </Button>
       </form>
@@ -230,10 +230,10 @@ function Unlock({ onForgot }: { onForgot: () => void }) {
         />
         <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />
         <FormError>{error}</FormError>
-        <Button type="submit" disabled={pending} className="h-11 rounded-full">
+        <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
-        <Button type="button" variant="ghost" className="rounded-full" onClick={onForgot}>
+        <Button type="button" variant="ghost" className="rounded-xl" onClick={onForgot}>
           Use the recovery code
         </Button>
       </form>
@@ -306,10 +306,10 @@ function Recover({ onBack }: { onBack: () => void }) {
           disabled={pending}
         />
         <FormError>{error}</FormError>
-        <Button type="submit" disabled={pending} className="h-11 rounded-full">
+        <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Recovering…' : 'Unlock and change password'}
         </Button>
-        <Button type="button" variant="ghost" className="rounded-full" onClick={onBack}>
+        <Button type="button" variant="ghost" className="rounded-xl" onClick={onBack}>
           Back
         </Button>
       </form>
@@ -339,11 +339,11 @@ export function VaultRecoveryCode({ code, onDone }: { code: string; onDone: () =
         {code}
       </output>
       <div className="flex w-full flex-col gap-2">
-        <Button variant="outline" className="h-11 rounded-full" onClick={() => void copy()}>
+        <Button variant="outline" className="h-11 rounded-xl" onClick={() => void copy()}>
           <Copy aria-hidden />
           Copy
         </Button>
-        <Button className="h-11 rounded-full" onClick={onDone}>
+        <Button className="h-11 rounded-xl" onClick={onDone}>
           I have saved it
         </Button>
       </div>

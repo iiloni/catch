@@ -129,6 +129,56 @@ async function shape(page: Page, name: string) {
 
 const rows = async (page: Page, name: string) => (await shape(page, name)).rows;
 
+test('the vault button can be hidden before setup and its preference survives reloads', async ({
+  page,
+}) => {
+  await signUp(page);
+  await expect(page.getByRole('button', { name: 'Open the vault' })).toBeVisible();
+  await page.goto('/settings/vault');
+  const showButton = page.getByRole('switch', { name: 'Show vault button' });
+  await expect(showButton).toBeChecked();
+  await showButton.click();
+  await page.reload();
+  await expect(showButton).not.toBeChecked();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+
+  for (const title of ['Gallery', 'Deck', 'Search']) {
+    if (title !== 'Gallery') {
+      await page.getByRole('link', { name: title, exact: true }).click();
+    }
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
+  }
+
+  await page.goto('/settings/vault');
+  await showButton.click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  for (const title of ['Gallery', 'Deck', 'Search']) {
+    if (title !== 'Gallery') {
+      await page.getByRole('link', { name: title, exact: true }).click();
+    }
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open the vault' })).toBeVisible();
+  }
+});
+
+test('a hidden vault still opens from Settings and keeps its leave button', async ({ page }) => {
+  await signUp(page);
+  await setUpVault(page, { remember: true });
+  await page.goto('/settings/vault');
+  await page.getByRole('switch', { name: 'Show vault button' }).click();
+  await page.getByRole('button', { name: 'Lock now' }).click();
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await gate(page).getByLabel('Vault password').fill(PASSWORD);
+  await gate(page).getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(gate(page)).toBeHidden();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Vault', exact: true })).toBeVisible();
+  await leave(page);
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
+});
+
 test('the vault is set up, locks on leaving, and opens with its password or recovery code', async ({
   page,
 }) => {
