@@ -16,19 +16,42 @@ type Props = {
    * animates open and swap in the real (heavier) editor once it settles.
    */
   variant?: Variant;
+  /**
+   * The preview is all its reader gets, as on a share link's page (ADR 0021): links open
+   * and tables are drawn, where a card or an opening editor leaves both to the editor.
+   */
+  reading?: boolean;
   className?: string;
 };
+
+/** A link a stranger's note may send its reader to: nothing that runs in this page. */
+const opensSafely = (href: unknown): href is string =>
+  typeof href === 'string' && /^(https?:\/\/|mailto:)/i.test(href);
 
 /** BlockNote's heading sizes, by level. */
 const HEADING_SIZES: Record<number, string> = { 1: '3em', 2: '2em', 3: '1.3em' };
 
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null;
 
-function renderInline(content: unknown, variant: Variant, key = 0): ReactNode {
+function renderInline(content: unknown, variant: Variant, key = 0, reading = false): ReactNode {
   if (typeof content === 'string') return content;
   if (Array.isArray(content))
-    return content.map((item, index) => renderInline(item, variant, index));
+    return content.map((item, index) => renderInline(item, variant, index, reading));
   if (!isObject(content)) return null;
+
+  if (content.type === 'link' && reading && opensSafely(content.href)) {
+    return (
+      <a
+        key={key}
+        href={content.href}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="underline underline-offset-2"
+      >
+        {renderInline(content.content, variant, 0, reading)}
+      </a>
+    );
+  }
 
   // Cards are buttons, so links render as text here; they are clickable in the editor.
   if (content.type === 'link') {
@@ -62,15 +85,17 @@ function PreviewBlock({
   isTitle,
   variant,
   listIndex,
+  reading,
 }: {
   block: Json;
   isTitle: boolean;
   variant: Variant;
   listIndex: number;
+  reading: boolean;
 }) {
   const props = isObject(block.props) ? block.props : {};
   const children = Array.isArray(block.children) ? block.children.filter(isObject) : [];
-  const inline = renderInline(block.content, variant);
+  const inline = renderInline(block.content, variant, 0, reading);
   const empty = Array.isArray(block.content) ? block.content.length === 0 : !block.content;
   const text = empty && variant === 'editor' ? <br /> : inline;
 
@@ -174,13 +199,42 @@ function PreviewBlock({
           />
         ) : null;
       break;
+    case 'table': {
+      const rows =
+        reading && isObject(block.content) && Array.isArray(block.content.rows)
+          ? block.content.rows.filter(isObject)
+          : [];
+      body = rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="border-collapse text-left">
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: a table's rows have no ids and never reorder here
+                <tr key={rowIndex}>
+                  {(Array.isArray(row.cells) ? row.cells : []).map((cell, cellIndex) => (
+                    <td
+                      // biome-ignore lint/suspicious/noArrayIndexKey: as for the rows
+                      key={cellIndex}
+                      className="border border-foreground/20 px-2 py-1 align-top"
+                    >
+                      {renderInline(isObject(cell) ? cell.content : cell, variant, 0, reading)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null;
+      break;
+    }
     default:
       body = inline || variant === 'editor' ? <p className="whitespace-pre-wrap">{text}</p> : null;
   }
 
   const nested = children.length > 0 && (
     <div className={variant === 'editor' ? 'pl-6' : 'pl-4'}>
-      {renderBlocks(children, variant, false)}
+      {renderBlocks(children, variant, false, reading)}
     </div>
   );
   return variant === 'editor' ? (
@@ -196,7 +250,12 @@ function PreviewBlock({
   );
 }
 
-function renderBlocks(blocks: readonly Json[], variant: Variant, topLevel: boolean) {
+function renderBlocks(
+  blocks: readonly Json[],
+  variant: Variant,
+  topLevel: boolean,
+  reading: boolean,
+) {
   let listIndex = 0;
   return blocks.map((block, index) => {
     const props = isObject(block.props) ? block.props : {};
@@ -215,6 +274,7 @@ function renderBlocks(blocks: readonly Json[], variant: Variant, topLevel: boole
         isTitle={topLevel && index === 0 && block.type === 'heading'}
         variant={variant}
         listIndex={listIndex}
+        reading={reading}
       />
     );
   });
@@ -231,7 +291,13 @@ function isEmptyBlock(block: Json) {
 }
 
 /** Read-only rendering of a BlockNote document, light enough for a grid of cards. */
-export function NotePreview({ content, maxBlocks = 10, variant = 'card', className }: Props) {
+export function NotePreview({
+  content,
+  maxBlocks = 10,
+  variant = 'card',
+  reading = false,
+  className,
+}: Props) {
   const blocks = variant === 'editor' ? content : content.filter((block) => !isEmptyBlock(block));
   const shown = blocks.slice(0, maxBlocks);
 
@@ -245,7 +311,7 @@ export function NotePreview({ content, maxBlocks = 10, variant = 'card', classNa
         className,
       )}
     >
-      {renderBlocks(shown, variant, true)}
+      {renderBlocks(shown, variant, true, reading)}
       {blocks.length > shown.length && <p className="text-muted-foreground">…</p>}
     </div>
   );

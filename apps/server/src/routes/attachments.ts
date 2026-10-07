@@ -8,7 +8,7 @@ import {
   updateAttachmentSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { issueAccess, readAccess } from '../attachments/access';
@@ -22,13 +22,40 @@ import {
 } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes, vaultNotes } from '../db/schema';
+import { attachments, notes, sharedNotes, vaultNotes } from '../db/schema';
 import { env } from '../env';
 import { requireUser } from '../lib/requireUser';
+import { lockSharedNote, refreshSharedNote } from '../lib/sharing';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 const owned = (id: string, userId: string) =>
   and(eq(attachments.id, id), eq(attachments.userId, userId));
+/**
+ * A file the user may read: one of their own, or one in a note someone shared that they
+ * added to their gallery (ADR 0021), while that note is out of its owner's trash.
+ */
+const readable = (id: string, userId: string) =>
+  and(
+    eq(attachments.id, id),
+    isNull(attachments.deletedAt),
+    eq(attachments.status, 'ready'),
+    or(
+      eq(attachments.userId, userId),
+      exists(
+        db
+          .select({ id: notes.id })
+          .from(sharedNotes)
+          .innerJoin(notes, eq(notes.id, sharedNotes.noteId))
+          .where(
+            and(
+              eq(sharedNotes.noteId, attachments.noteId),
+              eq(sharedNotes.userId, userId),
+              isNull(notes.deletedAt),
+            ),
+          ),
+      ),
+    ),
+  );
 /** Thrown inside the reservation's transaction to undo a row that does not fit the quota. */
 class QuotaFull extends Error {}
 
@@ -44,11 +71,8 @@ export const attachmentRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const userId = c.get('user')?.id ?? readAccess(c.req.query('access') ?? '', id);
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(and(owned(id, userId), isNull(attachments.deletedAt)));
-    if (row?.status !== 'ready') return c.json({ error: 'Not found' }, 404);
+    const [row] = await db.select().from(attachments).where(readable(id, userId));
+    if (!row) return c.json({ error: 'Not found' }, 404);
     const preview = c.req.query('preview') === 'true';
     if (preview) await createThumbnail(id, row.kind);
     return fileResponse(
@@ -67,9 +91,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
     const [row] = await db
       .select({ id: attachments.id })
       .from(attachments)
-      .where(
-        and(owned(id, userId), isNull(attachments.deletedAt), eq(attachments.status, 'ready')),
-      );
+      .where(readable(id, userId));
     if (!row) return c.json({ error: 'Not found' }, 404);
     const url = new URL(c.req.url);
     url.pathname = `/api/attachments/${id}/content`;
@@ -176,11 +198,13 @@ export const attachmentRoutes = new Hono<AppEnv>()
       await copyFile(filePath(body.sourceId), filePath(body.id));
       await createThumbnail(body.id, attachmentKind(body.mimeType));
       txid = await db.transaction(async (tx) => {
+        await lockSharedNote(tx, body.noteId, userId);
         const updated = await tx
           .update(attachments)
           .set({ status: 'ready' })
           .where(and(owned(body.id, userId), isNull(attachments.deletedAt)))
           .returning({ id: attachments.id });
+        if (updated.length) await refreshSharedNote(tx, body.noteId, userId);
         return updated.length ? currentTxid(tx) : null;
       });
       if (txid === null) await deleteFiles([body.id]);
@@ -206,11 +230,13 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
     await createThumbnail(id, row.kind);
     const txid = await db.transaction(async (tx) => {
+      await lockSharedNote(tx, row.noteId, userId);
       const updated = await tx
         .update(attachments)
         .set({ status: 'ready' })
         .where(and(owned(id, userId), isNull(attachments.deletedAt)))
         .returning({ id: attachments.id });
+      if (updated.length) await refreshSharedNote(tx, row.noteId, userId);
       return updated.length ? currentTxid(tx) : null;
     });
     if (txid === null) await deleteFiles([id]);
@@ -224,6 +250,12 @@ export const attachmentRoutes = new Hono<AppEnv>()
     if (body.deletedAt === null)
       return c.json({ error: 'Cannot restore a removed attachment' }, 400);
     const result = await db.transaction(async (tx) => {
+      const [file] = await tx
+        .select({ noteId: attachments.noteId })
+        .from(attachments)
+        .where(owned(id, userId));
+      if (!file) return null;
+      await lockSharedNote(tx, file.noteId, userId);
       const [row] = await tx.select().from(attachments).where(owned(id, userId)).for('update');
       if (!row) return null;
       if (row.deletedAt) return { txid: null, removed: true };
@@ -243,6 +275,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
             .where(and(eq(notes.id, row.noteId), eq(notes.userId, userId)));
       }
       await tx.update(attachments).set(body).where(owned(id, userId));
+      await refreshSharedNote(tx, row.noteId, userId);
       return { txid: await currentTxid(tx), removed: Boolean(body.deletedAt) };
     });
     if (result?.removed) await deleteFiles([id]);

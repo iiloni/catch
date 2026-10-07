@@ -1,0 +1,38 @@
+---
+title: Security
+description: Limit access, keep services private and protect recovery data.
+---
+
+## Finish private setup first
+
+Restrict the new installation until you have created the first admin account. The first person to create an account becomes admin regardless of `REGISTRATION=closed`. Afterwards, keep registration closed unless you intend anyone reaching the address to join.
+
+Generate independent authentication, Postgres and Electric credentials. Keep `.env` readable only by its owner, protect host access, and keep credentials with your off-server recovery material. Do not put them in a source repository or public diagnostics.
+
+## Expose only the proxy
+
+Serve Catch over HTTPS and [HTTP/2](/docs/running-a-server/https). Publish the app to loopback for a host proxy or use a private shared proxy network without a host app port. Leave Postgres and Electric without public ports; clients use Catch's authenticated API, not Electric directly.
+
+Trust only the actual proxies in `TRUSTED_PROXIES`. Keep `AUTH_RATE_LIMIT=true`. The limiter uses the connection address unless a trusted proxy supplies a forwarded address; a broad trust list allows peers in that range to influence its buckets.
+
+Preserve the server's security headers and API cache controls. The released server sends a content security policy, blocks framing and content sniffing, and marks synced user responses private. Do not add a CDN rule that caches authenticated API responses publicly or inject scripts into the app.
+
+## Control outbound fetching
+
+Link previews fetch sites linked by users. Catch blocks private/local addresses through its fetch helper, but this still causes outbound requests. Set `LINK_PREVIEWS=false` if you do not want that traffic. A user's preview-display preference alone does not disable all server fetching.
+
+Browser reminders require outbound HTTPS to the allowed browser-push services. Notification payloads are encrypted to each subscribing device, but this is not end-to-end encryption of stored notes. Native Android reminders use local alarms and do not require configuring a Firebase project.
+
+## Protect storage and quotas
+
+Keep Docker, host software and Catch updated. Preserve persistent mounts and monitor the disk. Attachment quota defaults to 10 GiB per account; the 100 MiB file limit is fixed in the app. Notes have no total per-account quota. The JSON request cap limits a single request, not total database growth. Open registration can therefore grow storage even with attachment quotas enabled.
+
+Treat backups as sensitive data. They contain every account's notes, password hashes, and browser-push credentials, and are not encrypted. Use access controls and encryption in your storage/backup system as appropriate. Keep copies off the server and test restores. Deleting live data does not erase existing backup ZIPs or downloaded copies.
+
+Invite links and temporary reset passwords are secrets. Invites are single-use and time-limited; temporary passwords do not expire automatically. Share them with their intended recipient and ask users to replace reset passwords promptly.
+
+## Understand the boundary
+
+Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read the database and files. Catch currently has no encrypted vault, two-factor sign-in or self-service email recovery. A backup is not evidence that only its account holders can read it.
+
+For details of the implemented guards, see [the internet-exposure decision](https://github.com/iiloni/catch/blob/main/docs/decisions/0015-exposed-servers.md). For failures, see [Troubleshooting](/docs/running-a-server/troubleshooting).

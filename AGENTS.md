@@ -383,6 +383,16 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   them, so `lib/push.ts` answers for both and callers need not know which they are on.
   `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
+- A note is shared by a link (ADR 0021, `lib/sharing.ts`). The owner's link is a row in the
+  `note-shares` collection; a note someone else shared is a row in `shared-notes`, a copy the
+  server rewrites with `refreshSharedNote` in the transaction of every change a reader would
+  see, so a new write that changes what a note shows must call it. Pages show those copies as
+  `Note`s whose `userId` is their owner's: `isSharedNote` tells them apart, and anything that
+  edits a note must leave them alone (the note actions in `lib/notes.ts` already route a pin,
+  archive or move to the copy). `/s/<token>` and `GET /api/shares/:token` are read with no
+  account, so that page must not start a sync or assume a signed-in user. Android gives the app no
+  `https` links (a server's host is not known at build time), so that page offers the app
+  through the `catchnotes:` scheme in `lib/appLinks.ts`.
 - Vault notes (ADR 0020, `lib/vault.ts`) are sealed on the device: the `vault-notes`
   collection, the device database, the outbox and the server hold only ciphertext, and the
   opened notes and the key live in memory. A vault note is a `Note` to the UI but is not in

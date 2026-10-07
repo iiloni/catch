@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { Archive, ArchiveRestore, ChevronLeft, Pin, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ChevronLeft, Pin, Share2, Trash2 } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -24,9 +24,17 @@ import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteTimestamp } from '@/components/NoteTimestamp/NoteTimestamp';
 import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
 import { SaveStatus } from '@/components/SaveStatus/SaveStatus';
+import { SharePanel } from '@/components/SharePanel/SharePanel';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
 import { useNoteAttachments } from '@/lib/attachments';
-import { notesCollection, useReminders } from '@/lib/collections';
+import {
+  notesCollection,
+  useNoteShares,
+  useReminders,
+  useSharedNotes,
+  useSharedNotesReady,
+} from '@/lib/collections';
 import {
   editorControls,
   editorScrollToBottom,
@@ -65,11 +73,12 @@ import {
   takeOrigin,
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
+import { isSharedNote, useSharedNoteOwner } from '@/lib/sharing';
 import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
-import { openIfVaultNote, useVaultNote } from '@/lib/vault';
+import { isVaultNote, openIfVaultNote, useVaultNote } from '@/lib/vault';
 import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
@@ -93,18 +102,22 @@ export function NoteEditorOverlay({ noteId }: Props) {
   );
   // A note in the unlocked vault is not in the notes collection; locking the vault closes it.
   const vaultNote = useVaultNote(noteId);
-  const note = matches[0] ?? vaultNote;
+  // A note someone shared opens like one of the user's own, to be read (ADR 0021).
+  const shared = useSharedNotes().notes;
+  const sharedReady = useSharedNotesReady();
+  const note = matches[0] ?? vaultNote ?? shared.find((candidate) => candidate.id === noteId);
 
-  // A deleted or unknown note id in the URL closes the editor. One this editor never showed
-  // may be a vault note asked for from outside, by its reminder or a reload: that enters
-  // the vault, asking for its password if need be, and opens the note there.
+  // A deleted or unknown note id in the URL closes the editor. So does a shared note whose
+  // owner stops sharing it or moves it to the trash while it is open. One this editor never
+  // showed may be a vault note asked for from outside, by its reminder or a reload: that
+  // enters the vault, asking for its password if need be, and opens the note there.
   const shown = useRef<string | null>(null);
   if (note) shown.current = note.id;
   useEffect(() => {
-    if (!noteId || !isReady || note) return;
+    if (!noteId || !isReady || !sharedReady || note) return;
     if (shown.current !== noteId) openIfVaultNote(noteId, () => open(noteId));
     close();
-  }, [noteId, isReady, note, open, close]);
+  }, [noteId, isReady, sharedReady, note, open, close]);
 
   return (
     <AnimatePresence>
@@ -219,7 +232,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
   targetRef.current = target;
-  const editable = !note.deletedAt;
+  const shared = isSharedNote(note);
+  const owner = useSharedNoteOwner(note.id);
+  const editable = !note.deletedAt && !shared;
+  const hasLink = useNoteShares().has(note.id);
   const [controls, setControls] = useState<EditorControls | null>(null);
   useEditorDock(note, controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
@@ -532,6 +548,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         <div className="flex min-h-full flex-1 flex-col">
           {settled ? (
             <LazyNoteEditor
+              // The editor reads its content once, and a shared note changes under its reader.
+              key={shared ? note.updatedAt.getTime() : undefined}
               noteId={note.id}
               initialContent={note.content}
               onChange={save}
@@ -560,6 +578,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 }}
               />
             </div>
+          )}
+          {shared && (
+            <p className="px-4 pt-6 text-center text-muted-foreground text-xs">
+              {owner ? `Shared by ${owner}` : 'Shared with you'} · Read only
+            </p>
           )}
           <NoteTimestamp updatedAt={note.updatedAt} />
           {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
@@ -613,7 +636,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             if (
               !target.isConnected ||
               target.closest(
-                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
+                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], [data-share-panel], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
               )
             ) {
               event.preventDefault();
@@ -712,13 +735,13 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                     'pointer-events-none relative h-[50px] min-w-0 flex-1',
                     // Balance the buttons on the right so the centered pill clears history in
                     // narrow panes. A phone has no history there and no width to spare.
-                    editable && (note.isArchived ? 'sm:ml-10' : 'sm:ml-[5.5625rem]'),
+                    editable && (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
                   )}
                 >
                   <SaveStatus state={state} compact={split && target.width < 480} />
                 </div>
                 <div className="glass flex shrink-0 items-center rounded-[var(--dock-radius)] p-1">
-                  {editable && !note.isArchived && (
+                  {!note.deletedAt && !note.isArchived && (
                     <>
                       <IconButton
                         label={note.isPinned ? 'Unpin' : 'Pin'}
@@ -735,11 +758,37 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       >
                         <Pin className={cn(note.isPinned && 'fill-current')} />
                       </IconButton>
-                      {/* Pinning keeps the note; the two beyond the line put it away. */}
                       <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
                     </>
                   )}
-                  {editable && (
+                  {editable && !isVaultNote(note.id) && (
+                    <>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <IconButton
+                            label="Share"
+                            onClick={() => haptics.toggle()}
+                            className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                          >
+                            <Share2 className={cn(hasLink && 'fill-current')} />
+                          </IconButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          aria-label="Share"
+                          align="end"
+                          sideOffset={12}
+                          collisionPadding={16}
+                          // Named so the note does not take a tap in here for a tap outside it.
+                          data-share-panel
+                          className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+                        >
+                          <SharePanel note={note} getContent={controls?.getContent} />
+                        </PopoverContent>
+                      </Popover>
+                      <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
+                    </>
+                  )}
+                  {!note.deletedAt && (
                     <IconButton
                       label={note.isArchived ? 'Unarchive' : 'Archive'}
                       onPointerDown={(event) => event.preventDefault()}
@@ -754,18 +803,21 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       {note.isArchived ? <ArchiveRestore /> : <Archive />}
                     </IconButton>
                   )}
-                  <IconButton
-                    label={editable ? 'Move to trash' : 'Delete forever'}
-                    onClick={() => {
-                      haptics.warning();
-                      if (editable) trashNote(note.id);
-                      else deleteNoteForever(note.id);
-                      requestClose();
-                    }}
-                    className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] text-destructive hover:text-destructive [&_svg]:size-6"
-                  >
-                    <Trash2 />
-                  </IconButton>
+                  {/* A shared note is not the reader's to trash; the dock removes it. */}
+                  {!shared && (
+                    <IconButton
+                      label={editable ? 'Move to trash' : 'Delete forever'}
+                      onClick={() => {
+                        haptics.warning();
+                        if (editable) trashNote(note.id);
+                        else deleteNoteForever(note.id);
+                        requestClose();
+                      }}
+                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] text-destructive hover:text-destructive [&_svg]:size-6"
+                    >
+                      <Trash2 />
+                    </IconButton>
+                  )}
                 </div>
               </header>
 

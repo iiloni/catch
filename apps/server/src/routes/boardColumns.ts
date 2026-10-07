@@ -11,6 +11,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { boardColumns, notes } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { lockTagTree } from '../lib/tagTreeLock';
 
 const idParam = zValidator('param', z.object({ id: z.string().min(1).max(64) }));
 
@@ -60,6 +61,9 @@ export const boardColumnRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     if (id === DEFAULT_BOARD_STATUS) return c.json({ error: 'Default column is protected' }, 403);
     const txid = await db.transaction(async (tx) => {
+      // Tag changes can lock several of these notes too. Serialize both complete sets,
+      // including unshared notes, before taking any column or note row locks.
+      await lockTagTree(tx, userId);
       const deleted = await tx
         .delete(boardColumns)
         .where(and(eq(boardColumns.userId, userId), eq(boardColumns.id, id)))

@@ -1,0 +1,55 @@
+---
+title: Updates and release channels
+description: Choose an image and update the server before its clients.
+---
+
+## Choose an image tag
+
+Set `CATCH_IMAGE` in `.env`:
+
+| Choice | Example | Behavior |
+| --- | --- | --- |
+| Stable channel | `ghcr.io/iiloni/catch:stable` | Moves to the highest published stable release when pulled. |
+| Stable alias | `ghcr.io/iiloni/catch:latest` | Follows the same stable release. |
+| Preview channel | `ghcr.io/iiloni/catch:preview` | Follows the highest published preview release. |
+| Exact stable | `ghcr.io/iiloni/catch:0.3.2` | Stays on that published version until you change it. |
+| Exact preview | `ghcr.io/iiloni/catch:0.3.2-preview` | Stays on that published preview. |
+| Digest | `ghcr.io/iiloni/catch@sha256:RELEASE_DIGEST` | Selects the exact published image digest from release notes. |
+
+Examples are tag syntax, not a recommendation to install those historical versions. Choose a version with a published [GitHub Release](https://github.com/iiloni/catch/releases); a partially failed release build can leave an exact image without a corresponding published APK. Exact tags are fixed after publication. Git tags have a leading `v`; image tags do not.
+
+Channel aliases advance when new releases are published; running containers do not change until you pull and recreate them. Neither a server restart nor an in-app update check deploys a newer server image.
+
+## Update a standalone deployment
+
+1. Read the [changelog](/changelog) and release notes, especially breaking changes and upgrade order.
+2. Confirm you have a usable full backup off the server. The helper's update backup contains only the database.
+3. Record the current exact version from **Settings > Update**, the chosen image and credentials so recovery does not depend on a moving alias.
+4. If pinned, edit `CATCH_IMAGE` to the target version. Leave a channel alias in place to follow it.
+5. From the directory with the downloaded helpers, run:
+
+```bash
+./update.sh
+```
+
+The helper makes a database-only `update` backup with the old app, pulls images, starts the services and waits for health. If making that backup fails, it stops before changing the deployment. The server also backs up before pending migrations or a recorded release-version change at startup; it recognizes a fresh suitable backup rather than making a duplicate.
+
+`./update.sh --skip-backup` skips the helper's backup. It does not set `UPDATE_BACKUPS=false`: the server can still make its startup backup. Use either bypass only deliberately, with independent recoverable data.
+
+Afterwards, check `docker compose ps`, `/api/health`, sign-in, writing and cross-device sync. Update scripts do not automatically undo a failed deployment. [Restore and recovery](/docs/running-a-server/restore) covers the next steps.
+
+## Update the clients
+
+The browser app comes from the server. Open browser/PWA clients can still be running older cached code; ask users to close open notes and use **Reload to update** in **Settings > Update**.
+
+Android updates separately. Its updater targets the server's exact published version, in the installed app's channel, and only moves forward. Users confirm the Android installation. Stable and preview are separate Android apps with separate local data.
+
+Catch checks data protocol compatibility separately from release numbers. A compatible older release can sync. An incompatible client pauses data sync and retains local notes and queued changes, with **App update required** or **Server update required**. Health, authentication and update metadata remain available for recovery.
+
+For the current reminders protocol, update the server first, then Android clients. Future breaking releases may give different requirements; follow their notes. Do not ask users to clear app data or sign out to repair a protocol mismatch. See the [user update guide](/docs/using-catch/offline-and-updates) and [API compatibility decision](https://github.com/iiloni/catch/blob/main/docs/decisions/0013-api-compatibility.md).
+
+## Try preview separately
+
+Use a separate Compose project, hostname, `.env` and storage for preview. Choose `:preview` or an exact preview tag. Do not share Postgres, Electric or bind-mounted data directories with stable. Preview migrations can change the database; switching the image back does not revert it.
+
+`dev` identifies an untagged development build, not a published channel to follow. Ordinary operators use published images; maintainers' tagging and signing procedures remain in [release engineering documentation](https://github.com/iiloni/catch/blob/main/docs/releases.md).

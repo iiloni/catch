@@ -1,0 +1,40 @@
+---
+title: Links and share menu
+description: Capture web pages and send material into Catch from other apps.
+---
+
+## Paste links into notes
+
+Put a web address in a note. Catch derives link previews from the note's links and shows cards with page details when available. Your server fetches those details; the linked site sees the server's request rather than a request from your device.
+
+**Settings > General > Link previews** controls whether you see those cards. The server administrator can disable fetching for everyone. A plain link remains usable when a preview cannot be fetched. Catch does not save a complete offline copy of the linked page.
+
+Tap a preview card to open its website. **Link options** offers **Copy link**, **Share** where the device supports it, **Show in note**, **Refresh preview** and **Remove preview**. Share sends the external website's link, not your private Catch note. Remove preview hides that card while leaving the URL in the note's text; its **Undo** restores it.
+
+## Capture a rich link
+
+In **New note**, use **Save link** to open **Add Rich Link**. Paste a complete HTTP or HTTPS address into **URL**. Pasting can fetch details automatically; **Fetch details** retries. Once details or an error appear, you can edit **Title**, **Description** and **Your notes**, then choose **Save link**.
+
+If the same address is already in notes, the form offers to open an existing note or save another copy. Fetching details is optional: you can save the address even when the server is unreachable or fetching fails. The new note goes to Gallery.
+
+<DocsScreenshot name="linkCapture" caption="Add Rich Link lets you edit the fetched details before saving a new Gallery note." />
+
+## Add the browser bookmarklet
+
+In **Settings > General > Link capture**, drag the Catch bookmark link to your browser's bookmarks bar. If dragging is unavailable, use **Copy bookmarklet** and paste it into a bookmark's URL field.
+
+On a page you want to keep, select that bookmark. A small Catch window opens with the page's details, which you can edit before saving. Allow that window if your browser blocks it, and sign in to your Catch server if asked.
+
+## Send material from another app on Android
+
+Use the other app's **Share** action and choose Catch. The native Android app receives text, links, photos, video, audio and files. An installed Android web app can also receive shares where the browser supports it.
+
+<DocsScreenshot name="androidShare" caption="Choose your installed Catch app in Android’s Share menu. This phone has Catch Dev and Catch Preview; the stable app is named Catch." />
+
+One share makes one Gallery note; multiple files and captions stay together. Text and file shares open the resulting note. A share containing one web link and no files opens link capture first, so you can edit and explicitly save it. Cancelling that capture does not create a note. Incoming shares support at most 20 files, with the same 100 MiB limit per file.
+
+If Catch asks you to connect or sign in, complete that step to finish saving. Check the current account before saving a share. On a device with several accounts, the share is bound to the account that starts processing it.
+
+Catch can receive shares offline after it has been set up, subject to device storage and the [one-tab limit](/docs/using-catch/offline-and-updates). iPhone and iPad web apps do not have this incoming share target.
+
+Receiving material from another app is separate from sharing a Catch note with someone else. Catch currently has no collaborative note sharing or public note links. A copied Catch note address requires access to the owning account; it does not grant access.

@@ -1,4 +1,4 @@
-import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import { type CDPSession, expect, type Locator, type Page, test } from '@playwright/test';
 import { createNote, openNote, settledBox, signUp, waitForPageTransition } from './helpers';
 
 async function pullSettings(touch: CDPSession, delta: number, whileHeld?: () => Promise<void>) {
@@ -57,6 +57,51 @@ async function settingsPositions(page: Page) {
   });
 }
 
+async function expandedSettingsTitle(title: Locator) {
+  await title.page().evaluate(() => document.fonts.ready.then(() => undefined));
+  // Give ResizeObserver a rendering cycle to update the target after a viewport resize.
+  await title
+    .page()
+    .evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+  const read = () =>
+    title.evaluate((element) => {
+      const measure = element.closest('[data-page-header]')?.querySelector('span.invisible');
+      if (!measure) throw new Error('Missing title measurement');
+      const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
+      const box = element.getBoundingClientRect();
+      return {
+        fontSize,
+        atFittedSize: fontSize === Number.parseFloat(getComputedStyle(measure).fontSize),
+        fontsLoaded: document.fonts.status === 'loaded',
+        box: { x: box.x, width: box.width },
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        pageWidth: document.documentElement.scrollWidth,
+      };
+    });
+  let layout = await read();
+  // A stable box can be the spring's initial delay. Wait for its fitted target, and
+  // keep the font and overflow measurements in the same layout sample.
+  await expect
+    .poll(async () => {
+      layout = await read();
+      return { atFittedSize: layout.atFittedSize, fontsLoaded: layout.fontsLoaded };
+    })
+    .toEqual({ atFittedSize: true, fontsLoaded: true });
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+  expect(layout.box.x).toBeGreaterThanOrEqual(0);
+  expect(layout.box.x + layout.box.width).toBeLessThanOrEqual(
+    title.page().viewportSize()?.width ?? 0,
+  );
+  expect(layout.pageWidth).toBeLessThanOrEqual(title.page().viewportSize()?.width ?? 0);
+  return layout.fontSize;
+}
+
 test('settings titles collapse into glass pills with an edge blur on every user page', async ({
   page,
   isMobile,
@@ -92,41 +137,18 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     await expect(title).toBeVisible({ timeout: 30_000 });
     await expect(pill).toBeDisabled();
     await expect(blur).toHaveCSS('opacity', '0');
-    const expandedBox = await settledBox(title);
-    const expandedSize = await title.evaluate((element) =>
-      Number.parseFloat(getComputedStyle(element).fontSize),
-    );
+    const expandedSize = await expandedSettingsTitle(title);
     if (isMobile && path === 'data') {
       expect(expandedSize).toBeGreaterThan(17);
       expect(expandedSize).toBeLessThan(42);
     } else {
       expect(expandedSize).toBe(42);
     }
-    expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-      true,
-    );
-    expect(expandedBox.x).toBeGreaterThanOrEqual(0);
-    expect(expandedBox.x + expandedBox.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-      page.viewportSize()?.width ?? 0,
-    );
     if (isMobile && path === 'data') {
       await page.setViewportSize({ width: 360, height: 300 });
-      await expect
-        .poll(() =>
-          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-        )
-        .toBeGreaterThan(expandedSize);
-      await settledBox(title);
-      expect(
-        await title.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-      ).toBe(true);
+      expect(await expandedSettingsTitle(title)).toBeGreaterThan(expandedSize);
       await page.setViewportSize({ width: 320, height: 300 });
-      await expect
-        .poll(() =>
-          title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-        )
-        .toBeCloseTo(expandedSize, 1);
+      expect(await expandedSettingsTitle(title)).toBeCloseTo(expandedSize, 1);
     }
 
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -144,11 +166,7 @@ test('settings titles collapse into glass pills with an edge blur on every user 
     await pill.click();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(pill).toBeDisabled();
-    await expect
-      .poll(() =>
-        title.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
-      )
-      .toBeCloseTo(expandedSize, 1);
+    expect(await expandedSettingsTitle(title)).toBeCloseTo(expandedSize, 1);
     await expect(blur).toHaveCSS('opacity', '0');
   }
 });
@@ -311,7 +329,7 @@ test('mobile settings scroll normally and keep short pulls open', async ({ page,
   await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
 });
 
-test('settings pages load promptly while all seven collections keep syncing over HTTP', async ({
+test('settings pages load promptly while all nine collections keep syncing over HTTP', async ({
   page,
   isMobile,
 }) => {
@@ -338,10 +356,12 @@ test('settings pages load promptly while all seven collections keep syncing over
         collections.tagsCollection,
         collections.noteTagsCollection,
         collections.remindersCollection,
+        collections.noteSharesCollection,
+        collections.sharedNotesCollection,
       ].map((collection) => collection.preload()),
     );
   });
-  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(7);
+  await expect.poll(() => [...polls.values()].filter((count) => count >= 2).length).toBe(9);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Appearance', exact: true })).toBeVisible({

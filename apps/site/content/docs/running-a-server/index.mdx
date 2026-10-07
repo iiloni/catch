@@ -1,0 +1,20 @@
+---
+title: Admin guide
+description: Install and maintain a Catch server with Docker.
+---
+
+Your Catch server serves the web app and API, stores accounts and notes in Postgres, and keeps attachment files on disk. Electric streams each signed-in account's changes through Catch's authenticated proxy. The public documentation site is separate and is not installed on your server.
+
+This guide assumes you know how to run Docker Compose. Commands use a Linux shell and a standalone deployment directory; you do not need a source checkout or Node.js on the host.
+
+1. Follow the [installation guide](/docs/running-a-server/installation) and keep the first-account setup private.
+2. [Configure HTTPS and the reverse proxy](/docs/running-a-server/https).
+3. [Create the admin account and invite people](/docs/running-a-server/users).
+4. [Configure backups](/docs/running-a-server/backups) and test a restore.
+5. Review [configuration](/docs/running-a-server/configuration), [security](/docs/running-a-server/security) and [updates](/docs/running-a-server/updates).
+
+When something fails, use [Troubleshooting](/docs/running-a-server/troubleshooting). For lost data or a bad update, use [Restore and recovery](/docs/running-a-server/restore).
+
+Each account's data is private from other ordinary accounts. Administrators control membership and whole-server backups. Catch is not encrypted end to end: access to its database, files or backups gives access to user data.
+
+Contributor instructions remain in the repository's [development guide](https://github.com/iiloni/catch/blob/main/DEVELOPMENT.md). You do not need to configure release signing, CI or Git tags to run published images.

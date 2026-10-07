@@ -1,0 +1,40 @@
+---
+title: FAQ
+description: Current limits and answers about your data.
+---
+
+## Can I use Catch without running a server?
+
+Someone needs to run one. You can use a server managed by someone you trust; ask them for an account or invite. There is no hosted Catch service at this documentation site.
+
+## Are my notes encrypted so the administrator cannot read them?
+
+No. Catch has per-account access controls and uses HTTPS when configured, but notes and server backups are not encrypted end to end. Someone with database, disk or backup access can read the data. There is no encrypted vault on `main`.
+
+## Can I share a note or collaborate?
+
+There is no collaborative note sharing, public note link or live collaboration. Android sharing sends material **into** Catch. Copying a note address does not grant another account access.
+
+## Is there an iPhone, iPad or desktop app?
+
+Use the browser or installed web app. The repository ships a native Android app, not a native iOS or desktop app. Browser feature support varies; Notifications settings explains whether the current device can receive reminders.
+
+## Can I export my notes?
+
+Data Management currently offers Keep import only. General Markdown import/export and personal account exports are not implemented. You can download individual attachments. An administrator can make a [whole-server backup](/docs/running-a-server/backups), which contains every account's data and is not a personal export.
+
+## Does search read pictures or use AI?
+
+Search matches text in your locally synced notes. It does not read text from images or documents, perform semantic search or generate AI summaries.
+
+## Does deleting a note remove it everywhere?
+
+Moving it to Trash syncs to your other devices and keeps it recoverable there. **Delete forever** or **Empty trash** removes it and its attachment files. Existing downloaded files and older server backups are separate copies.
+
+## Why are changes or notes missing on another device?
+
+Changes still saved only on the first device have not reached the server. Check its cloud indicator and [offline status](/docs/using-catch/offline-and-updates). Make sure both devices use the same server and account. An account with queued changes must be open to sync them.
+
+## Where can I report a problem?
+
+For connection, invites, passwords, quota or server updates, contact your administrator. For a reproducible app problem, use [GitHub issues](https://github.com/iiloni/catch/issues), including app/server versions and the steps to reproduce. Do not post passwords, invite links, session tokens, private notes or backup files.
