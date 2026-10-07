@@ -1,11 +1,11 @@
 import type { Note } from '@catch/shared';
 import { Copy, FileText, Link2, Link2Off, Share2 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { type ComponentProps, useEffect, useState } from 'react';
+import { type ComponentProps, useEffect, useId, useState } from 'react';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
+import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useNoteShares } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -26,6 +26,7 @@ export function SharePanel({ note, getContent, className }: Props) {
   const share = useNoteShares().get(note.id);
   const [type, setType] = useState<ShareType>('link');
   const [direction, setDirection] = useState(1);
+  const tabsId = useId();
   const reducedMotion = useReducedMotion();
   const [markdown, setMarkdown] = useState<{ source: Note['content']; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -99,35 +100,43 @@ export function SharePanel({ note, getContent, className }: Props) {
   return (
     <div data-share-panel className={cn('flex flex-col gap-3 p-2', className)}>
       <h2 className="font-medium text-sm">Share this note</h2>
-      <ToggleGroup
-        type="single"
-        aria-label="Share type"
+      <SegmentedTabs<ShareType>
+        label="Share type"
         value={type}
         disabled={pending}
         onValueChange={(value) => {
-          if (value !== 'link' && value !== 'content') return;
+          if (value === type) return;
           haptics.selection();
           setDirection(value === 'content' ? 1 : -1);
           setType(value);
           setCopied(false);
           setError(null);
         }}
-        className="flex w-full rounded-xl"
-      >
-        <ToggleGroupItem value="link" className="h-11 flex-1 rounded-lg">
-          <Link2 aria-hidden />
-          Catch link
-        </ToggleGroupItem>
-        <ToggleGroupItem value="content" className="h-11 flex-1 rounded-lg">
-          <FileText aria-hidden />
-          Note content
-        </ToggleGroupItem>
-      </ToggleGroup>
+        options={[
+          {
+            value: 'link',
+            id: `${tabsId}-tab-link`,
+            controls: `${tabsId}-view-link`,
+            label: 'Catch link',
+            icon: <Link2 className="relative size-4" aria-hidden />,
+          },
+          {
+            value: 'content',
+            id: `${tabsId}-tab-content`,
+            controls: `${tabsId}-view-content`,
+            label: 'Note content',
+            icon: <FileText className="relative size-4" aria-hidden />,
+          },
+        ]}
+      />
       <AnimatedHeight anchor="top">
         <div className="flex flex-col gap-3">
           <AnimatePresence initial={false} mode="wait" custom={direction}>
             <ShareView
               key={type}
+              id={`${tabsId}-view-${type}`}
+              role="tabpanel"
+              aria-labelledby={`${tabsId}-tab-${type}`}
               custom={direction}
               variants={views}
               initial="enter"

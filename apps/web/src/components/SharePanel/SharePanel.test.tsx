@@ -61,10 +61,12 @@ describe('SharePanel', () => {
 
   it('copies Markdown content without creating a share link', async () => {
     render(<SharePanel note={note} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Note content' }));
     const button = screen.getByRole('button', { name: 'Copy content' });
     await waitFor(() => expect(button).toBeEnabled());
-    expect(await screen.findByLabelText('Note content')).toHaveValue('Pack the tent');
+    expect(await screen.findByRole('textbox', { name: 'Note content' })).toHaveValue(
+      'Pack the tent',
+    );
     fireEvent.click(button);
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalledWith({ text: 'Pack the tent' }));
     expect(shareNote).not.toHaveBeenCalled();
@@ -75,7 +77,7 @@ describe('SharePanel', () => {
     render(
       <SharePanel note={note} getContent={() => [{ type: 'paragraph', content: 'Just typed' }]} />,
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Note content' }));
     const button = screen.getByRole('button', { name: 'Copy content' });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
@@ -96,14 +98,16 @@ describe('SharePanel', () => {
   it('switches back to the link without keeping the content warning or copied state', async () => {
     vi.mocked(useNoteShares).mockReturnValue(new Map([[note.id, share]]));
     render(<SharePanel note={note} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Note content' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Note content' }));
     const button = screen.getByRole('button', { name: 'Copy content' });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     await screen.findByRole('button', { name: 'Copied' });
-    fireEvent.click(screen.getByRole('radio', { name: 'Catch link' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Catch link' }));
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeVisible();
-    await waitFor(() => expect(screen.queryByLabelText('Note content')).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'Note content' })).not.toBeInTheDocument(),
+    );
   });
 });

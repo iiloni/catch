@@ -357,8 +357,8 @@ test('note content shares a Markdown copy without making a Catch link', async ({
   await signUp(page);
   await seedNotes(page, [{ title: 'Trip plan', body: 'Pack the tent' }]);
   await noteAction(page, 'Trip plan', 'Share');
-  await page.getByRole('radio', { name: 'Note content', exact: true }).click();
-  await expect(page.getByLabel('Note content', { exact: true })).toHaveValue(
+  await page.getByRole('tab', { name: 'Note content', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Note content', exact: true })).toHaveValue(
     /### Trip plan[\s\S]*Pack the tent/,
   );
   await page
@@ -367,7 +367,7 @@ test('note content shares a Markdown copy without making a Catch link', async ({
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, 'sentNoteContent')))
     .toEqual(['### Trip plan\n\nPack the tent']);
-  await page.getByRole('radio', { name: 'Catch link', exact: true }).click();
+  await page.getByRole('tab', { name: 'Catch link', exact: true }).click();
   await expect(page.getByLabel('Share link')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: isMobile ? 'Share link' : 'Create link', exact: true }),
