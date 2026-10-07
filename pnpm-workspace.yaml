@@ -8,6 +8,8 @@ allowBuilds:
   esbuild: true
   # Prebuilt libvips ships in @img/sharp-*; its install script only checks for it.
   sharp: false
+  # Wrangler installs it during site deployment; postinstall prepares its native runtime.
+  workerd: true
 
 minimumReleaseAgeExclude:
   - '@tanstack/react-router@1.170.40'

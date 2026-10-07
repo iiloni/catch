@@ -13,6 +13,7 @@ on:
       - scripts/changelog.ts
       - scripts/release.ts
       - pnpm-lock.yaml
+      - pnpm-workspace.yaml
       - .github/workflows/site.yml
     # A release adds a version to the changelog page.
     tags: ['v*']

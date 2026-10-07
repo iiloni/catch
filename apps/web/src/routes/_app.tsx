@@ -1,7 +1,7 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
-import { AnimatePresence } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -24,6 +24,7 @@ import { watchNativeReminders } from '@/lib/nativeReminders';
 import { useOpenNote } from '@/lib/openNote';
 import { onNotificationOpen, syncPush } from '@/lib/push';
 import { syncReminderSettings } from '@/lib/reminders';
+import { pageBounceY, watchScrollBounce } from '@/lib/scrollBounce';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
@@ -47,6 +48,7 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   useEffect(watchUpdates, []);
+  useEffect(watchScrollBounce, []);
   const { open } = useOpenNote();
   useEffect(
     () =>
@@ -101,9 +103,10 @@ function AppLayout() {
         a card still moving to a narrower page reaches under the pane, and anything wider than
         the screen would widen the layout viewport on Android, and the fixed headers with it.
       */}
-      <div
-        className="min-h-dvh overflow-x-clip pb-[var(--dock-space)]"
-        style={{ paddingRight: pane.shown ? pane.noteWidth : 0 }}
+      {/* The edge bounce moves it by `top`, which leaves those headers on the viewport. */}
+      <motion.div
+        className="relative min-h-dvh overflow-x-clip pb-[var(--dock-space)]"
+        style={{ paddingRight: pane.shown ? pane.noteWidth : 0, top: pageBounceY }}
         inert={
           (Boolean(note) && !pane.split) ||
           noteState === 'open' ||
@@ -112,7 +115,7 @@ function AppLayout() {
         }
       >
         <Outlet />
-      </div>
+      </motion.div>
       <QuickNote />
       <LinkCapture />
       <PageBottomBlur />
