@@ -39,7 +39,10 @@ the search field expands it to full width and hides matching controls; leaving f
 them without changing the selection or match mode. The tab views share a bottom anchor
 while sliding and resizing, and horizontal overflow is clipped.
 Reduced motion switches views immediately. Untagged is separate from No color. Archived
-notes are included, trashed notes excluded, and result badges show the assigned tags.
+notes are included unless the panel's "Show archived notes" switch is off; the switch sits
+below both tabs, is remembered on the device, and is a view preference rather than a filter:
+it does not count toward the dock's filter badge and Clear filters leaves it alone. Tag
+counts follow it. Trashed notes are excluded, and result badges show the assigned tags.
 Recent text searches remain available. See ADR 0016 for tag semantics.
 
 ## Why not a separate vector store
