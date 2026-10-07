@@ -29,6 +29,7 @@ import { useGalleryPages } from '@/lib/galleryPages';
 import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
+import { pageBounceY } from '@/lib/scrollBounce';
 import { PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
@@ -155,10 +156,12 @@ export function TabPageHeader({
   const [collapsed, setCollapsed] = useState(() => scrollY.get() >= TITLE_COLLAPSE_AT);
   useMotionValueEvent(scrollY, 'change', (latest) => setCollapsed(latest >= TITLE_COLLAPSE_AT));
   // The expanded title follows the page; only the move into the corner is animated.
+  // That includes the page's bounce off its top edge; off the bottom, the title is in its corner.
   const titleScrollY = useTransform(
-    scrollY,
-    [0, TITLE_COLLAPSE_AT],
-    [TITLE_REST_Y, TITLE_REST_Y - TITLE_COLLAPSE_AT],
+    () =>
+      TITLE_REST_Y -
+      Math.min(Math.max(scrollY.get(), 0), TITLE_COLLAPSE_AT) +
+      Math.max(pageBounceY.get(), 0),
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
   const branded = !leading && !collapsed && !selection;
