@@ -758,33 +758,35 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       >
                         <Pin className={cn(note.isPinned && 'fill-current')} />
                       </IconButton>
-                      {/* Pinning keeps the note; the two beyond the line put it away. */}
                       <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
                     </>
                   )}
                   {editable && !isVaultNote(note.id) && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <IconButton
-                          label="Share"
-                          onClick={() => haptics.toggle()}
-                          className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                    <>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <IconButton
+                            label="Share"
+                            onClick={() => haptics.toggle()}
+                            className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                          >
+                            <Share2 className={cn(hasLink && 'fill-current')} />
+                          </IconButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          aria-label="Share"
+                          align="end"
+                          sideOffset={12}
+                          collisionPadding={16}
+                          // Named so the note does not take a tap in here for a tap outside it.
+                          data-share-panel
+                          className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
                         >
-                          <Share2 className={cn(hasLink && 'fill-current')} />
-                        </IconButton>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        aria-label="Share"
-                        align="end"
-                        sideOffset={12}
-                        collisionPadding={16}
-                        // Named so the note does not take a tap in here for a tap outside it.
-                        data-share-panel
-                        className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
-                      >
-                        <SharePanel note={note} getContent={controls?.getContent} />
-                      </PopoverContent>
-                    </Popover>
+                          <SharePanel note={note} getContent={controls?.getContent} />
+                        </PopoverContent>
+                      </Popover>
+                      <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
+                    </>
                   )}
                   {!note.deletedAt && (
                     <IconButton
