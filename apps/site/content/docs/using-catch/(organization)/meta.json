@@ -1,0 +1,5 @@
+{
+  "title": "Organization",
+  "defaultOpen": true,
+  "pages": ["organizing", "deck", "tags", "search"]
+}

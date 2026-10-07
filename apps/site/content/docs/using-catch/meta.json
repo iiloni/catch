@@ -1,19 +1,4 @@
 {
-  "title": "Using Catch",
-  "pages": [
-    "index",
-    "getting-started",
-    "notes",
-    "organizing",
-    "deck",
-    "tags",
-    "search",
-    "attachments",
-    "links-and-sharing",
-    "reminders",
-    "offline-and-updates",
-    "settings-and-accounts",
-    "google-keep",
-    "faq"
-  ]
+  "title": "User guide",
+  "pages": ["index", "(getting-started)", "(notes)", "(organization)", "(app-and-account)", "faq"]
 }
