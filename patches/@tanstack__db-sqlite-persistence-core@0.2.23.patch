@@ -1,0 +1,48 @@
+diff --git a/dist/cjs/sqlite-core-adapter.cjs b/dist/cjs/sqlite-core-adapter.cjs
+index 5717d6a87740a4e6bcde8be73ce6a9c7cb0d4f40..8282f8e52434ead685dfdbaf2121c176b849e5c7 100644
+--- a/dist/cjs/sqlite-core-adapter.cjs
++++ b/dist/cjs/sqlite-core-adapter.cjs
+@@ -1464,6 +1464,11 @@ class SQLiteCorePersistenceAdapter {
+          WHERE collection_id = ?`,
+         [collectionId]
+       );
++      // A reset cache must fetch a fresh snapshot, rather than resume after its removed rows.
++      await transactionDriver.run(
++        `DELETE FROM collection_metadata WHERE collection_id = ?`,
++        [collectionId]
++      );
+       await transactionDriver.run(
+         `DELETE FROM persisted_index_registry
+          WHERE collection_id = ?`,
+diff --git a/dist/esm/sqlite-core-adapter.js b/dist/esm/sqlite-core-adapter.js
+index 35150d1c77417400fc6a267f4d6076736cfa6aeb..65dcfde2b6d87ba318df69ff6401f9f17e4f79f0 100644
+--- a/dist/esm/sqlite-core-adapter.js
++++ b/dist/esm/sqlite-core-adapter.js
+@@ -1462,6 +1462,11 @@ class SQLiteCorePersistenceAdapter {
+          WHERE collection_id = ?`,
+         [collectionId]
+       );
++      // A reset cache must fetch a fresh snapshot, rather than resume after its removed rows.
++      await transactionDriver.run(
++        `DELETE FROM collection_metadata WHERE collection_id = ?`,
++        [collectionId]
++      );
+       await transactionDriver.run(
+         `DELETE FROM persisted_index_registry
+          WHERE collection_id = ?`,
+diff --git a/src/sqlite-core-adapter.ts b/src/sqlite-core-adapter.ts
+index 69f29fc604aad9c4968a8fbaf029e7dab7bd09e5..90e7d031e3eac00fe9c6e2b56f36e1462332c5fd 100644
+--- a/src/sqlite-core-adapter.ts
++++ b/src/sqlite-core-adapter.ts
+@@ -2018,6 +2018,11 @@ export class SQLiteCorePersistenceAdapter implements PersistenceAdapter {
+          WHERE collection_id = ?`,
+         [collectionId],
+       )
++      // A reset cache must fetch a fresh snapshot, rather than resume after its removed rows.
++      await transactionDriver.run(
++        `DELETE FROM collection_metadata WHERE collection_id = ?`,
++        [collectionId],
++      )
+       await transactionDriver.run(
+         `DELETE FROM persisted_index_registry
+          WHERE collection_id = ?`,
