@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
@@ -46,7 +45,6 @@ import { linkOverlay } from '@/lib/linkPreviews';
 import { HOLD_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
-import { useOpenNote } from '@/lib/openNote';
 import {
   isSettingsPath,
   type SettingsPath,
@@ -57,7 +55,6 @@ import {
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
-import { createVaultNote, vaultStatus } from '@/lib/vault';
 
 const TABS = [
   { path: '/deck', label: 'Deck', icon: Columns3 },
@@ -126,21 +123,6 @@ export function Dock() {
 
   const settings = useSettingsNavigation();
   const settingsTab = settingsTabFor(pathname);
-  const { open: openNote } = useOpenNote();
-
-  // On the Vault page a new note must be a vault note: the quick note would save its words
-  // as an ordinary one, readable by the server.
-  async function composeInVault() {
-    if (vaultStatus.get() !== 'unlocked') {
-      toast('Unlock the vault to add a note to it');
-      return;
-    }
-    try {
-      openNote((await createVaultNote({ content: [] })).id);
-    } catch {
-      toast.error('Could not add a note to the vault');
-    }
-  }
 
   function selectSettingsTab(path: SettingsPath) {
     haptics.selection();
@@ -259,7 +241,6 @@ export function Dock() {
                     <ComposeButton
                       key="compose"
                       onBack={mode === 'settings' ? settings.leave : undefined}
-                      onCompose={pathname === '/vault' ? composeInVault : undefined}
                     />
                   )}
                 </AnimatePresence>
@@ -670,10 +651,9 @@ function SearchFilterButton() {
 
 /**
  * The compose button beside the tabs. With `onBack` (in Settings) it turns into a back
- * button in place. With `onCompose` (in the Vault) the page makes the note instead of the
- * quick-note window.
+ * button in place.
  */
-function ComposeButton({ onBack, onCompose }: { onBack?: () => void; onCompose?: () => void }) {
+function ComposeButton({ onBack }: { onBack?: () => void }) {
   const state = quickNote.use();
   const capture = linkCaptureControls.use();
   const hasContent = quickNoteCanSave.use();
@@ -717,7 +697,6 @@ function ComposeButton({ onBack, onCompose }: { onBack?: () => void; onCompose?:
             if (capture.canSave) capture.save();
             else capture.cancel();
           } else if (back) onBack();
-          else if (onCompose && !open) onCompose();
           else quickNote.set(open ? 'closed' : 'open');
         }}
         whileTap={{ scale: 0.88 }}

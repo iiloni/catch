@@ -21,7 +21,6 @@ import { Route as AppRemindersRouteImport } from './routes/_app/reminders'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
-import { Route as AppVaultRouteImport } from './routes/_app/vault'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings/account'
 import { Route as AppSettingsAdminRouteImport } from './routes/_app/settings/admin'
@@ -30,6 +29,7 @@ import { Route as AppSettingsGeneralRouteImport } from './routes/_app/settings/g
 import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/settings/notifications'
 import { Route as AppSettingsTagsRouteImport } from './routes/_app/settings/tags'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
+import { Route as AppSettingsVaultRouteImport } from './routes/_app/settings/vault'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 
@@ -92,11 +92,6 @@ const AppTrashRoute = AppTrashRouteImport.update({
   path: '/trash',
   getParentRoute: () => AppRoute,
 } as any)
-const AppVaultRoute = AppVaultRouteImport.update({
-  id: '/vault',
-  path: '/vault',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -138,6 +133,11 @@ const AppSettingsUpdateRoute = AppSettingsUpdateRouteImport.update({
   path: '/update',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsVaultRoute = AppSettingsVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
   id: '/backups',
   path: '/backups',
@@ -161,7 +161,6 @@ export interface FileRoutesByFullPath {
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/trash': typeof AppTrashRoute
-  '/vault': typeof AppVaultRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
   '/settings/data': typeof AppSettingsDataRoute
@@ -169,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings/vault': typeof AppSettingsVaultRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -183,7 +183,6 @@ export interface FileRoutesByTo {
   '/reminders': typeof AppRemindersRoute
   '/search': typeof AppSearchRoute
   '/trash': typeof AppTrashRoute
-  '/vault': typeof AppVaultRoute
   '/': typeof AppIndexRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/admin': typeof AppSettingsAdminRouteWithChildren
@@ -192,6 +191,7 @@ export interface FileRoutesByTo {
   '/settings/notifications': typeof AppSettingsNotificationsRoute
   '/settings/tags': typeof AppSettingsTagsRoute
   '/settings/update': typeof AppSettingsUpdateRoute
+  '/settings/vault': typeof AppSettingsVaultRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -209,7 +209,6 @@ export interface FileRoutesById {
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/trash': typeof AppTrashRoute
-  '/_app/vault': typeof AppVaultRoute
   '/_app/': typeof AppIndexRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/admin': typeof AppSettingsAdminRouteWithChildren
@@ -218,6 +217,7 @@ export interface FileRoutesById {
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
   '/_app/settings/tags': typeof AppSettingsTagsRoute
   '/_app/settings/update': typeof AppSettingsUpdateRoute
+  '/_app/settings/vault': typeof AppSettingsVaultRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
@@ -236,7 +236,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/trash'
-    | '/vault'
     | '/settings/account'
     | '/settings/admin'
     | '/settings/data'
@@ -244,6 +243,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
+    | '/settings/vault'
     | '/settings/'
     | '/settings/admin/backups'
     | '/settings/admin/users'
@@ -258,7 +258,6 @@ export interface FileRouteTypes {
     | '/reminders'
     | '/search'
     | '/trash'
-    | '/vault'
     | '/'
     | '/settings/account'
     | '/settings/admin'
@@ -267,6 +266,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/settings/tags'
     | '/settings/update'
+    | '/settings/vault'
     | '/settings'
     | '/settings/admin/backups'
     | '/settings/admin/users'
@@ -283,7 +283,6 @@ export interface FileRouteTypes {
     | '/_app/search'
     | '/_app/settings'
     | '/_app/trash'
-    | '/_app/vault'
     | '/_app/'
     | '/_app/settings/account'
     | '/_app/settings/admin'
@@ -292,6 +291,7 @@ export interface FileRouteTypes {
     | '/_app/settings/notifications'
     | '/_app/settings/tags'
     | '/_app/settings/update'
+    | '/_app/settings/vault'
     | '/_app/settings/'
     | '/_app/settings/admin/backups'
     | '/_app/settings/admin/users'
@@ -391,13 +391,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTrashRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/vault': {
-      id: '/_app/vault'
-      path: '/vault'
-      fullPath: '/vault'
-      preLoaderRoute: typeof AppVaultRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/settings/': {
       id: '/_app/settings/'
       path: '/'
@@ -454,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsUpdateRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/vault': {
+      id: '/_app/settings/vault'
+      path: '/vault'
+      fullPath: '/settings/vault'
+      preLoaderRoute: typeof AppSettingsVaultRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/admin/backups': {
       id: '/_app/settings/admin/backups'
       path: '/backups'
@@ -492,6 +492,7 @@ interface AppSettingsRouteChildren {
   AppSettingsNotificationsRoute: typeof AppSettingsNotificationsRoute
   AppSettingsTagsRoute: typeof AppSettingsTagsRoute
   AppSettingsUpdateRoute: typeof AppSettingsUpdateRoute
+  AppSettingsVaultRoute: typeof AppSettingsVaultRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
@@ -503,6 +504,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsNotificationsRoute: AppSettingsNotificationsRoute,
   AppSettingsTagsRoute: AppSettingsTagsRoute,
   AppSettingsUpdateRoute: AppSettingsUpdateRoute,
+  AppSettingsVaultRoute: AppSettingsVaultRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
 
@@ -517,7 +519,6 @@ interface AppRouteChildren {
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppTrashRoute: typeof AppTrashRoute
-  AppVaultRoute: typeof AppVaultRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -528,7 +529,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppTrashRoute: AppTrashRoute,
-  AppVaultRoute: AppVaultRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

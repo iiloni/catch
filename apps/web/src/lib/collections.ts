@@ -28,6 +28,7 @@ import {
   updateNoteTagsSchema,
   updateTagSchema,
   updateVaultNoteSchema,
+  VAULT_REMINDER_TEXT,
   vaultNoteSchema,
   vaultSchema,
 } from '@catch/shared';
@@ -82,7 +83,7 @@ import {
   updateSyncStatus,
   useAwaitingSync,
 } from './syncStatus';
-import { forgetVaultKey } from './vaultKeyStore';
+import { forgetVault } from './vaultKeyStore';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
@@ -655,7 +656,7 @@ export async function clearLocalData() {
   executor.dispose();
   await clearAttachmentFiles();
   if (user) await clearIncomingShares(user.id);
-  if (user) await forgetVaultKey(user.id);
+  if (user) await forgetVault(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
 }
@@ -776,6 +777,10 @@ export function watchReminderAlarms(listener: (alarms: ReminderAlarm[]) => void)
     listener(
       [...remindersCollection.values()].flatMap((reminder) => {
         const note = notesCollection.get(reminder.noteId);
+        // A vault note's alarm cannot say what the note does: the phone shows it locked.
+        if (!note && vaultNotesCollection.has(reminder.noteId)) {
+          return reminderAlarm(reminder, VAULT_REMINDER_TEXT) ?? [];
+        }
         if (!note || note.deletedAt) return [];
         return reminderAlarm(reminder, blocksToPlainText(note.content)) ?? [];
       }),
@@ -848,6 +853,8 @@ export function useTags(): readonly Tag[] {
 }
 
 let assignmentRows: ReadonlyMap<string, NoteTags> = new Map();
+let syncedAssignments: ReadonlyMap<string, NoteTags> = new Map();
+let vaultAssignments: ReadonlyMap<string, NoteTags> = new Map();
 const assignmentListeners = new Set<() => void>();
 let assignmentsSubscribed = false;
 function subscribeNoteTags(listener: () => void) {
@@ -856,7 +863,8 @@ function subscribeNoteTags(listener: () => void) {
     assignmentsSubscribed = true;
     noteTagsCollection.subscribeChanges(
       () => {
-        assignmentRows = new Map([...noteTagsCollection.values()].map((row) => [row.id, row]));
+        syncedAssignments = new Map([...noteTagsCollection.values()].map((row) => [row.id, row]));
+        assignmentRows = new Map([...syncedAssignments, ...vaultAssignments]);
         for (const notify of assignmentListeners) notify();
       },
       { includeInitialState: true },
@@ -868,6 +876,17 @@ function subscribeNoteTags(listener: () => void) {
 }
 export function useNoteTagAssignments(): ReadonlyMap<string, NoteTags> {
   return useSyncExternalStore(subscribeNoteTags, () => assignmentRows);
+}
+
+/**
+ * The tags of the unlocked vault's notes, which are sealed inside each note rather than
+ * kept in a collection (ADR 0020). They read as assignments like any other note's.
+ */
+export function publishVaultAssignments(rows: ReadonlyMap<string, NoteTags>) {
+  if (rows.size === 0 && vaultAssignments.size === 0) return;
+  vaultAssignments = rows;
+  assignmentRows = new Map([...syncedAssignments, ...vaultAssignments]);
+  for (const notify of assignmentListeners) notify();
 }
 
 /** An empty cached relationship is meaningful only after its first snapshot online. */

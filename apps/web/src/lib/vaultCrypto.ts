@@ -5,15 +5,19 @@ import {
   type VaultNotePayload,
   vaultNotePayloadSchema,
 } from '@catch/shared';
+import { gcm } from '@noble/ciphers/aes.js';
 
 /**
- * The vault's cryptography (ADR 0020), all of it the browser's own Web Crypto.
+ * The vault's cryptography (ADR 0020).
  *
- * One random 256 bit vault key seals every note with AES-GCM. The server keeps that key
+ * One random 256 bit vault key seals every note and file with AES-256-GCM. The server keeps that key
  * sealed twice: under a key stretched from the vault password (PBKDF2-SHA256) and under one
  * derived from the recovery code (HKDF-SHA256; the code is already random). What is sealed
  * names its owner and its place as additional data, so the server cannot pass one note's
  * ciphertext off as another's, or one user's as another's.
+ *
+ * Keys and files go through the browser's Web Crypto. Notes are sealed with the same cipher
+ * from `@noble/ciphers`, which is synchronous; the two read each other's output.
  */
 
 type Bytes = Uint8Array<ArrayBuffer>;
@@ -143,10 +147,6 @@ export function parseRecoveryCode(text: string): Bytes | null {
   return bytes;
 }
 
-/** The vault key ready for use. It cannot be read back out of the browser's keeping. */
-export const importVaultKey = (raw: Bytes) =>
-  crypto.subtle.importKey('raw', raw, AES, false, ['encrypt', 'decrypt']);
-
 /** Seals the vault key under a password, with a salt of its own. */
 export async function sealUnderPassword(
   userId: string,
@@ -204,27 +204,127 @@ export async function openVaultKey(
   );
 }
 
-export function sealNote(
-  key: CryptoKey,
-  userId: string,
-  noteId: string,
-  payload: VaultNotePayload,
-) {
-  return seal(key, utf8(JSON.stringify(payload)), noteContext(userId, noteId));
+/**
+ * Seals a note. Synchronous, unlike Web Crypto, so a change to a vault note is sealed
+ * inside the same optimistic write that changes any other note.
+ */
+export function sealNote(raw: Bytes, userId: string, noteId: string, payload: VaultNotePayload) {
+  const iv = random(NONCE_BYTES);
+  const sealed = gcm(raw, iv, utf8(noteContext(userId, noteId))).encrypt(
+    utf8(JSON.stringify(payload)),
+  );
+  const out = new Uint8Array(iv.length + sealed.length);
+  out.set(iv);
+  out.set(sealed, iv.length);
+  return toBase64(out);
 }
 
 /** Null when the note was sealed with another key or is not what this device wrote. */
-export async function openNote(
-  key: CryptoKey,
+export function openNote(
+  raw: Bytes,
   userId: string,
   noteId: string,
   data: string,
-): Promise<VaultNotePayload | null> {
-  const plain = await unseal(key, data, noteContext(userId, noteId));
-  if (!plain) return null;
+): VaultNotePayload | null {
   try {
+    const bytes = fromBase64(data);
+    const plain = gcm(
+      raw,
+      bytes.subarray(0, NONCE_BYTES),
+      utf8(noteContext(userId, noteId)),
+    ).decrypt(bytes.subarray(NONCE_BYTES));
     return vaultNotePayloadSchema.parse(JSON.parse(decoder.decode(plain)));
   } catch {
     return null;
   }
 }
+
+/** A file's own bytes, or the thumbnail the device made of it. */
+export type FilePart = 'content' | 'thumbnail';
+const fileContext = (userId: string, sealId: string, part: FilePart, piece: string) =>
+  `catch-vault-file:${userId}:${sealId}:${part}:${piece}`;
+
+/** Files are sealed in pieces this size, so a large one never has to sit in memory twice. */
+export const FILE_CHUNK_BYTES = 4 * 1024 * 1024;
+const PIECE_OVERHEAD = NONCE_BYTES + 16;
+const SEALED_CHUNK_BYTES = FILE_CHUNK_BYTES + PIECE_OVERHEAD;
+
+/** How many bytes a file of this size is once sealed. */
+export const sealedFileSize = (size: number) =>
+  size + Math.max(1, Math.ceil(size / FILE_CHUNK_BYTES)) * PIECE_OVERHEAD;
+
+/** The key as Web Crypto holds it, for files: far faster than sealing megabytes in script. */
+export const importFileKey = (raw: Bytes) =>
+  crypto.subtle.importKey('raw', raw, AES, false, ['encrypt', 'decrypt']);
+
+/**
+ * Seals a file piece by piece. Each piece names what it was sealed as, its place and whether
+ * it is the last, so pieces cannot be reordered, dropped from the end or moved between files.
+ */
+export async function sealFile(
+  key: CryptoKey,
+  userId: string,
+  sealId: string,
+  part: FilePart,
+  file: Blob,
+) {
+  const count = Math.max(1, Math.ceil(file.size / FILE_CHUNK_BYTES));
+  const parts: Bytes[] = [];
+  for (let index = 0; index < count; index++) {
+    const piece = new Uint8Array(
+      await file.slice(index * FILE_CHUNK_BYTES, (index + 1) * FILE_CHUNK_BYTES).arrayBuffer(),
+    );
+    const iv = random(NONCE_BYTES);
+    const context = fileContext(userId, sealId, part, `${index}:${index === count - 1}`);
+    const sealed = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv, additionalData: utf8(context) },
+        key,
+        piece,
+      ),
+    );
+    parts.push(iv, sealed);
+  }
+  return new Blob(parts, { type: 'application/octet-stream' });
+}
+
+/** Opens a sealed file as a blob of the given type. Throws if any piece is not as sealed. */
+export async function openFile(
+  key: CryptoKey,
+  userId: string,
+  sealId: string,
+  part: FilePart,
+  sealed: Blob,
+  type: string,
+) {
+  const count = Math.max(1, Math.ceil(sealed.size / SEALED_CHUNK_BYTES));
+  const parts: ArrayBuffer[] = [];
+  for (let index = 0; index < count; index++) {
+    const piece = new Uint8Array(
+      await sealed
+        .slice(index * SEALED_CHUNK_BYTES, (index + 1) * SEALED_CHUNK_BYTES)
+        .arrayBuffer(),
+    );
+    const context = fileContext(userId, sealId, part, `${index}:${index === count - 1}`);
+    parts.push(
+      await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: piece.subarray(0, NONCE_BYTES), additionalData: utf8(context) },
+        key,
+        piece.subarray(NONCE_BYTES),
+      ),
+    );
+  }
+  return new Blob(parts, { type });
+}
+
+/**
+ * The vault key for a device asked to remember it: sealed under a key of the device's own,
+ * which the browser keeps and never shows to scripts.
+ */
+export async function sealForDevice(raw: Bytes) {
+  const deviceKey = await crypto.subtle.generateKey(AES, false, ['encrypt', 'decrypt']);
+  return { deviceKey, sealed: await seal(deviceKey, raw, 'catch-vault-key:device') };
+}
+
+export const openFromDevice = (deviceKey: CryptoKey, sealed: string) =>
+  unseal(deviceKey, sealed, 'catch-vault-key:device');

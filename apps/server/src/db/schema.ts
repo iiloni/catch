@@ -170,9 +170,9 @@ export const attachments = pgTable(
     userId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    noteId: uuid()
-      .notNull()
-      .references(() => notes.id, { onDelete: 'cascade' }),
+    // No foreign key, as for reminders: a vault note's files are rows here too, sealed
+    // (ADR 0020). The routes that delete a note of either kind delete its files with it.
+    noteId: uuid().notNull(),
     name: text().notNull(),
     mimeType: text().notNull(),
     size: integer().notNull(),
@@ -266,16 +266,17 @@ export const noteTags = pgTable(
 );
 
 /**
- * A note's reminder (ADR 0018), at most one, so the note's id is its key. Times are wall
+ * A note's reminder (ADR 0018), at most one, so the note's id is its key. A vault note can
+ * have one too: when it rings is not sealed, only what the note says. Times are wall
  * clock times; `fireAt` is the instant the scheduler waits for, worked out from them and the
  * zone the user is in, and stays on the server.
  */
 export const reminders = pgTable(
   'reminders',
   {
-    noteId: uuid()
-      .primaryKey()
-      .references(() => notes.id, { onDelete: 'cascade' }),
+    // No foreign key: the note is in `notes` or, sealed, in `vault_notes` (ADR 0020). The
+    // routes that delete a note of either kind delete its reminder with it.
+    noteId: uuid().primaryKey(),
     userId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),

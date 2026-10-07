@@ -1,11 +1,12 @@
 import { createVaultNoteSchema, saveVaultSchema, updateVaultNoteSchema } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { vaultNotes, vaults } from '../db/schema';
+import { attachments, reminders, vaultNotes, vaults } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -63,14 +64,30 @@ export const vaultRoutes = new Hono<AppEnv>()
   // Deletes the vault and, through the foreign key, every note in it.
   .delete('/', async (c) => {
     const userId = c.get('user')!.id;
-    const txid = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
+      // Before the notes go: their reminders and files have no foreign key to follow them out.
+      const noteIds = tx
+        .select({ id: vaultNotes.id })
+        .from(vaultNotes)
+        .where(eq(vaultNotes.userId, userId));
+      await tx
+        .delete(reminders)
+        .where(and(eq(reminders.userId, userId), inArray(reminders.noteId, noteIds)));
+      const files = await tx
+        .delete(attachments)
+        .where(and(eq(attachments.userId, userId), inArray(attachments.noteId, noteIds)))
+        .returning({ id: attachments.id });
       const deleted = await tx
         .delete(vaults)
         .where(eq(vaults.userId, userId))
         .returning({ userId: vaults.userId });
-      return deleted.length > 0 ? currentTxid(tx) : null;
+      return {
+        txid: deleted.length > 0 ? await currentTxid(tx) : null,
+        files: files.map((file) => file.id),
+      };
     });
-    return c.json({ txid });
+    await deleteFiles(result.files);
+    return c.json({ txid: result.txid });
   })
   .post('/notes', zValidator('json', createVaultNoteSchema), async (c) => {
     const userId = c.get('user')!.id;
@@ -118,13 +135,20 @@ export const vaultRoutes = new Hono<AppEnv>()
   .delete('/notes/:id', idParam, async (c) => {
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
-    const txid = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const deleted = await tx
         .delete(vaultNotes)
         .where(and(eq(vaultNotes.id, id), eq(vaultNotes.userId, userId)))
         .returning({ id: vaultNotes.id });
-      return deleted.length > 0 ? currentTxid(tx) : null;
+      if (deleted.length === 0) return null;
+      await tx.delete(reminders).where(and(eq(reminders.noteId, id), eq(reminders.userId, userId)));
+      const files = await tx
+        .delete(attachments)
+        .where(and(eq(attachments.noteId, id), eq(attachments.userId, userId)))
+        .returning({ id: attachments.id });
+      return { txid: await currentTxid(tx), files: files.map((file) => file.id) };
     });
+    await deleteFiles(result?.files ?? []);
     // Already gone, perhaps deleted by an earlier try of this same queued write.
-    return c.json({ txid });
+    return c.json({ txid: result?.txid ?? null });
   });

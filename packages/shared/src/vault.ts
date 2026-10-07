@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { noteColorSchema, noteContentSchema, notePositionSchema } from './notes';
+import { attachmentSchema } from './attachments';
+import { noteColorSchema, noteContentSchema, notePositionSchema, noteStatusSchema } from './notes';
 
 /**
  * The vault (ADR 0020): notes encrypted on the device, so the server stores and syncs only
@@ -66,12 +67,45 @@ export type CreateVaultNote = z.infer<typeof createVaultNoteSchema>;
 export const updateVaultNoteSchema = vaultNoteSchema.pick({ data: true });
 export type UpdateVaultNote = z.infer<typeof updateVaultNoteSchema>;
 
-/** What a vault note's `data` holds once opened. Only devices with the vault key see it. */
+/**
+ * A file in a vault note. Its bytes are an attachment row like any other, sealed on the
+ * device; what the file is called and what it is are known only here, inside the note.
+ */
+export const vaultFileSchema = attachmentSchema
+  .pick({ id: true, name: true, mimeType: true, size: true, kind: true, createdAt: true })
+  .extend({
+    /** The attachment that holds a sealed thumbnail the device made, if it could make one. */
+    thumbnailId: z.uuid({ version: 'v7' }).nullable(),
+    /** What the bytes were sealed as. A copy of the note has new ids and the same bytes. */
+    sealId: z.uuid({ version: 'v7' }),
+  });
+export type VaultFile = z.infer<typeof vaultFileSchema>;
+
+/** What the server is told of a vault file in place of its name and type. */
+export const VAULT_FILE_NAME = 'Vault file';
+export const VAULT_FILE_TYPE = 'application/octet-stream';
+
+/**
+ * What a vault note's `data` holds once opened. Only devices with the vault key see it, so
+ * where a note is kept and what it is tagged with stay private as well as its words.
+ */
 export const vaultNotePayloadSchema = z.object({
   v: z.literal(1),
   content: noteContentSchema,
   color: noteColorSchema,
+  status: noteStatusSchema,
   isPinned: z.boolean(),
+  isArchived: z.boolean(),
   position: notePositionSchema,
+  deletedAt: z.coerce.date().nullable(),
+  /** When the note was last edited, by its device's clock: the server's time is of the last save. */
+  updatedAt: z.coerce.date(),
+  /** The note's tags. The tags themselves are the user's ordinary ones. */
+  primaryTagId: z.uuid({ version: 'v7' }).nullable(),
+  secondaryTagIds: z.array(z.uuid({ version: 'v7' })),
+  files: z.array(vaultFileSchema),
 });
 export type VaultNotePayload = z.infer<typeof vaultNotePayloadSchema>;
+
+/** What a vault note's reminder says when it rings: the server cannot read the note. */
+export const VAULT_REMINDER_TEXT = 'Vault note';

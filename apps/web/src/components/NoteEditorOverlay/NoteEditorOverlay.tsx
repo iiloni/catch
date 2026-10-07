@@ -69,13 +69,7 @@ import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/li
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
-import {
-  deleteVaultNote,
-  discardVaultNoteIfEmpty,
-  isVaultNote,
-  updateVaultNote,
-  useVaultNote,
-} from '@/lib/vault';
+import { useVaultNote } from '@/lib/vault';
 import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
@@ -200,8 +194,6 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     if (isPresent) closing.current = false;
   }, [isPresent]);
   const { state, save, flush } = useNoteAutosave(note.id);
-  // Fixed for the surface's life: a closing note has already left a vault that locked.
-  const [inVault] = useState(() => isVaultNote(note.id));
   const pane = useNotePane();
   // Leaving for the Deck closes the note on a page that does not split, so a closing note
   // keeps the layout it had: a pane slides away rather than turning into a panel.
@@ -377,9 +369,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   useEffect(() => {
     if (isPresent) return;
     flush();
-    // Sealing the last save is still under way, so a vault note is judged after it.
-    if (inVault) void discardVaultNoteIfEmpty(note.id);
-    const discarded = !inVault && discardIfEmpty(note.id);
+    const discarded = discardIfEmpty(note.id);
 
     if (splitRef.current) {
       let done = false;
@@ -451,19 +441,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       window.clearTimeout(landing);
       document.removeEventListener('scroll', follow, SCROLL_OPTIONS);
     };
-  }, [
-    isPresent,
-    flush,
-    note.id,
-    inVault,
-    progress,
-    dragY,
-    fade,
-    textFade,
-    layoutTick,
-    self,
-    safeToRemove,
-  ]);
+  }, [isPresent, flush, note.id, progress, dragY, fade, textFade, layoutTick, self, safeToRemove]);
 
   // A pane is part of the layout, not a sheet over it, so it does not swipe away.
   const scrollRef = useSwipeToDismiss({
@@ -742,9 +720,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
                           haptics.toggle();
-                          if (inVault) {
-                            void updateVaultNote(note.id, { isPinned: !note.isPinned });
-                          } else setNotePinned(note.id, !note.isPinned);
+                          setNotePinned(note.id, !note.isPinned);
                         }}
                         className={cn(
                           'size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6',
@@ -757,7 +733,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                       <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
                     </>
                   )}
-                  {editable && !inVault && (
+                  {editable && (
                     <IconButton
                       label={note.isArchived ? 'Unarchive' : 'Archive'}
                       onPointerDown={(event) => event.preventDefault()}
@@ -773,11 +749,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                     </IconButton>
                   )}
                   <IconButton
-                    label={editable && !inVault ? 'Move to trash' : 'Delete forever'}
+                    label={editable ? 'Move to trash' : 'Delete forever'}
                     onClick={() => {
                       haptics.warning();
-                      if (inVault) void deleteVaultNote(note.id);
-                      else if (editable) trashNote(note.id);
+                      if (editable) trashNote(note.id);
                       else deleteNoteForever(note.id);
                       requestClose();
                     }}

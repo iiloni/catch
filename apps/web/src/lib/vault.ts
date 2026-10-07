@@ -1,33 +1,35 @@
-import {
-  blocksHaveContent,
-  type Note,
-  type NoteColor,
-  positionBetween,
-  type Vault,
-  type VaultNotePayload,
-} from '@catch/shared';
-import type { Transaction } from '@tanstack/react-db';
+import type { Attachment, Note, NoteTags, Vault, VaultFile, VaultNotePayload } from '@catch/shared';
 import { useEffect } from 'react';
-import { toast } from 'sonner';
-import { uuidv7 } from 'uuidv7';
 import { ApiError, api } from './api';
+import { closeSealedFiles, setSealedFiles } from './attachmentFiles';
 import { getSignedInUser } from './auth';
-import { awaitVaultSync, vaultCollection, vaultNotesCollection, write } from './collections';
+import {
+  awaitVaultSync,
+  publishVaultAssignments,
+  vaultCollection,
+  vaultNotesCollection,
+} from './collections';
 import { createStore } from './store';
 import {
   createVaultKey,
-  importVaultKey,
+  importFileKey,
+  openFile,
+  openFromDevice,
   openNote,
   openVaultKey,
+  sealForDevice,
   sealNote,
   sealUnderPassword,
 } from './vaultCrypto';
-import { forgetVaultKey, loadVaultKey, rememberVaultKey } from './vaultKeyStore';
+import { forgetVaultKey, loadVaultKey, rememberVaultKey, vaultSeenKey } from './vaultKeyStore';
 
 /**
  * The vault (ADR 0020): notes the server only ever holds as ciphertext. The collections
  * sync and keep that ciphertext; this module holds the key while the vault is unlocked and
  * the notes it opens with it, both in memory only.
+ *
+ * The rest of the app reaches vault notes through `lib/noteStore.ts`, which sends each
+ * change to the notes collection or to here by the note's id.
  */
 
 /**
@@ -37,6 +39,10 @@ import { forgetVaultKey, loadVaultKey, rememberVaultKey } from './vaultKeyStore'
 export type VaultStatus = 'loading' | 'none' | 'locked' | 'unlocked';
 
 export const vaultStatus = createStore<VaultStatus>('loading');
+/** Whether the pages show the vault's notes in place of the ordinary ones. */
+export const vaultMode = createStore(false);
+/** Whether the form that sets the vault up or unlocks it is asked for. */
+export const vaultPrompt = createStore(false);
 /** The vault's notes, opened. Empty unless unlocked. */
 export const vaultNotes = createStore<readonly Note[]>([]);
 /** How many notes the key could not open: sealed by a vault since replaced, or damaged. */
@@ -47,18 +53,28 @@ export const vaultRemembered = createStore(false);
 /** A hidden app locks a vault it does not remember once it has been away this long. */
 const AUTO_LOCK_MS = 5 * 60_000;
 
-type VaultChanges = Partial<Pick<Note, 'content' | 'color' | 'isPinned'>>;
+type Bytes = Uint8Array<ArrayBuffer>;
+type Tags = Pick<NoteTags, 'primaryTagId' | 'secondaryTagIds'>;
+type Entry = { note: Note; tags: Tags; files: readonly VaultFile[] };
 
-let key: CryptoKey | null = null;
+let key: Bytes | null = null;
+/** The same key as Web Crypto holds it, for sealing files. */
+let fileKey: CryptoKey | null = null;
 /** The vault the key belongs to; a vault deleted and set up again elsewhere has another. */
 let keyVault: string | null = null;
-let byId: ReadonlyMap<string, Note> = new Map();
-// A note's words by its ciphertext, so a change to one note does not open them all again.
-const opened = new Map<string, VaultNotePayload>();
 /** A vault this device just made, until its row syncs back. */
 let awaitingRow: string | null = null;
+let entries: ReadonlyMap<string, Entry> = new Map();
+/** Every file in the unlocked vault, by its id. */
+let files: ReadonlyMap<string, { noteId: string; file: VaultFile }> = new Map();
+// A note's words by its ciphertext, so a change to one note does not open them all again.
+const opened = new Map<string, VaultNotePayload>();
+/** The opened note each published one was made from. */
+const shown = new Map<string, VaultNotePayload>();
 let started = false;
-let refreshes = 0;
+
+/** Called before the key goes, so an editor can save what it still holds. */
+export const beforeVaultLock = new Set<() => void>();
 
 const userId = () => getSignedInUser()?.id ?? null;
 const vaultRow = (): Vault | undefined => {
@@ -69,18 +85,93 @@ const vaultRow = (): Vault | undefined => {
 const vaultIdentity = (vault: Pick<Vault, 'recoveryKey'>) => vault.recoveryKey;
 
 /** Whether an id is a note in the unlocked vault. */
-export const isVaultNote = (id: string) => byId.has(id);
-export const getVaultNote = (id: string) => byId.get(id);
+export const isVaultNote = (id: string) => entries.has(id);
+export const getVaultNote = (id: string) => entries.get(id)?.note;
+/** A vault note's tags, in the shape other notes' assignments have. */
+export function getVaultNoteTags(id: string): NoteTags | undefined {
+  const entry = entries.get(id);
+  return entry && { id, userId: entry.note.userId, ...entry.tags };
+}
+export const isVaultMode = () => vaultMode.get();
+
+/** A vault note's files, as the attachments any note has. */
+export function getVaultFiles(noteId: string): Attachment[] {
+  const entry = entries.get(noteId);
+  if (!entry) return [];
+  return entry.files.map(({ thumbnailId: _thumbnail, sealId: _seal, ...file }) => ({
+    ...file,
+    userId: entry.note.userId,
+    noteId,
+    status: 'ready',
+    sourceId: null,
+    deletedAt: null,
+  }));
+}
+/** A vault note's files as the note keeps them, with what each was sealed as. */
+export const getSealedFiles = (noteId: string) => entries.get(noteId)?.files ?? [];
+/** The vault note a file is in, if it is in one. */
+export const vaultFileNote = (fileId: string) => files.get(fileId)?.noteId;
+
+/** Tells the device's file store which files are sealed, and how to open them. */
+const sealedFile: Parameters<typeof setSealedFiles>[0] = (id, preview) => {
+  const found = files.get(id);
+  const owner = userId();
+  if (!found || !fileKey || !owner) return undefined;
+  const { file } = found;
+  const key = fileKey;
+  // An image with no thumbnail of its own is shown as it is, as a new one is anywhere.
+  const thumbnail = preview && file.thumbnailId !== null;
+  if (preview && !thumbnail && file.kind !== 'image') return null;
+  return {
+    id: thumbnail ? file.thumbnailId! : file.id,
+    open: (sealed) =>
+      openFile(
+        key,
+        owner,
+        file.sealId,
+        thumbnail ? 'thumbnail' : 'content',
+        sealed,
+        thumbnail ? 'image/webp' : file.mimeType,
+      ),
+  };
+};
+
+/** The key for sealing and opening the vault's files, while it is unlocked. */
+export const vaultFileKey = () => fileKey;
+
+function publish(next: ReadonlyMap<string, Entry>, unreadable = vaultUnreadable.get()) {
+  entries = next;
+  files = new Map(
+    [...next].flatMap(([noteId, entry]) =>
+      entry.files.map((file) => [file.id, { noteId, file }] as const),
+    ),
+  );
+  vaultNotes.set([...next.values()].map((entry) => entry.note));
+  vaultUnreadable.set(unreadable);
+  publishVaultAssignments(
+    new Map(
+      [...next].flatMap(([id, entry]) =>
+        entry.tags.primaryTagId || entry.tags.secondaryTagIds.length > 0
+          ? [[id, { id, userId: entry.note.userId, ...entry.tags }]]
+          : [],
+      ),
+    ),
+  );
+}
 
 /** Locks: forgets the key and the notes it opened, in memory and in the device's keeping. */
 function dropKey() {
+  if (key) for (const save of beforeVaultLock) save();
+  key?.fill(0);
   key = null;
+  fileKey = null;
   keyVault = null;
   awaitingRow = null;
   opened.clear();
-  byId = new Map();
-  vaultNotes.set([]);
-  vaultUnreadable.set(0);
+  shown.clear();
+  publish(new Map(), 0);
+  closeSealedFiles();
+  vaultMode.set(false);
   vaultRemembered.set(false);
   const id = userId();
   return id ? forgetVaultKey(id) : Promise.resolve();
@@ -93,30 +184,67 @@ function refreshStatus() {
     const known = vaultCollection.isReady() && !(key && keyVault === awaitingRow);
     // Deleted on another device.
     if (key && known) void dropKey();
+    const id = userId();
+    if (known && id) localStorage.removeItem(vaultSeenKey(id));
     vaultStatus.set(key ? 'unlocked' : known ? 'none' : 'loading');
     return;
   }
   awaitingRow = null;
+  localStorage.setItem(vaultSeenKey(vault.userId), 'true');
   // Deleted and set up again on another device: this key opens none of the new vault.
   if (key && keyVault !== vaultIdentity(vault)) void dropKey();
   vaultStatus.set(key ? 'unlocked' : 'locked');
 }
 
+const fromPayload = (
+  row: { id: string; userId: string; createdAt: Date },
+  payload: VaultNotePayload,
+): Entry => ({
+  note: {
+    id: row.id,
+    userId: row.userId,
+    content: payload.content,
+    color: payload.color,
+    status: payload.status,
+    isPinned: payload.isPinned,
+    isArchived: payload.isArchived,
+    position: payload.position,
+    hiddenLinks: [],
+    createdAt: row.createdAt,
+    updatedAt: payload.updatedAt,
+    deletedAt: payload.deletedAt,
+  },
+  tags: { primaryTagId: payload.primaryTagId, secondaryTagIds: payload.secondaryTagIds },
+  files: payload.files,
+});
+
+const toPayload = ({ note, tags, files }: Entry): VaultNotePayload => ({
+  v: 1,
+  content: note.content,
+  color: note.color,
+  status: note.status,
+  isPinned: note.isPinned,
+  isArchived: note.isArchived,
+  position: note.position,
+  deletedAt: note.deletedAt,
+  updatedAt: note.updatedAt,
+  primaryTagId: tags.primaryTagId,
+  secondaryTagIds: tags.secondaryTagIds,
+  files: [...files],
+});
+
 /** Opens every note the collection holds with the key, and publishes them. */
-async function refreshNotes() {
-  const current = ++refreshes;
+function refreshNotes() {
   const owner = userId();
-  const using = key;
-  if (!owner || !using) return;
-  const notes: Note[] = [];
+  if (!owner || !key) return;
+  const next = new Map<string, Entry>();
   const seen = new Set<string>();
   let unreadable = 0;
   for (const row of vaultNotesCollection.values()) {
     seen.add(row.data);
     let payload = opened.get(row.data);
     if (!payload) {
-      const result = await openNote(using, owner, row.id, row.data);
-      if (current !== refreshes || key !== using) return;
+      const result = openNote(key, owner, row.id, row.data);
       if (!result) {
         unreadable++;
         continue;
@@ -124,51 +252,53 @@ async function refreshNotes() {
       payload = result;
       opened.set(row.data, payload);
     }
-    notes.push({
-      id: row.id,
-      userId: row.userId,
-      content: payload.content,
-      color: payload.color,
-      isPinned: payload.isPinned,
-      position: payload.position,
-      status: null,
-      isArchived: false,
-      hiddenLinks: [],
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      deletedAt: null,
-    });
+    // Unchanged notes keep their objects, so their cards do not draw again.
+    const current = entries.get(row.id);
+    next.set(
+      row.id,
+      current && shown.get(row.id) === payload ? current : fromPayload(row, payload),
+    );
+    shown.set(row.id, payload);
   }
   for (const data of opened.keys()) if (!seen.has(data)) opened.delete(data);
-  byId = new Map(notes.map((note) => [note.id, note]));
-  vaultNotes.set(notes);
-  vaultUnreadable.set(unreadable);
+  for (const id of shown.keys()) if (!next.has(id)) shown.delete(id);
+  publish(next, unreadable);
 }
 
-async function adoptKey(raw: Uint8Array<ArrayBuffer>, vault: Pick<Vault, 'recoveryKey'>) {
-  key = await importVaultKey(raw);
-  // The browser keeps the key from here; this copy of its bytes has no further use.
-  raw.fill(0);
+async function adoptKey(raw: Bytes, vault: Pick<Vault, 'recoveryKey'>) {
+  fileKey = await importFileKey(raw);
+  key = raw;
   keyVault = vaultIdentity(vault);
   refreshStatus();
-  await refreshNotes();
+  refreshNotes();
 }
 
 async function setRemembered(remember: boolean) {
   const id = userId();
   if (!id) return;
-  if (remember && key && keyVault) await rememberVaultKey(id, { key, vault: keyVault });
-  else await forgetVaultKey(id);
+  if (remember && key && keyVault) {
+    await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
+  } else await forgetVaultKey(id);
   vaultRemembered.set(remember && key !== null);
 }
 
-/** Starts following the vault. Pages that show it call this through `useVault`. */
-function start() {
+/**
+ * Whether this device has seen the user's vault. Only then does the app follow the vault
+ * from the start: a user without one never asks the server for it.
+ */
+export function hasSeenVault() {
+  const id = userId();
+  return id !== null && localStorage.getItem(vaultSeenKey(id)) === 'true';
+}
+
+/** Starts following the vault: at launch on a device that has seen it, or when first asked for. */
+export function startVault() {
   if (started) return;
   started = true;
+  setSealedFiles(sealedFile);
   vaultCollection.subscribeChanges(refreshStatus, { includeInitialState: true });
   vaultCollection.onFirstReady(refreshStatus);
-  vaultNotesCollection.subscribeChanges(() => void refreshNotes(), { includeInitialState: true });
+  vaultNotesCollection.subscribeChanges(refreshNotes, { includeInitialState: true });
   void restoreKey();
 
   let hiddenAt: number | null = null;
@@ -191,21 +321,35 @@ async function restoreKey() {
   const kept = await loadVaultKey(id);
   if (!kept || key) return;
   const vault = vaultRow();
-  if (vault && kept.vault !== vaultIdentity(vault)) {
-    await forgetVaultKey(id);
+  const raw =
+    vault && kept.vault !== vaultIdentity(vault)
+      ? null
+      : await openFromDevice(kept.deviceKey, kept.sealed);
+  if (!raw || key) {
+    if (!raw) await forgetVaultKey(id);
     return;
   }
-  key = kept.key;
-  keyVault = kept.vault;
+  await adoptKey(raw, { recoveryKey: kept.vault });
   vaultRemembered.set(true);
-  refreshStatus();
-  await refreshNotes();
 }
 
 /** The vault's status, kept current while the calling component is mounted. */
 export function useVault() {
-  useEffect(start, []);
+  useEffect(startVault, []);
   return vaultStatus.use();
+}
+
+/** The vault's notes while the pages are showing the vault, or null while they are not. */
+export function useVaultView(): readonly Note[] | null {
+  const mode = vaultMode.use();
+  const notes = vaultNotes.use();
+  return mode ? notes : null;
+}
+
+/** A note in the unlocked vault, kept current. Undefined once the vault locks. */
+export function useVaultNote(id: string | undefined) {
+  vaultNotes.use();
+  return id ? entries.get(id)?.note : undefined;
 }
 
 export class VaultError extends Error {}
@@ -289,12 +433,7 @@ export async function changeVaultPassword(current: string, next: string) {
   return true;
 }
 
-async function resealVault(
-  id: string,
-  vault: Vault,
-  raw: Uint8Array<ArrayBuffer>,
-  password: string,
-) {
+async function resealVault(id: string, vault: Vault, raw: Bytes, password: string) {
   const sealed = await sealUnderPassword(id, raw, password);
   try {
     await awaitVaultSync((await api.saveVault({ ...sealed, recoveryKey: vault.recoveryKey })).txid);
@@ -305,8 +444,6 @@ async function resealVault(
 
 /** Locks the vault and has this device forget its key. */
 export async function lockVault() {
-  // Let a note being sealed reach the outbox before the key goes.
-  await queue;
   await dropKey();
   refreshStatus();
 }
@@ -326,13 +463,44 @@ export async function deleteVault() {
   refreshStatus();
 }
 
-// Sealing is asynchronous, so changes wait their turn: each builds on the one before it.
-let queue: Promise<unknown> = Promise.resolve();
+/** Shows the vault's notes, asking for it to be set up or unlocked first if need be. */
+export function enterVault() {
+  startVault();
+  if (key) vaultMode.set(true);
+  else vaultPrompt.set(true);
+}
 
-function enqueue<T>(task: () => Promise<T>): Promise<T> {
-  const run = queue.then(task, task);
-  queue = run.catch(() => undefined);
-  return run;
+/** Back to the ordinary notes. A device that does not remember the vault locks it. */
+export function leaveVault() {
+  if (vaultRemembered.get()) vaultMode.set(false);
+  else void lockVault();
+}
+
+/**
+ * Runs `then` inside the vault when the id is one of its notes, as when a reminder is
+ * opened from outside: a locked vault asks for its password first. False for any other note.
+ */
+export function inVaultFor(id: string, then: () => void) {
+  if (!vaultNotesCollection.has(id)) return false;
+  enterVault();
+  if (vaultMode.get()) {
+    then();
+    return true;
+  }
+  const stop = () => {
+    stopMode();
+    stopPrompt();
+  };
+  const stopMode = vaultMode.subscribe(() => {
+    if (!vaultMode.get()) return;
+    stop();
+    then();
+  });
+  // Entering sets the mode before it closes the form, so a form closed first was dismissed.
+  const stopPrompt = vaultPrompt.subscribe(() => {
+    if (!vaultPrompt.get()) stop();
+  });
+  return true;
 }
 
 function unlocked() {
@@ -341,119 +509,77 @@ function unlocked() {
   return { id, key };
 }
 
-const payloadOf = (note: Note): VaultNotePayload => ({
-  v: 1,
-  content: note.content,
-  color: note.color,
-  isPinned: note.isPinned,
-  position: note.position,
-});
+/**
+ * The changes below belong inside `write()`, like changes to any synced collection: each
+ * seals the note and puts the ciphertext in the collection, and so in the outbox.
+ */
 
-/** Adds a note to the vault, ahead of its other notes. Settles once it can be opened. */
-export function createVaultNote(input: { content: Note['content']; color?: NoteColor }) {
-  return enqueue(async () => {
-    const { id: owner, key } = unlocked();
-    let first: string | null = null;
-    for (const note of byId.values()) {
-      if (first === null || note.position < first) first = note.position;
-    }
-    const id = uuidv7();
-    const payload: VaultNotePayload = {
-      v: 1,
-      content: input.content,
-      color: input.color ?? 'default',
-      isPinned: false,
-      position: positionBetween(null, first),
-    };
-    const data = await sealNote(key, owner, id, payload);
-    opened.set(data, payload);
-    const now = new Date();
-    const transaction = write(() =>
-      vaultNotesCollection.insert({ id, userId: owner, data, createdAt: now, updatedAt: now }),
-    );
-    await refreshNotes();
-    return { id, transaction };
-  });
+function store(entry: Entry, exists: boolean) {
+  const { id: owner, key } = unlocked();
+  const payload = toPayload(entry);
+  const data = sealNote(key, owner, entry.note.id, payload);
+  opened.set(data, payload);
+  shown.set(entry.note.id, payload);
+  if (exists) {
+    vaultNotesCollection.update(entry.note.id, (draft) => {
+      draft.data = data;
+      draft.updatedAt = new Date();
+    });
+  } else {
+    vaultNotesCollection.insert({
+      id: entry.note.id,
+      userId: owner,
+      data,
+      createdAt: entry.note.createdAt,
+      updatedAt: entry.note.updatedAt,
+    });
+  }
+  const next = new Map(entries);
+  next.set(entry.note.id, entry);
+  publish(next);
+}
+
+/** Adds a note to the vault, with its tags and files if it has any. */
+export function insertVaultNote(note: Note, tags?: Tags, files: readonly VaultFile[] = []) {
+  store(
+    { note, tags: tags ?? { primaryTagId: null, secondaryTagIds: [] }, files },
+    vaultNotesCollection.has(note.id),
+  );
 }
 
 /**
  * Changes a vault note. A note is sealed whole, so unlike other notes the last device to
- * save one replaces all of it. Resolves to the write, whose `isPersisted.promise` settles
- * once the server has it.
+ * save one replaces all of it.
  */
-export function updateVaultNote(id: string, changes: VaultChanges): Promise<Transaction> {
-  return enqueue(async () => {
-    const { id: owner, key } = unlocked();
-    const note = byId.get(id);
-    if (!note) throw new VaultError('This note is no longer in the vault.');
-    const payload = { ...payloadOf(note), ...changes };
-    const data = await sealNote(key, owner, id, payload);
-    opened.set(data, payload);
-    const transaction = write(() =>
-      vaultNotesCollection.update(id, (draft) => {
-        draft.data = data;
-        draft.updatedAt = new Date();
-      }),
-    );
-    await refreshNotes();
-    return transaction;
-  });
+export function changeVaultNote(id: string, change: (draft: Note) => void) {
+  const entry = entries.get(id);
+  if (!entry) throw new VaultError('This note is no longer in the vault.');
+  const note = { ...entry.note };
+  change(note);
+  store({ ...entry, note }, true);
 }
 
-async function removeNote(id: string) {
+export function changeVaultNoteTags(id: string, change: (draft: Tags) => void) {
+  const entry = entries.get(id);
+  if (!entry) throw new VaultError('This note is no longer in the vault.');
+  const tags = { ...entry.tags };
+  change(tags);
+  store({ ...entry, tags }, true);
+}
+
+/** Changes which files a vault note holds, or what they are called. */
+export function changeVaultNoteFiles(id: string, change: (files: VaultFile[]) => VaultFile[]) {
+  const entry = entries.get(id);
+  if (!entry) throw new VaultError('This note is no longer in the vault.');
+  store({ ...entry, files: change([...entry.files]) }, true);
+}
+
+/** Deletes a vault note for good. */
+export function removeVaultNote(id: string) {
   if (!vaultNotesCollection.has(id)) return;
-  write(() => vaultNotesCollection.delete(id));
-  await refreshNotes();
-}
-
-/** Deletes a vault note for good: the vault has no trash, only this chance to undo. */
-export function deleteVaultNote(id: string) {
-  return enqueue(async () => {
-    const note = byId.get(id);
-    await removeNote(id);
-    if (!note) return;
-    toast('Note deleted', {
-      action: { label: 'Undo', onClick: () => void restoreVaultNote(note) },
-    });
-  });
-}
-
-function restoreVaultNote(note: Note) {
-  return enqueue(async () => {
-    const { id: owner, key } = unlocked();
-    if (vaultNotesCollection.has(note.id)) return;
-    const payload = payloadOf(note);
-    const data = await sealNote(key, owner, note.id, payload);
-    opened.set(data, payload);
-    write(() =>
-      vaultNotesCollection.insert({
-        id: note.id,
-        userId: owner,
-        data,
-        createdAt: note.createdAt,
-        updatedAt: new Date(),
-      }),
-    );
-    await refreshNotes();
-  });
-}
-
-/**
- * As `discardIfEmpty` for other notes: a vault note closed without content is deleted. It
- * waits its turn, so a save still being sealed counts as content.
- */
-export function discardVaultNoteIfEmpty(id: string) {
-  return enqueue(async () => {
-    const note = byId.get(id);
-    if (!note || blocksHaveContent(note.content)) return false;
-    await removeNote(id);
-    toast('Empty note discarded');
-    return true;
-  });
-}
-
-/** A note in the unlocked vault, kept current. Undefined once the vault locks. */
-export function useVaultNote(id: string | undefined) {
-  vaultNotes.use();
-  return id ? byId.get(id) : undefined;
+  vaultNotesCollection.delete(id);
+  const next = new Map(entries);
+  next.delete(id);
+  shown.delete(id);
+  publish(next);
 }

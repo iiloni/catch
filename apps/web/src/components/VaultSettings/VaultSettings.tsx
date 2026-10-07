@@ -1,6 +1,7 @@
-import { EllipsisVertical, KeyRound, Lock, Smartphone, Trash2 } from 'lucide-react';
+import { KeyRound, LockKeyhole, LockKeyholeOpen, Smartphone, Trash2 } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
+import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,21 +10,18 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { MIN_VAULT_PASSWORD, newPasswordProblem } from '@/components/VaultGate/VaultGate';
 import { haptics } from '@/lib/haptics';
 import {
   changeVaultPassword,
   deleteVault,
+  enterVault,
   lockVault,
   rememberVault,
+  useVault,
+  vaultNotes,
   vaultRemembered,
 } from '@/lib/vault';
 
@@ -34,63 +32,108 @@ const failure = (error: unknown) =>
 const DIALOG =
   'top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto';
 
-/** The unlocked vault's own controls, in its page header. */
-export function VaultMenu({ noteCount }: { noteCount: number }) {
+/** Settings > Vault: this device's hold on the vault, its password, and its deletion. */
+export function VaultSettings() {
+  const status = useVault();
   const remembered = vaultRemembered.use();
+  const notes = vaultNotes.use();
   const [dialog, setDialog] = useState<'password' | 'delete' | null>(null);
+  const unlocked = status === 'unlocked';
+
+  if (status === 'none' || status === 'loading') {
+    return (
+      <SettingsSection
+        title="Vault"
+        description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
+      >
+        <SettingsRow
+          icon={LockKeyhole}
+          label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
+          description={status === 'none' ? 'Set one up to keep private notes' : undefined}
+        >
+          {status === 'none' && (
+            <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
+              Set up
+            </Button>
+          )}
+        </SettingsRow>
+      </SettingsSection>
+    );
+  }
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Vault options"
-          className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    <div className="flex flex-col gap-6">
+      <SettingsSection
+        title="This device"
+        description="A device that remembers the vault opens it without the password, for anyone who can open Catch here. Otherwise the vault locks when you leave it, and after five minutes in the background."
+      >
+        <SettingsRow
+          icon={unlocked ? LockKeyholeOpen : LockKeyhole}
+          label={unlocked ? 'Unlocked' : 'Locked'}
+          description={
+            unlocked ? 'Lock it and forget its key here' : 'Enter the password to open it'
+          }
         >
-          <EllipsisVertical className="size-5" aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={8}>
-          <DropdownMenuItem
-            onSelect={() => {
+          <Button
+            variant="outline"
+            className="h-11 rounded-full"
+            onClick={() => {
               haptics.toggle();
-              void lockVault();
+              if (unlocked) void lockVault();
+              else enterVault();
             }}
           >
-            <Lock aria-hidden />
-            Lock now
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              haptics.toggle();
-              void rememberVault(!remembered).then(() =>
-                toast(
-                  remembered
-                    ? 'This device will ask for the vault password'
-                    : 'This device will keep the vault open',
-                ),
-              );
-            }}
+            {unlocked ? 'Lock now' : 'Unlock'}
+          </Button>
+        </SettingsRow>
+        <SettingsRow
+          icon={Smartphone}
+          label="Remember on this device"
+          description={unlocked ? 'Keep the vault open here' : 'Unlock the vault to change this'}
+        >
+          <Switch
+            aria-label="Remember on this device"
+            checked={remembered}
+            disabled={!unlocked}
+            onCheckedChange={(checked) => void rememberVault(checked)}
+          />
+        </SettingsRow>
+      </SettingsSection>
+      <SettingsSection title="Vault">
+        <SettingsRow
+          icon={KeyRound}
+          label="Vault password"
+          description="Your recovery code stays the same"
+        >
+          <Button
+            variant="outline"
+            className="h-11 rounded-full"
+            onClick={() => setDialog('password')}
           >
-            <Smartphone aria-hidden />
-            {remembered ? 'Stop remembering on this device' : 'Remember on this device'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDialog('password')}>
-            <KeyRound aria-hidden />
-            Change vault password
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => setDialog('delete')}>
-            <Trash2 aria-hidden />
-            Delete vault
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            Change
+          </Button>
+        </SettingsRow>
+        <SettingsRow
+          icon={Trash2}
+          label="Delete vault"
+          description="Deletes every note in it, on every device"
+        >
+          <Button
+            variant="outline"
+            className="h-11 rounded-full text-destructive"
+            onClick={() => setDialog('delete')}
+          >
+            Delete
+          </Button>
+        </SettingsRow>
+      </SettingsSection>
       <ChangeVaultPassword open={dialog === 'password'} onClose={() => setDialog(null)} />
       <DeleteVault
         open={dialog === 'delete'}
-        noteCount={noteCount}
+        noteCount={unlocked ? notes.length : null}
         onClose={() => setDialog(null)}
       />
-    </>
+    </div>
   );
 }
 
@@ -196,7 +239,8 @@ function DeleteVault({
   onClose,
 }: {
   open: boolean;
-  noteCount: number;
+  /** Null while the vault is locked, when nothing here can count its notes. */
+  noteCount: number | null;
   onClose: () => void;
 }) {
   const [pending, setPending] = useState(false);
@@ -221,11 +265,13 @@ function DeleteVault({
       <DialogContent showCloseButton={!pending}>
         <DialogTitle>Delete the vault?</DialogTitle>
         <DialogDescription>
-          {noteCount === 0
-            ? 'The vault will be deleted from the server and every device.'
-            : noteCount === 1
-              ? 'The vault and the note in it will be deleted forever, from the server and every device.'
-              : `The vault and all ${noteCount} notes in it will be deleted forever, from the server and every device.`}
+          {noteCount === null
+            ? 'The vault and every note in it will be deleted forever, from the server and every device. This does not need the vault password.'
+            : noteCount === 0
+              ? 'The vault will be deleted from the server and every device.'
+              : noteCount === 1
+                ? 'The vault and the note in it will be deleted forever, from the server and every device.'
+                : `The vault and all ${noteCount} notes in it will be deleted forever, from the server and every device.`}
         </DialogDescription>
         <div className="flex justify-end gap-2">
           <DialogClose asChild>

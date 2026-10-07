@@ -1,7 +1,7 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { updateNote } from './notes';
-import { isVaultNote, updateVaultNote } from './vault';
+import { getNote, updateNote } from './notes';
+import { beforeVaultLock } from './vault';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -22,12 +22,10 @@ export function useNoteAutosave(noteId: string) {
     const content = pending.current;
     if (!content) return;
     pending.current = null;
+    // Deleted elsewhere, or in a vault that has since locked: there is nothing to save to.
+    if (!getNote(noteId)) return;
     const current = ++generation.current;
-    // A vault note is sealed before it is queued (ADR 0020).
-    const saved = isVaultNote(noteId)
-      ? updateVaultNote(noteId, { content }).then((write) => write.isPersisted.promise)
-      : updateNote(noteId, { content }).isPersisted.promise;
-    saved.then(
+    updateNote(noteId, { content }).isPersisted.promise.then(
       () => {
         if (current === generation.current && !pending.current) setState('saved');
       },
@@ -48,6 +46,11 @@ export function useNoteAutosave(noteId: string) {
   );
 
   useEffect(() => flush, [flush]);
+  // A vault note must be saved while its key is still here to seal it with.
+  useEffect(() => {
+    beforeVaultLock.add(flush);
+    return () => void beforeVaultLock.delete(flush);
+  }, [flush]);
 
   return { state, save, flush };
 }

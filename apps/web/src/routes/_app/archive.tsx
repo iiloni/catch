@@ -12,6 +12,7 @@ import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
 import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/archive')({
   component: ArchivePage,
@@ -25,15 +26,17 @@ function ArchivePage() {
         .from({ note: notesCollection })
         .where(({ note }) => and(isNull(note.deletedAt), eq(note.isArchived, true))),
   });
-  const awaitingSync = useAwaitingSync(isLoading, notes.length);
-  const sorted = sortNotes(notes);
+  const vault = useVaultView();
+  const shown = vault ? vault.filter((note) => !note.deletedAt && note.isArchived) : notes;
+  const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);
+  const sorted = sortNotes(shown);
   const selection = useNoteSelection(sorted);
   const gutterShift = usePageGutterShift(PAGE_MAX);
 
   return (
     <>
       <TabPageHeader
-        title="Archive"
+        title={vault ? 'Vault archive' : 'Archive'}
         leading={<BackToGallery />}
         selection={selectionHeader(selection, 'archive')}
       />
@@ -42,7 +45,7 @@ function ArchivePage() {
         style={{ x: gutterShift }}
         className="mx-auto max-w-7xl px-3 pt-3 sm:px-6"
       >
-        {awaitingSync ? null : notes.length > 0 ? (
+        {awaitingSync ? null : shown.length > 0 ? (
           <NoteGrid
             notes={sorted}
             onOpen={(note, card) => open(note.id, card)}

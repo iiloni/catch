@@ -1,6 +1,6 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { ArrowDownUp, LayoutGrid, Lightbulb, Rows3 } from 'lucide-react';
+import { ArrowDownUp, LayoutGrid, Lightbulb, LockKeyholeOpen, Rows3 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useState } from 'react';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { notesCollection } from '@/lib/collections';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
@@ -30,6 +31,7 @@ import { sortNotes } from '@/lib/sortNotes';
 import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/')({
   component: GalleryPage,
@@ -77,8 +79,13 @@ function GalleryPage() {
         ),
   });
 
-  const awaitingSync = useAwaitingSync(isLoading, notes.length);
-  const sorted = sortNotes(notes, sort.field, sort.direction);
+  // Inside the vault the page shows its notes instead (ADR 0020), which are already here.
+  const vault = useVaultView();
+  const shown = vault
+    ? vault.filter((note) => !note.deletedAt && !note.isArchived && note.status === null)
+    : notes;
+  const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);
+  const sorted = sortNotes(shown, sort.field, sort.direction);
   const pinned = sorted.filter((note) => note.isPinned);
   const others = sorted.filter((note) => !note.isPinned);
   // Notes can only be dragged into place while they are shown in that order.
@@ -89,10 +96,11 @@ function GalleryPage() {
   return (
     <>
       <TabPageHeader
-        title="Gallery"
+        title={vault ? 'Vault' : 'Gallery'}
         selection={selectionHeader(selection, 'gallery')}
         trailing={
           <>
+            <VaultToggle />
             {narrow && (
               <motion.button
                 type="button"
@@ -125,10 +133,16 @@ function GalleryPage() {
         style={{ x: gutterShift }}
         className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        {awaitingSync ? null : notes.length === 0 ? (
-          <EmptyState icon={Lightbulb} title="Catch your first note">
-            Tap + to write something down. It lands here.
-          </EmptyState>
+        {awaitingSync ? null : shown.length === 0 ? (
+          vault ? (
+            <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+              Tap + to write a note only your devices can read.
+            </EmptyState>
+          ) : (
+            <EmptyState icon={Lightbulb} title="Catch your first note">
+              Tap + to write something down. It lands here.
+            </EmptyState>
+          )
         ) : (
           <>
             {pinned.length > 0 && (

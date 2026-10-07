@@ -14,6 +14,7 @@ import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOver
 import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
 import { QuickNote } from '@/components/QuickNote/QuickNote';
 import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
+import { VaultEntry } from '@/components/VaultEntry/VaultEntry';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
@@ -26,6 +27,7 @@ import { syncReminderSettings } from '@/lib/reminders';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
+import { inVaultFor } from '@/lib/vault';
 
 /**
  * Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`.
@@ -50,8 +52,9 @@ function AppLayout() {
     () =>
       onNotificationOpen((noteId, userId) => {
         // A reminder rings for every account on the device; this one may be another's.
-        if (!userId || userId === getSignedInUser()?.id) open(noteId);
-        else openAccountNote(userId, noteId);
+        if (!userId || userId === getSignedInUser()?.id) {
+          if (!inVaultFor(noteId, () => open(noteId))) open(noteId);
+        } else openAccountNote(userId, noteId);
       }),
     [open],
   );
@@ -116,6 +119,7 @@ function AppLayout() {
       <Dock />
       <NoteEditorOverlay noteId={note} />
       <LinkPreviewOverlay />
+      <VaultEntry />
       <AppUpdatePrompt />
       <WebUpdatePrompt />
       <AnimatePresence>

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { Vault, VaultNote } from '@catch/shared';
+import type { Note, Vault, VaultFile, VaultNote } from '@catch/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The collections as plain maps: what the device's database and the outbox would be given.
@@ -33,13 +33,18 @@ vi.mock('./collections', () => ({
   vaultCollection: store.vault,
   vaultNotesCollection: store.notes,
   awaitVaultSync: async () => true,
+  publishVaultAssignments: vi.fn(),
   write: (mutate: () => void) => {
     mutate();
     return { id: 'write', isPersisted: { promise: Promise.resolve() } };
   },
 }));
 vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
+vi.mock('./attachmentFiles', () => ({ setSealedFiles: vi.fn(), closeSealedFiles: vi.fn() }));
+vi.stubGlobal('document', { addEventListener: () => {}, visibilityState: 'visible' });
+vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
 vi.mock('./vaultKeyStore', () => ({
+  vaultSeenKey: (id: string) => `catch-vault:${id}`,
   rememberVaultKey: vi.fn(async () => {}),
   loadVaultKey: vi.fn(async () => null),
   forgetVaultKey: vi.fn(async () => {}),
@@ -64,25 +69,57 @@ vi.mock('./api', () => ({
   },
 }));
 
+import { closeSealedFiles } from './attachmentFiles';
+import { publishVaultAssignments } from './collections';
 import {
+  changeVaultNote,
+  changeVaultNoteFiles,
+  changeVaultNoteTags,
   changeVaultPassword,
   createVault,
-  createVaultNote,
   deleteVault,
-  deleteVaultNote,
-  discardVaultNoteIfEmpty,
+  enterVault,
+  getSealedFiles,
+  getVaultFiles,
   getVaultNote,
+  getVaultNoteTags,
+  insertVaultNote,
   isVaultNote,
+  leaveVault,
   lockVault,
   recoverVault,
+  removeVaultNote,
   unlockVault,
-  updateVaultNote,
+  vaultFileNote,
+  vaultMode,
   vaultNotes,
+  vaultPrompt,
   vaultStatus,
 } from './vault';
 import { forgetVaultKey, rememberVaultKey } from './vaultKeyStore';
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
+const TAG = '0199a0a0-0000-7000-8000-00000000000a';
+let made = 0;
+const note = (content: Note['content']): Note => ({
+  id: `0199a0a0-0000-7000-8000-${String(++made).padStart(12, '0')}`,
+  userId: 'user-1',
+  content,
+  color: 'default',
+  status: 'todo',
+  isPinned: false,
+  isArchived: false,
+  position: 'a0',
+  hiddenLinks: [],
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  deletedAt: null,
+});
+const add = (text: string) => {
+  const added = note(paragraph(text));
+  insertVaultNote(added);
+  return added.id;
+};
 
 describe('the vault', () => {
   let recoveryCode = '';
@@ -91,6 +128,7 @@ describe('the vault', () => {
     if (vaultStatus.get() === 'unlocked') await lockVault();
     store.vault.rows.clear();
     store.notes.rows.clear();
+    vaultPrompt.set(false);
     vi.mocked(rememberVaultKey).mockClear();
     vi.mocked(forgetVaultKey).mockClear();
     recoveryCode = await createVault('correct horse', false);
@@ -102,8 +140,8 @@ describe('the vault', () => {
     expect(rememberVaultKey).not.toHaveBeenCalled();
   });
 
-  it('gives the collection only ciphertext', async () => {
-    const { id } = await createVaultNote({ content: paragraph('buried under the oak') });
+  it('gives the collection only ciphertext', () => {
+    const id = add('buried under the oak');
     expect(isVaultNote(id)).toBe(true);
     expect(getVaultNote(id)?.content).toEqual(paragraph('buried under the oak'));
     const stored = JSON.stringify([...store.notes.values()]);
@@ -111,44 +149,65 @@ describe('the vault', () => {
     expect(atob(store.notes.get(id)?.data ?? '')).not.toContain('oak');
   });
 
-  it('applies changes made in quick succession on top of each other', async () => {
-    const { id } = await createVaultNote({ content: [] });
-    await Promise.all([
-      updateVaultNote(id, { content: paragraph('first') }),
-      updateVaultNote(id, { isPinned: true }),
-      updateVaultNote(id, { color: 'red' }),
-    ]);
-    expect(getVaultNote(id)).toMatchObject({
-      content: paragraph('first'),
-      isPinned: true,
-      color: 'red',
+  it('seals where a note is kept, its tags and its files along with its words', async () => {
+    const id = add('secret');
+    const file: VaultFile = {
+      id: '0199a0a0-0000-7000-8000-0000000000f1',
+      name: 'passport.jpg',
+      mimeType: 'image/jpeg',
+      size: 10,
+      kind: 'image',
+      createdAt: new Date(),
+      thumbnailId: null,
+      sealId: '0199a0a0-0000-7000-8000-0000000000f1',
+    };
+    changeVaultNote(id, (draft) => {
+      draft.isArchived = true;
+      draft.deletedAt = new Date(0);
+      draft.status = 'done';
     });
+    changeVaultNoteTags(id, (draft) => {
+      draft.primaryTagId = TAG;
+    });
+    changeVaultNoteFiles(id, (files) => [...files, file]);
+    expect(getVaultNoteTags(id)).toMatchObject({ id, primaryTagId: TAG, secondaryTagIds: [] });
+    expect(vi.mocked(publishVaultAssignments).mock.lastCall?.[0].get(id)?.primaryTagId).toBe(TAG);
+    expect(getVaultFiles(id)).toMatchObject([{ id: file.id, noteId: id, name: 'passport.jpg' }]);
+    expect(vaultFileNote(file.id)).toBe(id);
+    const stored = JSON.stringify([...store.notes.values()]);
+    expect(stored).not.toContain('passport');
+    expect(stored).not.toContain(TAG);
+
+    // Another visit opens all of it again from the ciphertext alone.
+    await lockVault();
+    expect(vaultFileNote(file.id)).toBeUndefined();
+    expect(closeSealedFiles).toHaveBeenCalled();
+    await unlockVault('correct horse', false);
+    expect(getVaultNote(id)).toMatchObject({
+      isArchived: true,
+      status: 'done',
+      deletedAt: new Date(0),
+    });
+    expect(getVaultNoteTags(id)?.primaryTagId).toBe(TAG);
+    expect(getSealedFiles(id)).toEqual([file]);
   });
 
-  it('does not discard a note whose first save is still being sealed', async () => {
-    const { id } = await createVaultNote({ content: [] });
-    void updateVaultNote(id, { content: paragraph('typed just before closing') });
-    expect(await discardVaultNoteIfEmpty(id)).toBe(false);
-    expect(getVaultNote(id)?.content).toEqual(paragraph('typed just before closing'));
-  });
-
-  it('discards a note left empty, and deletes one for good', async () => {
-    const empty = await createVaultNote({ content: [] });
-    expect(await discardVaultNoteIfEmpty(empty.id)).toBe(true);
-    const { id } = await createVaultNote({ content: paragraph('gone') });
-    await deleteVaultNote(id);
+  it('deletes a note for good', () => {
+    const id = add('gone');
+    removeVaultNote(id);
     expect(store.notes.rows.size).toBe(0);
     expect(vaultNotes.get()).toEqual([]);
+    expect(isVaultNote(id)).toBe(false);
   });
 
   it('forgets everything when locked, and opens again only with the password', async () => {
-    const { id } = await createVaultNote({ content: paragraph('secret') });
+    const id = add('secret');
     await lockVault();
     expect(vaultStatus.get()).toBe('locked');
     expect(vaultNotes.get()).toEqual([]);
     expect(isVaultNote(id)).toBe(false);
     expect(forgetVaultKey).toHaveBeenCalledWith('user-1');
-    await expect(updateVaultNote(id, { isPinned: true })).rejects.toThrow('locked');
+    expect(() => insertVaultNote(note([]))).toThrow('locked');
     expect(await unlockVault('wrong horse', false)).toBe(false);
     expect(vaultStatus.get()).toBe('locked');
     expect(await unlockVault('correct horse', true)).toBe(true);
@@ -156,8 +215,27 @@ describe('the vault', () => {
     expect(rememberVaultKey).toHaveBeenCalledOnce();
   });
 
+  it('shows its notes when entered, and locks on leaving unless the device remembers it', async () => {
+    enterVault();
+    expect(vaultMode.get()).toBe(true);
+    leaveVault();
+    await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+    expect(vaultMode.get()).toBe(false);
+
+    // Locked: entering asks for the password instead.
+    enterVault();
+    expect(vaultMode.get()).toBe(false);
+    expect(vaultPrompt.get()).toBe(true);
+
+    await unlockVault('correct horse', true);
+    enterVault();
+    leaveVault();
+    expect(vaultMode.get()).toBe(false);
+    expect(vaultStatus.get()).toBe('unlocked');
+  });
+
   it('changes the password without losing the notes or the recovery code', async () => {
-    const { id } = await createVaultNote({ content: paragraph('kept') });
+    const id = add('kept');
     expect(await changeVaultPassword('wrong horse', 'new password')).toBe(false);
     expect(await changeVaultPassword('correct horse', 'new password')).toBe(true);
     await lockVault();
@@ -174,7 +252,7 @@ describe('the vault', () => {
   });
 
   it('is gone once deleted', async () => {
-    await createVaultNote({ content: paragraph('secret') });
+    add('secret');
     await deleteVault();
     expect(vaultStatus.get()).toBe('none');
     expect(vaultNotes.get()).toEqual([]);

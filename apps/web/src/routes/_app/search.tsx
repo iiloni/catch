@@ -16,6 +16,7 @@ import {
 } from '@/components/SearchFilters/SearchFilters';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import {
   boardColumnsCollection,
   notesCollection,
@@ -35,6 +36,7 @@ import { READING_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
+import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/search')({
   component: SearchPage,
@@ -52,9 +54,15 @@ function SearchPage() {
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
   const gutterShift = usePageGutterShift(READING_MAX);
-  const { data: notes = [] } = useLiveQuery({
+  const { data: plainNotes = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
+  // Search runs on the device, so inside the vault it reads the vault's opened notes.
+  const vault = useVaultView();
+  const notes = useMemo(
+    () => (vault ? vault.filter((note) => !note.deletedAt) : plainNotes),
+    [vault, plainNotes],
+  );
   const { data: columns = [] } = useLiveQuery({
     query: (q) => q.from({ column: boardColumnsCollection }),
   });
@@ -157,7 +165,11 @@ function SearchPage() {
           </SearchFilterPanel>
         )}
       </AnimatePresence>
-      <TabPageHeader title="Search" selection={selectionHeader(selection, place)} />
+      <TabPageHeader
+        title={vault ? 'Search the vault' : 'Search'}
+        selection={selectionHeader(selection, place)}
+        trailing={<VaultToggle />}
+      />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
         <ActiveSearchFilters
           tags={tags}

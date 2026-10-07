@@ -29,6 +29,7 @@ import { createNote, discardIfEmpty, getNote, setNoteColor, updateNote } from '@
 import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
+import { isVaultMode } from '@/lib/vault';
 import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 
 type Destination = 'gallery' | 'deck';
@@ -183,6 +184,8 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       content,
       color,
       status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+      // Written while the pages show the vault, a note belongs in it.
+      vault: isVaultMode(),
     }).id;
   }
 
@@ -447,7 +450,9 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
                 {tools === 'format' ? (
                   <FormattingBar
                     controls={controls}
-                    onLink={captureLink}
+                    // Capturing a link has the server read its page, which a vault note's
+                    // links are kept from (ADR 0020).
+                    onLink={isVaultMode() ? undefined : captureLink}
                     attachmentsOpen={attachmentPanel}
                     onAttachments={() => {
                       ensureNote();

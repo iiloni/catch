@@ -1,9 +1,9 @@
 /**
- * The vault key on a device asked to remember it (ADR 0020). The browser stores the key
- * object itself, which scripts can use but never read the bytes of, in a database named
- * after the user. Signing out deletes it.
+ * The vault key on a device asked to remember it (ADR 0020): sealed under a key of the
+ * device's own, which the browser stores as an object scripts can use but never read the
+ * bytes of. Both are kept in a database named after the user. Signing out deletes it.
  */
-export type KeptVaultKey = { key: CryptoKey; vault: string };
+export type KeptVaultKey = { deviceKey: CryptoKey; sealed: string; vault: string };
 
 const databaseName = (userId: string) => `catch-vault-${userId}`;
 const STORE = 'keys';
@@ -47,10 +47,23 @@ export async function loadVaultKey(userId: string): Promise<KeptVaultKey | null>
     const kept = await run<KeptVaultKey | undefined>(userId, 'readonly', (store) =>
       store.get(ENTRY),
     );
-    return kept?.key instanceof CryptoKey && typeof kept.vault === 'string' ? kept : null;
+    return kept?.deviceKey instanceof CryptoKey &&
+      typeof kept.sealed === 'string' &&
+      typeof kept.vault === 'string'
+      ? kept
+      : null;
   } catch {
     return null;
   }
+}
+
+/** Where a device notes that it has seen the user's vault (see `hasSeenVault`). */
+export const vaultSeenKey = (userId: string) => `catch-vault:${userId}`;
+
+/** Everything a device keeps about a user's vault besides its synced rows, for signing out. */
+export function forgetVault(userId: string) {
+  localStorage.removeItem(vaultSeenKey(userId));
+  return forgetVaultKey(userId);
 }
 
 export function forgetVaultKey(userId: string): Promise<void> {

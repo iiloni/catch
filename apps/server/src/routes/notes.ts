@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes, noteTags } from '../db/schema';
+import { attachments, notes, noteTags, reminders } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
 import { lockTagTree } from '../lib/tagTreeLock';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
@@ -159,7 +159,15 @@ export const notesRoutes = new Hono<AppEnv>()
         .delete(notes)
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
-      return deleted.length > 0 ? currentTxid(tx) : null;
+      if (deleted.length === 0) return null;
+      // Reminders and attachments have no foreign key to follow the note out (see the schema).
+      await tx
+        .delete(reminders)
+        .where(and(eq(reminders.noteId, id), eq(reminders.userId, user.id)));
+      await tx
+        .delete(attachments)
+        .where(and(eq(attachments.noteId, id), eq(attachments.userId, user.id)));
+      return currentTxid(tx);
     });
     await deleteFiles(files.map((file) => file.id));
     // Already gone, perhaps deleted by an earlier try of this same queued write.

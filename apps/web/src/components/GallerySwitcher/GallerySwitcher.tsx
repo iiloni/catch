@@ -1,4 +1,4 @@
-import { Archive, Bell, LayoutGrid, LockKeyhole, Trash2 } from 'lucide-react';
+import { Archive, Bell, LayoutGrid, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { GalleryPage } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
@@ -9,7 +9,6 @@ const PAGES = [
   { path: '/reminders', label: 'Reminders', icon: Bell },
   { path: '/archive', label: 'Archive', icon: Archive },
   { path: '/trash', label: 'Trash', icon: Trash2 },
-  { path: '/vault', label: 'Vault', icon: LockKeyhole },
 ] as const satisfies ReadonlyArray<{ path: GalleryPage; label: string; icon: unknown }>;
 
 /** The Gallery page under a point on screen, for a finger sliding up from the dock. */
@@ -61,7 +60,7 @@ type Props = {
 };
 
 /**
- * A segmented control for the Gallery, Reminders, Archive, Trash and the Vault. It floats as its own glass
+ * A segmented control for the Gallery, Reminders, Archive and Trash. It floats as its own glass
  * bar above the dock with a gap, rather than growing the dock itself.
  */
 export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
@@ -77,7 +76,7 @@ export function GallerySwitcher({ open, current, hovered, onSelect }: Props) {
           key="switcher"
           aria-label="Gallery pages"
           data-gallery-switcher
-          className="glass absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10 grid touch-none select-none grid-cols-5 rounded-[var(--dock-radius)] p-1 [-webkit-touch-callout:none]"
+          className="glass absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10 grid touch-none select-none grid-cols-4 rounded-[var(--dock-radius)] p-1 [-webkit-touch-callout:none]"
           initial={{ opacity: 0, y: 16, scale: 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.16 } }}
