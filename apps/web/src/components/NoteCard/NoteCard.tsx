@@ -7,6 +7,7 @@ import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
+import { NoteShareBadge } from '@/components/NoteShareBadge/NoteShareBadge';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
@@ -49,6 +50,7 @@ export function NoteCardFace({ note }: { note: Note }) {
     <>
       <NoteCardContent note={note} />
       <NoteReminder note={note} />
+      <NoteShareBadge note={note} className="px-3.5 pb-3" />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" interactive={false} />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
     </>
@@ -199,6 +201,7 @@ export function NoteCard({
         <NoteCardContent note={note} />
       </button>
       <NoteReminder note={note} />
+      <NoteShareBadge note={note} className="px-3.5 pb-3" />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
       <motion.span

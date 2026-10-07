@@ -18,12 +18,13 @@ import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { Button } from '@/components/ui/button';
 import { useNoteAttachments } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
-import { notesCollection } from '@/lib/collections';
+import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { linkOverlay, showLinkInNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { findCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
+import { isSharedNote } from '@/lib/sharing';
 import { GUTTER, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
@@ -41,7 +42,8 @@ export function LinkPreviewOverlay() {
     (q) => q.from({ note: notesCollection }).where(({ note }) => eq(note.id, state?.noteId ?? '')),
     [state?.noteId],
   );
-  const note = matches[0];
+  const shared = useSharedNotes().notes;
+  const note = matches[0] ?? shared.find((candidate) => candidate.id === state?.noteId);
 
   // The list belongs to the page it was opened on, so any navigation closes it.
   const href = useRouterState({ select: (router) => router.location.href });
@@ -291,7 +293,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                   <section className="glass-thick shrink-0 rounded-b-3xl border-t-0! shadow-none">
                     <NoteMedia
                       noteId={note.id}
-                      readOnly={Boolean(note.deletedAt)}
+                      readOnly={Boolean(note.deletedAt) || isSharedNote(note)}
                       withHeading={false}
                       onShowInNote={close}
                       className="px-3 pb-3"
@@ -317,7 +319,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
                           <LinkPreviewCard
                             link={link}
                             noteId={note.id}
-                            readOnly={Boolean(note.deletedAt)}
+                            readOnly={Boolean(note.deletedAt) || isSharedNote(note)}
                             onShowInNote={
                               fromEditor
                                 ? () => {

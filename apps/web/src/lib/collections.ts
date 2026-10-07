@@ -6,18 +6,26 @@ import {
   createAttachmentSchema,
   createBoardColumnSchema,
   createNoteSchema,
+  createNoteShareSchema,
   createTagSchema,
   type LinkPreview,
   linkPreviewSchema,
   MAX_NOTES_PER_REQUEST,
+  type Note,
+  type NoteShare,
   type NoteTags,
   noteSchema,
+  noteShareSchema,
   noteTagsSchema,
   type Reminder,
   type ReminderAlarm,
   reminderAlarm,
   reminderSchema,
+  type SharedNote,
   saveReminderSchema,
+  sharedAttachments,
+  sharedNoteAsNote,
+  sharedNoteSchema,
   type Tag,
   type TxidResponse,
   tagSchema,
@@ -25,6 +33,7 @@ import {
   updateBoardColumnSchema,
   updateNoteSchema,
   updateNoteTagsSchema,
+  updateSharedNoteSchema,
   updateTagSchema,
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
@@ -244,7 +253,50 @@ export const remindersCollection = createCollection(
   ),
 );
 
+/** The links to the user's notes that they have shared, keyed by the note's id (ADR 0020). */
+export const noteSharesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'note-shares',
+      schema: noteShareSchema,
+      getKey: (share) => share.noteId,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/note-shares`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
+/**
+ * Other people's notes the user added to their gallery, keyed by the note's id. The server
+ * rewrites a row when its owner changes the note; the user changes only where it sits.
+ */
+export const sharedNotesCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'shared-notes',
+      schema: sharedNoteSchema,
+      getKey: (shared) => shared.noteId,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/shared-notes`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
 const writableCollections = {
+  noteShares: noteSharesCollection,
+  sharedNotes: sharedNotesCollection,
   notes: notesCollection,
   tags: tagsCollection,
   noteTags: noteTagsCollection,
@@ -409,6 +461,18 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
     return mutation.type === 'delete'
       ? api.deleteReminder(key)
       : api.saveReminder(key, saveReminderSchema.parse(mutation.modified));
+  }
+  if (mutation.collection.id === noteSharesCollection.id) {
+    // A link is made once and never changed, so replaying either request is safe.
+    if (mutation.type === 'insert')
+      return api.createNoteShare(key, createNoteShareSchema.parse(mutation.modified));
+    if (mutation.type === 'delete') return api.deleteNoteShare(key);
+  }
+  if (mutation.collection.id === sharedNotesCollection.id) {
+    // Adding one takes its link, which is a request of its own (`api.acceptShare`).
+    if (mutation.type === 'update')
+      return api.updateSharedNote(key, updateSharedNoteSchema.parse(mutation.changes));
+    if (mutation.type === 'delete') return api.deleteSharedNote(key);
   }
   throw new NonRetriableError(`Writes to ${mutation.collection.id} are not supported`);
 }
@@ -742,14 +806,18 @@ function subscribeAttachments(listener: () => void) {
   attachmentListeners.add(listener);
   if (!attachmentsSubscribed) {
     attachmentsSubscribed = true;
-    attachmentsCollection.subscribeChanges(
-      () => {
-        attachmentRows = [...attachmentsCollection.values()];
-        for (const notify of attachmentListeners) notify();
-        refreshAttachmentUrls();
-      },
-      { includeInitialState: true },
-    );
+    // A shared note's files come with the note, and are shown by the views that show the
+    // user's own.
+    const update = () => {
+      attachmentRows = [
+        ...attachmentsCollection.values(),
+        ...[...sharedNotesCollection.values()].flatMap(sharedAttachments),
+      ];
+      for (const notify of attachmentListeners) notify();
+      refreshAttachmentUrls();
+    };
+    attachmentsCollection.subscribeChanges(update, { includeInitialState: true });
+    sharedNotesCollection.subscribeChanges(update, { includeInitialState: true });
   }
   return () => {
     attachmentListeners.delete(listener);
@@ -825,4 +893,76 @@ export function useTagReadiness() {
     awaitingTags: useAwaitingSync(!tagsReady, 0),
     awaitingAssignments: useAwaitingSync(!assignmentsReady, 0),
   };
+}
+
+// As with previews: every card asks whether its note is shared.
+let sharesByNote: ReadonlyMap<string, NoteShare> = new Map();
+const shareListeners = new Set<() => void>();
+let sharesSubscribed = false;
+function subscribeToShares(listener: () => void) {
+  shareListeners.add(listener);
+  if (!sharesSubscribed) {
+    sharesSubscribed = true;
+    noteSharesCollection.subscribeChanges(
+      () => {
+        sharesByNote = new Map(
+          [...noteSharesCollection.values()].map((share) => [share.noteId, share]),
+        );
+        for (const notify of shareListeners) notify();
+      },
+      { includeInitialState: true },
+    );
+  }
+  return () => {
+    shareListeners.delete(listener);
+  };
+}
+
+/** The links to the user's own shared notes, by note id. */
+export function useNoteShares(): ReadonlyMap<string, NoteShare> {
+  return useSyncExternalStore(subscribeToShares, () => sharesByNote);
+}
+
+type SharedNotes = {
+  /** The notes as the gallery shows them, leaving out any in their owner's trash. */
+  notes: readonly Note[];
+  byId: ReadonlyMap<string, SharedNote>;
+};
+let sharedNotes: SharedNotes = { notes: [], byId: new Map() };
+const sharedNoteListeners = new Set<() => void>();
+let sharedNotesSubscribed = false;
+function subscribeToSharedNotes(listener: () => void) {
+  sharedNoteListeners.add(listener);
+  if (!sharedNotesSubscribed) {
+    sharedNotesSubscribed = true;
+    sharedNotesCollection.subscribeChanges(
+      () => {
+        const rows = [...sharedNotesCollection.values()];
+        sharedNotes = {
+          notes: rows.filter((row) => row.isAvailable).map(sharedNoteAsNote),
+          byId: new Map(rows.map((row) => [row.noteId, row])),
+        };
+        for (const notify of sharedNoteListeners) notify();
+      },
+      { includeInitialState: true },
+    );
+  }
+  return () => {
+    sharedNoteListeners.delete(listener);
+  };
+}
+
+/**
+ * Other people's notes in the user's gallery (ADR 0020), shaped like the user's own so the
+ * same pages and cards show them. `isSharedNote` tells them apart.
+ */
+export function useSharedNotes(): SharedNotes {
+  return useSyncExternalStore(subscribeToSharedNotes, () => sharedNotes);
+}
+
+/** Whether the shared notes have synced: until then, one that is not here may yet arrive. */
+export function useSharedNotesReady() {
+  const [ready, setReady] = useState(() => sharedNotesCollection.isReady());
+  useEffect(() => sharedNotesCollection.onFirstReady(() => setReady(true)), []);
+  return ready;
 }

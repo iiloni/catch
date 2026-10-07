@@ -2,7 +2,7 @@ import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { ArrowDownUp, LayoutGrid, Lightbulb, Rows3 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { notesCollection } from '@/lib/collections';
+import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -68,7 +68,7 @@ function GalleryPage() {
     field: 'position',
     direction: 'desc',
   });
-  const { data: notes = [], isLoading } = useLiveQuery({
+  const { data: own = [], isLoading } = useLiveQuery({
     query: (q) =>
       q
         .from({ note: notesCollection })
@@ -76,6 +76,12 @@ function GalleryPage() {
           and(isNull(note.deletedAt), eq(note.isArchived, false), isNull(note.status)),
         ),
   });
+  // Notes other people shared sit among the user's own (ADR 0020).
+  const shared = useSharedNotes().notes;
+  const notes = useMemo(
+    () => [...own, ...shared.filter((note) => !note.isArchived)],
+    [own, shared],
+  );
 
   const awaitingSync = useAwaitingSync(isLoading, notes.length);
   const sorted = sortNotes(notes, sort.field, sort.direction);

@@ -7,6 +7,7 @@ import {
   type NoteColor,
   positionBetween,
   positionsBetween,
+  sharedNoteAsNote,
 } from '@catch/shared';
 import { toast } from 'sonner';
 import { uuidv7 } from 'uuidv7';
@@ -15,6 +16,7 @@ import {
   attachmentsCollection,
   notesCollection,
   noteTagsCollection,
+  sharedNotesCollection,
   tagsCollection,
   write,
 } from './collections';
@@ -25,18 +27,24 @@ type NoteChanges = Partial<
   Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
 >;
 
+/** Every place taken in the user's arrangement: their notes', and shared notes' among them. */
+function* existingPositions() {
+  for (const note of notesCollection.values()) yield note.position;
+  for (const shared of sharedNotesCollection.values()) yield shared.position;
+}
+
 function firstExistingPosition() {
   let first: string | null = null;
-  for (const note of notesCollection.values()) {
-    if (first === null || note.position < first) first = note.position;
+  for (const position of existingPositions()) {
+    if (first === null || position < first) first = position;
   }
   return first;
 }
 
 function lastExistingPosition() {
   let last: string | null = null;
-  for (const note of notesCollection.values()) {
-    if (last === null || note.position > last) last = note.position;
+  for (const position of existingPositions()) {
+    if (last === null || position > last) last = position;
   }
   return last;
 }
@@ -84,9 +92,26 @@ export function createNote(input: {
 }
 
 /** The note as this device has it now, local writes included. Not a subscription. */
-export const getNote = (id: string): Note | undefined => notesCollection.get(id);
+export function getNote(id: string): Note | undefined {
+  const shared = sharedNotesCollection.get(id);
+  return notesCollection.get(id) ?? (shared && sharedNoteAsNote(shared));
+}
+
+/**
+ * Someone else's note in the user's gallery (ADR 0020) takes only the changes that are the
+ * user's to make: its pin and archive. Nothing here edits it, so its dates stay its owner's.
+ */
+function updateSharedNote(id: string, changes: NoteChanges) {
+  return write(() =>
+    sharedNotesCollection.update(id, (draft) => {
+      if (changes.isPinned !== undefined) draft.isPinned = changes.isPinned;
+      if (changes.isArchived !== undefined) draft.isArchived = changes.isArchived;
+    }),
+  );
+}
 
 export function updateNote(id: string, changes: NoteChanges) {
+  if (sharedNotesCollection.has(id)) return updateSharedNote(id, changes);
   return write(() =>
     notesCollection.update(id, (draft) => {
       Object.assign(draft, changes);
@@ -101,11 +126,17 @@ export function updateNote(id: string, changes: NoteChanges) {
  */
 export function moveNote(id: string, others: readonly Note[], index: number) {
   const position = positionForMove(others, index);
-  return write(() =>
-    notesCollection.update(id, (draft) => {
-      draft.position = position;
-    }),
-  );
+  return write(() => {
+    if (sharedNotesCollection.has(id)) {
+      sharedNotesCollection.update(id, (draft) => {
+        draft.position = position;
+      });
+    } else {
+      notesCollection.update(id, (draft) => {
+        draft.position = position;
+      });
+    }
+  });
 }
 
 /** The positions a note moved to `index` among `others` must fall between. */
@@ -172,7 +203,7 @@ export function setNoteColor(id: string, color: NoteColor) {
 export const setNotePinned = (id: string, isPinned: boolean) => updateNote(id, { isPinned });
 
 export function setNoteArchived(id: string, isArchived: boolean) {
-  const isPinned = notesCollection.get(id)?.isPinned ?? false;
+  const isPinned = getNote(id)?.isPinned ?? false;
   // Archiving unpins, as in Keep.
   const transaction = updateNote(id, isArchived ? { isArchived, isPinned: false } : { isArchived });
   if (isArchived) {

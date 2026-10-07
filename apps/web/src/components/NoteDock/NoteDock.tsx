@@ -1,6 +1,7 @@
 import { type ColumnColor, DEFAULT_BOARD_STATUS, tagColor } from '@catch/shared';
 import {
   Bell,
+  CircleMinus,
   Columns3,
   LayoutDashboard,
   type LucideIcon,
@@ -33,6 +34,7 @@ import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress
 import { springs } from '@/lib/motion';
 import { moveNoteToDeck, restoreNote, sendNoteToGallery, setNoteColor } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
+import { isSharedNote, removeSharedNote } from '@/lib/sharing';
 import { setPrimaryTag } from '@/lib/tags';
 import { cn } from '@/lib/utils';
 
@@ -86,7 +88,8 @@ export function NoteDock() {
   const hold = useRef<Hold | null>(null);
   useBackHandler(panel !== null, () => setPanel(null));
 
-  const editable = note !== null && !note.deletedAt;
+  const shared = note !== null && isSharedNote(note);
+  const editable = note !== null && !note.deletedAt && !shared;
   // The tag search and a reminder's fields also raise the keyboard; keep their panels mounted
   // while typing.
   const formOpen = tagFormOpen.use();
@@ -235,6 +238,16 @@ export function NoteDock() {
         label: 'Restore',
         icon: RotateCcw,
         onPress: then(() => restoreNote(note.id)),
+      },
+    ];
+  } else if (note && shared) {
+    // Someone else's note is read here (ADR 0020): all there is to do is put it away.
+    actions = [
+      {
+        id: 'remove',
+        label: 'Remove from my notes',
+        icon: CircleMinus,
+        onPress: then(() => removeSharedNote(note.id)),
       },
     ];
   } else if (note) {

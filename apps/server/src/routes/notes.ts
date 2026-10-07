@@ -15,6 +15,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { attachments, notes, noteTags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { refreshSharedNote } from '../lib/sharing';
 import { lockTagTree } from '../lib/tagTreeLock';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
 
@@ -141,10 +142,16 @@ export const notesRoutes = new Hono<AppEnv>()
           .where(and(eq(noteTags.id, id), eq(noteTags.userId, user.id)));
       }
       const links = body.content ? await trackNoteLinks(tx, user.id, [body.content]) : [];
-      return { txid: await currentTxid(tx), links };
+      // Rearranging, pinning and the like change nothing a reader of the note sees.
+      const readers =
+        body.content || body.color !== undefined || body.deletedAt !== undefined
+          ? await refreshSharedNote(tx, id)
+          : [];
+      return { txid: await currentTxid(tx), links, readers };
     });
     if (result === null) return c.json({ error: 'Note not found' }, 404);
     queuePreviews(user.id, result.links);
+    for (const reader of result.readers) queuePreviews(reader.userId, reader.links);
     return c.json({ txid: result.txid });
   })
   .delete('/:id', idParam, async (c) => {

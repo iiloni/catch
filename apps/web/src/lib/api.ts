@@ -1,4 +1,5 @@
 import type {
+  AcceptShareResponse,
   AdminUser,
   AttachmentAccess,
   CreateAttachment,
@@ -6,6 +7,7 @@ import type {
   CreateInvite,
   CreateInviteResponse,
   CreateNote,
+  CreateNoteShare,
   CreateNotes,
   CreateTag,
   InvitesResponse,
@@ -20,12 +22,14 @@ import type {
   ResetUserPasswordResponse,
   SaveReminder,
   SaveReminderSettings,
+  SharedNoteView,
   TestPushResponse,
   TxidResponse,
   UpdateAttachment,
   UpdateBoardColumn,
   UpdateNote,
   UpdateNoteTags,
+  UpdateSharedNote,
   UpdateTag,
   UpdateUserRole,
   UserActionResponse,
@@ -141,6 +145,22 @@ export const api = {
     request<TxidResponse>(`/reminders/${noteId}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteReminder: (noteId: string) =>
     request<TxidResponse>(`/reminders/${noteId}`, { method: 'DELETE' }),
+  createNoteShare: (noteId: string, body: CreateNoteShare) =>
+    request<TxidResponse>(`/note-shares/${noteId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteNoteShare: (noteId: string) =>
+    request<TxidResponse>(`/note-shares/${noteId}`, { method: 'DELETE' }),
+  updateSharedNote: (noteId: string, body: UpdateSharedNote) =>
+    request<TxidResponse>(`/shared-notes/${noteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteSharedNote: (noteId: string) =>
+    request<TxidResponse>(`/shared-notes/${noteId}`, { method: 'DELETE' }),
+  // What a share link shows. It needs no account, and says what the reader may do if they have one.
+  sharedNote: (token: string, signal?: AbortSignal) =>
+    request<SharedNoteView>(`/shares/${token}`, { method: 'GET', cache: 'no-store', signal }),
+  acceptShare: (token: string) =>
+    request<AcceptShareResponse>(`/shares/${token}/accept`, { method: 'POST' }),
   reportTimeZone: (body: ReportTimeZone) =>
     request<{ timeZone: string }>('/reminders/time-zone', {
       method: 'PUT',

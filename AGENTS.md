@@ -342,6 +342,14 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   them, so `lib/push.ts` answers for both and callers need not know which they are on.
   `ReminderTimes.java` must read a wall clock time as the shared helpers do. Push needs a service worker, which the dev server lacks, and a subscription's
   endpoint must pass `isPushEndpoint` before the server posts to it.
+- A note is shared by a link (ADR 0020, `lib/sharing.ts`). The owner's link is a row in the
+  `note-shares` collection; a note someone else shared is a row in `shared-notes`, a copy the
+  server rewrites with `refreshSharedNote` in the transaction of every change a reader would
+  see, so a new write that changes what a note shows must call it. Pages show those copies as
+  `Note`s whose `userId` is their owner's: `isSharedNote` tells them apart, and anything that
+  edits a note must leave them alone (the note actions in `lib/notes.ts` already route a pin,
+  archive or move to the copy). `/s/<token>` and `GET /api/shares/:token` are read with no
+  account, so that page must not start a sync or assume a signed-in user.
 - Importers (Settings > Data Management) read exports on the device and add notes with
   `importNotes`, giving each a UUIDv7 derived from its source so importing again skips it
   (`importedNoteId`, ADR 0008). Read archives with `lib/zip.ts`, which never loads a whole file.

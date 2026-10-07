@@ -1,4 +1,4 @@
-import type { Recurrence, ReminderTimes } from '@catch/shared';
+import type { Recurrence, ReminderTimes, SharedAttachment } from '@catch/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -307,6 +307,64 @@ export const reminderSettings = pgTable('reminder_settings', {
   snoozeMinutes: integer(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * A note's share link (ADR 0020), at most one, so the note's id is its key. Anyone holding
+ * the token reads the note. Removing the row ends the sharing: the link stops working and
+ * the note leaves the galleries it was added to.
+ */
+export const noteShares = pgTable(
+  'note_shares',
+  {
+    noteId: uuid()
+      .primaryKey()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    token: text().notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (table) => [index().on(table.userId)],
+);
+
+/**
+ * A shared note in the gallery of someone who added it: a copy of what they may read, which
+ * `refreshSharedNote` rewrites in the transaction of every change to the note. A copy, so
+ * that this syncs like every other shape, by `user_id` alone. The pin, archive and position
+ * are the reader's own.
+ */
+export const sharedNotes = pgTable(
+  'shared_notes',
+  {
+    /** Whose gallery the note is in. */
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid()
+      .notNull()
+      .references(() => noteShares.noteId, { onDelete: 'cascade' }),
+    ownerId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    ownerName: text().notNull(),
+    content: jsonb().$type<Record<string, unknown>[]>().notNull().default([]),
+    color: text().notNull().default('default'),
+    attachments: jsonb()
+      .$type<(Omit<SharedAttachment, 'createdAt'> & { createdAt: string })[]>()
+      .notNull()
+      .default([]),
+    /** False while the note is in its owner's trash, when the copy is emptied too. */
+    isAvailable: boolean().notNull().default(true),
+    isPinned: boolean().notNull().default(false),
+    isArchived: boolean().notNull().default(false),
+    position: text().notNull(),
+    /** The note's own dates, not this row's. */
+    createdAt: timestamp({ withTimezone: true }).notNull(),
+    updatedAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.noteId] }), index().on(table.noteId)],
+);
 
 /** A browser that asked for notifications. Server state, not synced to devices. */
 export const pushSubscriptions = pgTable(

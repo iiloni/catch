@@ -21,6 +21,7 @@ import {
   notesCollection,
   tagsCollection,
   useNoteTagAssignments,
+  useSharedNotes,
   useTagReadiness,
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
@@ -52,9 +53,12 @@ function SearchPage() {
   const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
   const { open } = useOpenNote();
   const gutterShift = usePageGutterShift(READING_MAX);
-  const { data: notes = [] } = useLiveQuery({
+  const { data: own = [] } = useLiveQuery({
     query: (q) => q.from({ note: notesCollection }).where(({ note }) => isNull(note.deletedAt)),
   });
+  // Notes other people shared are found with the user's own (ADR 0020).
+  const shared = useSharedNotes().notes;
+  const notes = useMemo(() => [...own, ...shared], [own, shared]);
   const { data: columns = [] } = useLiveQuery({
     query: (q) => q.from({ column: boardColumnsCollection }),
   });

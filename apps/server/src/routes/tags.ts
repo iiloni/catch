@@ -14,6 +14,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { notes, noteTags, tags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { refreshSharedNote } from '../lib/sharing';
 import { lockTagTree } from '../lib/tagTreeLock';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -260,6 +261,8 @@ export const noteTagRoutes = new Hono<AppEnv>()
           set: { primaryTagId, secondaryTagIds },
           setWhere: eq(noteTags.userId, userId),
         });
+      // The primary tag gives the note its color, which its readers see too.
+      await refreshSharedNote(tx, id);
       return txid(tx);
     });
     return c.json({ txid: result });

@@ -22,7 +22,11 @@ vi.mock('@/lib/attachmentFiles', () => ({
   useAttachmentUrl: () => ({ source: 'blob:preview', error: false }),
   keepAttachmentOffline: vi.fn(),
 }));
-vi.mock('@/lib/collections', () => ({ useLinkPreviews: () => previews, notesCollection: {} }));
+vi.mock('@/lib/collections', () => ({
+  useLinkPreviews: () => previews,
+  useSharedNotes: () => ({ notes: [], byId: new Map() }),
+  notesCollection: {},
+}));
 vi.mock('@tanstack/react-db', () => ({ eq: vi.fn(), useLiveQuery: () => ({ data: notes }) }));
 let href = '/';
 vi.mock('@tanstack/react-router', () => ({

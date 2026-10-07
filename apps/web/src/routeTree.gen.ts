@@ -14,6 +14,7 @@ import { Route as CaptureRouteImport } from './routes/capture'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as ShareRouteImport } from './routes/share'
+import { Route as STokenRouteImport } from './routes/s.$token'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppDeckRouteImport } from './routes/_app/deck'
@@ -54,6 +55,11 @@ const SetupRoute = SetupRouteImport.update({
 const ShareRoute = ShareRouteImport.update({
   id: '/share',
   path: '/share',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const STokenRoute = STokenRouteImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -149,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
+  '/s/$token': typeof STokenRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/reminders': typeof AppRemindersRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
+  '/s/$token': typeof STokenRoute
   '/archive': typeof AppArchiveRoute
   '/deck': typeof AppDeckRoute
   '/reminders': typeof AppRemindersRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/share': typeof ShareRoute
+  '/s/$token': typeof STokenRoute
   '/_app/archive': typeof AppArchiveRoute
   '/_app/deck': typeof AppDeckRoute
   '/_app/reminders': typeof AppRemindersRoute
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
+    | '/s/$token'
     | '/archive'
     | '/deck'
     | '/reminders'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
+    | '/s/$token'
     | '/archive'
     | '/deck'
     | '/reminders'
@@ -266,6 +277,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/share'
+    | '/s/$token'
     | '/_app/archive'
     | '/_app/deck'
     | '/_app/reminders'
@@ -291,6 +303,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   ShareRoute: typeof ShareRoute
+  STokenRoute: typeof STokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -328,6 +341,13 @@ declare module '@tanstack/react-router' {
       path: '/share'
       fullPath: '/share'
       preLoaderRoute: typeof ShareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s/$token': {
+      id: '/s/$token'
+      path: '/s/$token'
+      fullPath: '/s/$token'
+      preLoaderRoute: typeof STokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -519,6 +539,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   ShareRoute: ShareRoute,
+  STokenRoute: STokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

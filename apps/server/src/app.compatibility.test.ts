@@ -78,6 +78,7 @@ describe('API compatibility gate', () => {
       '/api/updates',
       '/api/updates/releases',
       '/api/attachments/invalid/content',
+      '/api/shares/invalid/attachments/invalid/content',
       '/api/admin/backups/example.zip/download',
       '/api/link-previews/assets/invalid',
     ]) {
@@ -86,8 +87,8 @@ describe('API compatibility gate', () => {
     expect((await app.request('/api/updates', { method: 'POST' })).status).toBe(426);
   });
 
-  it('still serves protocol 2 clients, which have no reminders (ADR 0018)', async () => {
-    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 3 });
+  it('still serves protocol 2 clients, which have no reminders or shared notes (ADRs 0018, 0020)', async () => {
+    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 4 });
     const older = { [API_PROTOCOL_HEADER]: '2' };
     expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(401);
     expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);
@@ -111,6 +112,28 @@ describe('API compatibility gate', () => {
       expect((await app.request(path, { method })).status).toBe(426);
       expect((await app.request(path, { method, headers: supportedHeaders })).status).toBe(401);
     }
+  });
+
+  it('gates the sharing routes, and lets a share link be read without an account', async () => {
+    const id = '0199a0a0-0000-7000-8000-000000000000';
+    const token = 'a'.repeat(43);
+    for (const [path, method] of [
+      [`/api/note-shares/${id}`, 'PUT'],
+      [`/api/note-shares/${id}`, 'DELETE'],
+      [`/api/shared-notes/${id}`, 'PATCH'],
+      [`/api/shared-notes/${id}`, 'DELETE'],
+      [`/api/shares/${token}/accept`, 'POST'],
+      ['/api/shapes/note-shares', 'GET'],
+      ['/api/shapes/shared-notes', 'GET'],
+    ] as const) {
+      expect((await app.request(path, { method })).status).toBe(426);
+      expect((await app.request(path, { method, headers: supportedHeaders })).status).toBe(401);
+    }
+    expect((await app.request(`/api/shares/${token}`)).status).toBe(426);
+    // A token of the wrong shape never reaches the database.
+    expect((await app.request('/api/shares/short', { headers: supportedHeaders })).status).toBe(
+      400,
+    );
   });
 
   it('allows Android CORS preflights to declare the protocol', async () => {
