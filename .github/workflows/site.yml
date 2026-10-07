@@ -1,6 +1,6 @@
 name: Site
 
-# Builds the public site (apps/site, ADR 0020) and uploads it to Cloudflare Pages. Pull
+# Builds the public site (apps/site, ADR 0020) and uploads it to Cloudflare Workers. Pull
 # requests only build it, in CI's check job.
 on:
   push:
@@ -27,8 +27,8 @@ concurrency:
 
 jobs:
   deploy:
-    # Skipped until the repository names its Cloudflare Pages project (docs/ci.md).
-    if: vars.CLOUDFLARE_PAGES_PROJECT != ''
+    # Enabled after the repository has its Cloudflare credentials (docs/ci.md).
+    if: vars.CLOUDFLARE_SITE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -55,4 +55,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/site/out --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }} --branch=main
+          wranglerVersion: '4.148.0'
+          packageManager: pnpm
+          workingDirectory: apps/site
+          command: deploy

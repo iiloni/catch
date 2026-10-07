@@ -12,6 +12,7 @@ coverage/
 test-results/
 playwright-report/
 .next/
+.wrangler/
 apps/site/out/
 .source/
 next-env.d.ts
