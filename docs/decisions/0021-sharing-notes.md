@@ -52,6 +52,13 @@ subqueries, which are experimental, or a second kind of filter to get wrong. The
 content stored once per reader, which a household's sharing keeps small, and one indexed
 lookup on each note save.
 
+Acceptance and snapshot publication take the owner's note row lock through their
+transaction, before any attachment or assignment row locks. Acceptance then revalidates
+and holds the exact token's share row until insertion finishes, so a revoked link cannot
+join its replacement. Snapshot reads and publication are serialized with owner writes,
+including the first reader joining and tag tree color changes. The client waits for the
+accepted copy to sync before navigating to its editor.
+
 **Shared notes are shown as notes.** The client turns a copy into a `Note` whose `userId` is
 its owner's (`sharedNoteAsNote`), so the gallery, archive and search show it with the same
 cards, and `isSharedNote` is how anything tells it apart. Its card says whose it is. Opened,

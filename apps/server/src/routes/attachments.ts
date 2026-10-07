@@ -25,7 +25,7 @@ import { db } from '../db/client';
 import { attachments, notes, sharedNotes, vaultNotes } from '../db/schema';
 import { env } from '../env';
 import { requireUser } from '../lib/requireUser';
-import { refreshSharedNote } from '../lib/sharing';
+import { lockSharedNote, refreshSharedNote } from '../lib/sharing';
 
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 const owned = (id: string, userId: string) =>
@@ -198,12 +198,13 @@ export const attachmentRoutes = new Hono<AppEnv>()
       await copyFile(filePath(body.sourceId), filePath(body.id));
       await createThumbnail(body.id, attachmentKind(body.mimeType));
       txid = await db.transaction(async (tx) => {
+        await lockSharedNote(tx, body.noteId, userId);
         const updated = await tx
           .update(attachments)
           .set({ status: 'ready' })
           .where(and(owned(body.id, userId), isNull(attachments.deletedAt)))
           .returning({ id: attachments.id });
-        if (updated.length) await refreshSharedNote(tx, body.noteId);
+        if (updated.length) await refreshSharedNote(tx, body.noteId, userId);
         return updated.length ? currentTxid(tx) : null;
       });
       if (txid === null) await deleteFiles([body.id]);
@@ -229,12 +230,13 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }
     await createThumbnail(id, row.kind);
     const txid = await db.transaction(async (tx) => {
+      await lockSharedNote(tx, row.noteId, userId);
       const updated = await tx
         .update(attachments)
         .set({ status: 'ready' })
         .where(and(owned(id, userId), isNull(attachments.deletedAt)))
         .returning({ id: attachments.id });
-      if (updated.length) await refreshSharedNote(tx, row.noteId);
+      if (updated.length) await refreshSharedNote(tx, row.noteId, userId);
       return updated.length ? currentTxid(tx) : null;
     });
     if (txid === null) await deleteFiles([id]);
@@ -248,6 +250,12 @@ export const attachmentRoutes = new Hono<AppEnv>()
     if (body.deletedAt === null)
       return c.json({ error: 'Cannot restore a removed attachment' }, 400);
     const result = await db.transaction(async (tx) => {
+      const [file] = await tx
+        .select({ noteId: attachments.noteId })
+        .from(attachments)
+        .where(owned(id, userId));
+      if (!file) return null;
+      await lockSharedNote(tx, file.noteId, userId);
       const [row] = await tx.select().from(attachments).where(owned(id, userId)).for('update');
       if (!row) return null;
       if (row.deletedAt) return { txid: null, removed: true };
@@ -267,7 +275,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
             .where(and(eq(notes.id, row.noteId), eq(notes.userId, userId)));
       }
       await tx.update(attachments).set(body).where(owned(id, userId));
-      await refreshSharedNote(tx, row.noteId);
+      await refreshSharedNote(tx, row.noteId, userId);
       return { txid: await currentTxid(tx), removed: Boolean(body.deletedAt) };
     });
     if (result?.removed) await deleteFiles([id]);

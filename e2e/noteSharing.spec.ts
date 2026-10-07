@@ -193,6 +193,25 @@ test('a share link is read without an account and added by one, until it is ende
   });
   expect((await (await read(anonymous)).json()).content).toEqual(paragraph('Trip plan, revised'));
 
+  // Reader colors follow the owner's tag tree as well as direct note color writes.
+  const tag = noteId();
+  await alice.context.post('/api/tags', {
+    headers: alice.headers,
+    data: { id: tag, name: 'Trips', color: 'yellow' },
+  });
+  await alice.context.patch(`/api/note-tags/${id}`, {
+    headers: alice.headers,
+    data: { primaryTagId: tag },
+  });
+  expect(await bobsCopy()).toMatchObject({ color: 'yellow' });
+  await alice.context.patch(`/api/tags/${tag}`, {
+    headers: alice.headers,
+    data: { color: 'green' },
+  });
+  expect(await bobsCopy()).toMatchObject({ color: 'green' });
+  await alice.context.delete(`/api/tags/${tag}`, { headers: alice.headers });
+  expect(await bobsCopy()).toMatchObject({ color: 'default' });
+
   // Undo uses the original link and arrangement, but gets fresh content from the owner.
   await bob.context.delete(`/api/shared-notes/${id}`, { headers: bob.headers });
   const latest = paragraph('Trip plan, edited while removed');
@@ -297,7 +316,33 @@ test('a shared note is read from its link and added to another gallery', async (
   const reader = await (await browser.newContext()).newPage();
   await signUp(reader);
   await reader.goto(link);
+  // Simulate a gallery already visited in this app session, then hold its next sync poll.
+  // An already-ready collection must not turn a pending accepted copy into a missing note.
+  await reader.evaluate(async () => {
+    const { notesCollection, sharedNotesCollection } = await import('/src/lib/collections.ts');
+    await Promise.all([notesCollection.preload(), sharedNotesCollection.preload()]);
+  });
+  let releaseSync!: () => void;
+  let pollHeld!: () => void;
+  const syncGate = new Promise<void>((resolve) => {
+    releaseSync = resolve;
+  });
+  const heldPoll = new Promise<void>((resolve) => {
+    pollHeld = resolve;
+  });
+  await reader.route('**/api/shapes/shared-notes?*', async (route) => {
+    pollHeld();
+    await syncGate;
+    await route.continue();
+  });
+  await heldPoll;
   await reader.getByRole('button', { name: 'Add to my notes' }).click();
+  try {
+    await expect(reader.getByRole('button', { name: 'Adding…' })).toBeVisible();
+    await expect(reader).toHaveURL(link);
+  } finally {
+    releaseSync();
+  }
   const dialog = reader.getByRole('dialog');
   await expect(dialog.getByText('Pack the tent')).toBeVisible();
   await expect(dialog.getByText(/Read only$/)).toBeVisible();

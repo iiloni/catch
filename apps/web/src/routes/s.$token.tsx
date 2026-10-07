@@ -79,7 +79,9 @@ function SharedNotePage() {
     setAdding(true);
     setError(null);
     try {
-      const { noteId } = await api.acceptShare(token);
+      // Only an authenticated action starts sync; merely reading this public page does not.
+      const { acceptSharedNote } = await import('@/lib/sharing');
+      const noteId = await acceptSharedNote(token);
       await openInNotes(noteId);
     } catch (failure) {
       setError(

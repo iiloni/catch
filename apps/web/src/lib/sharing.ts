@@ -1,7 +1,14 @@
 import { type Note, shareLink } from '@catch/shared';
 import { toast } from 'sonner';
+import { api } from './api';
 import { getSignedInUser } from './auth';
-import { noteSharesCollection, sharedNotesCollection, useSharedNotes, write } from './collections';
+import {
+  awaitSharedNote,
+  noteSharesCollection,
+  sharedNotesCollection,
+  useSharedNotes,
+  write,
+} from './collections';
 import { getServerUrl } from './serverUrl';
 
 /**
@@ -23,6 +30,12 @@ export function newShareToken() {
 
 /** The link a note is shared at, for its token. */
 export const noteShareLink = (token: string) => shareLink(getServerUrl(), token);
+
+export async function acceptSharedNote(token: string) {
+  const { noteId, txid } = await api.acceptShare(token);
+  await awaitSharedNote(noteId, txid);
+  return noteId;
+}
 
 /**
  * Shares a note, giving back its link. The device makes the token, so this works offline;

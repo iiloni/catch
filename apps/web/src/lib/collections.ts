@@ -301,6 +301,13 @@ export const sharedNotesCollection = createCollection(
   ),
 );
 
+/** Do not open an accepted note until its copy has arrived in this account's gallery. */
+export async function awaitSharedNote(noteId: string, txid: number | null) {
+  await sharedNotesCollection.preload();
+  if (txid !== null) await sharedNotesCollection.utils.awaitTxId(txid, SYNC_WAIT_MS);
+  if (!sharedNotesCollection.has(noteId)) throw new Error('Shared note has not synced');
+}
+
 /**
  * The user's vault (ADR 0020): its key as the server keeps it, sealed. Read only here; the
  * vault's own requests change it (see `lib/vault.ts`).

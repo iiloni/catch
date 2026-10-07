@@ -1,10 +1,19 @@
 import { type Tag, tagColor } from '@catch/shared';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { db } from '../db/client';
-import { attachments, notes, noteTags, sharedNotes, tags, user } from '../db/schema';
+import { attachments, noteShares, notes, noteTags, sharedNotes, tags, user } from '../db/schema';
 import { trackNoteLinks } from '../linkPreviews';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Take the note lock before attachment/assignment locks and hold it through publication. */
+export async function lockSharedNote(tx: Tx, noteId: string, ownerId: string) {
+  await tx
+    .select({ id: notes.id })
+    .from(notes)
+    .where(and(eq(notes.id, noteId), eq(notes.userId, ownerId)))
+    .for('update');
+}
 
 /**
  * What a reader may see of a note now, or null when there is no such note. A note in the
@@ -65,7 +74,9 @@ export async function sharedSnapshot(tx: Tx, noteId: string) {
  * primary tag, or its files. Returns the links each reader has yet to get a preview of, to
  * queue once the transaction commits. A note nobody added costs one indexed lookup.
  */
-export async function refreshSharedNote(tx: Tx, noteId: string) {
+export async function refreshSharedNote(tx: Tx, noteId: string, ownerId: string) {
+  // Acceptance takes the same lock, including when there are no readers yet.
+  await lockSharedNote(tx, noteId, ownerId);
   const readers = await tx
     .select({ userId: sharedNotes.userId })
     .from(sharedNotes)
@@ -79,4 +90,21 @@ export async function refreshSharedNote(tx: Tx, noteId: string) {
     previews.push({ userId, links: await trackNoteLinks(tx, userId, [snapshot.content]) });
   }
   return previews;
+}
+
+/** A tag tree change can change the shown color of any linked note of this owner. */
+export async function lockOwnerSharedNotes(tx: Tx, ownerId: string) {
+  const shares = await tx
+    .select({ noteId: noteShares.noteId })
+    .from(noteShares)
+    .innerJoin(notes, eq(notes.id, noteShares.noteId))
+    .where(eq(noteShares.userId, ownerId))
+    .orderBy(noteShares.noteId)
+    .for('update', { of: notes });
+  return shares;
+}
+
+export async function refreshOwnerSharedNotes(tx: Tx, ownerId: string) {
+  const shares = await lockOwnerSharedNotes(tx, ownerId);
+  for (const { noteId } of shares) await refreshSharedNote(tx, noteId, ownerId);
 }

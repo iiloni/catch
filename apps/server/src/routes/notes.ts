@@ -145,7 +145,7 @@ export const notesRoutes = new Hono<AppEnv>()
       // Rearranging, pinning and the like change nothing a reader of the note sees.
       const readers =
         body.content || body.color !== undefined || body.deletedAt !== undefined
-          ? await refreshSharedNote(tx, id)
+          ? await refreshSharedNote(tx, id, user.id)
           : [];
       return { txid: await currentTxid(tx), links, readers };
     });

@@ -16,7 +16,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { attachments, noteShares, notes, sharedNotes } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
-import { sharedSnapshot } from '../lib/sharing';
+import { lockSharedNote, sharedSnapshot } from '../lib/sharing';
 import { queuePreviews, trackNoteLinks } from '../linkPreviews';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -111,13 +111,23 @@ export const sharedNoteRoutes = new Hono<AppEnv>()
 const tokenParam = zValidator('param', z.object({ token: shareTokenSchema }));
 
 /** The shared note a link's token stands for, unless it is in its owner's trash. */
-async function sharedByToken(tx: Tx, token: string) {
+async function sharedByToken(tx: Tx, token: string, lock = false) {
   const [share] = await tx
     .select({ noteId: noteShares.noteId, ownerId: noteShares.userId })
     .from(noteShares)
     .innerJoin(notes, eq(notes.id, noteShares.noteId))
     .where(and(eq(noteShares.token, token), isNull(notes.deletedAt)));
-  return share ?? null;
+  if (!share || !lock) return share ?? null;
+  // Lock the note first, like owner writes, then recheck and hold the exact link. A
+  // revoke/replacement while we waited must not let an old token join the new share.
+  await lockSharedNote(tx, share.noteId, share.ownerId);
+  const [current] = await tx
+    .select({ noteId: noteShares.noteId, ownerId: noteShares.userId })
+    .from(noteShares)
+    .innerJoin(notes, eq(notes.id, noteShares.noteId))
+    .where(and(eq(noteShares.token, token), isNull(notes.deletedAt)))
+    .for('share', { of: noteShares });
+  return current ?? null;
 }
 
 function viewerOf(
@@ -153,11 +163,15 @@ async function firstPosition(tx: Tx, userId: string) {
  * note to a gallery asks for one.
  */
 export const shareLinkRoutes = new Hono<AppEnv>()
+  .use(async (c, next) => {
+    await next();
+    c.header('X-Robots-Tag', 'noindex');
+  })
   .get('/:token', tokenParam, async (c) => {
     const { token } = c.req.valid('param');
     const user = c.get('user');
     const view = await db.transaction(async (tx) => {
-      const share = await sharedByToken(tx, token);
+      const share = await sharedByToken(tx, token, true);
       const snapshot = share && (await sharedSnapshot(tx, share.noteId));
       if (!share || !snapshot) return null;
       const [member] = user
@@ -177,7 +191,6 @@ export const shareLinkRoutes = new Hono<AppEnv>()
       };
     });
     c.header('Cache-Control', 'private, no-store');
-    c.header('X-Robots-Tag', 'noindex');
     if (!view) return c.json({ error: 'This note is not shared' }, 404);
     return c.json(view);
   })
@@ -230,7 +243,7 @@ export const shareLinkRoutes = new Hono<AppEnv>()
     const body = acceptShareSchema.safeParse(input);
     if (!body.success) return c.json({ error: 'Invalid request' }, 400);
     const result = await db.transaction(async (tx) => {
-      const share = await sharedByToken(tx, token);
+      const share = await sharedByToken(tx, token, true);
       const snapshot = share && (await sharedSnapshot(tx, share.noteId));
       if (!share || !snapshot) return null;
       // The owner has the note already; opening their own link changes nothing.

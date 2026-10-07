@@ -1,10 +1,19 @@
 import { type SharedNote, shareTokenSchema } from '@catch/shared';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { isSharedNote, newShareToken, noteShareLink, removeSharedNote } from './sharing';
+import { api } from './api';
+import { awaitSharedNote } from './collections';
+import {
+  acceptSharedNote,
+  isSharedNote,
+  newShareToken,
+  noteShareLink,
+  removeSharedNote,
+} from './sharing';
 
 const copies = vi.hoisted(() => new Map<string, SharedNote>());
 vi.mock('./collections', () => ({
+  awaitSharedNote: vi.fn(),
   noteSharesCollection: {},
   sharedNotesCollection: {
     get: (id: string) => copies.get(id),
@@ -15,6 +24,7 @@ vi.mock('./collections', () => ({
   useSharedNotes: vi.fn(),
   write: (fn: () => void) => fn(),
 }));
+vi.mock('./api', () => ({ api: { acceptShare: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: vi.fn() }));
 vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
@@ -90,5 +100,33 @@ describe('isSharedNote', () => {
   it("tells someone else's note from the user's own", () => {
     expect(isSharedNote({ userId: 'user-1' })).toBe(false);
     expect(isSharedNote({ userId: 'ada' })).toBe(true);
+  });
+});
+
+describe('acceptSharedNote', () => {
+  it('waits for the accepted copy before returning the note to open', async () => {
+    vi.mocked(api.acceptShare).mockResolvedValue({ noteId: 'shared', txid: 42 });
+    let synced = () => {};
+    vi.mocked(awaitSharedNote).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          synced = resolve;
+        }),
+    );
+    let opened = false;
+    const acceptance = acceptSharedNote('token').then(() => {
+      opened = true;
+    });
+    await vi.waitFor(() => expect(awaitSharedNote).toHaveBeenCalledWith('shared', 42));
+    expect(opened).toBe(false);
+    synced();
+    await acceptance;
+    expect(opened).toBe(true);
+  });
+
+  it('keeps a failed sync from opening a missing editor', async () => {
+    vi.mocked(api.acceptShare).mockResolvedValue({ noteId: 'shared', txid: 42 });
+    vi.mocked(awaitSharedNote).mockRejectedValue(new Error('Sync timed out'));
+    await expect(acceptSharedNote('token')).rejects.toThrow('Sync timed out');
   });
 });
