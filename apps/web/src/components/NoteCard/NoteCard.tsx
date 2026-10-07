@@ -49,21 +49,20 @@ export function NoteCardFace({ note }: { note: Note }) {
   return (
     <>
       <NoteCardContent note={note} />
-      <NoteReminder note={note} />
-      <NoteShareBadge note={note} className="px-3.5 pb-3" />
+      <NoteBadges note={note} />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" interactive={false} />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
     </>
   );
 }
 
-/** When the note's reminder rings. A tap on it opens the note like the rest of the face. */
-function NoteReminder({ note }: { note: Note }) {
+/** Card metadata shares one row and wraps when the card is too narrow. */
+function NoteBadges({ note }: { note: Note }) {
   const reminder = useReminders().get(note.id);
-  if (!reminder || note.deletedAt) return null;
   return (
-    <div className="pointer-events-none flex px-3.5 pb-3">
-      <ReminderChip reminder={reminder} />
+    <div className="pointer-events-none flex flex-wrap items-center gap-2 px-3.5 pb-3 empty:hidden">
+      {reminder && !note.deletedAt && <ReminderChip reminder={reminder} />}
+      <NoteShareBadge note={note} className="min-w-0 max-w-full" />
     </div>
   );
 }
@@ -200,8 +199,7 @@ export function NoteCard({
       >
         <NoteCardContent note={note} />
       </button>
-      <NoteReminder note={note} />
-      <NoteShareBadge note={note} className="px-3.5 pb-3" />
+      <NoteBadges note={note} />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
       <motion.span
