@@ -161,6 +161,21 @@ export function TabPageHeader({
     [TITLE_REST_Y, TITLE_REST_Y - TITLE_COLLAPSE_AT],
   );
   const slide = { ...springs.smooth, visualDuration: 0.3 };
+  // The title turns the corner instead of cutting it: with five controls on a phone, a
+  // straight line between its two places runs through the leftmost one. So it moves aside
+  // before it rises into the row, and drops out of the row before it moves back.
+  const lead = { ...slide, delay: 0 };
+  const follow = { ...slide, delay: 0.1 };
+  const across = collapsed ? lead : follow;
+  const titleSlide = {
+    ...slide,
+    y: collapsed ? follow : lead,
+    left: across,
+    x: across,
+    marginLeft: across,
+    fontSize: across,
+    paddingInline: across,
+  };
   const branded = !leading && !collapsed && !selection;
   // What sits in the left corner stays over the page's edge while a note pane slides.
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
@@ -255,7 +270,7 @@ export function TabPageHeader({
                 paddingInline: collapsed ? 14 : 0,
                 opacity: selection ? 0 : 1,
               }}
-              transition={slide}
+              transition={titleSlide}
             >
               <motion.span
                 aria-hidden
