@@ -23,7 +23,7 @@ import { watchNativeReminders } from '@/lib/nativeReminders';
 import { useOpenNote } from '@/lib/openNote';
 import { onNotificationOpen, syncPush } from '@/lib/push';
 import { syncReminderSettings } from '@/lib/reminders';
-import { pageBounceY, watchPageBounce } from '@/lib/scrollBounce';
+import { pageBounceY, watchScrollBounce } from '@/lib/scrollBounce';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
@@ -46,7 +46,7 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   useEffect(watchUpdates, []);
-  useEffect(watchPageBounce, []);
+  useEffect(watchScrollBounce, []);
   const { open } = useOpenNote();
   useEffect(
     () =>
