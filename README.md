@@ -80,9 +80,9 @@ changes get merged.
 
 ## AI development notice
 
-Catch is developed with the help of AI coding tools. The maintainer directs the work for
-both frontend and backend design and is responsible for the project. Code quality is
-validated through manual and automated testing, and supplemental AI review. As with all
+Catch is developed primarily with AI coding tools. The maintainer develops
+both the frontend and backend design and directs agents through implementation. Code quality is
+validated through manual and automated testing and supplemental AI review. As with all
 self-hosted projects, you are encouraged to maintain regular backups of your Catch service.
 
 ## More documentation
