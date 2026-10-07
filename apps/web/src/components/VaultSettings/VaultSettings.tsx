@@ -24,6 +24,7 @@ import {
   vaultNotes,
   vaultRemembered,
 } from '@/lib/vault';
+import { useShowVaultButton } from '@/lib/vaultPreferences';
 
 const failure = (error: unknown) =>
   error instanceof Error && error.message ? error.message : 'Something went wrong. Try again.';
@@ -46,6 +47,7 @@ export function VaultSettings() {
         title="Vault"
         description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
       >
+        <VaultButtonSetting />
         <SettingsRow
           icon={LockKeyhole}
           label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
@@ -67,6 +69,7 @@ export function VaultSettings() {
         title="This device"
         description="A device that remembers the vault opens it without the password, for anyone who can open Catch here. Otherwise the vault locks when you leave it, and after five minutes in the background."
       >
+        <VaultButtonSetting />
         <SettingsRow
           icon={unlocked ? LockKeyholeOpen : LockKeyhole}
           label={unlocked ? 'Unlocked' : 'Locked'}
@@ -134,6 +137,27 @@ export function VaultSettings() {
         onClose={() => setDialog(null)}
       />
     </div>
+  );
+}
+
+function VaultButtonSetting() {
+  const [shown, setShown] = useShowVaultButton();
+
+  return (
+    <SettingsRow
+      icon={LockKeyhole}
+      label="Show vault button"
+      description="Header shortcut on this device"
+    >
+      <Switch
+        aria-label="Show vault button"
+        checked={shown}
+        onCheckedChange={(checked) => {
+          haptics.toggle();
+          setShown(checked);
+        }}
+      />
+    </SettingsRow>
   );
 }
 

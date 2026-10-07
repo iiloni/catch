@@ -74,6 +74,11 @@ and not of each card. `lib/noteStore.ts` sends each change to the notes collecti
 vault by the note's id, so the note actions, the editor and the dock are the same code for
 both. Search runs on the device (ADR 0002) and so covers the open notes without the server.
 
+Settings > Vault can hide the header's entry button on this device, with it shown by
+default, even before a vault exists. This is a device appearance preference, shared by its
+accounts like the theme. Settings and reminders still open the vault; while inside, the
+leave button is always shown so there is a way back to ordinary notes.
+
 **Reminders ring without saying what for.** A vault note's reminder is an ordinary row in
 `reminders`, so the server's scheduler and the phone's alarms work unchanged, and the
 notification reads "Vault note". The server therefore knows when a vault note is due.
