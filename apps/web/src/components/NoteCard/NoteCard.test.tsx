@@ -37,6 +37,8 @@ vi.mock('@/lib/collections', () => ({
   useNoteTagAssignments: () => assignments,
   useLinkPreviews: () => previews,
   useBoardColumns: () => columns,
+  useNoteShares: () => new Map(),
+  useSharedNotes: () => ({ notes: [], byId: new Map() }),
 }));
 
 const note: Note = {

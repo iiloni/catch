@@ -1,6 +1,7 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useBackHandler } from './backButton';
+import { isSharedNote } from './sharing';
 
 /**
  * Which of a page's notes are selected. Notes that leave the page (archived on another
@@ -15,6 +16,8 @@ export function useNoteSelection(notes: readonly Note[]) {
   const selecting = selectedNotes.length > 0;
 
   const select = useCallback((note: Note, selected: boolean) => {
+    // The actions on a selection edit notes, and someone else's note is only read here.
+    if (isSharedNote(note)) return;
     setIds((current) => {
       if (current.has(note.id) === selected) return current;
       const next = new Set(current);

@@ -3,9 +3,11 @@ import {
   Archive,
   ArchiveRestore,
   Bell,
+  CircleMinus,
   Columns3,
   LayoutDashboard,
   RotateCcw,
+  Share2,
   Tags,
   Trash2,
   TriangleAlert,
@@ -15,10 +17,11 @@ import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
 import { ReminderPanel } from '@/components/ReminderPanel/ReminderPanel';
+import { SharePanel } from '@/components/SharePanel/SharePanel';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sortBoardColumns } from '@/lib/boardColumns';
-import { useBoardColumns, useReminders } from '@/lib/collections';
+import { useBoardColumns, useNoteShares, useReminders } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import {
   deleteNoteForever,
@@ -29,8 +32,10 @@ import {
   setNoteColor,
   trashNote,
 } from '@/lib/notes';
+import { isSharedNote, removeSharedNote } from '@/lib/sharing';
 import { setPrimaryTag, useNoteColor } from '@/lib/tags';
 import { cn } from '@/lib/utils';
+import { isVaultNote } from '@/lib/vault';
 
 type Props = {
   note: Note;
@@ -39,11 +44,16 @@ type Props = {
   className?: string;
 };
 
-/** Actions for one note. Trashed notes can only be restored or deleted. */
+/**
+ * Actions for one note. Trashed notes can only be restored or deleted, and a note someone
+ * else shared (ADR 0021) only archived or removed.
+ */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [moving, setMoving] = useState(false);
   const [tagging, setTagging] = useState(false);
   const [reminding, setReminding] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const isShared = useNoteShares().has(note.id);
   const reminder = useReminders().get(note.id);
   const color = useNoteColor(note);
   const then = (action: () => unknown) => () => {
@@ -64,9 +74,32 @@ export function NoteToolbar({ note, onDone, className }: Props) {
     );
   }
 
+  if (isSharedNote(note)) {
+    return (
+      <div className={cn('flex items-center gap-0.5', className)}>
+        {note.isArchived ? (
+          <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
+            <ArchiveRestore />
+          </IconButton>
+        ) : (
+          <IconButton label="Archive" onClick={then(() => setNoteArchived(note.id, true))}>
+            <Archive />
+          </IconButton>
+        )}
+        <IconButton label="Remove from my notes" onClick={then(() => removeSharedNote(note.id))}>
+          <CircleMinus />
+        </IconButton>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={cn('flex flex-col', className, (moving || tagging || reminding) && 'opacity-100')}
+      className={cn(
+        'flex flex-col',
+        className,
+        (moving || tagging || reminding || sharing) && 'opacity-100',
+      )}
     >
       <div className="flex min-w-0 items-center gap-0.5 [&>button]:min-w-0 [&>button]:shrink">
         <NoteColorPicker
@@ -135,6 +168,23 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             />
           </PopoverContent>
         </Popover>
+        {/* A link would hand the server a vault note to read, which it must never have. */}
+        {!isVaultNote(note.id) && (
+          <Popover open={sharing} onOpenChange={setSharing}>
+            <PopoverTrigger asChild>
+              <IconButton label="Share" onClick={() => haptics.toggle()}>
+                <Share2 className={cn(isShared && 'fill-current')} />
+              </IconButton>
+            </PopoverTrigger>
+            <PopoverContent
+              aria-label="Share"
+              className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SharePanel note={note} />
+            </PopoverContent>
+          </Popover>
+        )}
         {note.isArchived ? (
           <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
             <ArchiveRestore />

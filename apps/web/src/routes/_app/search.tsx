@@ -22,6 +22,7 @@ import {
   notesCollection,
   tagsCollection,
   useNoteTagAssignments,
+  useSharedNotes,
   useTagReadiness,
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
@@ -64,9 +65,11 @@ function SearchPage() {
   });
   // Search runs on the device, so inside the vault it reads the vault's opened notes.
   const vault = useVaultView();
+  // Notes other people shared are found with the user's own (ADR 0021).
+  const shared = useSharedNotes().notes;
   const stored = useMemo(
-    () => (vault ? vault.filter((note) => !note.deletedAt) : plainNotes),
-    [vault, plainNotes],
+    () => (vault ? vault.filter((note) => !note.deletedAt) : [...plainNotes, ...shared]),
+    [vault, plainNotes, shared],
   );
   // Filtered ahead of the counts, so a tag's number is the notes its filter would show.
   const notes = useMemo(

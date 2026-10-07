@@ -111,10 +111,48 @@ async function openBrowserDatabase(name: string): Promise<LocalDatabase> {
     openBrowserWASQLiteOPFSDatabase,
   } = await import('@tanstack/browser-db-sqlite-persistence');
   const database = await openBrowserWASQLiteOPFSDatabase({ databaseName: `${name}.sqlite` });
+  const persistence = createBrowserWASQLitePersistence({ database });
+  type CoordinatorAdapter = NonNullable<
+    ConstructorParameters<typeof BrowserCollectionCoordinator>[0]['adapter']
+  >;
+  const adapters = new Map<string, CoordinatorAdapter>();
+  function adapterFor(collectionId: string) {
+    const adapter = adapters.get(collectionId);
+    if (!adapter) throw new Error(`No persistence adapter for ${collectionId}`);
+    return adapter;
+  }
   // Tabs share the database: one leader writes to it and relays changes to the others.
-  const coordinator = new BrowserCollectionCoordinator({ dbName: name });
+  // The package otherwise gives the coordinator the last-created schema adapter, which
+  // resets unrelated collections when their schema versions differ. Route by collection.
+  const coordinator = new BrowserCollectionCoordinator({
+    dbName: name,
+    adapter: {
+      loadSubset: (id, options, context) => adapterFor(id).loadSubset(id, options, context),
+      applyCommittedTx: (id, transaction) => adapterFor(id).applyCommittedTx(id, transaction),
+      ensureIndex: (id, signature, spec) => adapterFor(id).ensureIndex(id, signature, spec),
+      getStreamPosition: async (id) =>
+        (await adapterFor(id).getStreamPosition?.(id)) ?? {
+          latestTerm: 0,
+          latestSeq: 0,
+          latestRowVersion: 0,
+        },
+      pullSince: async (id, version) =>
+        (await adapterFor(id).pullSince?.(id, version)) ?? {
+          latestRowVersion: 0,
+          requiresFullReload: true,
+        },
+    },
+  });
   return {
-    persistence: createBrowserWASQLitePersistence({ database, coordinator }),
+    persistence: {
+      ...persistence,
+      coordinator,
+      resolvePersistenceForCollection: (options) => {
+        const resolved = persistence.resolvePersistenceForCollection?.(options) ?? persistence;
+        adapters.set(options.collectionId, resolved.adapter);
+        return { ...resolved, coordinator };
+      },
+    },
     destroy: async () => {
       coordinator.dispose();
       await database.close?.();

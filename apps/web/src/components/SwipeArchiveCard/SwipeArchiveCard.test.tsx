@@ -13,6 +13,8 @@ vi.mock('@/lib/collections', () => ({
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),
   useLinkPreviews: () => new Map(),
+  useNoteShares: () => new Map(),
+  useSharedNotes: () => ({ notes: [], byId: new Map() }),
 }));
 
 vi.mock('@/lib/haptics', () => ({

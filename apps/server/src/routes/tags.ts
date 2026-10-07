@@ -14,6 +14,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { notes, noteTags, tags } from '../db/schema';
 import { requireUser } from '../lib/requireUser';
+import { lockOwnerSharedNotes, refreshOwnerSharedNotes, refreshSharedNote } from '../lib/sharing';
 import { lockTagTree } from '../lib/tagTreeLock';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -129,6 +130,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const body = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
       await lockTagTree(tx, userId);
+      await lockOwnerSharedNotes(tx, userId);
       const rows = await userTags(tx, userId);
       if (rows.some((tag) => tag.id === body.id)) return null;
       validateTag({ ...body, userId }, rows);
@@ -139,6 +141,7 @@ export const tagRoutes = new Hono<AppEnv>()
         .returning();
       if (!inserted.length) throw new TagError('Tag id is taken');
       await tagPlainColorNotes(tx, userId, { ...body, userId });
+      await refreshOwnerSharedNotes(tx, userId);
       return txid(tx);
     });
     return c.json({ txid: result });
@@ -149,6 +152,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const body = c.req.valid('json');
     const result = await db.transaction(async (tx) => {
       await lockTagTree(tx, userId);
+      await lockOwnerSharedNotes(tx, userId);
       const rows = await userTags(tx, userId);
       const current = rows.find((tag) => tag.id === id);
       if (!current) throw new TagError('Tag not found', 404);
@@ -173,6 +177,7 @@ export const tagRoutes = new Hono<AppEnv>()
       }
       if (candidate.color && candidate.color !== current.color)
         await tagPlainColorNotes(tx, userId, candidate);
+      await refreshOwnerSharedNotes(tx, userId);
       return txid(tx);
     });
     return c.json({ txid: result });
@@ -182,6 +187,7 @@ export const tagRoutes = new Hono<AppEnv>()
     const { id } = c.req.valid('param');
     const result = await db.transaction(async (tx) => {
       await lockTagTree(tx, userId);
+      await lockOwnerSharedNotes(tx, userId);
       const rows = await userTags(tx, userId);
       if (!rows.some((tag) => tag.id === id)) return null;
       const removed = tagSubtreeIds(rows, id);
@@ -204,6 +210,7 @@ export const tagRoutes = new Hono<AppEnv>()
           .where(and(eq(noteTags.id, assignment.id), eq(noteTags.userId, userId)));
       }
       await tx.delete(tags).where(and(eq(tags.userId, userId), inArray(tags.id, [...removed])));
+      await refreshOwnerSharedNotes(tx, userId);
       return txid(tx);
     });
     return c.json({ txid: result });
@@ -224,7 +231,8 @@ export const noteTagRoutes = new Hono<AppEnv>()
       const [note] = await tx
         .select({ id: notes.id })
         .from(notes)
-        .where(and(eq(notes.id, id), eq(notes.userId, userId)));
+        .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+        .for('update');
       if (!note) throw new TagError('Note not found', 404);
       const [current] = await tx
         .select()
@@ -260,6 +268,8 @@ export const noteTagRoutes = new Hono<AppEnv>()
           set: { primaryTagId, secondaryTagIds },
           setWhere: eq(noteTags.userId, userId),
         });
+      // The primary tag gives the note its color, which its readers see too.
+      await refreshSharedNote(tx, id, userId);
       return txid(tx);
     });
     return c.json({ txid: result });
