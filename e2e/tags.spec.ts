@@ -111,6 +111,46 @@ test('selection actions pin notes and edit mixed tags on touch and desktop', asy
     ).toBeVisible();
 });
 
+test("opening the color picker does not show its tag badge's tooltip", async ({
+  page,
+  request,
+  isMobile,
+}) => {
+  await signUp(page);
+  const headers = await auth(page);
+  const home = await addTag(request, headers, 'Home', null, 'yellow');
+  await seedNotes(page, ['One']);
+  const noteId = await card(page, 'One').getAttribute('data-note-card');
+  expect(
+    (
+      await request.patch(`/api/note-tags/${noteId}`, {
+        headers,
+        data: { primaryTagId: home, secondaryTagIds: [] },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect(card(page, 'One')).toHaveAttribute('data-note-color', 'yellow');
+  if (isMobile) {
+    await longPress(page, card(page, 'One').getByRole('button', { name: 'Open note' }));
+  } else {
+    const cell = page
+      .locator('[data-note-cell]')
+      .filter({ has: page.getByRole('heading', { name: 'One', exact: true }) });
+    await cell.hover();
+    await cell.getByRole('button', { name: 'Select note', exact: true }).click();
+  }
+  await page
+    .getByRole('toolbar', { name: 'Selected notes' })
+    .getByRole('button', { name: 'Background color', exact: true })
+    .click();
+  const picker = page.locator('[data-slot="popover-content"]');
+  await settledBox(picker);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  // The badge still explains itself when asked.
+  await picker.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('tooltip')).toHaveText('Home');
+});
+
 test('selection pickers are cards as wide as a phone under the header', async ({
   page,
   isMobile,
