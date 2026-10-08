@@ -98,9 +98,18 @@ const sideMenuFloatingOptions: FloatingUIOptions = {
         const inline = reference?.querySelector('.bn-inline-content');
         if (!inline) return 0;
         const bounds = inline.getBoundingClientRect();
+        const group = reference?.closest('.bn-editor > .bn-block-group');
         const lineHeight = Number.parseFloat(getComputedStyle(inline).lineHeight) || bounds.height;
         // Wrapped text and touch-sized lists need their first line, not the whole block's center.
         return {
+          // Nested blocks share the editor's gutter so their handles clear every indent guide.
+          mainAxis: group
+            ? Math.max(
+                0,
+                elements.reference.getBoundingClientRect().left -
+                  group.getBoundingClientRect().left,
+              )
+            : 0,
           crossAxis:
             bounds.top +
             Math.min(lineHeight, bounds.height) / 2 -

@@ -121,7 +121,32 @@ test('block handles stay inset and align with the first line, including touch-si
         },
         { id: 'bullet', type: 'bulletListItem', content: 'A bullet item' },
         { id: 'numbered', type: 'numberedListItem', content: 'A numbered item' },
-        { id: 'checkbox', type: 'checkListItem', content: 'A checklist item' },
+        {
+          id: 'checkbox',
+          type: 'checkListItem',
+          content: 'A checklist item',
+          children: [
+            {
+              id: 'nested-checkbox',
+              type: 'checkListItem',
+              content: 'A nested checklist item',
+              children: [
+                {
+                  id: 'nested-bullet',
+                  type: 'bulletListItem',
+                  content: 'A deeper bullet item',
+                  children: [
+                    {
+                      id: 'nested-numbered',
+                      type: 'numberedListItem',
+                      content: 'A deeper numbered item',
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
         { id: 'empty', type: 'paragraph', content: [] },
       ],
     });
@@ -129,7 +154,18 @@ test('block handles stay inset and align with the first line, including touch-si
   });
   const dialog = await openNote(page, 'Handle alignment');
   const editor = dialog.locator('.bn-editor');
-  for (const id of ['title', 'heading', 'wrapped', 'bullet', 'numbered', 'checkbox', 'empty']) {
+  for (const id of [
+    'title',
+    'heading',
+    'wrapped',
+    'bullet',
+    'numbered',
+    'checkbox',
+    'nested-checkbox',
+    'nested-bullet',
+    'nested-numbered',
+    'empty',
+  ]) {
     const inline = editor.locator(`[data-id="${id}"] .bn-inline-content`).first();
     await inline.scrollIntoViewIfNeeded();
     const box = await inline.boundingBox();
@@ -156,12 +192,30 @@ test('block handles stay inset and align with the first line, including touch-si
     if (!target || !editorBounds) throw new Error('Missing handle layout');
     expect(target.x - editorBounds.x).toBeGreaterThanOrEqual(isMobile ? 16 : 8);
     expect(target.x + target.width).toBeLessThanOrEqual(box.x + 1);
+    if (id.startsWith('nested-')) {
+      const guides = await editor.evaluate(
+        (editor, y) =>
+          Array.from(editor.querySelectorAll('.bn-block-group .bn-block-group > .bn-block-outer'))
+            .filter((row) => {
+              const bounds = row.getBoundingClientRect();
+              return bounds.top <= y && bounds.bottom >= y;
+            })
+            .map(
+              (row) =>
+                row.getBoundingClientRect().left +
+                Number.parseFloat(getComputedStyle(row, '::before').left),
+            ),
+        target.y + target.height / 2,
+      );
+      expect(guides.length).toBeGreaterThan(0);
+      for (const guide of guides) expect(target.x + target.width).toBeLessThan(guide);
+    }
     if (isMobile) {
       expect(target.width).toBe(32);
       expect(target.height).toBe(32);
-      const blockBounds = await editor.locator(`[data-id="${id}"]`).first().boundingBox();
-      if (!blockBounds) throw new Error('Missing block bounds');
-      expect(blockBounds.x - (target.x + target.width)).toBeCloseTo(4, 0);
+      const gutter = await editor.locator(':scope > .bn-block-group').boundingBox();
+      if (!gutter) throw new Error('Missing editor gutter');
+      expect(gutter.x - (target.x + target.width)).toBeCloseTo(4, 0);
     }
   }
   await page.screenshot({ path: `test-results/block-handle-${isMobile ? 'touch' : 'mouse'}.png` });
