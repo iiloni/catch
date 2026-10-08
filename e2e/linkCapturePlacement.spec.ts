@@ -34,7 +34,10 @@ async function seedChoices(page: Page) {
   await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Later', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Choose tags' }).click();
+  await page
+    .getByRole('dialog', { name: 'Secondary tags', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
   await page.reload();
   await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
   await page.goto('/');
@@ -51,7 +54,10 @@ async function choosePlacement(page: Page, column: string) {
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Reading / Web', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: 'Later', exact: true }).check();
-  await page.getByRole('button', { name: 'Choose tags' }).click();
+  await page
+    .getByRole('dialog', { name: 'Secondary tags', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
 }
 
 async function stage(page: Page) {

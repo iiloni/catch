@@ -107,6 +107,7 @@ describe('LinkCaptureForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Choose tags' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Later' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(

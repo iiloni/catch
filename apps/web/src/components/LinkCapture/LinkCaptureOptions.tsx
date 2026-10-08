@@ -6,12 +6,20 @@ import {
   tagPath,
 } from '@catch/shared';
 import { Palette, Tags } from 'lucide-react';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { COLOR_NAMES, ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
@@ -25,6 +33,8 @@ export function LinkCaptureOptions({
   onChange: (value: LinkCapturePlacement) => void;
 }) {
   const id = useId();
+  const [choosingTags, setChoosingTags] = useState(false);
+  useBackHandler(choosingTags, () => setChoosingTags(false));
   const columns = sortBoardColumns(useBoardColumns());
   const tags = useTags();
   const { awaitingTags } = useTagReadiness();
@@ -118,8 +128,8 @@ export function LinkCaptureOptions({
             {primary?.name ?? COLOR_NAMES[color]}
           </span>
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
+        <Dialog open={choosingTags} onOpenChange={setChoosingTags}>
+          <DialogTrigger asChild>
             <Button
               type="button"
               variant="secondary"
@@ -128,10 +138,26 @@ export function LinkCaptureOptions({
             >
               <Tags aria-hidden /> Tags{secondary.length ? ` (${secondary.length})` : ''}
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="z-[80] w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-3">
+          </DialogTrigger>
+          <DialogContent
+            aria-describedby={undefined}
+            showCloseButton={false}
+            overlayClassName="z-[80]"
+            className="z-[80] top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-1.5rem)] overflow-y-auto overscroll-contain p-4 sm:max-w-sm pointer-coarse:top-auto pointer-coarse:bottom-[calc(var(--keyboard)+var(--safe-bottom)+0.75rem)] pointer-coarse:translate-y-0"
+            onOpenAutoFocus={(event) => {
+              // Let touch users scroll the list before choosing to bring up search.
+              if (
+                typeof window.matchMedia !== 'function' ||
+                !window.matchMedia('(pointer: coarse)').matches
+              )
+                return;
+              event.preventDefault();
+              if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
             <section aria-label="Secondary tags">
-              <h3 className="mb-2 font-medium text-sm">Secondary tags</h3>
+              <DialogTitle className="mb-3 text-base">Secondary tags</DialogTitle>
               {awaitingTags && !tags.length ? (
                 <p role="status" className="py-3 text-muted-foreground text-sm">
                   Loading tags…
@@ -141,7 +167,7 @@ export function LinkCaptureOptions({
               ) : (
                 <TagTree
                   tags={tags}
-                  className="max-h-[min(20rem,40dvh)]"
+                  className="max-h-[min(20rem,max(0px,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-13rem)))]"
                   renderTag={(tag, path) => {
                     const isPrimary = tag.id === primary?.id;
                     const descendant = ancestors.get(tag.id);
@@ -187,8 +213,13 @@ export function LinkCaptureOptions({
                 />
               )}
             </section>
-          </PopoverContent>
-        </Popover>
+            <DialogClose asChild>
+              <Button type="button" className="h-11 rounded-xl">
+                Done
+              </Button>
+            </DialogClose>
+          </DialogContent>
+        </Dialog>
       </div>
       {secondary.length > 0 && (
         <p className="text-muted-foreground text-sm">

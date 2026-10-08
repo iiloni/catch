@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { settledBox, signUp } from './helpers';
 
@@ -62,6 +63,21 @@ for (const entry of ['sheet', 'bookmarklet', 'share'] as const) {
   }) => {
     await page.setViewportSize({ width: 320, height: 480 });
     await signUp(page);
+    const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
+    for (let index = 0; index < 10; index++) {
+      const uuid = randomUUID();
+      const response = await page.request.post('/api/tags', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          id: `${uuid.slice(0, 14)}7${uuid.slice(15)}`,
+          name: `Capture tag ${index}`,
+          parentId: null,
+          color: null,
+          icon: null,
+        },
+      });
+      expect(response.ok()).toBeTruthy();
+    }
     await page.route('**/api/link-previews/intake', (route) =>
       route.fulfill({
         json: {
@@ -125,6 +141,35 @@ for (const entry of ['sheet', 'bookmarklet', 'share'] as const) {
     );
     await surface.getByLabel('URL', { exact: true }).focus();
     await expectFocusVisible(surface);
+
+    await surface.getByRole('button', { name: 'Choose tags' }).click();
+    const picker = page.getByRole('dialog', { name: 'Secondary tags', exact: true });
+    await expect(
+      picker.getByRole('checkbox', { name: 'Capture tag 0', exact: true }),
+    ).toBeVisible();
+    await picker.getByRole('textbox', { name: 'Find tags' }).focus();
+    // The overlay keyboard changes while search has focus, without resizing the viewport.
+    for (const height of [300, 380, 0, 300]) {
+      await keyboard(page, height);
+      await expect
+        .poll(async () => {
+          const bounds = await picker.boundingBox();
+          return Boolean(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 740 - height);
+        })
+        .toBe(true);
+    }
+    const tagList = picker.locator('[data-slot="scroll-area-viewport"]');
+    await tagList.evaluate((area) => {
+      area.scrollTop = area.scrollHeight;
+    });
+    expect(await tagList.evaluate((area) => area.scrollTop)).toBeGreaterThan(0);
+    await picker.getByRole('checkbox', { name: 'Capture tag 9', exact: true }).check();
+    await picker.getByRole('textbox', { name: 'Find tags' }).fill('Capture tag 9');
+    await expect(
+      picker.getByRole('checkbox', { name: 'Capture tag 9', exact: true }),
+    ).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
 
     await keyboard(page, 0);
     await page.setViewportSize({ width: 640, height: 360 });
