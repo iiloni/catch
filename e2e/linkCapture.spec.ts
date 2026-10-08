@@ -174,8 +174,13 @@ test('the Settings bookmarklet opens a compact capture from another site', async
     }),
   ).toEqual([{ status: 'in_progress', color: 'orange' }]);
   const closed = popup.waitForEvent('close');
-  // The button closes its own page, so Playwright's post-click wait can race with closure.
-  await popup.getByRole('button', { name: 'Close window' }).click({ noWaitAfter: true });
+  // Closing the page can interrupt the click itself, even with navigation waiting disabled.
+  await popup
+    .getByRole('button', { name: 'Close window' })
+    .click({ noWaitAfter: true })
+    .catch((error: unknown) => {
+      if (!popup.isClosed()) throw error;
+    });
   await closed;
 });
 
