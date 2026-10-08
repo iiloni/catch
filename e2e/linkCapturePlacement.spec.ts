@@ -34,7 +34,7 @@ async function seedChoices(page: Page) {
   await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Later', exact: true })).toBeVisible();
-  await page.getByText('Save to', { exact: true }).click();
+  await page.getByRole('button', { name: 'Choose tags' }).click();
   await page.reload();
   await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
   return { column, reading, web, later, headers };
@@ -46,11 +46,11 @@ async function choosePlacement(page: Page, column: string) {
   await page.getByRole('button', { name: 'Background color' }).click();
   await page.getByRole('button', { name: 'Blue: Reading', exact: true }).click();
   await page.getByRole('button', { name: 'Web', exact: true }).click();
-  await page.getByText('Save to', { exact: true }).click();
+  await page.getByRole('button', { name: 'Background color' }).click();
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Reading / Web', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: 'Later', exact: true }).check();
-  await page.getByText('Save to', { exact: true }).click();
+  await page.getByRole('button', { name: 'Choose tags' }).click();
 }
 
 async function stage(page: Page) {

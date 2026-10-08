@@ -157,7 +157,7 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   await popup.getByLabel('Save to', { exact: true }).selectOption('in_progress');
   await popup.getByRole('button', { name: 'Background color' }).click();
   await popup.getByRole('button', { name: 'Orange', exact: true }).click();
-  await popup.getByText('Save to', { exact: true }).click();
+  await popup.getByRole('button', { name: 'Background color' }).click();
   await popup.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(popup.getByRole('heading', { name: 'Link saved', exact: true })).toBeVisible();
   await expect(popup.getByText('Your note is in Deck · In progress.')).toBeVisible();
