@@ -33,6 +33,9 @@ vi.mock('./notes', () => ({
   hasNote: mocks.hasNote,
   updateNote: mocks.update,
 }));
+vi.mock('./linkCapturePlacement', () => ({
+  resolveLinkCapturePlacement: (value: unknown) => value,
+}));
 vi.mock('./attachments', () => ({ importAttachment: mocks.attachment }));
 
 import { dismissLinkShare, prepareShare, receiveShare, saveLinkShare } from './receiveShare';
@@ -74,12 +77,20 @@ describe('link share preparation', () => {
   it('uses the same stable id on retry, waits for storage and preserves edits on replay', async () => {
     const id = await captureLink();
     mocks.noteStored.mockRejectedValueOnce(new Error('Storage unavailable'));
-    await expect(saveLinkShare(id, editedDraft)).rejects.toThrow('Storage unavailable');
+    const placement = {
+      status: 'in_progress',
+      color: 'blue' as const,
+      primaryTagId: 'tag-1',
+      secondaryTagIds: ['tag-2'],
+    };
+    await expect(saveLinkShare(id, editedDraft, placement)).rejects.toThrow('Storage unavailable');
     expect((await getIncomingShare(id))?.complete).toBe(false);
     mocks.hasNote.mockReturnValue(true);
     await saveLinkShare(id, editedDraft);
     expect(mocks.create).toHaveBeenCalledTimes(1);
-    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ id, userId: 'user-1' }));
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ id, userId: 'user-1', ...placement }),
+    );
     expect(blocksToPlainText(mocks.create.mock.calls[0]?.[0]?.content ?? [])).toContain('My title');
     expect(mocks.update).toHaveBeenCalledWith(
       id,

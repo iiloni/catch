@@ -86,6 +86,23 @@ test('pending native link shares recover in order and cancelled shares stay canc
   const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
   await expect(capture.getByLabel('URL', { exact: true })).toHaveValue('https://example.com/first');
   await capture.getByLabel('Your notes').fill('Unsaved capture thoughts');
+  await capture.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Save to', exact: true })
+    .getByRole('button', { name: 'In progress', exact: true })
+    .click();
+  await expect(
+    capture.getByRole('button', { name: 'Save to Deck · In progress', exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/note=/);
+  await capture.getByRole('button', { name: 'Background color', exact: true }).click();
+  await page.getByRole('button', { name: 'Blue', exact: true }).click();
+  await capture.getByRole('button', { name: 'Background color', exact: true }).click();
+  await capture.getByRole('button', { name: 'Choose tags', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Secondary tags', exact: true })
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
   await expect(page).toHaveURL(/note=/);
   await capture.getByLabel('URL', { exact: true }).fill('');
   await page.getByRole('button', { name: 'Close link capture', exact: true }).click();
@@ -93,6 +110,7 @@ test('pending native link shares recover in order and cancelled shares stay canc
     'https://example.com/second',
   );
   await expect(capture.getByLabel('Title', { exact: true })).toHaveValue(metadata.title);
+  await expect(capture.getByRole('button', { name: 'Save to Gallery', exact: true })).toBeVisible();
   await capture.getByLabel('Title', { exact: true }).fill('Second shared link');
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(capture).toBeHidden();

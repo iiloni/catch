@@ -145,12 +145,14 @@ export function ColorTagSelector({
   primaryTagId,
   onTagChange,
   className,
-}: Omit<Props, 'value'> & { value: NoteColor | null; className?: string }) {
+  disabled,
+}: Omit<Props, 'value'> & { value: NoteColor | null; className?: string; disabled?: boolean }) {
   const tags = useTags();
   const [branch, setBranch] = useState<string | 'uncolored' | null>(null);
   const [direction, setDirection] = useState(1);
   const reducedMotion = useReducedMotion();
   const { awaitingTags, awaitingAssignments } = useTagReadiness();
+  const unavailable = disabled ?? (awaitingTags || awaitingAssignments);
   const selected = tags.find((tag) => tag.id === primaryTagId);
   const current = tags.find((tag) => tag.id === branch);
   const children = tags
@@ -179,8 +181,8 @@ export function ColorTagSelector({
   const slideTransition = { duration: reducedMotion ? 0 : 0.16 };
   return (
     <fieldset
-      disabled={awaitingTags || awaitingAssignments}
-      aria-busy={awaitingTags || awaitingAssignments}
+      disabled={unavailable}
+      aria-busy={unavailable}
       className={cn('min-w-0 overflow-hidden', className)}
     >
       <legend className="sr-only">Primary tag</legend>

@@ -1,6 +1,6 @@
 import type { Tag } from '@catch/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ColorTagSelector } from './ColorPicker';
 
@@ -21,14 +21,38 @@ const child: Tag = {
   icon: null,
 };
 const leaf: Tag = { ...child, id: 'leaf', name: 'Catch', parentId: child.id };
+const readiness = vi.hoisted(() => ({ awaitingTags: false, awaitingAssignments: false }));
 vi.mock('@/lib/collections', () => ({
-  useTagReadiness: () => ({ awaitingTags: false, awaitingAssignments: false }),
+  useTagReadiness: () => readiness,
   useTags: () => [root, child, leaf],
 }));
 vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'ada' }) }));
 vi.mock('@/lib/tags', () => ({ createTag: vi.fn(() => ({ id: 'made' })) }));
+beforeEach(() => Object.assign(readiness, { awaitingTags: false, awaitingAssignments: false }));
 
 describe('primary tag color picker', () => {
+  it('lets a draft choose cached tags and plain colors without waiting for synced assignments', () => {
+    Object.assign(readiness, { awaitingTags: true, awaitingAssignments: true });
+    const onChange = vi.fn();
+    const onTagChange = vi.fn();
+    const { rerender } = render(
+      <ColorTagSelector value="default" onChange={onChange} onTagChange={onTagChange} />,
+      { wrapper: TooltipProvider },
+    );
+    expect(screen.getByRole('button', { name: 'Red' })).toBeDisabled();
+    rerender(
+      <ColorTagSelector
+        value="default"
+        onChange={onChange}
+        onTagChange={onTagChange}
+        disabled={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Red' }));
+    expect(onChange).toHaveBeenCalledWith('red');
+    fireEvent.click(screen.getByRole('button', { name: 'Blue: Work' }));
+    expect(onTagChange).toHaveBeenCalledWith(root.id);
+  });
   it('makes a tag under the open branch and assigns it as the primary tag', async () => {
     const onTagChange = vi.fn();
     render(<ColorTagSelector value="default" onChange={vi.fn()} onTagChange={onTagChange} />, {

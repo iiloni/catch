@@ -52,6 +52,13 @@ When closing a manual capture returns to its quick-note editor, queued shares wa
 editor closes so they do not interrupt the restored draft.
 Account-bound staging and receipts are cleared with that account's local data on sign-out.
 
+The Add Rich Link form offers Gallery or a specific Deck column, color or primary tag,
+and secondary tags before Save. These choices belong to the current capture, with Gallery
+and no color or tags initially selected. Bookmarklet, Android/PWA link shares and manual
+rich-link creation use the same controls. Ordinary file and text shares keep their existing
+intake behavior. The note and its tag assignments are queued together through the existing
+write contracts; receipts and retries preserve assignments on notes already created.
+
 ## Compatibility
 
 No REST, shape, persisted note encoding, or outbox format changes. Existing servers receive

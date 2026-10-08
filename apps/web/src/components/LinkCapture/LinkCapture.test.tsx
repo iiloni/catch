@@ -6,7 +6,7 @@ import { LinkCaptureForm } from './LinkCapture';
 
 const mocks = vi.hoisted(() => ({
   intake: vi.fn(),
-  create: vi.fn(() => ({ id: 'note-1', transaction: { id: 'write-1' } })),
+  create: vi.fn((_input: unknown) => ({ id: 'note-1', transaction: { id: 'write-1' } })),
   update: vi.fn(() => ({ id: 'write-2' })),
   has: vi.fn(() => false),
   stored: vi.fn(async () => {}),
@@ -26,6 +26,11 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('@/lib/collections', () => ({
   useCaptureNotes: () => [],
+  useBoardColumns: () => [{ id: 'in_progress', name: 'In progress', position: 'a0' }],
+  useTags: () => [{ id: 'tag-1', name: 'Later', parentId: null, color: null }],
+  useTagReadiness: () => ({ awaitingTags: false }),
+  boardColumnsCollection: new Map([['in_progress', {}]]),
+  tagsCollection: new Map([['tag-1', { id: 'tag-1', name: 'Later', parentId: null, color: null }]]),
   loadShareCollections: mocks.load,
   waitForWriteStored: mocks.stored,
 }));
@@ -38,7 +43,15 @@ vi.mock('@/lib/linkPreviews', () => ({
   assetUrl: (hash: string) => `/api/link-previews/assets/${hash}`,
 }));
 vi.mock('@/lib/openNote', () => ({ useOpenNote: () => ({ open: vi.fn() }) }));
-vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn() } }));
+vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn(), selection: vi.fn() } }));
+vi.mock('@/components/ColorPicker/ColorPicker', () => ({
+  COLOR_NAMES: { default: 'No color', blue: 'Blue' },
+  ColorTagSelector: ({ onChange }: { onChange: (color: 'blue') => void }) => (
+    <button type="button" onClick={() => onChange('blue')}>
+      Blue
+    </button>
+  ),
+}));
 vi.mock('@/lib/receiveShare', () => ({ dismissLinkShare: vi.fn(), saveLinkShare: vi.fn() }));
 
 const metadata: LinkIntake = {
@@ -86,6 +99,42 @@ function mount(autoFetch = false) {
 }
 
 describe('LinkCaptureForm', () => {
+  it('saves the destination, color and tags selected in the dialog', async () => {
+    mount(true);
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getByRole('button', { name: 'Save to Gallery' }));
+    fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose tags' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Later' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'in_progress',
+          color: 'blue',
+          secondaryTagIds: ['tag-1'],
+        }),
+      ),
+    );
+  });
+  it('starts each capture in Gallery with no color or tags', async () => {
+    mount(true);
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: null,
+          color: 'default',
+          primaryTagId: null,
+          secondaryTagIds: [],
+        }),
+      ),
+    );
+  });
   it('keeps only the URL until the current fetch completes, and hides details for a changed URL', async () => {
     let finish!: (value: LinkIntake) => void;
     mocks.intake.mockReturnValueOnce(
@@ -181,12 +230,15 @@ describe('LinkCaptureForm', () => {
     await screen.findByDisplayValue('Fetched title');
     fireEvent.change(screen.getByLabelText('Your notes'), { target: { value: 'My context' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
-    expect(saveDraft).toHaveBeenCalledWith({
-      url: 'https://example.com/',
-      title: 'Fetched title',
-      description: 'Fetched description',
-      notes: 'My context',
-    });
+    expect(saveDraft).toHaveBeenCalledWith(
+      {
+        url: 'https://example.com/',
+        title: 'Fetched title',
+        description: 'Fetched description',
+        notes: 'My context',
+      },
+      { status: null, color: 'default', primaryTagId: null, secondaryTagIds: [] },
+    );
     expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save link' })).toBeDisabled();
     await act(async () => complete('share-id'));

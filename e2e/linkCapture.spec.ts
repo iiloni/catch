@@ -154,11 +154,37 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   await expect(popup.getByLabel('Title', { exact: true })).toHaveValue(metadata.title);
   await expect(popup.getByLabel('Your notes')).toHaveValue('Useful selected passage');
   expect(await popup.evaluate(() => window.opener)).toBeNull();
+  await popup.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  await popup
+    .getByRole('dialog', { name: 'Save to', exact: true })
+    .getByRole('button', { name: 'In progress', exact: true })
+    .click();
+  await popup.getByRole('button', { name: 'Background color' }).click();
+  await popup.getByRole('button', { name: 'Orange', exact: true }).click();
+  await popup.getByRole('button', { name: 'Background color' }).click();
   await popup.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(popup.getByRole('heading', { name: 'Link saved', exact: true })).toBeVisible();
+  await expect(popup.getByText('Your note is in Deck · In progress.')).toBeVisible();
+  expect(
+    await popup.evaluate(async () => {
+      const modulePath = '/src/lib/collections.ts';
+      const collections: {
+        notesCollection: { values: () => Iterable<{ status: string | null; color: string }> };
+      } = await import(modulePath);
+      return [...collections.notesCollection.values()].map(({ status, color }) => ({
+        status,
+        color,
+      }));
+    }),
+  ).toEqual([{ status: 'in_progress', color: 'orange' }]);
   const closed = popup.waitForEvent('close');
-  // The button closes its own page, so Playwright's post-click wait can race with closure.
-  await popup.getByRole('button', { name: 'Close window' }).click({ noWaitAfter: true });
+  // Closing the page can interrupt the click itself, even with navigation waiting disabled.
+  await popup
+    .getByRole('button', { name: 'Close window' })
+    .click({ noWaitAfter: true })
+    .catch((error: unknown) => {
+      if (!popup.isClosed()) throw error;
+    });
   await closed;
 });
 

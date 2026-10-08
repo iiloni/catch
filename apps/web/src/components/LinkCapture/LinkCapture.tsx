@@ -35,6 +35,7 @@ import {
   matchingLinkNotes,
   removeLinkCapture,
 } from '@/lib/linkCapture';
+import { type LinkCapturePlacement, resolveLinkCapturePlacement } from '@/lib/linkCapturePlacement';
 import { assetUrl } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { createNote, hasNote, updateNote } from '@/lib/notes';
@@ -42,6 +43,7 @@ import type { Rect } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { dismissLinkShare, saveLinkShare } from '@/lib/receiveShare';
 import { cn } from '@/lib/utils';
+import { LinkCaptureOptions } from './LinkCaptureOptions';
 
 type FormProps = {
   initial?: Partial<LinkCaptureDraft>;
@@ -52,13 +54,20 @@ type FormProps = {
   onSaved: (id: string) => void;
   onCancel: () => void | Promise<void>;
   onOpenNote: (id: string) => void | Promise<void>;
-  saveDraft?: (draft: LinkCaptureDraft) => Promise<string>;
+  saveDraft?: (draft: LinkCaptureDraft, placement: LinkCapturePlacement) => Promise<string>;
   onSavingChange?: (saving: boolean) => void;
 };
 
 const fieldClass = 'min-h-11 rounded-xl border-input bg-foreground/[0.03] text-base md:text-base';
 const areaClass =
   'w-full resize-y rounded-xl border border-input bg-foreground/[0.03] px-3 py-2 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+function revealCaptureField(area: HTMLElement, field: HTMLElement) {
+  const bounds = area.getBoundingClientRect();
+  const focused = field.getBoundingClientRect();
+  if (focused.bottom > bounds.bottom - 4) area.scrollTop += focused.bottom - bounds.bottom + 4;
+  else if (focused.top < bounds.top + 4) area.scrollTop -= bounds.top + 4 - focused.top;
+}
 
 function surfaceRect(surface: HTMLElement, radius: number): Rect {
   const { x, y, width, height } = surface.getBoundingClientRect();
@@ -140,6 +149,12 @@ export function LinkCaptureForm({
   saveDraft,
 }: FormProps) {
   const id = useId();
+  const [placement, setPlacement] = useState<LinkCapturePlacement>({
+    status: null,
+    color: 'default',
+    primaryTagId: null,
+    secondaryTagIds: [],
+  });
   const reduceMotion = useReducedMotion();
   const form = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<LinkCaptureDraft>(() => ({
@@ -230,7 +245,7 @@ export function LinkCaptureForm({
       frame = requestAnimationFrame(() => {
         const focused = document.activeElement;
         if (focused instanceof HTMLElement && area.contains(focused))
-          focused.scrollIntoView({ block: 'nearest' });
+          revealCaptureField(area, focused);
       });
     });
     observer.observe(area);
@@ -273,7 +288,7 @@ export function LinkCaptureForm({
     setSaveError(null);
     try {
       if (saveDraft) {
-        const id = await saveDraft({ ...draft, url: draft.url.trim() });
+        const id = await saveDraft({ ...draft, url: draft.url.trim() }, placement);
         haptics.success();
         onSaved(id);
         return;
@@ -285,7 +300,12 @@ export function LinkCaptureForm({
       const saved =
         existing && hasNote(existing)
           ? { id: existing, transaction: updateNote(existing, { content }) }
-          : createNote({ id: existing ?? undefined, userId: user.id, content });
+          : createNote({
+              id: existing ?? undefined,
+              userId: user.id,
+              content,
+              ...resolveLinkCapturePlacement(placement),
+            });
       savedId.current = saved.id;
       await waitForWriteStored(saved.transaction);
       haptics.success();
@@ -326,8 +346,11 @@ export function LinkCaptureForm({
           ref={scrollArea}
           className="h-auto min-h-0 flex-1 px-1 pr-4 pb-1"
           onFocusCapture={(event) => {
+            const area = event.currentTarget;
             const target = event.target;
-            requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest' }));
+            // A picker's portal bubbles through this form, but has its own scroll area.
+            if (!(target instanceof HTMLElement) || !area.contains(target)) return;
+            requestAnimationFrame(() => revealCaptureField(area, target));
           }}
         >
           <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
@@ -499,6 +522,7 @@ export function LinkCaptureForm({
                 </motion.div>
               )}
             </AnimatePresence>
+            <LinkCaptureOptions value={placement} onChange={setPlacement} />
           </fieldset>
           {saveError && (
             <p ref={saveErrorElement} role="alert" className="pt-4 text-destructive text-sm">
@@ -734,7 +758,11 @@ export function LinkCapture() {
               closing={manual && returning}
               showActions={false}
               onControls={linkCaptureControls.set}
-              saveDraft={incoming ? (draft) => saveLinkShare(incoming.id, draft) : undefined}
+              saveDraft={
+                incoming
+                  ? (draft, placement) => saveLinkShare(incoming.id, draft, placement)
+                  : undefined
+              }
               onCancel={cancel}
               onSavingChange={setSaving}
               onOpenNote={async (id) => {
