@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { LogOut, Server } from 'lucide-react';
 import { useState } from 'react';
 import { AccountSummary } from '@/components/AccountSummary/AccountSummary';
+import { ChangeName } from '@/components/ChangeName/ChangeName';
 import { ChangePassword } from '@/components/ChangePassword/ChangePassword';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ export const Route = createFileRoute('/_app/settings/account')({
 });
 
 function AccountSettings() {
-  const user = getSignedInUser();
+  const [user, setUser] = useState(getSignedInUser);
   const { pending } = useSyncStatus();
   const [confirming, setConfirming] = useState(false);
 
@@ -31,6 +32,7 @@ function AccountSettings() {
     <div className="flex flex-col gap-6">
       <SettingsSection title="Signed in as">
         {user && <AccountSummary id={user.id} name={user.name} email={user.email} />}
+        {user && <ChangeName name={user.name} onChanged={() => setUser(getSignedInUser())} />}
         {Capacitor.isNativePlatform() && (
           <SettingsRow icon={Server} label="Server" description={getServerUrl()} />
         )}

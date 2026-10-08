@@ -146,6 +146,40 @@ test('tabs show different accounts side by side, and signing one out leaves the 
   await expect(page.getByRole('button', { name: 'Back to your notes' })).toBeHidden();
 });
 
+test('changing a name belongs to the tab’s account while another is active on the device', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Account isolation across tabs does not depend on the layout.');
+  const first = await signUp(page);
+  const second = await addAccount(page, first);
+  const tab = await page.context().newPage();
+  await tab.goto('/u/2/settings/account');
+  await avatar(page, second).click();
+  await page
+    .getByRole('list', { name: 'Accounts' })
+    .getByRole('button', { name: first, exact: true })
+    .click();
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await tab.getByRole('button', { name: 'Change name' }).click();
+  const dialog = tab.getByRole('dialog', { name: 'Change name' });
+  await dialog.getByLabel('Name', { exact: true }).fill('Second Account');
+  await dialog.getByRole('button', { name: 'Save name' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(tab.getByRole('region', { name: 'Signed in as' })).toContainText('Second Account');
+  await page.reload();
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await avatar(page, first).click();
+  await expect(page.getByRole('list', { name: 'Accounts' })).toContainText('Second Account');
+  await page.goto('/u/1/settings/account');
+  const summary = page.getByRole('region', { name: 'Signed in as' });
+  await expect(summary).toContainText(first);
+  await expect(summary).not.toContainText('Second Account');
+  await tab.reload();
+  await expect(tab.getByRole('region', { name: 'Signed in as' })).toContainText('Second Account');
+  await tab.close();
+});
+
 test('an address names its account, as a bookmark of it does', async ({ page, isMobile }) => {
   test.skip(isMobile, 'Addresses do not depend on the layout.');
   const first = await signUp(page);

@@ -325,6 +325,19 @@ export const authClient = createAuthClient({
   },
 });
 
+/** Saves a name on the server before updating this account's offline identity. */
+export async function changeAccountName(name: string) {
+  const user = getSignedInUser();
+  if (!user) throw new Error('No signed-in account');
+  const result = await authClient.updateUser({ name });
+  if (!result.error) {
+    // Another tab may have switched accounts or signed this one out while saving.
+    const account = getAccounts().find((account) => account.user.id === user.id);
+    if (account) saveAccount({ ...account, user: { ...account.user, name } }, false);
+  }
+  return result;
+}
+
 /**
  * The signed-in user, asking the server when this device has a token but has not remembered
  * the user yet (a session from before the app remembered them). Null when signed out, or
