@@ -62,6 +62,13 @@ const fieldClass = 'min-h-11 rounded-xl border-input bg-foreground/[0.03] text-b
 const areaClass =
   'w-full resize-y rounded-xl border border-input bg-foreground/[0.03] px-3 py-2 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
+function revealCaptureField(area: HTMLElement, field: HTMLElement) {
+  const bounds = area.getBoundingClientRect();
+  const focused = field.getBoundingClientRect();
+  if (focused.bottom > bounds.bottom - 4) area.scrollTop += focused.bottom - bounds.bottom + 4;
+  else if (focused.top < bounds.top + 4) area.scrollTop -= bounds.top + 4 - focused.top;
+}
+
 function surfaceRect(surface: HTMLElement, radius: number): Rect {
   const { x, y, width, height } = surface.getBoundingClientRect();
   return { x, y, width, height, radius };
@@ -238,7 +245,7 @@ export function LinkCaptureForm({
       frame = requestAnimationFrame(() => {
         const focused = document.activeElement;
         if (focused instanceof HTMLElement && area.contains(focused))
-          focused.scrollIntoView({ block: 'nearest' });
+          revealCaptureField(area, focused);
       });
     });
     observer.observe(area);
@@ -339,8 +346,11 @@ export function LinkCaptureForm({
           ref={scrollArea}
           className="h-auto min-h-0 flex-1 px-1 pr-4 pb-1"
           onFocusCapture={(event) => {
+            const area = event.currentTarget;
             const target = event.target;
-            requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest' }));
+            // A picker's portal bubbles through this form, but has its own scroll area.
+            if (!(target instanceof HTMLElement) || !area.contains(target)) return;
+            requestAnimationFrame(() => revealCaptureField(area, target));
           }}
         >
           <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">

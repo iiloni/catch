@@ -142,6 +142,22 @@ for (const entry of ['sheet', 'bookmarklet', 'share'] as const) {
     await surface.getByLabel('URL', { exact: true }).focus();
     await expectFocusVisible(surface);
 
+    await surface.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+    const destination = page.getByRole('dialog', { name: 'Save to', exact: true });
+    await expect(
+      destination.getByRole('button', { name: 'New Default', exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const bounds = await destination.boundingBox();
+        return Boolean(bounds && bounds.y >= 0 && bounds.y + bounds.height <= 440);
+      })
+      .toBe(true);
+    await destination.getByRole('button', { name: 'In progress', exact: true }).click();
+    await expect(
+      surface.getByRole('button', { name: 'Save to Deck · In progress', exact: true }),
+    ).toBeVisible();
+
     await surface.getByRole('button', { name: 'Choose tags' }).click();
     const picker = page.getByRole('dialog', { name: 'Secondary tags', exact: true });
     await expect(

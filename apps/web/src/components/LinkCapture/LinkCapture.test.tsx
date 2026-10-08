@@ -102,7 +102,8 @@ describe('LinkCaptureForm', () => {
   it('saves the destination, color and tags selected in the dialog', async () => {
     mount(true);
     await screen.findByLabelText('Title');
-    fireEvent.change(screen.getByLabelText('Save to'), { target: { value: 'in_progress' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save to Gallery' }));
+    fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
     fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
     fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Choose tags' }));

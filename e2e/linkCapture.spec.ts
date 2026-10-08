@@ -154,7 +154,11 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   await expect(popup.getByLabel('Title', { exact: true })).toHaveValue(metadata.title);
   await expect(popup.getByLabel('Your notes')).toHaveValue('Useful selected passage');
   expect(await popup.evaluate(() => window.opener)).toBeNull();
-  await popup.getByLabel('Save to', { exact: true }).selectOption('in_progress');
+  await popup.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  await popup
+    .getByRole('dialog', { name: 'Save to', exact: true })
+    .getByRole('button', { name: 'In progress', exact: true })
+    .click();
   await popup.getByRole('button', { name: 'Background color' }).click();
   await popup.getByRole('button', { name: 'Orange', exact: true }).click();
   await popup.getByRole('button', { name: 'Background color' }).click();

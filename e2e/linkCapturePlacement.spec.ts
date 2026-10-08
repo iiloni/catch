@@ -31,7 +31,10 @@ async function seedChoices(page: Page) {
   ).toBeTruthy();
   // Visit the form online so these server-seeded choices reach the device's cache.
   await page.goto('/capture');
-  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
+  await page.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  const destination = page.getByRole('dialog', { name: 'Save to', exact: true });
+  await expect(destination.getByRole('button', { name: 'Inbox', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Later', exact: true })).toBeVisible();
   await page
@@ -39,14 +42,28 @@ async function seedChoices(page: Page) {
     .getByRole('button', { name: 'Done', exact: true })
     .click();
   await page.reload();
-  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
+  await page.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  await expect(destination.getByRole('button', { name: 'Inbox', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.goto('/');
   return { column, reading, web, later, headers };
 }
 
 async function choosePlacement(page: Page, column: string) {
-  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
-  await page.getByLabel('Save to', { exact: true }).selectOption(column);
+  await page.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  const destination = page.getByRole('dialog', { name: 'Save to', exact: true });
+  const inbox = destination.getByRole('button', { name: 'Inbox', exact: true });
+  await expect(inbox).toHaveAttribute('data-deck-column', column);
+  await expect(
+    destination.getByRole('button', { name: 'Send to gallery', exact: true }),
+  ).toHaveAttribute('aria-current', 'location');
+  await inbox.click();
+  await expect(destination).toBeHidden();
+  await page.getByRole('button', { name: 'Save to Deck · Inbox', exact: true }).click();
+  await expect(inbox).toHaveAttribute('aria-current', 'location');
+  await destination.getByRole('button', { name: 'Send to gallery', exact: true }).click();
+  await page.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
+  await inbox.click();
   await page.getByRole('button', { name: 'Background color' }).click();
   await page.getByRole('button', { name: 'Blue: Reading', exact: true }).click();
   await page.getByRole('button', { name: 'Web', exact: true }).click();

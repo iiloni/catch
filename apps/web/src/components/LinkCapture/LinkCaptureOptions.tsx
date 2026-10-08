@@ -1,13 +1,15 @@
 import {
+  BOARD_COLUMNS,
   DEFAULT_BOARD_STATUS,
   normalizeSecondaryTags,
   secondaryTagAncestors,
   tagColor,
   tagPath,
 } from '@catch/shared';
-import { Palette, Tags } from 'lucide-react';
+import { ChevronDown, Columns3, LayoutDashboard, Palette, Tags } from 'lucide-react';
 import { useId, useState } from 'react';
 import { COLOR_NAMES, ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
+import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Button } from '@/components/ui/button';
@@ -19,11 +21,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { sortBoardColumns } from '@/lib/boardColumns';
 import { useBoardColumns, useTagReadiness, useTags } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import type { LinkCapturePlacement } from '@/lib/linkCapturePlacement';
+
+const pickerClass =
+  'z-[80] top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-1.5rem)] overflow-y-auto overscroll-contain p-4 sm:max-w-sm pointer-coarse:top-auto pointer-coarse:bottom-[calc(var(--keyboard)+var(--safe-bottom)+0.75rem)] pointer-coarse:translate-y-0';
 
 export function LinkCaptureOptions({
   value,
@@ -33,9 +39,14 @@ export function LinkCaptureOptions({
   onChange: (value: LinkCapturePlacement) => void;
 }) {
   const id = useId();
+  const [choosingDestination, setChoosingDestination] = useState(false);
+  useBackHandler(choosingDestination, () => setChoosingDestination(false));
   const [choosingTags, setChoosingTags] = useState(false);
   useBackHandler(choosingTags, () => setChoosingTags(false));
   const columns = sortBoardColumns(useBoardColumns());
+  const destinations = columns.some((column) => column.id === DEFAULT_BOARD_STATUS)
+    ? columns
+    : [{ ...BOARD_COLUMNS[0], userId: getSignedInUser()?.id ?? '', position: 'a0' }, ...columns];
   const tags = useTags();
   const { awaitingTags } = useTagReadiness();
   const primary =
@@ -49,40 +60,61 @@ export function LinkCaptureOptions({
   const ancestors = secondaryTagAncestors(tags, secondary);
   const destination =
     value.status === null
-      ? ''
+      ? null
       : columns.some((column) => column.id === value.status)
         ? value.status
         : DEFAULT_BOARD_STATUS;
+  const destinationName =
+    destination === null
+      ? 'Gallery'
+      : `Deck · ${destinations.find((column) => column.id === destination)?.name}`;
   return (
     <section
       aria-label="Link placement"
       className="flex flex-col gap-3 border-t border-border pt-4"
     >
       <div className="flex flex-col gap-2">
-        <label htmlFor={id} className="font-medium text-sm">
+        <label id={`${id}-label`} htmlFor={id} className="font-medium text-sm">
           Save to
         </label>
-        <select
-          id={id}
-          value={destination}
-          onChange={(event) => {
-            haptics.selection();
-            onChange({ ...value, status: event.target.value || null });
-          }}
-          className="h-11 w-full min-w-0 rounded-xl border border-input bg-foreground/[0.03] px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          <option value="">Gallery</option>
-          <optgroup label="Deck">
-            {!columns.some((column) => column.id === DEFAULT_BOARD_STATUS) && (
-              <option value={DEFAULT_BOARD_STATUS}>Deck · New</option>
-            )}
-            {columns.map((column) => (
-              <option key={column.id} value={column.id}>
-                Deck · {column.name}
-              </option>
-            ))}
-          </optgroup>
-        </select>
+        <Dialog open={choosingDestination} onOpenChange={setChoosingDestination}>
+          <DialogTrigger asChild>
+            <Button
+              id={id}
+              type="button"
+              variant="secondary"
+              aria-labelledby={`${id}-label ${id}-destination`}
+              className="h-11 w-full min-w-0 justify-start rounded-xl border border-input px-3 font-normal text-base"
+            >
+              {destination === null ? <LayoutDashboard aria-hidden /> : <Columns3 aria-hidden />}
+              <span id={`${id}-destination`} className="min-w-0 flex-1 truncate text-left">
+                {destinationName}
+              </span>
+              <ChevronDown aria-hidden />
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            aria-describedby={undefined}
+            showCloseButton={false}
+            overlayClassName="z-[80]"
+            className={pickerClass}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <DialogTitle className="text-base">Save to</DialogTitle>
+            <div className="[&_[data-deck-columns]]:max-h-[min(50dvh,max(0px,calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-8rem)))]">
+              <NoteMovePicker
+                columns={destinations}
+                current={destination}
+                hovered={undefined}
+                onSelect={(status) => {
+                  haptics.selection();
+                  onChange({ ...value, status });
+                  setChoosingDestination(false);
+                }}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -143,7 +175,7 @@ export function LinkCaptureOptions({
             aria-describedby={undefined}
             showCloseButton={false}
             overlayClassName="z-[80]"
-            className="z-[80] top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-1.5rem)] overflow-y-auto overscroll-contain p-4 sm:max-w-sm pointer-coarse:top-auto pointer-coarse:bottom-[calc(var(--keyboard)+var(--safe-bottom)+0.75rem)] pointer-coarse:translate-y-0"
+            className={pickerClass}
             onOpenAutoFocus={(event) => {
               // Let touch users scroll the list before choosing to bring up search.
               if (
