@@ -78,27 +78,11 @@ export function Features() {
           Notes and files encrypted on your devices, with a separate password. The server and its
           backups hold only ciphertext. Ordinary notes stay outside the vault.
         </p>
-        <p>
-          <a
-            href="/docs/using-catch/vault"
-            className="font-semibold text-brand-link underline underline-offset-4"
-          >
-            Set up your vault
-          </a>
-        </p>
       </Feature>
       <Feature title="A note you can pass along." shot={shots.phoneSharing} phone flip>
         <p>
           Send a read-only link with files and future updates, or a Markdown copy of the text.
           Anyone with the link can read it. You choose when to stop sharing.
-        </p>
-        <p>
-          <a
-            href="/docs/using-catch/links-and-sharing#share-a-catch-note"
-            className="font-semibold text-brand-link underline underline-offset-4"
-          >
-            Learn about sharing
-          </a>
         </p>
       </Feature>
 

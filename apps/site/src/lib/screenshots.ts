@@ -132,6 +132,8 @@ export const docShots = {
   },
   gallery: shots.phoneGallery,
   note: shots.phoneNote,
+  vault: shots.phoneVault,
+  sharing: shots.phoneSharing,
   reminder: shots.phoneReminder,
   search: shots.phoneSearch,
   deck: shots.phoneDeck,
