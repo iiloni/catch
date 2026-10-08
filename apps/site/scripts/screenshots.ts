@@ -375,6 +375,26 @@ async function save(page: Page, name: string, theme: string) {
 const card = (page: Page, title: string) =>
   page.getByRole('article').filter({ has: page.getByRole('heading', { name: title }) });
 
+async function captureCapabilities(context: BrowserContext, theme: string) {
+  const vault = await openApp(context);
+  await card(vault, 'Groceries').waitFor({ timeout: 60_000 });
+  await vault.getByRole('button', { name: 'Open the vault', exact: true }).click();
+  await vault.getByRole('heading', { name: 'Set up your vault', exact: true }).waitFor();
+  await save(vault, 'phone-vault', theme);
+  await vault.close();
+
+  const sharing = await openApp(context);
+  const groceries = card(sharing, 'Groceries');
+  await groceries.waitFor({ timeout: 60_000 });
+  await groceries.getByRole('button', { name: 'Open note', exact: true }).click();
+  const editor = sharing.getByRole('dialog');
+  await editor.getByRole('textbox').waitFor();
+  await editor.getByRole('button', { name: 'Share', exact: true }).click();
+  await sharing.getByRole('heading', { name: 'Share this note', exact: true }).waitFor();
+  await save(sharing, 'phone-sharing', theme);
+  await sharing.close();
+}
+
 async function capture(context: BrowserContext, layout: Layout, theme: string) {
   const page = await openApp(context);
   await card(page, 'Groceries').waitFor({ timeout: 60_000 });
@@ -976,6 +996,15 @@ const storageState = await createAccount(browser);
   await context.close();
 }
 const only = process.argv[2];
+if (only === 'capabilities') {
+  for (const theme of themes) {
+    const context = await phoneContext(browser, storageState, theme);
+    await captureCapabilities(context, theme);
+    await context.close();
+  }
+  await browser.close();
+  process.exit(0);
+}
 if (only === 'docs') {
   const admin = await adminAccount(browser);
   for (const theme of themes) {
@@ -1021,6 +1050,7 @@ for (const layout of Object.keys(layouts) as Layout[]) {
             locale: 'en-US',
           });
     await capture(context, layout, theme);
+    if (layout === 'phone') await captureCapabilities(context, theme);
     await context.close();
   }
 }

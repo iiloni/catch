@@ -73,6 +73,19 @@ export function Features() {
         <p>Every weekday, or the second Tuesday of the month.</p>
       </Feature>
 
+      <Feature title="A vault for private notes." shot={shots.phoneVault} phone>
+        <p>
+          Notes and files encrypted on your devices, with a separate password. The server and its
+          backups hold only ciphertext. Ordinary notes stay outside the vault.
+        </p>
+      </Feature>
+      <Feature title="A note you can pass along." shot={shots.phoneSharing} phone flip>
+        <p>
+          Send a read-only link with files and future updates, or a Markdown copy of the text.
+          Anyone with the link can read it. You choose when to stop sharing.
+        </p>
+      </Feature>
+
       <ul className="flex flex-wrap justify-center gap-3">
         {more.map(({ icon: Icon, title }) => (
           <li

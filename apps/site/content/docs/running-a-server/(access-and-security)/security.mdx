@@ -27,12 +27,16 @@ Browser reminders require outbound HTTPS to the allowed browser-push services. N
 
 Keep Docker, host software and Catch updated. Preserve persistent mounts and monitor the disk. Attachment quota defaults to 10 GiB per account; the 100 MiB file limit is fixed in the app. Notes have no total per-account quota. The JSON request cap limits a single request, not total database growth. Open registration can therefore grow storage even with attachment quotas enabled.
 
-Treat backups as sensitive data. They contain every account's notes, password hashes, and browser-push credentials, and are not encrypted. Use access controls and encryption in your storage/backup system as appropriate. Keep copies off the server and test restores. Deleting live data does not erase existing backup ZIPs or downloaded copies.
+Treat backups as sensitive data. The backup archive is not encrypted and contains ordinary notes, share-link tokens, password hashes and browser-push credentials. Vault notes and files inside it remain encrypted with the user's vault key. Use access controls and encryption in your storage/backup system as appropriate. Keep copies off the server and test restores. Deleting live data does not erase existing backup ZIPs or downloaded copies.
 
 Invite links and temporary reset passwords are secrets. Invites are single-use and time-limited; temporary passwords do not expire automatically. Share them with their intended recipient and ask users to replace reset passwords promptly.
 
 ## Understand the boundary
 
-Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read the database and files. Catch currently has no encrypted vault, two-factor sign-in or self-service email recovery. A backup is not evidence that only its account holders can read it.
+Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read ordinary notes and files. The [vault](/docs/using-catch/vault) encrypts notes and files on devices with a separate password. Administrators cannot reset that password or recover vault content without the user's password or recovery code. The server still sees note sizes and change times, attachment sizes and reminder schedules.
+
+A remembered vault is accessible to anyone who can open Catch on that device. An unlocked vault also depends on the safety of the device and the app's code; preserve the content security policy and avoid injecting scripts. Catch currently has no two-factor sign-in or self-service email recovery.
+
+[Sharing links](/docs/using-catch/links-and-sharing#share-a-catch-note) grant anyone holding the link read-only access to that ordinary note and its files without signing in. Recipients can forward the link. Revocation takes effect once it reaches the server and cannot erase already downloaded copies. Links ask search engines not to index them, but that is not an access control.
 
 For details of the implemented guards, see [the internet-exposure decision](https://github.com/iiloni/catch/blob/main/docs/decisions/0015-exposed-servers.md). For failures, see [Troubleshooting](/docs/running-a-server/troubleshooting).

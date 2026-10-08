@@ -46,7 +46,7 @@ Android updates separately. Its updater targets the server's exact published ver
 
 Catch checks data protocol compatibility separately from release numbers. A compatible older release can sync. An incompatible client pauses data sync and retains local notes and queued changes, with **App update required** or **Server update required**. Health, authentication and update metadata remain available for recovery.
 
-For the current reminders protocol, update the server first, then Android clients. Future breaking releases may give different requirements; follow their notes. Do not ask users to clear app data or sign out to repair a protocol mismatch. See the [user update guide](/docs/using-catch/offline-and-updates) and [API compatibility decision](https://github.com/iiloni/catch/blob/main/docs/decisions/0013-api-compatibility.md).
+For **v0.6.0-preview**, update the server first, then Android clients. This release adds the [vault](/docs/using-catch/vault) and [note sharing](/docs/using-catch/links-and-sharing#share-a-catch-note). Its sharing protocol requires the new server; an older server pauses sync for the new client until updated. Older compatible clients can keep using the new server without those features. Follow each release's upgrade notes. Do not ask users to clear app data or sign out to repair a protocol mismatch. See the [user update guide](/docs/using-catch/offline-and-updates) and [API compatibility decision](https://github.com/iiloni/catch/blob/main/docs/decisions/0013-api-compatibility.md).
 
 ## Try preview separately
 

@@ -3,9 +3,9 @@ title: Backups
 description: Make full backups, schedule them and keep copies away from the server.
 ---
 
-A server backup is one ZIP containing all accounts, notes, settings and attachment metadata, plus original attachment files when included. Tags, Deck columns, reminders and browser-push keys/subscriptions are in the database dump too. Sessions are excluded. Image previews and video posters are regenerated as needed.
+A server backup is one ZIP containing all accounts, notes, settings and attachment metadata, plus original attachment files when included. The database dump also includes tags, Deck columns, reminders, browser-push keys/subscriptions, vaults and note-sharing records. Sessions are excluded. Ordinary image previews and video posters are regenerated as needed.
 
-Backups are not encrypted. They hold everyone's private notes, password hashes and push credentials. Restrict access and protect off-server storage. They do not contain your deployment's `.env` credentials, Compose file or proxy configuration; preserve those separately.
+Backups are not encrypted. They hold everyone's ordinary notes, share-link tokens, password hashes and push credentials. Vault notes and included vault files remain encrypted inside the backup; restoring one does not replace a lost vault password or recovery code. Restrict access and protect off-server storage. They do not contain your deployment's `.env` credentials, Compose file or proxy configuration; preserve those separately.
 
 ## Back up in the app
 

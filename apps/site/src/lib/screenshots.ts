@@ -49,6 +49,10 @@ import phoneReminderDark from '@/screenshots/phone-reminder-dark.webp';
 import phoneReminderLight from '@/screenshots/phone-reminder-light.webp';
 import phoneSearchDark from '@/screenshots/phone-search-dark.webp';
 import phoneSearchLight from '@/screenshots/phone-search-light.webp';
+import phoneSharingDark from '@/screenshots/phone-sharing-dark.webp';
+import phoneSharingLight from '@/screenshots/phone-sharing-light.webp';
+import phoneVaultDark from '@/screenshots/phone-vault-dark.webp';
+import phoneVaultLight from '@/screenshots/phone-vault-light.webp';
 
 /** Captured by `scripts/screenshots.ts`; rerun it rather than editing the files. */
 export const shots = {
@@ -92,6 +96,16 @@ export const shots = {
     dark: phoneDeckDark,
     alt: 'The deck on a phone, one column at a time',
   },
+  phoneVault: {
+    light: phoneVaultLight,
+    dark: phoneVaultDark,
+    alt: 'Vault setup on a phone, with a separate password and the option to remember this device',
+  },
+  phoneSharing: {
+    light: phoneSharingLight,
+    dark: phoneSharingDark,
+    alt: 'A note’s sharing panel on a phone, offering a Catch link or a Markdown content copy',
+  },
 } satisfies Record<string, Shot>;
 
 /** Guide assets share the capture pipeline, without changing the marketing gallery. */
@@ -118,6 +132,8 @@ export const docShots = {
   },
   gallery: shots.phoneGallery,
   note: shots.phoneNote,
+  vault: shots.phoneVault,
+  sharing: shots.phoneSharing,
   reminder: shots.phoneReminder,
   search: shots.phoneSearch,
   deck: shots.phoneDeck,

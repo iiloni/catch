@@ -2,7 +2,7 @@
  * The comparison on the home page. Every cell about another product comes from that
  * product's own pages (`sources`); recheck them and move `checkedOn` when editing a row.
  */
-export const checkedOn = '2026-10-05';
+export const checkedOn = '2026-10-07';
 
 export const products = ['Catch', 'Google Keep', 'Memos', 'Notesnook'] as const;
 
@@ -31,7 +31,7 @@ export const rows: readonly Row[] = [
   },
   {
     feature: 'End-to-end encryption',
-    cells: [no('The server can read your notes'), no(), no(), yes()],
+    cells: [partial('Vault notes and files; ordinary notes are not encrypted'), no(), no(), yes()],
   },
   {
     feature: 'Works offline',
@@ -64,7 +64,12 @@ export const rows: readonly Row[] = [
   },
   {
     feature: 'Share a note with someone',
-    cells: [no(), yes('And edit it together'), yes('Read-only links'), partial('Read-only links')],
+    cells: [
+      yes('Read-only links'),
+      yes('And edit it together'),
+      yes('Read-only links'),
+      partial('Read-only links'),
+    ],
   },
   {
     feature: 'Board for notes in progress',
@@ -87,8 +92,12 @@ export const rows: readonly Row[] = [
 
 export const sources = [
   { product: 'Google Keep', url: 'https://support.google.com/keep' },
+  { product: 'Keep sharing', url: 'https://support.google.com/keep/answer/6101196' },
+  { product: 'Keep privacy', url: 'https://support.google.com/keep/answer/10431250' },
   { product: 'Memos', url: 'https://usememos.com/features' },
+  { product: 'Memos sharing', url: 'https://usememos.com/docs/usage/sharing' },
   { product: 'Notesnook', url: 'https://notesnook.com/pricing' },
+  { product: 'Notesnook sharing', url: 'https://notesnook.com/help/publish-notes-with-monographs' },
   {
     product: 'Notesnook sync server',
     url: 'https://github.com/streetwriters/notesnook-sync-server',
