@@ -68,6 +68,11 @@ async function choosePlacement(page: Page, column: string) {
   await page.getByRole('button', { name: 'Blue: Reading', exact: true }).click();
   await page.getByRole('button', { name: 'Web', exact: true }).click();
   await page.getByRole('button', { name: 'Background color' }).click();
+  const primaryBadge = page
+    .getByRole('region', { name: 'Link placement' })
+    .locator('[title="Reading / Web"][data-note-color="blue"]');
+  await expect(primaryBadge).toHaveText('Web');
+  await expect(primaryBadge.locator('svg')).toBeVisible();
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await expect(page.getByRole('checkbox', { name: 'Reading / Web', exact: true })).toBeDisabled();
   await page.getByRole('checkbox', { name: 'Later', exact: true }).check();

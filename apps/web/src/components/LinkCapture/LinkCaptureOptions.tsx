@@ -10,6 +10,7 @@ import { ChevronDown, Columns3, LayoutDashboard, Palette, Tags } from 'lucide-re
 import { useId, useState } from 'react';
 import { COLOR_NAMES, ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
+import { TagBadge } from '@/components/TagBadge/TagBadge';
 import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Button } from '@/components/ui/button';
@@ -147,18 +148,18 @@ export function LinkCaptureOptions({
               />
             </PopoverContent>
           </Popover>
-          <span
-            className="min-w-0 truncate text-sm text-muted-foreground"
-            title={
-              primary
-                ? tagPath(tags, primary.id)
-                    .map((tag) => tag.name)
-                    .join(' / ')
-                : COLOR_NAMES[color]
-            }
-          >
-            {primary?.name ?? COLOR_NAMES[color]}
-          </span>
+          {primary ? (
+            <span className="flex min-w-0">
+              <TagBadge tag={primary} tags={tags} primary interactive={false} />
+            </span>
+          ) : (
+            <span
+              className="min-w-0 truncate text-sm text-muted-foreground"
+              title={COLOR_NAMES[color]}
+            >
+              {COLOR_NAMES[color]}
+            </span>
+          )}
         </div>
         <Dialog open={choosingTags} onOpenChange={setChoosingTags}>
           <DialogTrigger asChild>
