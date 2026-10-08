@@ -21,6 +21,8 @@ You cannot sign in for the first time, fetch a new attachment original or page p
 
 Only one tab per account owns its offline queue. If Catch says **Catch is open in another tab, and only that tab can save changes offline**, work in that other tab or close it and let this one take over. Writes in a secondary tab can fail and roll back without a connection.
 
+In **v0.6.0-preview**, the [vault](/docs/using-catch/vault) also works offline after it has synced here. Vault setup, password changes/recovery and deletion need a connection. You can create or stop a [sharing link](/docs/using-catch/links-and-sharing#share-a-catch-note) offline, but readers see the change only after it reaches the server.
+
 ## Understand queued changes
 
 The cloud control in a page header explains why sync stopped and shows how many changes are waiting. The editor says **Saved on this device** when it has stored changes locally.
@@ -39,6 +41,8 @@ With several accounts on a device, only accounts open in a tab sync. Switch back
 ## Avoid conflicting edits
 
 Edits to different note fields can both survive. If two devices change the same field, the last change to reach the server wins. The note's text is one field: an offline text edit sent later can replace text another device saved while you were away. There is no merge editor or saved revision history.
+
+A vault note is encrypted as a whole: a later write replaces the entire note, including its organization, rather than merging different fields.
 
 Let a note sync before editing its text on another device. For offline edits, **Last edited** reflects when the server applies the change, not necessarily when you typed it.
 

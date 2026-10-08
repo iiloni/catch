@@ -2,6 +2,7 @@ import {
   CalendarPlus,
   Images,
   Link2,
+  LockKeyhole,
   MousePointerClick,
   Search,
   Share2,
@@ -72,6 +73,52 @@ export function Features() {
       <Feature title="Reminders that repeat." shot={shots.phoneReminder} phone flip>
         <p>Every weekday, or the second Tuesday of the month.</p>
       </Feature>
+
+      <div id="preview-features" className="scroll-mt-24 space-y-6">
+        <div className="reveal flex flex-wrap items-baseline justify-between gap-3">
+          <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">New in v0.6.0-preview.</h3>
+          <a
+            href="/docs/running-a-server/updates#try-preview-separately"
+            className="font-semibold text-brand-link underline underline-offset-4"
+          >
+            Try the preview release
+          </a>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div data-note-color="violet" className="reveal rounded-3xl bg-note p-7 sm:p-9">
+            <LockKeyhole className="mb-6 size-7" aria-hidden />
+            <h4 className="text-balance text-3xl font-bold tracking-tight">
+              A vault for private notes.
+            </h4>
+            <p className="mt-4 text-pretty text-lg">
+              Notes and files encrypted on your devices, with a separate password. The server and
+              its backups hold only ciphertext. Ordinary notes stay outside the vault.
+            </p>
+            <a
+              href="/docs/using-catch/vault"
+              className="mt-6 inline-block font-semibold underline underline-offset-4"
+            >
+              Set up your vault
+            </a>
+          </div>
+          <div data-note-color="green" className="reveal rounded-3xl bg-note p-7 sm:p-9">
+            <Share2 className="mb-6 size-7" aria-hidden />
+            <h4 className="text-balance text-3xl font-bold tracking-tight">
+              A note you can pass along.
+            </h4>
+            <p className="mt-4 text-pretty text-lg">
+              Send a read-only link with files and future updates, or a Markdown copy of the text.
+              Anyone with the link can read it. You choose when to stop sharing.
+            </p>
+            <a
+              href="/docs/using-catch/links-and-sharing#share-a-catch-note"
+              className="mt-6 inline-block font-semibold underline underline-offset-4"
+            >
+              Learn about sharing
+            </a>
+          </div>
+        </div>
+      </div>
 
       <ul className="flex flex-wrap justify-center gap-3">
         {more.map(({ icon: Icon, title }) => (
