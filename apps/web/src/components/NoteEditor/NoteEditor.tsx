@@ -219,6 +219,21 @@ export function NoteEditor({
       checkbox.click();
       return;
     }
+    // Empty checklist text has only a caret's width. Taps on its placeholder or the
+    // surrounding row must select that item rather than leave the caret in another block.
+    const checklist = event.target.closest('[data-content-type="checkListItem"]');
+    if (
+      checklist?.querySelector('.bn-inline-content')?.textContent === '' &&
+      !event.target.closest('button, input, [contenteditable="false"]')
+    ) {
+      const id = checklist.closest<HTMLElement>('[data-node-type="blockContainer"]')?.dataset.id;
+      const block = id ? editor.getBlock(id) : undefined;
+      if (block) {
+        editor.setTextCursorPosition(block, 'start');
+        editor.focus();
+      }
+      return;
+    }
     // A tap inside a block belongs to BlockNote, which places the caret at the tapped text.
     if (event.target.closest('[data-node-type="blockContainer"]')) return;
 

@@ -56,6 +56,49 @@ test('checkboxes have a 44px target and toggle from its padding', async ({ page,
   await expect(page.getByRole('dialog').getByRole('checkbox').first()).toBeChecked();
 });
 
+test('an empty checklist item can be edited after dismissing the keyboard', async ({
+  page,
+  isMobile,
+}) => {
+  const dialog = await listNote(page);
+  const editor = dialog.locator('[contenteditable="true"]');
+  const lastItem = dialog.locator('.bn-editor [data-id="item-2"] p');
+  await lastItem.click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.press('End');
+  await page.keyboard.type('!');
+  await expect(lastItem).toHaveText('Item 2!');
+  await page.keyboard.press('Enter');
+  const emptyItem = dialog.locator('[data-content-type="checkListItem"]').last();
+  await expect(emptyItem.locator('p')).toBeEmpty();
+
+  // Keyboard dismissal blurs the editor; browser emulation has no native keyboard.
+  await page.evaluate(async () => {
+    const { keyboardHeight } = await import('/src/lib/keyboard.ts');
+    keyboardHeight.jump(320);
+    (document.activeElement as HTMLElement).blur();
+    keyboardHeight.jump(0);
+  });
+  await expect(editor).not.toBeFocused();
+  const box = await settledBox(emptyItem);
+  if (!box) throw new Error('Missing empty checklist item');
+  // The placeholder and surrounding blank space must both select this empty item.
+  const point = { x: box.x + 60, y: box.y + box.height / 2 };
+  if (isMobile) await page.touchscreen.tap(point.x, point.y);
+  else await page.mouse.click(point.x, point.y);
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Editable again');
+  await expect(emptyItem.locator('p')).toHaveText('Editable again');
+  await expect(emptyItem.getByRole('checkbox')).not.toBeChecked();
+  await expect(dialog.locator('.bn-editor h3')).toHaveText('Touch list');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.reload();
+  const reopened = await openNote(page, 'Touch list');
+  await expect(reopened.locator('[data-content-type="checkListItem"] p').last()).toHaveText(
+    'Editable again',
+  );
+});
+
 for (const kind of ['checkListItem', 'bulletListItem', 'numberedListItem']) {
   test(`holding a ${kind} reorders it with its children and supports undo`, async ({
     page,
