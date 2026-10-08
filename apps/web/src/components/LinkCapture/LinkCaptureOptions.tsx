@@ -89,6 +89,8 @@ export function LinkCaptureOptions({
             </PopoverTrigger>
             <PopoverContent className="z-[80] w-auto rounded-3xl p-3">
               <ColorTagSelector
+                // A new capture owns its draft assignments and can use cached tags offline.
+                disabled={false}
                 value={color}
                 primaryTagId={primary?.id}
                 onChange={(color) => onChange({ ...value, color, primaryTagId: null })}
@@ -130,7 +132,7 @@ export function LinkCaptureOptions({
           <PopoverContent className="z-[80] w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-3">
             <section aria-label="Secondary tags">
               <h3 className="mb-2 font-medium text-sm">Secondary tags</h3>
-              {awaitingTags ? (
+              {awaitingTags && !tags.length ? (
                 <p role="status" className="py-3 text-muted-foreground text-sm">
                   Loading tags…
                 </p>

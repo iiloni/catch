@@ -37,6 +37,7 @@ async function seedChoices(page: Page) {
   await page.getByRole('button', { name: 'Choose tags' }).click();
   await page.reload();
   await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
+  await page.goto('/');
   return { column, reading, web, later, headers };
 }
 
@@ -66,8 +67,16 @@ async function stage(page: Page) {
   });
 }
 
+async function selectInbox(page: Page, isMobile: boolean) {
+  if (!isMobile) return;
+  const tab = page.getByRole('tab', { name: /^Inbox / });
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+}
+
 test('the capture form saves to a chosen custom Deck column with primary and secondary tags', async ({
   page,
+  isMobile,
 }) => {
   await signUp(page);
   const { column } = await seedChoices(page);
@@ -85,12 +94,14 @@ test('the capture form saves to a chosen custom Deck column with primary and sec
   await expect(editor.locator('[data-note-color="blue"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await openDeck(page);
+  await selectInbox(page, isMobile);
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
       .getByRole('heading', { name: 'Captured link' }),
   ).toBeVisible();
   await page.reload();
+  await selectInbox(page, isMobile);
   await expect(
     card(page, 'Captured link').getByRole('button', { name: 'Reading / Web', exact: true }),
   ).toBeVisible();
@@ -156,10 +167,10 @@ test('a link share uses its dialog choices offline and completed receipts preser
 
 test('a pending native link share offers placement and tag choices inside the app dialog', async ({
   page,
+  isMobile,
 }) => {
   await signUp(page);
   const { column } = await seedChoices(page);
-  await page.goto('/');
   await page.route('**/api/link-previews/intake', (route) => route.fulfill({ status: 404 }));
   const link = await stage(page);
   await page.reload();
@@ -176,6 +187,7 @@ test('a pending native link share offers placement and tag choices inside the ap
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await openDeck(page);
+  await selectInbox(page, isMobile);
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
