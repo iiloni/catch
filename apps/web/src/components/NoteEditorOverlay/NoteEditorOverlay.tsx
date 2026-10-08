@@ -627,7 +627,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
           // detached target counts as ours too. Beside the page, the page is not outside.
           onInteractOutside={(event) => {
-            if (split || tagFormOpen.get()) {
+            if (split || tagFormOpen.get() || capture) {
               event.preventDefault();
               return;
             }
