@@ -86,7 +86,7 @@ function SharePage() {
           key={capture.id}
           initial={capture.draft}
           autoFetch
-          saveDraft={(draft) => saveLinkShare(capture.id, draft)}
+          saveDraft={(draft, placement) => saveLinkShare(capture.id, draft, placement)}
           onSavingChange={setSaving}
           onCancel={cancel}
           onSaved={(note) => void navigate({ to: '/', search: { note }, replace: true })}

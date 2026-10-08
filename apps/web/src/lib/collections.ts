@@ -761,7 +761,6 @@ export async function clearLocalData() {
   if (user) await forgetVault(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
-  if (user) localStorage.removeItem(`catch-incoming-note-defaults:${user.id}`);
 }
 
 /**

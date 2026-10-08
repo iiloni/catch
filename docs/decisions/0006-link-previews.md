@@ -39,9 +39,8 @@ Archive, excluding Trash. Duplicates can still be saved.
 Settings > General provides an instance-specific bookmarklet that opens the same form at
 `/capture` in a compact browser window. It sends the current URL, page title and selected
 text in a URL fragment, so those values do not reach server access logs, and carries no
-credentials. Setup/login retains the capture destination. Saving applies the account's
-device-local incoming-note defaults (ADR 0014). The popup confirms success only after the
-ordinary note write is durably queued or completed; other windows retain ADR
+credentials. Setup/login retains the capture destination. The popup confirms success only
+after the ordinary note write is durably queued or completed; other windows retain ADR
 0007's offline limitation. It never saves automatically on opening or canceling.
 
 **Fetched by the server.** Saving a note adds a `pending` row to `link_previews` (per user,

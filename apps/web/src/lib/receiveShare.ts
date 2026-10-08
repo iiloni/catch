@@ -1,13 +1,13 @@
 import { importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { loadShareCollections, waitForQueuedWrite, waitForWriteStored } from './collections';
-import { incomingNoteDefaults } from './incomingNoteDefaults';
 import {
   capturedLinkContent,
   type IncomingLinkCapture,
   incomingLinkDraft,
   type LinkCaptureDraft,
 } from './linkCapture';
+import { type LinkCapturePlacement, resolveLinkCapturePlacement } from './linkCapturePlacement';
 import { createNote, hasNote, updateNote } from './notes';
 import { sharedNoteContent } from './shareContent';
 import { getIncomingShare, saveIncomingShare } from './shareInbox';
@@ -52,7 +52,11 @@ export async function prepareShare(id: string): Promise<PreparedShare> {
   return prepared ?? { kind: 'note', id: await receiveShare(id) };
 }
 
-export function saveLinkShare(id: string, draft: LinkCaptureDraft): Promise<string> {
+export function saveLinkShare(
+  id: string,
+  draft: LinkCaptureDraft,
+  placement?: LinkCapturePlacement,
+): Promise<string> {
   return withShareLock(id, async () => {
     const { share, user } = await claimShare(id);
     if (share.dismissed)
@@ -63,7 +67,12 @@ export function saveLinkShare(id: string, draft: LinkCaptureDraft): Promise<stri
     const content = capturedLinkContent(draft);
     const transaction = hasNote(id)
       ? updateNote(id, { content })
-      : createNote({ id, userId: user.id, content, ...incomingNoteDefaults(user.id) }).transaction;
+      : createNote({
+          id,
+          userId: user.id,
+          content,
+          ...(placement && resolveLinkCapturePlacement(placement)),
+        }).transaction;
     await waitForWriteStored(transaction);
     await saveIncomingShare({ ...share, complete: true, files: [], title: '', text: '', url: '' });
     return id;
@@ -109,7 +118,6 @@ async function consume(id: string) {
       id: share.id,
       userId: user.id,
       content: sharedNoteContent(share),
-      ...incomingNoteDefaults(user.id),
     });
     await waitForWriteStored(transaction);
   }

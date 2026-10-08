@@ -7,7 +7,7 @@ const id = () => {
   return `${value.slice(0, 14)}7${value.slice(15)}`;
 };
 
-async function configureDefaults(page: Page) {
+async function seedChoices(page: Page) {
   const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
   const headers = { Authorization: `Bearer ${token}` };
   const reading = id();
@@ -29,49 +29,52 @@ async function configureDefaults(page: Page) {
       })
     ).ok(),
   ).toBeTruthy();
-  await page.goto('/settings/general');
-  const section = page.getByRole('region', { name: 'Incoming notes', exact: true });
-  await expect(section.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
-  await section.getByLabel('Save incoming notes to').selectOption(column);
-  await section.getByRole('button', { name: 'Background color' }).click();
-  await page.getByRole('button', { name: 'Blue: Reading', exact: true }).click();
-  await page.getByRole('button', { name: 'Web', exact: true }).click();
-  // Close only the palette; Android Back is covered by the palette's own tests.
-  await section.getByText('Save incoming notes to', { exact: true }).click();
-  await section.getByRole('checkbox', { name: 'Later', exact: true }).check();
-  await expect(
-    section.getByRole('checkbox', { name: 'Reading / Web', exact: true }),
-  ).toBeDisabled();
+  // Visit the form online so these server-seeded choices reach the device's cache.
+  await page.goto('/capture');
+  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
+  await page.getByRole('button', { name: 'Choose tags' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Later', exact: true })).toBeVisible();
+  await page.getByText('Save to', { exact: true }).click();
   await page.reload();
-  await expect(section.getByLabel('Save incoming notes to')).toHaveValue(column);
-  await expect(section.getByRole('checkbox', { name: 'Later', exact: true })).toBeChecked();
-  await expect(section.getByText('Web', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
   return { column, reading, web, later, headers };
 }
 
-async function stage(page: Page, kind: 'files' | 'link') {
-  return page.evaluate(async (kind) => {
+async function choosePlacement(page: Page, column: string) {
+  await expect(page.getByRole('option', { name: 'Deck · Inbox', exact: true })).toBeAttached();
+  await page.getByLabel('Save to', { exact: true }).selectOption(column);
+  await page.getByRole('button', { name: 'Background color' }).click();
+  await page.getByRole('button', { name: 'Blue: Reading', exact: true }).click();
+  await page.getByRole('button', { name: 'Web', exact: true }).click();
+  await page.getByText('Save to', { exact: true }).click();
+  await page.getByRole('button', { name: 'Choose tags' }).click();
+  await expect(page.getByRole('checkbox', { name: 'Reading / Web', exact: true })).toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Later', exact: true }).check();
+  await page.getByText('Save to', { exact: true }).click();
+}
+
+async function stage(page: Page) {
+  return page.evaluate(async () => {
     const modulePath = '/src/lib/shareInbox.ts';
     const inbox: { captureWebShare: (form: FormData) => Promise<string> } = await import(
       modulePath
     );
     const form = new FormData();
-    form.set('title', kind === 'files' ? 'Shared file' : 'Shared link');
-    form.set('text', kind === 'files' ? 'Shared caption' : 'https://example.com/incoming');
-    if (kind === 'files')
-      form.append('files', new File(['data'], 'shared.txt', { type: 'text/plain' }));
+    form.set('title', 'Shared link');
+    form.set('text', 'https://example.com/incoming');
     return inbox.captureWebShare(form);
-  }, kind);
+  });
 }
 
-test('incoming settings place link captures in a custom Deck column with primary and secondary tags', async ({
+test('the capture form saves to a chosen custom Deck column with primary and secondary tags', async ({
   page,
 }) => {
   await signUp(page);
-  await configureDefaults(page);
+  const { column } = await seedChoices(page);
   await page.route('**/api/link-previews/intake', (route) => route.fulfill({ status: 404 }));
   await page.goto('/capture#url=https%3A%2F%2Fexample.com%2Fincoming&title=Captured%20link');
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Captured link');
+  await choosePlacement(page, column);
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(page.getByText('Your note is in Deck · Inbox.')).toBeVisible();
   await page.getByRole('button', { name: 'Open note', exact: true }).click();
@@ -96,31 +99,23 @@ test('incoming settings place link captures in a custom Deck column with primary
   ).toBeVisible();
 });
 
-test('offline file and link shares retain defaults and completed receipts preserve later placement and tags', async ({
+test('a link share uses its dialog choices offline and completed receipts preserve later edits', async ({
   page,
   isMobile,
 }) => {
   test.skip(
     isMobile,
-    'Offline persistence and receipt replay do not depend on layout; settings and capture run on both.',
+    'Offline persistence does not depend on layout; capture placement runs on both.',
   );
   test.setTimeout(90_000);
   await signUp(page);
-  const { column, web, later } = await configureDefaults(page);
+  const { column, web, later } = await seedChoices(page);
   await page.route('**/api/**', (route) => route.abort());
-  const files = await stage(page, 'files');
-  await page.goto(`/share?id=${files}`);
   const editor = page.getByRole('dialog', { name: 'Edit note' });
-  await expect(editor.getByRole('textbox')).toContainText('Shared caption');
-  await expect(editor.getByText('shared.txt', { exact: true })).toBeVisible();
-  await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
-  await page.reload();
-  await expect(editor.getByRole('textbox')).toContainText('Shared caption');
-  await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
-  await editor.getByRole('button', { name: 'Close', exact: true }).click();
-  const link = await stage(page, 'link');
+  const link = await stage(page);
   await page.goto(`/share?id=${link}`);
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Shared link');
+  await choosePlacement(page, column);
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(editor.getByRole('textbox')).toContainText('Shared link');
   await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
@@ -157,4 +152,33 @@ test('offline file and link shares retain defaults and completed receipts preser
   await expect(editor.locator('[data-note-color="red"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(card(page, 'Shared link')).toBeVisible();
+});
+
+test('a pending native link share offers placement and tag choices inside the app dialog', async ({
+  page,
+}) => {
+  await signUp(page);
+  const { column } = await seedChoices(page);
+  await page.goto('/');
+  await page.route('**/api/link-previews/intake', (route) => route.fulfill({ status: 404 }));
+  const link = await stage(page);
+  await page.reload();
+  const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
+  await expect(capture.getByLabel('URL', { exact: true })).toHaveValue(
+    'https://example.com/incoming',
+  );
+  await choosePlacement(page, column);
+  await page.getByRole('button', { name: 'Save link', exact: true }).click();
+  await expect(capture).toBeHidden();
+  await page.goto(`/share?id=${link}`);
+  const editor = page.getByRole('dialog', { name: 'Edit note' });
+  await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await openDeck(page);
+  await expect(
+    page
+      .getByRole('region', { name: 'Inbox column' })
+      .getByRole('heading', { name: 'Shared link' }),
+  ).toBeVisible();
 });

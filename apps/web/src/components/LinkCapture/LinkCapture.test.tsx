@@ -26,6 +26,11 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/lib/auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('@/lib/collections', () => ({
   useCaptureNotes: () => [],
+  useBoardColumns: () => [{ id: 'in_progress', name: 'In progress', position: 'a0' }],
+  useTags: () => [{ id: 'tag-1', name: 'Later', parentId: null, color: null }],
+  useTagReadiness: () => ({ awaitingTags: false }),
+  boardColumnsCollection: new Map([['in_progress', {}]]),
+  tagsCollection: new Map([['tag-1', { id: 'tag-1', name: 'Later', parentId: null, color: null }]]),
   loadShareCollections: mocks.load,
   waitForWriteStored: mocks.stored,
 }));
@@ -38,14 +43,14 @@ vi.mock('@/lib/linkPreviews', () => ({
   assetUrl: (hash: string) => `/api/link-previews/assets/${hash}`,
 }));
 vi.mock('@/lib/openNote', () => ({ useOpenNote: () => ({ open: vi.fn() }) }));
-vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn() } }));
-vi.mock('@/lib/incomingNoteDefaults', () => ({
-  incomingNoteDefaults: () => ({
-    status: 'in_progress',
-    color: 'blue',
-    primaryTagId: null,
-    secondaryTagIds: ['tag-1'],
-  }),
+vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn(), selection: vi.fn() } }));
+vi.mock('@/components/ColorPicker/ColorPicker', () => ({
+  COLOR_NAMES: { default: 'No color', blue: 'Blue' },
+  ColorTagSelector: ({ onChange }: { onChange: (color: 'blue') => void }) => (
+    <button type="button" onClick={() => onChange('blue')}>
+      Blue
+    </button>
+  ),
 }));
 vi.mock('@/lib/receiveShare', () => ({ dismissLinkShare: vi.fn(), saveLinkShare: vi.fn() }));
 
@@ -78,14 +83,13 @@ beforeEach(() => {
   });
 });
 
-function mount(autoFetch = false, incoming = false) {
+function mount(autoFetch = false) {
   const onSaved = vi.fn();
   const onCancel = vi.fn();
   render(
     <LinkCaptureForm
       initial={{ url: 'https://example.com/', title: 'Browser title', notes: 'Selection' }}
       autoFetch={autoFetch}
-      incoming={incoming}
       onSaved={onSaved}
       onCancel={onCancel}
       onOpenNote={vi.fn()}
@@ -95,9 +99,14 @@ function mount(autoFetch = false, incoming = false) {
 }
 
 describe('LinkCaptureForm', () => {
-  it('applies incoming defaults to bookmarklet captures', async () => {
-    mount(true, true);
+  it('saves the destination, color and tags selected in the dialog', async () => {
+    mount(true);
     await screen.findByLabelText('Title');
+    fireEvent.change(screen.getByLabelText('Save to'), { target: { value: 'in_progress' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose tags' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Later' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
     await waitFor(() =>
       expect(mocks.create).toHaveBeenCalledWith(
@@ -109,13 +118,20 @@ describe('LinkCaptureForm', () => {
       ),
     );
   });
-  it('keeps manual link captures independent of incoming defaults', async () => {
+  it('starts each capture in Gallery with no color or tags', async () => {
     mount(true);
     await screen.findByLabelText('Title');
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
-    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
-    expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('status');
-    expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('secondaryTagIds');
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: null,
+          color: 'default',
+          primaryTagId: null,
+          secondaryTagIds: [],
+        }),
+      ),
+    );
   });
   it('keeps only the URL until the current fetch completes, and hides details for a changed URL', async () => {
     let finish!: (value: LinkIntake) => void;
@@ -212,12 +228,15 @@ describe('LinkCaptureForm', () => {
     await screen.findByDisplayValue('Fetched title');
     fireEvent.change(screen.getByLabelText('Your notes'), { target: { value: 'My context' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
-    expect(saveDraft).toHaveBeenCalledWith({
-      url: 'https://example.com/',
-      title: 'Fetched title',
-      description: 'Fetched description',
-      notes: 'My context',
-    });
+    expect(saveDraft).toHaveBeenCalledWith(
+      {
+        url: 'https://example.com/',
+        title: 'Fetched title',
+        description: 'Fetched description',
+        notes: 'My context',
+      },
+      { status: null, color: 'default', primaryTagId: null, secondaryTagIds: [] },
+    );
     expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save link' })).toBeDisabled();
     await act(async () => complete('share-id'));

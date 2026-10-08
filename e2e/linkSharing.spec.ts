@@ -86,6 +86,7 @@ test('pending native link shares recover in order and cancelled shares stay canc
   const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
   await expect(capture.getByLabel('URL', { exact: true })).toHaveValue('https://example.com/first');
   await capture.getByLabel('Your notes').fill('Unsaved capture thoughts');
+  await capture.getByLabel('Save to', { exact: true }).selectOption('in_progress');
   await expect(page).toHaveURL(/note=/);
   await capture.getByLabel('URL', { exact: true }).fill('');
   await page.getByRole('button', { name: 'Close link capture', exact: true }).click();
@@ -93,6 +94,7 @@ test('pending native link shares recover in order and cancelled shares stay canc
     'https://example.com/second',
   );
   await expect(capture.getByLabel('Title', { exact: true })).toHaveValue(metadata.title);
+  await expect(capture.getByLabel('Save to', { exact: true })).toHaveValue('');
   await capture.getByLabel('Title', { exact: true }).fill('Second shared link');
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(capture).toBeHidden();

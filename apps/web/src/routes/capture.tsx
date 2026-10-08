@@ -68,7 +68,6 @@ function CapturePage() {
             <h1 className="text-center font-display font-bold text-2xl">Add Rich Link</h1>
           </div>
           <LinkCaptureForm
-            incoming
             initial={{ url: initial.url, title: initial.title, notes: initial.text }}
             autoFetch={Boolean(initial.url)}
             onSaved={setSaved}

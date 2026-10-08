@@ -23,7 +23,6 @@ import { useBackHandler } from '@/lib/backButton';
 import { loadShareCollections, useCaptureNotes, waitForWriteStored } from '@/lib/collections';
 import { quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { incomingNoteDefaults } from '@/lib/incomingNoteDefaults';
 import {
   capturedLinkContent,
   incomingLinkCaptures,
@@ -36,6 +35,7 @@ import {
   matchingLinkNotes,
   removeLinkCapture,
 } from '@/lib/linkCapture';
+import { type LinkCapturePlacement, resolveLinkCapturePlacement } from '@/lib/linkCapturePlacement';
 import { assetUrl } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { createNote, hasNote, updateNote } from '@/lib/notes';
@@ -43,18 +43,18 @@ import type { Rect } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { dismissLinkShare, saveLinkShare } from '@/lib/receiveShare';
 import { cn } from '@/lib/utils';
+import { LinkCaptureOptions } from './LinkCaptureOptions';
 
 type FormProps = {
   initial?: Partial<LinkCaptureDraft>;
   autoFetch?: boolean;
-  incoming?: boolean;
   closing?: boolean;
   showActions?: boolean;
   onControls?: (controls: LinkCaptureControls | null) => void;
   onSaved: (id: string) => void;
   onCancel: () => void | Promise<void>;
   onOpenNote: (id: string) => void | Promise<void>;
-  saveDraft?: (draft: LinkCaptureDraft) => Promise<string>;
+  saveDraft?: (draft: LinkCaptureDraft, placement: LinkCapturePlacement) => Promise<string>;
   onSavingChange?: (saving: boolean) => void;
 };
 
@@ -132,7 +132,6 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
 export function LinkCaptureForm({
   initial,
   autoFetch = false,
-  incoming = false,
   closing = false,
   showActions = true,
   onControls,
@@ -143,6 +142,12 @@ export function LinkCaptureForm({
   saveDraft,
 }: FormProps) {
   const id = useId();
+  const [placement, setPlacement] = useState<LinkCapturePlacement>({
+    status: null,
+    color: 'default',
+    primaryTagId: null,
+    secondaryTagIds: [],
+  });
   const reduceMotion = useReducedMotion();
   const form = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<LinkCaptureDraft>(() => ({
@@ -276,7 +281,7 @@ export function LinkCaptureForm({
     setSaveError(null);
     try {
       if (saveDraft) {
-        const id = await saveDraft({ ...draft, url: draft.url.trim() });
+        const id = await saveDraft({ ...draft, url: draft.url.trim() }, placement);
         haptics.success();
         onSaved(id);
         return;
@@ -292,7 +297,7 @@ export function LinkCaptureForm({
               id: existing ?? undefined,
               userId: user.id,
               content,
-              ...(incoming && incomingNoteDefaults(user.id)),
+              ...resolveLinkCapturePlacement(placement),
             });
       savedId.current = saved.id;
       await waitForWriteStored(saved.transaction);
@@ -507,6 +512,7 @@ export function LinkCaptureForm({
                 </motion.div>
               )}
             </AnimatePresence>
+            <LinkCaptureOptions value={placement} onChange={setPlacement} />
           </fieldset>
           {saveError && (
             <p ref={saveErrorElement} role="alert" className="pt-4 text-destructive text-sm">
@@ -742,7 +748,11 @@ export function LinkCapture() {
               closing={manual && returning}
               showActions={false}
               onControls={linkCaptureControls.set}
-              saveDraft={incoming ? (draft) => saveLinkShare(incoming.id, draft) : undefined}
+              saveDraft={
+                incoming
+                  ? (draft, placement) => saveLinkShare(incoming.id, draft, placement)
+                  : undefined
+              }
               onCancel={cancel}
               onSavingChange={setSaving}
               onOpenNote={async (id) => {

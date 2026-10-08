@@ -184,7 +184,6 @@ export async function signOutAccount(account: Account) {
     `catch-snooze:${id}`,
     `catch-snooze:${id}:unsent`,
     `catch-time-zone:${id}`,
-    `catch-incoming-note-defaults:${id}`,
   ]) {
     localStorage.removeItem(key);
   }

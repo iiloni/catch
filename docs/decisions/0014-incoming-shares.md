@@ -5,17 +5,8 @@ Status: accepted (2026-10-01)
 ## Decisions
 
 Catch receives text, links, images, video, audio and files from other apps. One share creates
-one note; multiple files and captions stay together. Settings > General chooses its
-destination: Gallery (the default) or a specific Deck column. Bookmarklet captures use the
-same preference. It is stored per account on the device, follows a column's stable id through
-renames, and falls back to the default Deck column when the chosen column no longer exists.
-Device columns hydrate before creation so this also works offline and in capture popups.
-The same settings choose a color or primary tag and secondary tags, following ADR 0016's
-color linking and deepest-secondary rules. Deleted tags are skipped. Notes and their tag
-assignments are created in one ordinary queued transaction, after cached tags hydrate.
-Defaults are applied only when creating a note; retries and completed receipts never
-reapply them over later edits, and signing out clears the account's choices.
-Text and file shares open the note immediately. A single web link without files opens the link capture form (ADR 0006),
+one Gallery note; multiple files and captions stay together. Text and file shares open the
+note immediately. A single web link without files opens the link capture form (ADR 0006),
 fetches page details automatically and waits for an explicit Save. Shared titles and any
 surrounding text prefill the title and notes; the original URL, including its fragment, is
 preserved. Shares containing several distinct addresses retain the ordinary note flow.
@@ -61,11 +52,17 @@ When closing a manual capture returns to its quick-note editor, queued shares wa
 editor closes so they do not interrupt the restored draft.
 Account-bound staging and receipts are cleared with that account's local data on sign-out.
 
+The Add Rich Link form offers Gallery or a specific Deck column, color or primary tag,
+and secondary tags before Save. These choices belong to the current capture, with Gallery
+and no color or tags initially selected. Bookmarklet, Android/PWA link shares and manual
+rich-link creation use the same controls. Ordinary file and text shares keep their existing
+intake behavior. The note and its tag assignments are queued together through the existing
+write contracts; receipts and retries preserve assignments on notes already created.
+
 ## Compatibility
 
 No REST, shape, persisted note encoding, or outbox format changes. Existing servers receive
-ordinary notes, attachments and tag assignments using the existing supported protocol;
-existing clients read those notes normally.
+ordinary protocol-1 notes and attachments; existing clients read those notes normally.
 API protocol and collection schema versions stay unchanged.
 The device inbox gains an optional dismissed flag; existing staged records need no migration.
 Page metadata remains optional, so an older server or an offline device can still save links.
