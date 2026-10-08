@@ -77,17 +77,6 @@ export function Compare() {
         </table>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">
-        Catch's vault and sharing links are available in v0.6.0-preview. The default installation
-        follows stable; see{' '}
-        <a
-          href="/docs/running-a-server/updates#try-preview-separately"
-          className="underline underline-offset-2 hover:text-foreground"
-        >
-          how to try preview
-        </a>
-        .
-      </p>
-      <p className="mt-4 text-sm text-muted-foreground">
         Checked on {checked} against each product's own pages:{' '}
         {sources.map((source, index) => (
           <span key={source.url}>

@@ -31,12 +31,7 @@ export const rows: readonly Row[] = [
   },
   {
     feature: 'End-to-end encryption',
-    cells: [
-      partial('Vault notes and files in v0.6.0-preview; ordinary notes are not encrypted'),
-      no(),
-      no(),
-      yes(),
-    ],
+    cells: [partial('Vault notes and files; ordinary notes are not encrypted'), no(), no(), yes()],
   },
   {
     feature: 'Works offline',
@@ -70,7 +65,7 @@ export const rows: readonly Row[] = [
   {
     feature: 'Share a note with someone',
     cells: [
-      yes('Read-only links in v0.6.0-preview'),
+      yes('Read-only links'),
       yes('And edit it together'),
       yes('Read-only links'),
       partial('Read-only links'),

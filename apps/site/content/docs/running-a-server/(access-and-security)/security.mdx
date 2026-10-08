@@ -27,13 +27,13 @@ Browser reminders require outbound HTTPS to the allowed browser-push services. N
 
 Keep Docker, host software and Catch updated. Preserve persistent mounts and monitor the disk. Attachment quota defaults to 10 GiB per account; the 100 MiB file limit is fixed in the app. Notes have no total per-account quota. The JSON request cap limits a single request, not total database growth. Open registration can therefore grow storage even with attachment quotas enabled.
 
-Treat backups as sensitive data. The backup archive is not encrypted and contains ordinary notes, share-link tokens, password hashes and browser-push credentials. In v0.6.0-preview, vault notes and files inside it remain encrypted with the user's vault key. Use access controls and encryption in your storage/backup system as appropriate. Keep copies off the server and test restores. Deleting live data does not erase existing backup ZIPs or downloaded copies.
+Treat backups as sensitive data. The backup archive is not encrypted and contains ordinary notes, share-link tokens, password hashes and browser-push credentials. Vault notes and files inside it remain encrypted with the user's vault key. Use access controls and encryption in your storage/backup system as appropriate. Keep copies off the server and test restores. Deleting live data does not erase existing backup ZIPs or downloaded copies.
 
 Invite links and temporary reset passwords are secrets. Invites are single-use and time-limited; temporary passwords do not expire automatically. Share them with their intended recipient and ask users to replace reset passwords promptly.
 
 ## Understand the boundary
 
-Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read ordinary notes and files. In **v0.6.0-preview**, the [vault](/docs/using-catch/vault) encrypts notes and files on devices with a separate password. Administrators cannot reset that password or recover vault content without the user's password or recovery code. The server still sees note sizes and change times, attachment sizes and reminder schedules.
+Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read ordinary notes and files. The [vault](/docs/using-catch/vault) encrypts notes and files on devices with a separate password. Administrators cannot reset that password or recover vault content without the user's password or recovery code. The server still sees note sizes and change times, attachment sizes and reminder schedules.
 
 A remembered vault is accessible to anyone who can open Catch on that device. An unlocked vault also depends on the safety of the device and the app's code; preserve the content security policy and avoid injecting scripts. Catch currently has no two-factor sign-in or self-service email recovery.
 

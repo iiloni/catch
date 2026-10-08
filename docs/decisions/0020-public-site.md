@@ -42,7 +42,10 @@ product they describe.
   hero states that there is no hosted Catch. The comparison (`src/lib/comparison.ts`) lists
   the rows where Catch is behind, takes every claim about another product from that
   product's own pages, and carries the date it was checked. Claims about Catch must be true
-  of the released product.
+  of the released product. The latest published preview is the capability baseline for the
+  marketing page and user guides. Features are presented together without release-channel
+  badges or a separate "new" section; channel choices belong in installation and update
+  guidance, and version history in the changelog.
 - **The changelog is the release tooling's JSON** (ADR 0017), generated when the site is
   built and validated against the schema version the site knows. It needs full Git history
   with tags, which a shallow CI clone and the development container lack: there the page
