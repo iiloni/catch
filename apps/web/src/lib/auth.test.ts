@@ -4,6 +4,7 @@ type SuccessContext = { response: Response; request: { url: string }; data: unkn
 const mocks = vi.hoisted(() => ({
   native: vi.fn(() => true),
   server: vi.fn(() => 'http://llm:24085'),
+  updateUser: vi.fn(),
   success: undefined as ((context: SuccessContext) => void) | undefined,
 }));
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: mocks.native } }));
@@ -13,7 +14,7 @@ vi.mock('better-auth/react', () => ({
     fetchOptions: { onSuccess: (context: SuccessContext) => void };
   }) => {
     mocks.success = options.fetchOptions.onSuccess;
-    return {};
+    return { updateUser: mocks.updateUser };
   },
 }));
 
@@ -43,6 +44,7 @@ async function openTab() {
 }
 
 beforeEach(async () => {
+  mocks.updateUser.mockReset();
   localStorage.clear();
   sessionStorage.clear();
   window.history.replaceState(null, '', '/');
@@ -215,6 +217,49 @@ describe('several accounts on one device', () => {
       { user, token: 'first-token' },
       { user: other, token: 'changed-token' },
     ]);
+  });
+
+  it('remembers a changed name after reload and keeps the session', async () => {
+    signIn('first-token');
+    mocks.updateUser.mockResolvedValue({ error: null, data: { status: true } });
+    await auth.changeAccountName('New Name');
+    expect(mocks.updateUser).toHaveBeenCalledWith({ name: 'New Name' });
+    expect(auth.getSignedInUser()).toEqual({ ...user, name: 'New Name' });
+    await load();
+    expect(auth.getSignedInUser()?.name).toBe('New Name');
+    expect(auth.getAuthToken()).toBe('first-token');
+  });
+
+  it('updates the page’s account while the device is using another account', async () => {
+    await signInBoth();
+    auth.activateAccount(user.id);
+    mocks.updateUser.mockResolvedValue({ error: null, data: { status: true } });
+    await auth.changeAccountName('Changed Other');
+    expect(auth.getAccounts()).toEqual([
+      { user, token: 'first-token' },
+      { user: { ...other, name: 'Changed Other' }, token: 'second-token' },
+    ]);
+    expect(JSON.parse(localStorage.getItem('catch-user') ?? '')).toEqual(user);
+    expect(auth.getAuthToken()).toBe('second-token');
+  });
+
+  it('keeps the remembered name when the server refuses the change', async () => {
+    signIn('first-token');
+    mocks.updateUser.mockResolvedValue({ error: { message: 'Session expired' } });
+    await auth.changeAccountName('New Name');
+    expect(auth.getSignedInUser()).toEqual(user);
+  });
+
+  it('does not restore an account signed out while its name was saving', async () => {
+    await signInBoth();
+    mocks.updateUser.mockImplementation(async () => {
+      auth.forgetAccount(other.id);
+      auth.activateAccount(user.id);
+      return { error: null, data: { status: true } };
+    });
+    await auth.changeAccountName('New Name');
+    expect(auth.getAccounts()).toEqual([{ user, token: 'first-token' }]);
+    expect(auth.getSignedInUser()).toBeNull();
   });
 
   it('forgets one account and leaves the rest', async () => {

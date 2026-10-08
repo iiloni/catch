@@ -1,6 +1,35 @@
 import { type CDPSession, expect, type Locator, type Page, test } from '@playwright/test';
 import { createNote, openNote, settledBox, signUp, waitForPageTransition } from './helpers';
 
+test('users change their account name in settings and keep it after reload', async ({ page }) => {
+  const email = await signUp(page);
+  await page.goto('/settings/account');
+  const summary = page.getByRole('region', { name: 'Signed in as' });
+  await page.getByRole('button', { name: 'Change name' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Change name' });
+  await dialog.getByLabel('Name', { exact: true }).fill('  New Account Name  ');
+  await dialog.getByRole('button', { name: 'Save name' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(summary).toContainText('New Account Name');
+  await expect(summary).toContainText(email);
+  await page.reload();
+  await expect(summary).toContainText('New Account Name');
+  await page.getByRole('button', { name: 'Change name' }).click();
+  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('New Account Name');
+  await dialog.getByLabel('Name', { exact: true }).fill('Unsaved Name');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(summary).toContainText('New Account Name');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Account: New Account Name', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Accounts' })).toContainText('New Account Name');
+  const token = await page.evaluate(() => localStorage.getItem('catch-auth-token'));
+  const session = await page.request.get('/api/auth/get-session', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(session.ok()).toBeTruthy();
+  expect(await session.json()).toMatchObject({ user: { name: 'New Account Name', email } });
+});
+
 async function pullSettings(touch: CDPSession, delta: number, whileHeld?: () => Promise<void>) {
   let timestamp = Date.now() / 1000;
   await touch.send('Input.dispatchTouchEvent', {
