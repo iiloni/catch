@@ -47,6 +47,12 @@ writes keep their existing formats. HTTPS and production builds keep Electric's 
 long polling; production reverse proxies must offer HTTP/2. This compatible transport fix
 does not change the API protocol or collection schema versions.
 
+Incoming-note creation explicitly awaits the persistence wrapper's cached-row loader for
+notes, attachments, columns, tags and assignments. TanStack DB's collection-level subset
+loader does nothing for Electric's eager collections; awaiting it does not wait for cached
+rows. Keeping the wrapper's loader allows captures to resolve their defaults and existing
+receipts before saving without requiring an online Electric snapshot.
+
 **One database per user.** Electric identifies a shape by URL alone, and every user syncs the
 same URLs, so a shared database would resume one user's stream for another. The database and
 outbox are named after the user id. The app remembers the signed-in user next to the token

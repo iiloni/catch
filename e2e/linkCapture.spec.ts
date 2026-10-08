@@ -117,6 +117,13 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   );
   await signUp(page);
   await page.goto('/settings/general');
+  await page.getByLabel('Save incoming notes to').selectOption('in_progress');
+  await page
+    .getByRole('region', { name: 'Incoming notes', exact: true })
+    .getByRole('button', { name: 'Background color' })
+    .click();
+  await page.getByRole('button', { name: 'Orange', exact: true }).click();
+  await page.getByText('Save incoming notes to', { exact: true }).click();
   const bookmarklet = await page
     .getByRole('link', { name: 'Save to Catch', exact: true })
     .getAttribute('href');
@@ -156,6 +163,19 @@ test('the Settings bookmarklet opens a compact capture from another site', async
   expect(await popup.evaluate(() => window.opener)).toBeNull();
   await popup.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(popup.getByRole('heading', { name: 'Link saved', exact: true })).toBeVisible();
+  await expect(popup.getByText('Your note is in Deck · In progress.')).toBeVisible();
+  expect(
+    await popup.evaluate(async () => {
+      const modulePath = '/src/lib/collections.ts';
+      const collections: {
+        notesCollection: { values: () => Iterable<{ status: string | null; color: string }> };
+      } = await import(modulePath);
+      return [...collections.notesCollection.values()].map(({ status, color }) => ({
+        status,
+        color,
+      }));
+    }),
+  ).toEqual([{ status: 'in_progress', color: 'orange' }]);
   const closed = popup.waitForEvent('close');
   // The button closes its own page, so Playwright's post-click wait can race with closure.
   await popup.getByRole('button', { name: 'Close window' }).click({ noWaitAfter: true });

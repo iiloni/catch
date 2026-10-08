@@ -23,6 +23,7 @@ import { useBackHandler } from '@/lib/backButton';
 import { loadShareCollections, useCaptureNotes, waitForWriteStored } from '@/lib/collections';
 import { quickNote } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { incomingNoteDefaults } from '@/lib/incomingNoteDefaults';
 import {
   capturedLinkContent,
   incomingLinkCaptures,
@@ -46,6 +47,7 @@ import { cn } from '@/lib/utils';
 type FormProps = {
   initial?: Partial<LinkCaptureDraft>;
   autoFetch?: boolean;
+  incoming?: boolean;
   closing?: boolean;
   showActions?: boolean;
   onControls?: (controls: LinkCaptureControls | null) => void;
@@ -130,6 +132,7 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
 export function LinkCaptureForm({
   initial,
   autoFetch = false,
+  incoming = false,
   closing = false,
   showActions = true,
   onControls,
@@ -285,7 +288,12 @@ export function LinkCaptureForm({
       const saved =
         existing && hasNote(existing)
           ? { id: existing, transaction: updateNote(existing, { content }) }
-          : createNote({ id: existing ?? undefined, userId: user.id, content });
+          : createNote({
+              id: existing ?? undefined,
+              userId: user.id,
+              content,
+              ...(incoming && incomingNoteDefaults(user.id)),
+            });
       savedId.current = saved.id;
       await waitForWriteStored(saved.transaction);
       haptics.success();

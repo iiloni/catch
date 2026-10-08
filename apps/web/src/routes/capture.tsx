@@ -6,6 +6,8 @@ import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { LinkCaptureForm } from '@/components/LinkCapture/LinkCapture';
 import { Button } from '@/components/ui/button';
 import { getAuthToken } from '@/lib/auth';
+import { useBoardColumns } from '@/lib/collections';
+import { getNote } from '@/lib/notes';
 import { needsServerUrl } from '@/lib/serverUrl';
 
 const captureSearch = z.object({
@@ -34,6 +36,11 @@ function CapturePage() {
     ...captureSearch.parse(Object.fromEntries(new URLSearchParams(window.location.hash.slice(1)))),
   }));
   const [saved, setSaved] = useState<string | null>(null);
+  const columns = useBoardColumns();
+  const status = saved ? getNote(saved)?.status : null;
+  const destination = status
+    ? `Deck · ${columns.find((column) => column.id === status)?.name ?? 'New'}`
+    : 'Gallery';
   const navigate = useNavigate();
   const openNote = (note: string) => void navigate({ to: '/', search: { note } });
   return (
@@ -45,7 +52,7 @@ function CapturePage() {
             <Check className="size-7" aria-hidden />
           </span>
           <h1 className="font-display font-bold text-2xl">Link saved</h1>
-          <p className="text-muted-foreground">Your note is in Gallery.</p>
+          <p className="text-muted-foreground">Your note is in {destination}.</p>
           <Button onClick={() => openNote(saved)} className="h-11 rounded-xl">
             Open note
           </Button>
@@ -61,6 +68,7 @@ function CapturePage() {
             <h1 className="text-center font-display font-bold text-2xl">Add Rich Link</h1>
           </div>
           <LinkCaptureForm
+            incoming
             initial={{ url: initial.url, title: initial.title, notes: initial.text }}
             autoFetch={Boolean(initial.url)}
             onSaved={setSaved}

@@ -58,6 +58,7 @@ import {
   type PendingMutation,
   type Transaction,
   useLiveQuery,
+  withCollectionConfigFactory,
 } from '@tanstack/react-db';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
@@ -107,6 +108,7 @@ const memoryOnly: PersistedCollectionPersistence = {
   },
 };
 const persistence = database?.persistence ?? memoryOnly;
+const localHydrators = new Map<string, () => Promise<unknown>>();
 
 /**
  * Adds the database to a synced collection's options. The wrapper swaps in a `sync` that
@@ -118,11 +120,26 @@ const persistence = database?.persistence ?? memoryOnly;
  * collection and sync it again, rather than reading rows of the old shape.
  */
 function persisted<TOptions extends object>(options: TOptions, schemaVersion: number): TOptions {
-  return persistedCollectionOptions({
+  const wrapped = persistedCollectionOptions({
     ...(options as PersistedSyncWrappedOptions<object, string | number>),
     persistence,
     schemaVersion,
-  }) as unknown as TOptions;
+  });
+  const sync = wrapped.sync.sync;
+  wrapped.sync = {
+    ...wrapped.sync,
+    sync: (params) => {
+      const result = sync(params);
+      if (result && typeof result === 'object' && result.loadSubset)
+        localHydrators.set(params.collection.id, () => Promise.resolve(result.loadSubset?.({})));
+      return result;
+    },
+  };
+  // Keep our loader wrapper when TanStack materializes a fresh adapter for the collection.
+  return withCollectionConfigFactory(
+    { ...wrapped },
+    () => persisted(options, schemaVersion) as unknown as typeof wrapped,
+  ) as unknown as TOptions;
 }
 
 /**
@@ -715,9 +732,19 @@ export async function waitForQueuedWrite(id: string, completion: Promise<unknown
 /** Hydrate device rows without waiting for Electric's first online snapshot. */
 export async function loadShareCollections() {
   await Promise.all(
-    [notesCollection, attachmentsCollection].map(async (collection) => {
+    [
+      notesCollection,
+      attachmentsCollection,
+      boardColumnsCollection,
+      tagsCollection,
+      noteTagsCollection,
+    ].map(async (collection) => {
       collection.startSyncImmediate();
-      await collection._sync.loadSubset({});
+      // Electric is eager, so collection._sync.loadSubset is a no-op. The persistence
+      // wrapper's loader waits for cached rows without waiting for an online snapshot.
+      const hydrate = localHydrators.get(collection.id);
+      if (!hydrate) throw new Error('Could not load stored notes. Try again.');
+      await hydrate();
     }),
   );
 }
@@ -734,6 +761,7 @@ export async function clearLocalData() {
   if (user) await forgetVault(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
+  if (user) localStorage.removeItem(`catch-incoming-note-defaults:${user.id}`);
 }
 
 /**

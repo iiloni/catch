@@ -1,6 +1,7 @@
 import { importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { loadShareCollections, waitForQueuedWrite, waitForWriteStored } from './collections';
+import { incomingNoteDefaults } from './incomingNoteDefaults';
 import {
   capturedLinkContent,
   type IncomingLinkCapture,
@@ -62,7 +63,7 @@ export function saveLinkShare(id: string, draft: LinkCaptureDraft): Promise<stri
     const content = capturedLinkContent(draft);
     const transaction = hasNote(id)
       ? updateNote(id, { content })
-      : createNote({ id, userId: user.id, content }).transaction;
+      : createNote({ id, userId: user.id, content, ...incomingNoteDefaults(user.id) }).transaction;
     await waitForWriteStored(transaction);
     await saveIncomingShare({ ...share, complete: true, files: [], title: '', text: '', url: '' });
     return id;
@@ -108,6 +109,7 @@ async function consume(id: string) {
       id: share.id,
       userId: user.id,
       content: sharedNoteContent(share),
+      ...incomingNoteDefaults(user.id),
     });
     await waitForWriteStored(transaction);
   }

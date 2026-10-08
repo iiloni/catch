@@ -21,6 +21,12 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(async () => {}),
   noteStored: vi.fn(async () => {}),
   fileStored: vi.fn(async () => {}),
+  defaults: vi.fn(() => ({
+    status: 'in_progress' as string | null,
+    color: 'blue',
+    primaryTagId: null as string | null,
+    secondaryTagIds: ['tag-1'],
+  })),
 }));
 vi.mock('./auth', () => ({ getSignedInUser: mocks.user }));
 vi.mock('./collections', () => ({
@@ -34,6 +40,7 @@ vi.mock('./notes', () => ({
   updateNote: mocks.update,
 }));
 vi.mock('./attachments', () => ({ importAttachment: mocks.attachment }));
+vi.mock('./incomingNoteDefaults', () => ({ incomingNoteDefaults: mocks.defaults }));
 
 import { dismissLinkShare, prepareShare, receiveShare, saveLinkShare } from './receiveShare';
 
@@ -80,11 +87,15 @@ describe('link share preparation', () => {
     await saveLinkShare(id, editedDraft);
     expect(mocks.create).toHaveBeenCalledTimes(1);
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ id, userId: 'user-1' }));
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'in_progress', color: 'blue', secondaryTagIds: ['tag-1'] }),
+    );
     expect(blocksToPlainText(mocks.create.mock.calls[0]?.[0]?.content ?? [])).toContain('My title');
     expect(mocks.update).toHaveBeenCalledWith(
       id,
       expect.objectContaining({ content: expect.any(Array) }),
     );
+    expect(mocks.defaults).toHaveBeenCalledTimes(1);
     expect(await prepareShare(id)).toEqual({ kind: 'note', id });
     await saveLinkShare(id, { ...editedDraft, title: 'Do not overwrite' });
     expect(mocks.update).toHaveBeenCalledTimes(1);
@@ -134,6 +145,10 @@ describe('share consumption', () => {
     await first;
     await receiveShare(id);
     expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'in_progress', color: 'blue', secondaryTagIds: ['tag-1'] }),
+    );
+    expect(mocks.defaults).toHaveBeenCalledWith('user-1');
     expect(mocks.attachment).toHaveBeenCalledTimes(1);
     expect(mocks.noteStored).toHaveBeenCalledTimes(1);
     expect(mocks.fileStored).toHaveBeenCalledTimes(1);
@@ -152,6 +167,7 @@ describe('share consumption', () => {
     await receiveShare(id);
     expect(mocks.create).toHaveBeenCalledTimes(1);
     expect((await getIncomingShare(id))?.complete).toBe(true);
+    expect(mocks.defaults).toHaveBeenCalledTimes(1);
   });
   it('does not claim completion before the note is durable', async () => {
     const id = await capture();

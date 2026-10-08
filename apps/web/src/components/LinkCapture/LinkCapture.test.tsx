@@ -6,7 +6,7 @@ import { LinkCaptureForm } from './LinkCapture';
 
 const mocks = vi.hoisted(() => ({
   intake: vi.fn(),
-  create: vi.fn(() => ({ id: 'note-1', transaction: { id: 'write-1' } })),
+  create: vi.fn((_input: unknown) => ({ id: 'note-1', transaction: { id: 'write-1' } })),
   update: vi.fn(() => ({ id: 'write-2' })),
   has: vi.fn(() => false),
   stored: vi.fn(async () => {}),
@@ -39,6 +39,14 @@ vi.mock('@/lib/linkPreviews', () => ({
 }));
 vi.mock('@/lib/openNote', () => ({ useOpenNote: () => ({ open: vi.fn() }) }));
 vi.mock('@/lib/haptics', () => ({ haptics: { success: vi.fn() } }));
+vi.mock('@/lib/incomingNoteDefaults', () => ({
+  incomingNoteDefaults: () => ({
+    status: 'in_progress',
+    color: 'blue',
+    primaryTagId: null,
+    secondaryTagIds: ['tag-1'],
+  }),
+}));
 vi.mock('@/lib/receiveShare', () => ({ dismissLinkShare: vi.fn(), saveLinkShare: vi.fn() }));
 
 const metadata: LinkIntake = {
@@ -70,13 +78,14 @@ beforeEach(() => {
   });
 });
 
-function mount(autoFetch = false) {
+function mount(autoFetch = false, incoming = false) {
   const onSaved = vi.fn();
   const onCancel = vi.fn();
   render(
     <LinkCaptureForm
       initial={{ url: 'https://example.com/', title: 'Browser title', notes: 'Selection' }}
       autoFetch={autoFetch}
+      incoming={incoming}
       onSaved={onSaved}
       onCancel={onCancel}
       onOpenNote={vi.fn()}
@@ -86,6 +95,28 @@ function mount(autoFetch = false) {
 }
 
 describe('LinkCaptureForm', () => {
+  it('applies incoming defaults to bookmarklet captures', async () => {
+    mount(true, true);
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() =>
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'in_progress',
+          color: 'blue',
+          secondaryTagIds: ['tag-1'],
+        }),
+      ),
+    );
+  });
+  it('keeps manual link captures independent of incoming defaults', async () => {
+    mount(true);
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce());
+    expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('status');
+    expect(mocks.create.mock.calls[0]?.[0]).not.toHaveProperty('secondaryTagIds');
+  });
   it('keeps only the URL until the current fetch completes, and hides details for a changed URL', async () => {
     let finish!: (value: LinkIntake) => void;
     mocks.intake.mockReturnValueOnce(

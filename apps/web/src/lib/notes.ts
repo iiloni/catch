@@ -5,6 +5,7 @@ import {
   mapAttachmentBlocks,
   type Note,
   type NoteColor,
+  normalizeSecondaryTags,
   positionBetween,
   positionsBetween,
   sharedNoteAsNote,
@@ -69,6 +70,8 @@ export function createNote(input: {
   content: Note['content'];
   color?: NoteColor;
   status?: string | null;
+  primaryTagId?: string | null;
+  secondaryTagIds?: readonly string[];
   /** Make it a vault note, sealed before it is stored. The vault must be unlocked. */
   vault?: boolean;
 }) {
@@ -78,13 +81,18 @@ export function createNote(input: {
   const linkedTag = input.color
     ? [...tagsCollection.values()].find((tag) => tag.color === input.color)
     : undefined;
+  const primaryTagId = input.primaryTagId ?? linkedTag?.id ?? null;
+  const secondaryTagIds = normalizeSecondaryTags(
+    [...tagsCollection.values()],
+    (input.secondaryTagIds ?? []).filter((tagId) => tagId !== primaryTagId),
+  );
   const transaction = write(() => {
     noteStore.insert(
       {
         id,
         userId: input.userId,
         content: input.content,
-        color: linkedTag ? 'default' : (input.color ?? 'default'),
+        color: primaryTagId ? 'default' : (input.color ?? 'default'),
         status: input.status ?? null,
         isPinned: false,
         isArchived: false,
@@ -96,7 +104,11 @@ export function createNote(input: {
       },
       vault,
     );
-    if (linkedTag) assignPrimaryTag(id, linkedTag.id);
+    if (primaryTagId || secondaryTagIds.length)
+      noteTagStore.set({ id, userId: input.userId }, (draft) => {
+        draft.primaryTagId = primaryTagId;
+        draft.secondaryTagIds = secondaryTagIds;
+      });
   });
   return { id, transaction };
 }
