@@ -15,8 +15,13 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .github/workflows/site.yml
-    # A release adds a version to the changelog page.
+    # A release adds a version to the changelog page. Tags created by the Tag release
+    # workflow via the API do not emit push events (see tag-release.yml), so a published
+    # release also triggers a deploy; that covers API-created tags and manual Release
+    # retries, after their artifacts exist.
     tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:

@@ -234,7 +234,7 @@ or through `merge on pass` before merging.
 
 [`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
 Workers with static assets when `main` changes the site or its inputs, when a release tag
-is pushed (the changelog gains a version), and on request. It always builds `main` from a
+is pushed or published (the changelog gains a version), and on request. It always builds `main` from a
 full clone, because the changelog is derived from tags and history, and fails if that
 changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds the
 site for them.
