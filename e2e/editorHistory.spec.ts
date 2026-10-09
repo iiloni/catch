@@ -143,8 +143,12 @@ test('a narrow split pane keeps history in the header and the sync pill centered
   const before = await status.boundingBox();
   if (!before) throw new Error('Missing sync status area');
   await dialog.getByRole('textbox').locator('p').last().click();
-  await page.keyboard.press('End');
+  // The narrow pane wraps the paragraph, so End would stop at a visual line boundary.
+  await page.keyboard.press('Control+End');
   await page.keyboard.insertText('!');
+  await expect(dialog.getByRole('textbox').locator('p').last()).toHaveText(
+    'Keep the header steady!',
+  );
   const history = page.getByRole('toolbar', { name: 'Undo and redo' });
   await expect(history).toBeVisible();
   await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
