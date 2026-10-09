@@ -121,6 +121,7 @@ test('the capture form saves to a chosen custom Deck column with primary and sec
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await expect(editor.locator('[data-note-color="blue"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
   await openDeck(page);
   await selectInbox(page, isMobile);
   await expect(
@@ -220,6 +221,7 @@ test('a pending native link share offers placement and tag choices inside the ap
   await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
   await openDeck(page);
   await selectInbox(page, isMobile);
   await expect(
