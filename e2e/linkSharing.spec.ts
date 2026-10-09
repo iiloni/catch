@@ -39,6 +39,10 @@ for (const view of ['Gallery', 'Deck'] as const) {
     page,
   }) => {
     await signUp(page);
+    await openDeck(page);
+    await expect(page.getByRole('region', { name: 'New column' })).toBeVisible();
+    await page.getByRole('link', { name: 'Gallery', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
     await page.route('**/api/link-previews/intake', (route) => route.fulfill({ json: metadata }));
     const id = await stageLink(page);
     await page.evaluate(
