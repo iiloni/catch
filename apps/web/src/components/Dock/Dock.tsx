@@ -81,6 +81,10 @@ const TABS = [
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
 
+// A touch tap trails its compatibility click by a frame or two; the close button
+// mounts under the finger in between, so it ignores clicks this soon after opening.
+const GHOST_CLICK_MS = 350;
+
 function asGalleryPage(pathname: string): GalleryPage | null {
   return GALLERY_PAGES.find((page) => page === pathname) ?? null;
 }
@@ -130,6 +134,11 @@ export function Dock() {
   const settingsY = useSettingsSwipeY();
   const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
   const inputRef = useRef<HTMLInputElement>(null);
+  // The tap that opens search trails a compatibility click; by the time it arrives
+  // the close button has mounted under the finger, so the button discards clicks
+  // within this window of the tap. Mouse clicks retarget to the tab instead and
+  // never reach it.
+  const searchOpenedAt = useRef(0);
   const searchProgress = useMotionValue(mode === 'search' ? 1 : 0);
   const reducedMotion = useReducedMotion();
   const searchActive = mode === 'search';
@@ -149,6 +158,7 @@ export function Dock() {
   }, [searchActive, reducedMotion, searchProgress]);
 
   function openSearch() {
+    searchOpenedAt.current = performance.now();
     flushSync(() => setSearchIntent({ pathname, active: true }));
     inputRef.current?.focus();
   }
@@ -269,6 +279,7 @@ export function Dock() {
                       active={searchActive}
                       visible={mode === 'tabs' || mode === 'search'}
                       progress={searchProgress}
+                      openedAt={searchOpenedAt}
                       onClose={closeSearch}
                     />
                     <AnimatePresence initial={false}>
@@ -589,12 +600,14 @@ function SearchField({
   active,
   visible,
   progress,
+  openedAt,
   onClose,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   active: boolean;
   visible: boolean;
   progress: MotionValue<number>;
+  openedAt: RefObject<number>;
   onClose: () => void;
 }) {
   const reducedMotion = useReducedMotion();
@@ -682,7 +695,11 @@ function SearchField({
         key="close"
         type="button"
         aria-label="Close search"
-        onClick={() => exit(false)}
+        onClick={() => {
+          // Discard the compatibility click trailed by the tap that opened search.
+          if (performance.now() - openedAt.current < GHOST_CLICK_MS) return;
+          exit(false);
+        }}
         aria-hidden={!active}
         tabIndex={active ? 0 : -1}
         style={{ opacity: contentOpacity }}

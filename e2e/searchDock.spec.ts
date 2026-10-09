@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openGalleryPage, signUp } from './helpers';
+import { openGalleryPage, settledBox, signUp, waitForPageTransition } from './helpers';
 
 test('search reverses unfinished dock morphs without replacing the side button', async ({
   page,
@@ -114,6 +114,29 @@ test('back navigation clears a pending search intent before revisiting Archive',
   await expect(page.getByRole('link', { name: 'Search', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New note', exact: true })).toBeVisible();
+});
+
+test('a touch tap opens search instead of closing it with its trailing click', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'needs touch input');
+  await signUp(page);
+  await waitForPageTransition(page);
+  const link = page.getByRole('link', { name: 'Search', exact: true });
+  const box = await settledBox(link);
+  // The tap trails a compatibility click; with the close button mounted under the
+  // finger by then, search must stay open.
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toBeVisible();
+  // A later tap on Close still leaves search.
+  await page.waitForTimeout(400);
+  await waitForPageTransition(page);
+  const close = page.getByRole('button', { name: 'Close search', exact: true });
+  const closeBox = await settledBox(close);
+  await page.touchscreen.tap(closeBox.x + closeBox.width / 2, closeBox.y + closeBox.height / 2);
+  await expect(page).not.toHaveURL(/\/search$/);
 });
 
 test('search page slides while its dock transition follows the keyboard', async ({ page }) => {
