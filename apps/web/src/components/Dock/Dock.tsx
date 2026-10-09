@@ -54,7 +54,7 @@ import {
 } from '@/lib/settings';
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { isSharedNote } from '@/lib/sharing';
-import { GUTTER, useNotePane } from '@/lib/splitView';
+import { GUTTER, HEADER_HISTORY_MIN, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -260,12 +260,13 @@ export function Dock() {
 }
 
 /** Undo and redo at the dock's left end and the jump to the note's end at its right. */
-function FloatingNoteToolbars() {
+function FloatingNoteToolbars({ inPane = false }: { inPane?: boolean }) {
   const note = editorNote.use();
   const controls = editorControls.use();
   // The link tray peeks 2.75rem above the dock; float above it rather than over its text.
   const place = cn(
-    'absolute bottom-full mb-3 transition-transform duration-300 ease-out motion-reduce:transition-none sm:hidden',
+    'absolute bottom-full mb-3 transition-transform duration-300 ease-out motion-reduce:transition-none',
+    !inPane && 'sm:hidden',
     useNoteLinkTrayShown() && '-translate-y-11',
   );
   // The list of links slides up over where these float, so they slide out to their sides.
@@ -301,6 +302,7 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
       style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
+        {width - GUTTER < HEADER_HISTORY_MIN && <FloatingNoteToolbars inPane />}
         <NoteLinkTray />
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"

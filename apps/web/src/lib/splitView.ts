@@ -12,6 +12,8 @@ const MIN_HEIGHT = 480;
 /** The page keeps room for a column of cards, the note for comfortable lines. */
 export const LIST_MIN = 280;
 export const NOTE_MIN = 340;
+/** Narrow note panes put undo and redo above the dock so header actions still fit. */
+export const HEADER_HISTORY_MIN = 480;
 /** The widest a page of cards gets (`max-w-7xl`), and a page of results (`max-w-2xl`). */
 export const PAGE_MAX = 1280;
 export const READING_MAX = 672;

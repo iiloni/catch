@@ -74,7 +74,14 @@ import {
 } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { isSharedNote, useSharedNoteOwner } from '@/lib/sharing';
-import { GUTTER, type NotePane, paneNoteId, paneReveal, useNotePane } from '@/lib/splitView';
+import {
+  GUTTER,
+  HEADER_HISTORY_MIN,
+  type NotePane,
+  paneNoteId,
+  paneReveal,
+  useNotePane,
+} from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
@@ -229,6 +236,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     [viewportWidth, viewportHeight],
   );
   const target = targetRect({ ...pane, split }, insets);
+  const narrowPane = split && target.width < HEADER_HISTORY_MIN;
   const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -726,7 +734,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                   {editable && (
                     <HistoryToolbar
                       controls={controls}
-                      className="absolute top-0 left-[calc(100%+0.25rem)] hidden sm:flex"
+                      className={cn(
+                        'absolute top-0 left-[calc(100%+0.25rem)] hidden',
+                        !narrowPane && 'sm:flex',
+                      )}
                     />
                   )}
                 </div>
@@ -735,10 +746,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                     'pointer-events-none relative h-[50px] min-w-0 flex-1',
                     // Balance the buttons on the right so the centered pill clears history in
                     // narrow panes. A phone has no history there and no width to spare.
-                    editable && (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
+                    editable && !narrowPane && (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
                   )}
                 >
-                  <SaveStatus state={state} compact={split && target.width < 480} />
+                  <SaveStatus state={state} compact={narrowPane} />
                 </div>
                 <div className="glass flex shrink-0 items-center rounded-[var(--dock-radius)] p-1">
                   {!note.deletedAt && !note.isArchived && (

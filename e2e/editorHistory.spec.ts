@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openNote, seedNotes, signUp } from './helpers';
+import { noteToolbar, openNote, seedNotes, settledBox, signUp } from './helpers';
 
 test('history buttons follow edits and shortcuts, preserve focus, and reset on reopen', async ({
   page,
@@ -127,13 +127,13 @@ test('checkbox edits use the same undo and redo history', async ({ page }) => {
   await expect(checkbox).toBeChecked();
 });
 
-test('a narrow split pane keeps history in the header and the sync pill centered', async ({
+test('a narrow split pane floats history above the dock and keeps the sync pill centered', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 720, height: 820 });
   await signUp(page);
   await seedNotes(page, [{ title: 'Narrow history', body: 'Keep the header steady' }]);
-  // Exercise the minimum pane width, where full status labels would overlap history.
+  // Exercise the minimum pane width, where header history would crowd the note actions.
   await page.evaluate(async () => {
     const { listRatio } = await import('/src/lib/splitView.ts');
     listRatio.set(0.7);
@@ -151,7 +151,7 @@ test('a narrow split pane keeps history in the header and the sync pill centered
   );
   const history = page.getByRole('toolbar', { name: 'Undo and redo' });
   await expect(history).toBeVisible();
-  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
+  await expect(dialog.getByRole('toolbar', { name: 'Undo and redo' })).toBeHidden();
   await expect(history).toHaveCount(1);
   await expect(status.getByText('Synced', { exact: true })).toBeVisible();
   await expect
@@ -163,13 +163,16 @@ test('a narrow split pane keeps history in the header and the sync pill centered
     })
     .toBeLessThan(1);
   expect(await status.boundingBox()).toEqual(before);
-  const box = await history.boundingBox();
+  const box = await settledBox(history);
+  const dock = await noteToolbar(page).boundingBox();
   const back = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+  const pin = await dialog.getByRole('button', { name: 'Pin', exact: true }).boundingBox();
   const pill = await dialog.locator('[data-sync-pill]').boundingBox();
-  if (!box || !back || !pill) throw new Error('Missing history, back button or sync pill');
-  expect(Math.abs(box.y + box.height / 2 - back.y - back.height / 2)).toBeLessThan(2);
-  expect(box.x).toBeGreaterThan(back.x + back.width);
-  expect(pill.x).toBeGreaterThan(box.x + box.width);
+  if (!dock || !back || !pin || !pill) throw new Error('Missing dock, header action or sync pill');
+  expect(box.y + box.height).toBeLessThan(dock.y);
+  expect(Math.abs(box.x - dock.x)).toBeLessThan(2);
+  expect(pill.x).toBeGreaterThan(back.x + back.width);
+  expect(pill.x + pill.width).toBeLessThan(pin.x);
   await history.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(dialog.getByRole('textbox').locator('p').last()).toHaveText(
     'Keep the header steady',

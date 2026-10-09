@@ -213,6 +213,63 @@ test('the split is resized by dragging the handle, within limits', async ({ page
   await expect(handle).toHaveAttribute('aria-valuenow', String(min));
 });
 
+test('narrow note panes keep header actions and undo reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 672, height: 820 });
+  await signUp(page);
+  await seedNotes(page, ['Toolbar fit']);
+  const dialog = await openNote(page, 'Toolbar fit');
+  const header = dialog.locator('[data-note-header]');
+  const handle = page.getByRole('separator', { name: 'Resize note' });
+  const editor = dialog.getByRole('textbox');
+
+  const expectActionsInside = async () => {
+    await expect
+      .poll(() =>
+        header.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return [...element.querySelectorAll('button')]
+            .filter((button) => button.checkVisibility())
+            .every((button) => {
+              const box = button.getBoundingClientRect();
+              return box.left >= bounds.left && box.right <= bounds.right;
+            });
+        }),
+      )
+      .toBe(true);
+  };
+
+  await expectActionsInside();
+  await editor.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' extra');
+  const history = page.getByRole('toolbar', { name: 'Undo and redo' });
+  await expect(history).toBeVisible();
+  await expect(history).toHaveCount(1);
+  const dock = await settledBox(noteToolbar(page));
+  const undoBox = await settledBox(history);
+  expect(undoBox.y + undoBox.height).toBeLessThan(dock.y);
+  await history.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(editor).not.toContainText('extra');
+  await dialog.getByRole('button', { name: 'Pin', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Unpin', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Share' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The same narrow pane can occur on a large display after resizing the split.
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await handle.press('End');
+  await expectActionsInside();
+  await expect(history).toHaveCount(1);
+  await handle.press('Home');
+  await expectActionsInside();
+  await expect(header.getByRole('toolbar', { name: 'Undo and redo' })).toBeVisible();
+  await expect(history).toHaveCount(1);
+});
+
 for (const layout of ['split view', 'popup'] as const) {
   test(`the ${layout} scrollbar stays inside the card and scrolls without losing the caret`, async ({
     page,
