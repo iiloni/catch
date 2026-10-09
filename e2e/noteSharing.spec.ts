@@ -109,9 +109,9 @@ test('a share link is read without an account and added by one, until it is ende
     data: { id: other, content: [] },
   });
   expect((await share(alice, other, token)).status()).toBe(409);
-  expect(await syncedRows(alice.context, alice.headers, 'note-shares')).toEqual([
-    expect.objectContaining({ note_id: id, token }),
-  ]);
+  await expect
+    .poll(() => syncedRows(alice.context, alice.headers, 'note-shares'))
+    .toEqual([expect.objectContaining({ note_id: id, token })]);
 
   const guestView = await read(anonymous);
   expect(guestView.status()).toBe(200);
@@ -153,7 +153,9 @@ test('a share link is read without an account and added by one, until it is ende
       }
     );
   };
-  expect(await bobsCopy()).toEqual({
+  // Electric can be up to date with its log before replication delivers the REST write.
+  // Wait for each expected state before another write can replace it.
+  await expect.poll(bobsCopy).toEqual({
     ownerName: 'Alice',
     content: paragraph('Trip plan'),
     color: 'blue',
@@ -183,11 +185,12 @@ test('a share link is read without an account and added by one, until it is ende
       })
     ).ok(),
   ).toBeTruthy();
-  await alice.context.patch(`/api/notes/${id}`, {
+  const revised = await alice.context.patch(`/api/notes/${id}`, {
     headers: alice.headers,
     data: { content: paragraph('Trip plan, revised') },
   });
-  expect(await bobsCopy()).toMatchObject({
+  expect(revised.ok()).toBeTruthy();
+  await expect.poll(bobsCopy).toMatchObject({
     content: paragraph('Trip plan, revised'),
     isPinned: true,
   });
@@ -211,7 +214,7 @@ test('a share link is read without an account and added by one, until it is ende
       })
     ).ok(),
   ).toBeTruthy();
-  expect(await bobsCopy()).toMatchObject({ color: 'yellow' });
+  await expect.poll(bobsCopy).toMatchObject({ color: 'yellow' });
   expect(
     (
       await alice.context.patch(`/api/tags/${tag}`, {
@@ -220,11 +223,11 @@ test('a share link is read without an account and added by one, until it is ende
       })
     ).ok(),
   ).toBeTruthy();
-  expect(await bobsCopy()).toMatchObject({ color: 'green' });
+  await expect.poll(bobsCopy).toMatchObject({ color: 'green' });
   expect(
     (await alice.context.delete(`/api/tags/${tag}`, { headers: alice.headers })).ok(),
   ).toBeTruthy();
-  expect(await bobsCopy()).toMatchObject({ color: 'default' });
+  await expect.poll(bobsCopy).toMatchObject({ color: 'default' });
 
   // Undo uses the original link and arrangement, but gets fresh content from the owner.
   await bob.context.delete(`/api/shared-notes/${id}`, { headers: bob.headers });
@@ -241,10 +244,17 @@ test('a share link is read without an account and added by one, until it is ende
     });
   expect((await restore()).ok()).toBeTruthy();
   expect(await (await restore()).json()).toEqual({ noteId: id, txid: null });
-  const [restored] = await syncedRows(bob.context, bob.headers, 'shared-notes');
-  expect(restored).toMatchObject({ token, position: placement.position });
-  expect(bool(restored.is_archived)).toBe(true);
-  expect(await bobsCopy()).toMatchObject({
+  await expect
+    .poll(async () => {
+      const [restored] = await syncedRows(bob.context, bob.headers, 'shared-notes');
+      return {
+        token: restored?.token,
+        position: restored?.position,
+        isArchived: bool(restored?.is_archived),
+      };
+    })
+    .toEqual({ token, position: placement.position, isArchived: true });
+  await expect.poll(bobsCopy).toMatchObject({
     content: latest,
     isPinned: true,
   });
@@ -263,13 +273,13 @@ test('a share link is read without an account and added by one, until it is ende
     data: { deletedAt: new Date().toISOString() },
   });
   expect((await read(anonymous)).status()).toBe(404);
-  expect(await bobsCopy()).toMatchObject({ content: [], isAvailable: false });
+  await expect.poll(bobsCopy).toMatchObject({ content: [], isAvailable: false });
   await alice.context.patch(`/api/notes/${id}`, {
     headers: alice.headers,
     data: { deletedAt: null },
   });
   expect((await read(anonymous)).status()).toBe(200);
-  expect(await bobsCopy()).toMatchObject({
+  await expect.poll(bobsCopy).toMatchObject({
     content: latest,
     isAvailable: true,
   });
@@ -283,7 +293,7 @@ test('a share link is read without an account and added by one, until it is ende
   expect((await ended.json()).txid).toEqual(expect.any(Number));
   expect((await read(anonymous)).status()).toBe(404);
   expect((await accept(bob)).status()).toBe(404);
-  expect(await bobsCopy()).toBeUndefined();
+  await expect.poll(bobsCopy).toBeUndefined();
 });
 
 test('a shared note is read from its link and added to another gallery', async ({
