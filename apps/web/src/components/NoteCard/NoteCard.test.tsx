@@ -83,6 +83,51 @@ describe('NoteCard', () => {
     expect(onOpen).toHaveBeenCalledWith(note, expect.any(HTMLElement));
   });
 
+  it('keeps the in-flow action row for text notes', () => {
+    const { container } = renderCard();
+    expect(container.querySelector('div[aria-hidden].h-9')).toBeInTheDocument();
+  });
+
+  it('floats its actions over the face for gallery-face links', () => {
+    const { container } = renderCard({
+      note: {
+        ...note,
+        color: 'default',
+        content: [...note.content, paragraph(link('https://a.example/'))],
+        galleryPreviewUrl: 'https://a.example/',
+      },
+    });
+    // The card ends at the preview: no reserved action row below it.
+    expect(screen.getByRole('heading', { name: 'Page A' })).toBeInTheDocument();
+    expect(container.querySelector('div[aria-hidden].h-9')).not.toBeInTheDocument();
+    expect(container.querySelector('div[aria-hidden].h-12')).not.toBeInTheDocument();
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    const pill = screen.getByRole('button', { name: 'Move to trash' }).closest('div.glass');
+    expect(pill).not.toBeNull();
+    // Rounded like the card it floats over, not the screen dock.
+    expect(pill?.className).toContain('rounded-2xl');
+    // Over the face, not in a row below it...
+    const floater = pill?.parentElement;
+    expect(floater?.className).toContain('absolute');
+    // ...fading in on hover and out on leave, never intercepting while hidden.
+    expect(pill?.className).not.toContain('delay-300');
+    // The wrapper passes pointer events through outside the pill, so the pill
+    // re-enables them for its buttons.
+    expect(pill?.className).toContain('pointer-events-auto');
+    // The pin itself stays bare; its glass backing fades as a unit behind it.
+    const pin = screen.getByRole('button', { name: 'Pin' });
+    expect(pin.className).not.toContain('glass');
+    const backing = pin.parentElement?.querySelector('span.glass');
+    expect(backing?.className).toContain('group-hover:opacity-100');
+  });
+
+  it('leaves the pin bare on text notes', () => {
+    const { container } = renderCard();
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    expect(screen.getByRole('button', { name: 'Pin' }).className).not.toContain('glass');
+    expect(container.querySelector('.glass')).toBeNull();
+  });
+
   it('builds its actions once focus enters the card', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();

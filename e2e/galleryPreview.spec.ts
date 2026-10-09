@@ -26,13 +26,14 @@ test('any link can be the card preview, and the choice can return to text', asyn
   await expect(face).toHaveAttribute('data-gallery-preview', second);
   await expect(page.getByRole('button', { name: /^2 links, first / })).toBeVisible();
 
-  await page.locator(`[data-note-card="${id}"]`).getByRole('button', { name: 'Open note' }).click();
+  // The card's hover dock sits over the face's bottom edge, so reopen from its top.
+  await face.click({ position: { x: 20, y: 20 } });
   await expect(editor.getByRole('textbox')).toContainText('Preview choices');
   await choose(first, 'Show as Gallery Preview');
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(face).toHaveAttribute('data-gallery-preview', first);
 
-  await page.locator(`[data-note-card="${id}"]`).getByRole('button', { name: 'Open note' }).click();
+  await face.click({ position: { x: 20, y: 20 } });
   await choose(first, 'Show Text in Gallery');
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(face).toHaveCount(0);
@@ -65,7 +66,8 @@ test('an offline preview choice survives reload, and hiding it falls back to tex
     'data-gallery-preview',
     second,
   );
-  await chosen.getByRole('button', { name: 'Open note' }).click();
+  // The card's hover dock sits over the face's bottom edge, so open from its top.
+  await chosen.locator('[data-gallery-preview]').click({ position: { x: 20, y: 20 } });
   await expect(editor.getByRole('textbox')).toContainText('Offline choice');
   await editor
     .locator(`[data-link-card="${second}"]`)
