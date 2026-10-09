@@ -3,6 +3,7 @@ import {
   createNoteSchema,
   createNotesSchema,
   MAX_NOTES_PER_REQUEST,
+  noteSchema,
   updateNoteSchema,
 } from './notes';
 
@@ -51,5 +52,40 @@ describe('createNotesSchema', () => {
 describe('updateNoteSchema', () => {
   it('allows clearing status to send a note to the gallery', () => {
     expect(updateNoteSchema.parse({ status: null })).toEqual({ status: null });
+  });
+
+  it('keeps old queued writes from resetting a chosen preview', () => {
+    expect(updateNoteSchema.parse({ content: [] })).toEqual({ content: [] });
+    expect(updateNoteSchema.parse({ galleryPreviewUrl: null })).toEqual({
+      galleryPreviewUrl: null,
+    });
+    expect(updateNoteSchema.parse({ galleryPreviewUrl: 'https://example.com/' })).toEqual({
+      galleryPreviewUrl: 'https://example.com/',
+    });
+  });
+
+  it.each(['javascript:alert(1)', 'https://example.com/#part', 'not a url'])(
+    'rejects invalid or unnormalized preview choices: %s',
+    (galleryPreviewUrl) => {
+      expect(updateNoteSchema.safeParse({ galleryPreviewUrl }).success).toBe(false);
+    },
+  );
+
+  it('defaults pre-existing note payloads to text without changing content', () => {
+    const old = {
+      id,
+      userId: 'user',
+      content: [],
+      color: 'default',
+      status: null,
+      isPinned: false,
+      isArchived: false,
+      position: 'a0',
+      hiddenLinks: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    };
+    expect(noteSchema.parse(old)).toEqual({ ...old, galleryPreviewUrl: null });
   });
 });

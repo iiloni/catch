@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { type Attachment, attachmentId, attachmentSchema } from './attachments';
-import { type Note, noteColorSchema, noteContentSchema, notePositionSchema } from './notes';
+import {
+  galleryPreviewUrlSchema,
+  type Note,
+  noteColorSchema,
+  noteContentSchema,
+  notePositionSchema,
+} from './notes';
 
 /** 32 random bytes in base64url. Whoever holds a note's token can read the note. */
 export const shareTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -52,14 +58,16 @@ export const sharedNoteSchema = z.object({
   isPinned: z.boolean(),
   isArchived: z.boolean(),
   position: notePositionSchema,
+  galleryPreviewUrl: galleryPreviewUrlSchema.default(null),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 export type SharedNote = z.infer<typeof sharedNoteSchema>;
 
 export const updateSharedNoteSchema = sharedNoteSchema
-  .pick({ isPinned: true, isArchived: true, position: true })
-  .partial();
+  .pick({ isPinned: true, isArchived: true, position: true, galleryPreviewUrl: true })
+  .partial()
+  .extend({ galleryPreviewUrl: galleryPreviewUrlSchema.optional() });
 export type UpdateSharedNote = z.infer<typeof updateSharedNoteSchema>;
 
 /** Adding a note by its link. Undoing a removal says where the note was. */
@@ -115,6 +123,7 @@ export function sharedNoteAsNote(shared: SharedNote): Note {
     isArchived: shared.isArchived,
     position: shared.position,
     hiddenLinks: [],
+    galleryPreviewUrl: shared.galleryPreviewUrl ?? null,
     createdAt: shared.createdAt,
     updatedAt: shared.updatedAt,
     deletedAt: null,

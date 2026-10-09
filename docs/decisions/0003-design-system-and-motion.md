@@ -116,8 +116,9 @@ and Restore and Delete forever in the Trash. Back and Escape end selecting.
 
 In the Deck, dragging a card while notes are selected gathers the whole selection: the other
 cards fold out of their columns and fly into a stack under the finger, with the count on it.
-Dropping the stack in a column places the notes there together, in board order, and ends
-selecting. While any card is held, "Send to gallery" and "Cancel" targets float above the
+Dropping the stack in a column places the notes there together, in board order, and keeps
+the selection. Moving a single card ends selecting; a long press without moving it keeps
+it selected. While any card is held, "Send to gallery" and "Cancel" targets float above the
 dock, Cancel nearest it; dropping on Cancel changes nothing and keeps the selection.
 
 **Wide screens.** On tablets and unfolded foldables (at least 672 × 480 px) an open note

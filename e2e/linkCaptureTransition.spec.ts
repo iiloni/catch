@@ -292,8 +292,15 @@ test('the dock morphs from close to save, and pasting a link fetches without lea
   await saveLink.click();
   await expect(capture).toBeHidden();
   await expect(popup).toBeHidden();
-  await expect(card(page, 'Pasted reading')).toBeVisible();
+  const captured = page
+    .locator('[data-note-card]')
+    .filter({ has: page.locator('[data-gallery-preview="https://example.com/pasted"]') });
+  await expect(captured).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
+  await captured.getByRole('button', { name: 'Open note', exact: true }).click();
+  const note = page.getByRole('dialog', { name: 'Edit note', exact: true });
+  await expect(note.getByRole('textbox')).toContainText('Pasted reading');
+  await expect(note.getByRole('textbox')).toContainText('Fetched from the pasted URL.');
 });
 
 for (const reducedMotion of [false, true]) {

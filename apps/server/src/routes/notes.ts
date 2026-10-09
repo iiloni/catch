@@ -120,7 +120,9 @@ export const notesRoutes = new Hono<AppEnv>()
     const body = c.req.valid('json');
     // Rearranging notes or hiding a link's preview is not editing them, so it leaves
     // "Last edited" alone.
-    const notAnEdit = Object.keys(body).every((key) => key === 'position' || key === 'hiddenLinks');
+    const notAnEdit = Object.keys(body).every(
+      (key) => key === 'position' || key === 'hiddenLinks' || key === 'galleryPreviewUrl',
+    );
     const result = await db.transaction(async (tx) => {
       if (body.color !== undefined) await lockTagTree(tx, user.id);
       const updated = await tx

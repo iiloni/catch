@@ -88,7 +88,7 @@ describe('API compatibility gate', () => {
   });
 
   it('still serves protocol 2 clients, which have no reminders or shared notes (ADRs 0018, 0021)', async () => {
-    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 4 });
+    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 5 });
     const older = { [API_PROTOCOL_HEADER]: '2' };
     expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(401);
     expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);

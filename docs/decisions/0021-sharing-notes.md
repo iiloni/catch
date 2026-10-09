@@ -42,7 +42,7 @@ it is wanted.
 
 **A reader's gallery holds a copy the server keeps current.** `shared_notes` has a row per
 reader and note with the note's content, shown color, files and owner's name, beside the
-reader's own pin, archive and position, plus the link token used to add it again on Undo.
+reader's own pin, archive, position and gallery preview choice (ADR 0006), plus the link token used to add it again on Undo.
 `refreshSharedNote` rewrites those rows in the transaction of every change a reader would
 see: the note's content, color or trash, its
 primary tag (which gives it its color, ADR 0016), and its files. A copy rather than a shape
@@ -67,7 +67,7 @@ before taking row locks, covering their entire note sets, including unshared col
 its owner's (`sharedNoteAsNote`), so the gallery, archive and search show it with the same
 cards, and `isSharedNote` is how anything tells it apart. Its card says whose it is. Opened,
 it is read only: no editing, color, tags, reminder, deck or trash, and it cannot be
-selected with other notes. The reader can pin it, archive it, move it and remove it from
+selected with other notes. The reader can pin it, archive it, move it, choose a link as its card face and remove it from
 their notes. Its files are listed with the reader's own attachments and load through the
 ordinary attachment routes, which let a reader fetch the files of a note in their gallery.
 
