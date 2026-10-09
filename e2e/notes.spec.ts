@@ -261,6 +261,75 @@ test('the editor dock keeps held labels above its edge', async ({ page, isMobile
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 });
 
+test('the formatting dock follows the iOS visual viewport while editing', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  test.skip(!isMobile, 'Checks the touch keyboard layout.');
+  // Chromium cannot open an iOS keyboard. Exercise Safari's API path and viewport geometry.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'virtualKeyboard', { value: undefined, configurable: true });
+    Object.defineProperty(window, 'visualViewport', {
+      value: Object.assign(new EventTarget(), { height: innerHeight, offsetTop: 0, scale: 1 }),
+      configurable: true,
+    });
+  });
+  await signUp(page);
+  await seedNotes(page, [{ title: 'iOS toolbar', body: 'Keyboard stays open' }]);
+  const dialog = await openNote(page, 'iOS toolbar');
+  const editor = dialog.getByRole('textbox');
+  await editor.click();
+  await expect(editor).toBeFocused();
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperty(viewport, 'height', { value: innerHeight - 320, configurable: true });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+
+  const bar = page.getByRole('toolbar', { name: 'Formatting' });
+  const bold = bar.getByRole('button', { name: 'Bold' });
+  await expect(bold).toBeVisible();
+  const expectAboveKeyboard = async () => {
+    await expect
+      .poll(() =>
+        bar.evaluate((element) => {
+          const viewport = window.visualViewport!;
+          return viewport.height + viewport.offsetTop - element.getBoundingClientRect().bottom;
+        }),
+      )
+      .toBeGreaterThanOrEqual(4);
+  };
+  await expectAboveKeyboard();
+  await bold.click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.type(' formatted');
+  await expect(editor.locator('strong')).toContainText('formatted');
+
+  // Safari can pan its visual viewport to bring the caret into view without resizing it.
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperty(viewport, 'offsetTop', { value: 60, configurable: true });
+    viewport.dispatchEvent(new Event('scroll'));
+  });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--keyboard')))
+    .toBe('260px');
+  await expectAboveKeyboard();
+  await expect(editor).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('ios-formatting-keyboard.png') });
+
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperties(viewport, {
+      height: { value: innerHeight, configurable: true },
+      offsetTop: { value: 0, configurable: true },
+    });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await expect(bar).toBeHidden();
+  await expect(noteToolbar(page)).toBeVisible();
+});
+
 test('tapping blank space below a short note focuses its last block', async ({
   page,
   isMobile,

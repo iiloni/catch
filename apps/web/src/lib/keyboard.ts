@@ -69,7 +69,8 @@ function keyboardMovesTo(height: number) {
  * Starts tracking the keyboard. On Android the WebView is not resized for the keyboard
  * (see KeyboardInsetsPlugin.java); the native side reports each keyboard animation once and
  * this replays it with the same duration and curve. In Chromium browsers the VirtualKeyboard
- * API does the same job with a spring; elsewhere the browser resizes the page as usual.
+ * API does the same job with a spring. Safari only shrinks the visual viewport, so its
+ * visible bottom edge supplies the inset for UI fixed to the unchanged layout viewport.
  */
 export function startKeyboardTracking() {
   if (started) return;
@@ -105,7 +106,32 @@ export function startKeyboardTracking() {
       keyboardMovesTo(virtualKeyboard.boundingRect.height);
       void animate(keyboardHeight, virtualKeyboard.boundingRect.height, springs.smooth);
     });
+    return;
   }
+
+  const viewport = window.visualViewport;
+  if (!viewport) return;
+  const update = () => {
+    const focused = document.activeElement;
+    const editing =
+      focused instanceof HTMLElement &&
+      (focused.isContentEditable || focused.matches('input, textarea'));
+    // Pinch zoom also shrinks the visual viewport; it is not a keyboard inset. Browsers
+    // that resize the layout viewport already leave fixed controls above the keyboard.
+    const height =
+      editing && Math.abs(viewport.scale - 1) < 0.01
+        ? Math.max(0, root.clientHeight - viewport.height - viewport.offsetTop)
+        : 0;
+    // These events report the current geometry, so another animation would lag behind it.
+    // Do not blur on viewport changes: a pan or rotation can also remove the bottom inset.
+    keyboardHeight.jump(height);
+  };
+  viewport.addEventListener('resize', update);
+  viewport.addEventListener('scroll', update);
+  window.addEventListener('resize', update);
+  document.addEventListener('focusin', update);
+  document.addEventListener('focusout', () => queueMicrotask(update));
+  update();
 }
 
 function subscribe(listener: () => void) {
