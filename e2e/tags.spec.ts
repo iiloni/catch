@@ -1124,6 +1124,8 @@ test('search filter glass stays above the keyboard and closes before leaving sea
   await addTag(request, headers, 'Projects', work);
   for (let index = 0; index < 10; index++) await addTag(request, headers, `Other ${index}`, work);
   await page.getByRole('link', { name: 'Search', exact: true }).click();
+  // The dock exposes filters before the Search route and its synced tags are ready.
+  await expect(page.getByRole('button', { name: 'Browse Work', exact: true })).toBeVisible();
   const input = page.getByRole('textbox', { name: 'Search notes' });
   const button = page.getByRole('button', { name: 'Filter notes' });
   await expect(page.getByRole('search').getByRole('button', { name: 'Filter notes' })).toHaveCount(
@@ -1146,7 +1148,10 @@ test('search filter glass stays above the keyboard and closes before leaving sea
       );
     }
     const maximum = Math.max(...heights);
-    expect(heights.some((height) => height > maximum * 0.15 && height < maximum * 0.85)).toBe(true);
+    expect(
+      heights.some((height) => height > maximum * 0.15 && height < maximum * 0.85),
+      `${opening ? 'Opening' : 'Closing'} filter heights: ${JSON.stringify(heights)}`,
+    ).toBe(true);
     if (opening) expect(heights.at(-1)!).toBeGreaterThan(maximum * 0.9);
     else expect(heights.at(-1)!).toBeLessThan(maximum * 0.1);
   }
