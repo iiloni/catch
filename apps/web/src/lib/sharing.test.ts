@@ -43,6 +43,7 @@ describe('removeSharedNote', () => {
     isPinned: true,
     isArchived: true,
     position: 'a3',
+    galleryPreviewUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

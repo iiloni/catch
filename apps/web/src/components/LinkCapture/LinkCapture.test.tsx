@@ -128,6 +128,7 @@ describe('LinkCaptureForm', () => {
       expect(mocks.create).toHaveBeenCalledWith(
         expect.objectContaining({
           status: null,
+          galleryPreviewUrl: 'https://example.com/',
           color: 'default',
           primaryTagId: null,
           secondaryTagIds: [],

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { attachmentUrl } from './attachments';
 import {
+  acceptShareSchema,
   resolveAttachmentBlocks,
   type SharedNote,
   sharedAttachmentPath,
   sharedAttachments,
   sharedNoteAsNote,
+  sharedNoteSchema,
   shareLink,
   shareTokenSchema,
+  updateSharedNoteSchema,
 } from './sharing';
 
 const noteId = '0199a0a0-0000-7000-8000-000000000001';
@@ -34,6 +37,7 @@ const shared: SharedNote = {
   isPinned: true,
   isArchived: false,
   position: 'a0',
+  galleryPreviewUrl: null,
   createdAt: new Date('2026-10-01T00:00:00.000Z'),
   updatedAt: new Date('2026-10-02T00:00:00.000Z'),
 };
@@ -58,6 +62,16 @@ describe('share links', () => {
 });
 
 describe('shared notes', () => {
+  it("keeps the reader's explicit card choice and defaults older payloads to text", () => {
+    expect(
+      sharedNoteAsNote({ ...shared, galleryPreviewUrl: 'https://example.com/' }).galleryPreviewUrl,
+    ).toBe('https://example.com/');
+    expect(
+      sharedNoteSchema.parse({ ...shared, galleryPreviewUrl: undefined }).galleryPreviewUrl,
+    ).toBeNull();
+    expect(updateSharedNoteSchema.parse({ isPinned: true })).toEqual({ isPinned: true });
+    expect(acceptShareSchema.parse({})).toEqual({});
+  });
   it("keeps the owner as the note's user and the reader's own arrangement", () => {
     expect(sharedNoteAsNote(shared)).toMatchObject({
       id: noteId,
@@ -67,6 +81,7 @@ describe('shared notes', () => {
       isPinned: true,
       isArchived: false,
       position: 'a0',
+      galleryPreviewUrl: null,
       deletedAt: null,
       updatedAt: shared.updatedAt,
     });

@@ -32,8 +32,9 @@ older servers without this endpoint leave manual capture available.
 
 Saving puts the edited title, URL, description and personal notes in ordinary BlockNote
 blocks. This is an intentional snapshot in note content, searchable and exportable; the
-derived preview remains independent and is not overridden. Duplicate warnings compare URLs
-using the existing fragment-free normalization against device notes, including the Deck and
+derived preview remains independent and is not overridden. Capture also sets the note's
+`gallery_preview_url` to its normalized URL, choosing that link as the card's face without
+removing any captured text. Duplicate warnings compare URLs using the existing fragment-free normalization against device notes, including the Deck and
 Archive, excluding Trash. Duplicates can still be saved.
 
 Settings > General provides an instance-specific bookmarklet that opens the same form at
@@ -68,8 +69,21 @@ underlays use the note's own color a step darker, so the user's colors stay in c
 **Where previews show.**
 - *Cards (Gallery, Deck, Archive, Trash, Search).* A tab tucked under the card names the first
   link, with `+N` for the rest (`LinkUnderlay`). It moves with the card when it is dragged or
-  swiped; while notes are selected, tapping it selects. A note that is only one link shows the
-  link's preview as its face instead, keeping the note's color if the user chose one.
+  swiped; while notes are selected, tapping it selects. Notes default to a text face, including
+  notes containing only a URL. `gallery_preview_url`, a nullable normalized URL stored on the
+  note, explicitly chooses one link as its face instead. Rich capture sets it on Save; any
+  preview's menu offers **Show as Gallery Preview**, including in a note with several links.
+  The chosen preview offers **Show Text in Gallery** to clear the choice. The face keeps
+  the note's color and shows its tags and badges; tags never force it back to text. A chosen
+  face with several links keeps the underlay so the full list remains reachable. The choice
+  applies to every card view, including the Deck, archive, trash and search.
+  A removed or hidden chosen link, or previews disabled on the device, falls back to text
+  without choosing another link. The saved URL is retained so Undo or enabling previews
+  restores the face. If editing moves the chosen link past the per-note preview limit, it
+  stays among the previews shown. Existing notes default to text: ordinary BlockNote content
+  does not reliably identify past rich captures, so no capture is inferred during migration.
+  A reader of a shared note chooses their own face in `shared_notes`; owner edits leave it
+  alone. Neither choosing a face nor hiding a preview changes the note's Last edited time.
 - *Overlay.* Tapping an underlay opens every link as a list (`LinkPreviewOverlay`) that slides
   up from behind the dock it belongs to (the page's, or the open note's) and rests just above
   it, in reach of the thumb, on every screen size. Notes with attachments show their Media
@@ -93,9 +107,18 @@ underlays use the note's own color a step darker, so the user's colors stay in c
 
 ## Consequences
 
-- Link capture adds an optional REST endpoint with a manual-save fallback on older servers.
-  Old clients continue to use unchanged note and preview APIs. API protocol, synced columns,
-  collection schema versions, persisted note encoding and queued write formats are unchanged.
+- Explicit gallery faces use protocol 5 with server range 2–5 (ADR 0013). New clients
+  require the added note/shared-note shape columns and request fields; update the server
+  first. Older clients ignore those nullable columns and keep using their existing card
+  rules. Omitted fields on old creates default to null, and old PATCH requests do not reset
+  the choice. Replayed creates/acceptances leave existing choices alone. `notes` moves to
+  local schemaVersion 2 and `shared-notes` to 3. Cached synced rows reset as usual; existing
+  queued writes, BlockNote content and sealed vault payloads keep their formats, and missing
+  choices in old payloads are read as null. Vault notes continue to show no link previews.
+
+- The intake endpoint remains optional: a missing endpoint allows manual capture. Intake
+  alone changed no protocol, synced columns or queued write formats; explicit card choices
+  now require protocol 5 as described above.
 
 - Previews are best effort and eventually consistent: a card may show only its URL for a moment.
 - Assets are never deleted yet. They are small, but a cleanup of unreferenced ones will be

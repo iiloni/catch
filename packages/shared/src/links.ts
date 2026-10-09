@@ -120,7 +120,6 @@ export function extractLinks(blocks: readonly Json[]): NoteLink[] {
 
 /**
  * Whether a note is nothing but a single link, as notes shared from another app often are.
- * Such a note shows as its link's preview rather than as text.
  */
 export function isLinkOnly(blocks: readonly Json[]): boolean {
   let links = 0;

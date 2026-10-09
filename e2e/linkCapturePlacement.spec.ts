@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type Page, test } from '@playwright/test';
-import { card, openDeck, signUp } from './helpers';
+import { openDeck, signUp } from './helpers';
 
 const id = () => {
   const value = randomUUID();
@@ -126,15 +126,21 @@ test('the capture form saves to a chosen custom Deck column with primary and sec
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
-      .getByRole('heading', { name: 'Captured link' }),
+      .locator('[data-gallery-preview="https://example.com/incoming"]'),
   ).toBeVisible();
   await page.reload();
   await selectInbox(page, isMobile);
   await expect(
-    card(page, 'Captured link').getByRole('button', { name: 'Reading / Web', exact: true }),
+    page
+      .locator('[data-note-card]')
+      .filter({ has: page.locator('[data-gallery-preview="https://example.com/incoming"]') })
+      .getByRole('button', { name: 'Reading / Web', exact: true }),
   ).toBeVisible();
   await expect(
-    card(page, 'Captured link').getByRole('button', { name: 'Later', exact: true }),
+    page
+      .locator('[data-note-card]')
+      .filter({ has: page.locator('[data-gallery-preview="https://example.com/incoming"]') })
+      .getByRole('button', { name: 'Later', exact: true }),
   ).toBeVisible();
 });
 
@@ -190,7 +196,7 @@ test('a link share uses its dialog choices offline and completed receipts preser
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toHaveCount(0);
   await expect(editor.locator('[data-note-color="red"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(card(page, 'Shared link')).toBeVisible();
+  await expect(page.locator(`[data-note-card="${link}"]`)).toBeVisible();
 });
 
 test('a pending native link share offers placement and tag choices inside the app dialog', async ({
@@ -219,6 +225,6 @@ test('a pending native link share offers placement and tag choices inside the ap
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
-      .getByRole('heading', { name: 'Shared link' }),
+      .locator('[data-gallery-preview="https://example.com/incoming"]'),
   ).toBeVisible();
 });

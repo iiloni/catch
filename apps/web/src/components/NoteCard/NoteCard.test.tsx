@@ -54,6 +54,7 @@ const note: Note = {
   isArchived: false,
   position: 'a0',
   hiddenLinks: [],
+  galleryPreviewUrl: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,
@@ -215,10 +216,74 @@ describe('NoteCard', () => {
     expect(linkOverlay.get()).toBeNull();
   });
 
-  it('shows a note that is only a link as that link', () => {
+  it('keeps ordinary single-link notes as text', () => {
     renderCard({ note: { ...note, content: [paragraph(link('https://a.example/'))] } });
+    expect(screen.queryByRole('heading', { name: 'Page A' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Link: Page A' })).toBeInTheDocument();
+  });
+
+  it('shows the chosen link as its face even with text and tags', () => {
+    tags.push({
+      id: 'work',
+      userId: note.userId,
+      name: 'Work',
+      parentId: null,
+      color: 'blue',
+      icon: null,
+    });
+    assignments.set(note.id, { primaryTagId: 'work', secondaryTagIds: [] });
+    renderCard({
+      note: {
+        ...note,
+        content: [...note.content, paragraph(link('https://a.example/'))],
+        galleryPreviewUrl: 'https://a.example/',
+      },
+    });
     expect(screen.getByRole('heading', { name: 'Page A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Work' })).toBeInTheDocument();
+    expect(screen.queryByText('Oat milk')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Link/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the chosen second link and keeps the full link list reachable', () => {
+    renderCard({
+      note: {
+        ...note,
+        content: [
+          ...note.content,
+          paragraph(link('https://b.example/')),
+          paragraph(link('https://a.example/')),
+        ],
+        galleryPreviewUrl: 'https://a.example/',
+      },
+    });
+    expect(screen.getByRole('heading', { name: 'Page A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^2 links, first / })).toBeInTheDocument();
+  });
+
+  it.each([
+    { content: note.content, hiddenLinks: [] },
+    {
+      content: [...note.content, paragraph(link('https://a.example/'))],
+      hiddenLinks: ['https://a.example/'],
+    },
+  ])('falls back to text when the selected link is removed or hidden', (changes) => {
+    renderCard({ note: { ...note, ...changes, galleryPreviewUrl: 'https://a.example/' } });
+    expect(screen.getByText('Oat milk')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Page A' })).not.toBeInTheDocument();
+  });
+
+  it('shows text while link previews are disabled without losing the choice', () => {
+    localStorage.setItem('catch-link-previews', 'false');
+    renderCard({
+      note: {
+        ...note,
+        content: [...note.content, paragraph(link('https://a.example/'))],
+        galleryPreviewUrl: 'https://a.example/',
+      },
+    });
+    expect(screen.getByText('Oat milk')).toBeInTheDocument();
+    localStorage.removeItem('catch-link-previews');
   });
   it('opens and selects tagged card surroundings and attachment faces', () => {
     const tag: Tag = {

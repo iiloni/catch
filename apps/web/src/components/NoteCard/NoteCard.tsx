@@ -13,7 +13,7 @@ import { NoteToolbar } from '@/components/NoteToolbar/NoteToolbar';
 import { ReminderChip } from '@/components/ReminderChip/ReminderChip';
 import { useNoteAttachments } from '@/lib/attachments';
 import { useReminders } from '@/lib/collections';
-import { openLinkOverlay, useIsLinkNote, useNoteLinks } from '@/lib/linkPreviews';
+import { galleryPreviewLink, openLinkOverlay, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
 import { setNotePinned } from '@/lib/notes';
 import { useIsCardHidden, useIsCardLanding } from '@/lib/noteTransition';
@@ -41,7 +41,7 @@ type Props = {
 };
 
 /**
- * A card's contents: the note's text, or for a note that is only a link, that link's
+ * A card's contents: the note's text, or its explicitly chosen link's
  * preview. The editor draws the same face while it grows out of the card.
  */
 export function NoteCardFace({ note }: { note: Note }) {
@@ -69,11 +69,10 @@ function NoteBadges({ note }: { note: Note }) {
 
 function NoteCardContent({ note }: { note: Note }) {
   const links = useNoteLinks(note);
-  const [link] = links;
+  const link = galleryPreviewLink(note, links);
   const color = useNoteColor(note);
   const tagged = useResolvedNoteTags(note.id).length > 0;
-  const linkNote = useIsLinkNote(note, links);
-  if (linkNote && link && !tagged) {
+  if (link) {
     return <LinkNoteFace link={link} tinted={color === 'default'} />;
   }
   if (note.content.length === 0 && !tagged) return <MediaOnlyFace note={note} />;
@@ -131,8 +130,8 @@ export function NoteCard({
   const hidden = useIsCardHidden(note.id);
   const openBeside = paneNoteId.use() === note.id;
   const links = useNoteLinks(note);
-  // A note that is only a link shows it on its face; any other note lists links underneath.
-  const underlay = (!useIsLinkNote(note, links) || tagged) && links.length > 0;
+  // Keep the full link list reachable when the face shows one of several links.
+  const underlay = (!galleryPreviewLink(note, links) || links.length > 1) && links.length > 0;
 
   // A note shrinking back into its card lands without the underlay, which slides out from
   // behind the card as the note settles, as if the card were setting it down.

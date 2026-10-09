@@ -161,7 +161,7 @@ export const notesCollection = createCollection(
         parser: { timestamptz: (value: string) => new Date(value) },
       },
     }),
-    1,
+    2,
   ),
 );
 
@@ -312,7 +312,7 @@ export const sharedNotesCollection = createCollection(
         parser: { timestamptz: (value: string) => new Date(value) },
       },
     }),
-    2,
+    3,
   ),
 );
 
