@@ -15,10 +15,15 @@ describe('pageTransition', () => {
   it('slides in tab order', () => {
     expect(pageTransition('/deck', '/')).toEqual(['forward']);
     expect(pageTransition('/', '/deck')).toEqual(['back']);
-    expect(pageTransition('/deck', '/search')).toEqual(['forward']);
-    expect(pageTransition('/search', '/')).toEqual(['back']);
     expect(pageTransition('/', '/trash')).toEqual(['forward']);
     expect(pageTransition('/archive', '/')).toEqual(['back']);
+  });
+
+  it('slides into and out of search in tab order', () => {
+    expect(pageTransition('/deck', '/search')).toEqual(['forward']);
+    expect(pageTransition('/', '/search')).toEqual(['forward']);
+    expect(pageTransition('/search', '/')).toEqual(['back']);
+    expect(pageTransition('/search', '/deck')).toEqual(['back']);
   });
 
   it('slides Settings in from the right, and its pages past each other on narrow screens', () => {

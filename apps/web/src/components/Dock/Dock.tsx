@@ -11,8 +11,26 @@ import {
   SquarePen,
   X,
 } from 'lucide-react';
-import { AnimatePresence, LayoutGroup, motion, useIsPresent, useTransform } from 'motion/react';
-import { type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
+import {
+  AnimatePresence,
+  animate,
+  LayoutGroup,
+  type MotionValue,
+  motion,
+  useIsPresent,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
+import {
+  type PointerEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { flushSync } from 'react-dom';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
@@ -43,7 +61,7 @@ import { useKeyboardOpen } from '@/lib/keyboard';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { linkOverlay } from '@/lib/linkPreviews';
 import { HOLD_MS } from '@/lib/longPress';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { editorProgress } from '@/lib/noteTransition';
 import {
   isSettingsPath,
@@ -63,6 +81,10 @@ const TABS = [
   { path: '/search', label: 'Search', icon: Search },
 ] as const satisfies ReadonlyArray<{ path: TabPath; label: string; icon: unknown }>;
 
+// A touch tap trails its compatibility click by a frame or two; the close button
+// mounts under the finger in between, so it ignores clicks this soon after opening.
+const GHOST_CLICK_MS = 350;
+
 function asGalleryPage(pathname: string): GalleryPage | null {
   return GALLERY_PAGES.find((page) => page === pathname) ?? null;
 }
@@ -76,6 +98,7 @@ function asGalleryPage(pathname: string): GalleryPage | null {
  * dock steps aside.
  */
 export function Dock() {
+  const navigate = useNavigate();
   const isAdmin = useAdminAccess();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const noteOpen = useRouterState({
@@ -90,18 +113,62 @@ export function Dock() {
   const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
   const hidden = useWideSettings() && inSettings && !quickNoteOpen;
   const entry = useEntryMotion('dock', !hidden, 120);
+  // A tap changes the dock before the router mounts the page, alongside the keyboard.
+  const [searchIntent, setSearchIntent] = useState<{ pathname: string; active: boolean } | null>(
+    null,
+  );
+  // Once navigation arrives, the route owns the dock again, including on a later Back.
+  useEffect(() => {
+    setSearchIntent((intent) => (intent?.pathname === pathname ? intent : null));
+  }, [pathname]);
+  const wantsSearch = searchIntent?.pathname === pathname ? searchIntent.active : tab === '/search';
   const mode = quickNoteOpen
     ? 'tabs'
     : noteOpen && !pane.shown
       ? 'note'
       : inSettings
         ? 'settings'
-        : tab === '/search'
+        : wantsSearch
           ? 'search'
           : 'tabs';
   const settingsY = useSettingsSwipeY();
   const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
   const inputRef = useRef<HTMLInputElement>(null);
+  // The tap that opens search trails a compatibility click; by the time it arrives
+  // the close button has mounted under the finger, so the button discards clicks
+  // within this window of the tap. Mouse clicks retarget to the tab instead and
+  // never reach it.
+  const searchOpenedAt = useRef(0);
+  const searchProgress = useMotionValue(mode === 'search' ? 1 : 0);
+  const reducedMotion = useReducedMotion();
+  const searchActive = mode === 'search';
+  useLayoutEffect(() => {
+    if (searchProgress.get() === (searchActive ? 1 : 0)) return;
+    if (reducedMotion) {
+      searchProgress.set(searchActive ? 1 : 0);
+      return;
+    }
+    // The controls are already mounted. Keep time with the keyboard instead of waiting
+    // for the destination page to paint or stretching the animation across busy frames.
+    const animation = animate(searchProgress, searchActive ? 1 : 0, {
+      ...(searchActive ? curves.expand : curves.collapse),
+      duration: 0.35,
+    });
+    return () => animation.stop();
+  }, [searchActive, reducedMotion, searchProgress]);
+
+  function openSearch() {
+    searchOpenedAt.current = performance.now();
+    flushSync(() => setSearchIntent({ pathname, active: true }));
+    inputRef.current?.focus();
+  }
+
+  function closeSearch() {
+    inputRef.current?.blur();
+    flushSync(() => setSearchIntent({ pathname, active: false }));
+    haptics.toggle();
+    void navigate({ to: lastBrowsingTab.get(), replace: true });
+  }
   // Above the editor while it is open or animating. Motion keeps writing this value inline,
   // so the quick note overrides it in CSS to keep its close button above the scrim.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
@@ -207,14 +274,23 @@ export function Dock() {
                   {mode === 'note' && <NoteLinkTray />}
                   {mode === 'note' && <FloatingNoteToolbars />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
-                    <SearchField inputRef={inputRef} active={mode === 'search'} />
+                    <SearchField
+                      inputRef={inputRef}
+                      active={searchActive}
+                      visible={mode === 'tabs' || mode === 'search'}
+                      progress={searchProgress}
+                      openedAt={searchOpenedAt}
+                      onClose={closeSearch}
+                    />
                     <AnimatePresence initial={false}>
-                      {mode === 'tabs' && (
+                      {(mode === 'tabs' || mode === 'search') && (
                         <Tabs
                           key="tabs"
                           active={tab}
+                          searchProgress={searchProgress}
+                          searchActive={searchActive}
                           // Focusing inside the tap keeps Android willing to raise the keyboard.
-                          onSearch={() => inputRef.current?.focus()}
+                          onSearch={openSearch}
                           switcherOpen={switcherOpen}
                           onSwitcher={setSwitcher}
                           onSwitcherHover={setSwitcherHover}
@@ -237,10 +313,12 @@ export function Dock() {
                   </div>
                 </div>
                 <AnimatePresence initial={false}>
-                  {mode === 'search' && <SearchFilterButton key="filters" />}
-                  {(mode === 'tabs' || mode === 'settings') && (
-                    <ComposeButton
-                      key="compose"
+                  {(mode === 'tabs' || mode === 'settings' || mode === 'search') && (
+                    <DockActionButton
+                      key="action"
+                      search={searchActive}
+                      searchProgress={searchProgress}
+                      onCloseSearch={closeSearch}
                       onBack={mode === 'settings' ? settings.leave : undefined}
                     />
                   )}
@@ -319,6 +397,8 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
 
 type TabsProps = {
   active: TabPath;
+  searchProgress: MotionValue<number>;
+  searchActive: boolean;
   onSearch: () => void;
   switcherOpen: boolean;
   onSwitcher: (open: boolean) => void;
@@ -328,6 +408,8 @@ type TabsProps = {
 
 function Tabs({
   active,
+  searchProgress,
+  searchActive,
   onSearch,
   switcherOpen,
   onSwitcher,
@@ -338,17 +420,17 @@ function Tabs({
   const ref = useRef<HTMLElement>(null);
   // The tabs linger while they fade out; they must not catch taps meant for the search field.
   const isPresent = useIsPresent();
+  const opacity = useTransform(searchProgress, [0, 0.35], [1, 0]);
   // While a finger is down the indicator follows it (scrubbing); `pending` holds the
   // indicator on Search while the dock morphs.
   const [pressed, setPressed] = useState<TabPath | null>(null);
   const [pending, setPending] = useState<TabPath | null>(null);
   const shown = pressed ?? pending ?? active;
 
-  // AnimatePresence brings the same instance back if search closes before the tabs finish
-  // leaving, so drop the hold on Search when they return.
+  // The tabs stay behind the field during the morph, ready for an interrupted close.
   useEffect(() => {
-    if (isPresent) setPending(null);
-  }, [isPresent]);
+    if (isPresent && !searchActive) setPending(null);
+  }, [isPresent, searchActive]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   function tabAt(clientX: number): TabPath {
@@ -384,8 +466,7 @@ function Tabs({
       onSearch();
       haptics.toggle();
       setPending(path);
-      // Let the indicator land on Search before the tabs give way to the field.
-      window.setTimeout(() => void navigate({ to: '/search', replace: true }), 140);
+      void navigate({ to: '/search', replace: true });
       return;
     }
     if (path !== active) haptics.selection();
@@ -451,11 +532,9 @@ function Tabs({
       ref={ref}
       aria-label="Main"
       className="absolute inset-0 grid touch-none select-none grid-cols-3 p-1 [-webkit-touch-callout:none]"
-      style={{ pointerEvents: isPresent ? undefined : 'none' }}
-      initial={{ opacity: 0, scale: 0.92, filter: 'blur(6px)' }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, scale: 0.92, filter: 'blur(6px)', transition: { duration: 0.16 } }}
-      transition={springs.smooth}
+      style={{ pointerEvents: isPresent && !searchActive ? undefined : 'none', opacity }}
+      inert={!isPresent || searchActive}
+      aria-hidden={!isPresent || searchActive}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -499,9 +578,8 @@ function Tabs({
               />
             )}
             {tab.path === '/search' ? (
-              <motion.span layoutId="dock-search-icon" transition={springs.smooth}>
-                <Icon className="size-6" aria-hidden />
-              </motion.span>
+              // The field owns one icon throughout the morph, including while it is a tab.
+              <span className="size-6" aria-hidden />
             ) : (
               <motion.span
                 animate={{ scale: pressed === tab.path ? 1.12 : 1 }}
@@ -520,12 +598,41 @@ function Tabs({
 function SearchField({
   inputRef,
   active,
+  visible,
+  progress,
+  openedAt,
+  onClose,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   active: boolean;
+  visible: boolean;
+  progress: MotionValue<number>;
+  openedAt: RefObject<number>;
+  onClose: () => void;
 }) {
-  const navigate = useNavigate();
+  const reducedMotion = useReducedMotion();
   const query = searchQuery.use();
+  const fieldRef = useRef<HTMLElement>(null);
+  const width = useMotionValue(0);
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    const measure = () => width.set(field.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [width]);
+  // Reveal the full-size field from the Search tab's rounded bounds; text never scales.
+  const clipPath = useTransform(() => {
+    const remaining = 1 - progress.get();
+    const left = (4 + ((width.get() - 8) * 2) / 3) * remaining;
+    const inset = 4 * remaining;
+    return `inset(${inset}px ${inset}px ${inset}px ${left}px round calc(var(--dock-radius) - ${inset}px))`;
+  });
+  const iconX = useTransform(() => (4 + ((width.get() - 8) * 5) / 6 - 28) * (1 - progress.get()));
+  const contentOpacity = useTransform(progress, [0.35, 0.8], [0, 1]);
+  const highlightOpacity = useTransform(progress, [0, 0.35, 1], [0, 0.65, 0]);
   useEffect(() => {
     if (!active) searchFiltersOpen.set(false);
   }, [active]);
@@ -536,17 +643,17 @@ function SearchField({
       document.querySelector<HTMLButtonElement>('[data-search-filter-trigger]')?.focus();
       return;
     }
-    inputRef.current?.blur();
-    haptics.toggle();
-    void navigate({ to: lastBrowsingTab.get(), replace: true });
+    onClose();
   }
 
   useBackHandler(active, exit);
 
   // The input stays mounted (invisible) so tapping the Search tab can focus it at once.
   return (
-    <search
+    <motion.search
+      ref={fieldRef}
       aria-hidden={!active}
+      style={{ clipPath }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.stopPropagation();
@@ -554,17 +661,18 @@ function SearchField({
         }
       }}
       className={cn(
-        'absolute inset-x-0 bottom-0 flex h-[var(--dock-height)] items-center gap-2 pr-1.5 pl-4',
+        'absolute inset-x-0 bottom-0 z-10 flex h-[var(--dock-height)] items-center gap-2 pr-1.5 pl-4',
         !active && 'pointer-events-none',
       )}
     >
-      {active ? (
-        <motion.span layoutId="dock-search-icon" transition={springs.smooth}>
-          <Search className="size-6 text-muted-foreground" aria-hidden />
-        </motion.span>
-      ) : (
-        <span className="size-6" />
-      )}
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+        style={{ opacity: highlightOpacity }}
+      />
+      <motion.span className="relative shrink-0" style={{ x: iconX, opacity: visible ? 1 : 0 }}>
+        <Search className="size-6" aria-hidden />
+      </motion.span>
       <motion.input
         ref={inputRef}
         type="text"
@@ -579,84 +687,49 @@ function SearchField({
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
-        animate={{ opacity: active ? 1 : 0, x: active ? 0 : 16 }}
-        transition={{ ...springs.smooth, delay: active ? 0.08 : 0 }}
+        animate={{ opacity: active ? 1 : 0, x: active ? 0 : 8 }}
+        transition={reducedMotion ? { duration: 0 } : { duration: 0.25, delay: active ? 0.1 : 0 }}
         className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
       />
-      <AnimatePresence>
-        {active && (
-          <motion.button
-            key="close"
-            type="button"
-            aria-label="Close search"
-            onClick={() => exit(false)}
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            whileTap={{ scale: 0.88 }}
-            transition={{ ...springs.snappy, delay: 0.1 }}
-            className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-          >
-            <X className="size-5" aria-hidden />
-          </motion.button>
-        )}
-      </AnimatePresence>
-    </search>
-  );
-}
-
-function SearchFilterButton() {
-  const open = searchFiltersOpen.use();
-  const count = searchFilterCount.use();
-  const navigate = useNavigate();
-  return (
-    <motion.div
-      className="shrink-0"
-      initial={{ width: 0, marginLeft: 0 }}
-      animate={{ width: 64, marginLeft: 12 }}
-      exit={{ width: 0, marginLeft: 0 }}
-      transition={springs.smooth}
-    >
       <motion.button
+        key="close"
         type="button"
-        data-search-filter-trigger
-        aria-label="Filter notes"
-        title={count ? `Filter notes (${count} active)` : 'Filter notes'}
-        aria-expanded={open}
-        aria-controls="search-filter-panel"
-        onPointerDown={(event) => event.preventDefault()}
+        aria-label="Close search"
         onClick={() => {
-          haptics.toggle();
-          searchFiltersOpen.set(!open);
+          // Discard the compatibility click trailed by the tap that opened search.
+          if (performance.now() - openedAt.current < GHOST_CLICK_MS) return;
+          exit(false);
         }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            if (open) searchFiltersOpen.set(false);
-            else void navigate({ to: lastBrowsingTab.get(), replace: true });
-          }
-        }}
+        aria-hidden={!active}
+        tabIndex={active ? 0 : -1}
+        style={{ opacity: contentOpacity }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
-        className={cn(
-          'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
-          (open || count > 0) && 'text-brand',
-        )}
+        className="flex size-[3.25rem] shrink-0 items-center justify-center rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
       >
-        <span aria-hidden className="glass absolute inset-0 rounded-[var(--dock-radius)]" />
-        <SlidersHorizontal className="relative size-7" strokeWidth={2.25} aria-hidden />
-        {count > 0 && (
-          <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
-        )}
+        <X className="size-5" aria-hidden />
       </motion.button>
-    </motion.div>
+    </motion.search>
   );
 }
 
-/**
- * The compose button beside the tabs. With `onBack` (in Settings) it turns into a back
- * button in place.
- */
-function ComposeButton({ onBack }: { onBack?: () => void }) {
+/** One surface changes from compose to filters without changing the dock's width. */
+function DockActionButton({
+  onBack,
+  search,
+  searchProgress,
+  onCloseSearch,
+}: {
+  onBack?: () => void;
+  search: boolean;
+  searchProgress: MotionValue<number>;
+  onCloseSearch: () => void;
+}) {
+  const filtersOpen = searchFiltersOpen.use();
+  const count = searchFilterCount.use();
+  const composeOpacity = useTransform(searchProgress, [0, 1], [1, 0]);
+  const composeRotate = useTransform(searchProgress, [0, 1], [0, 45]);
+  const filterRotate = useTransform(searchProgress, [0, 1], [-45, 0]);
   const state = quickNote.use();
   const capture = linkCaptureControls.use();
   const hasContent = quickNoteCanSave.use();
@@ -665,17 +738,21 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
   const canSave = capture ? capture.canSave : open && hasContent;
   const back = onBack !== undefined && !active;
   const gradient = canSave || (!active && !back);
-  const label = back
-    ? 'Back'
-    : capture
-      ? canSave
-        ? 'Save link'
-        : 'Close link capture'
-      : open
+  const label = search
+    ? 'Filter notes'
+    : back
+      ? 'Back'
+      : capture
         ? canSave
-          ? 'Save note'
-          : 'Close new note'
-        : 'New note';
+          ? 'Save link'
+          : 'Close link capture'
+        : open
+          ? canSave
+            ? 'Save note'
+            : 'Close new note'
+          : 'New note';
+
+  const gradientOpacity = useTransform(() => (gradient ? 1 : 0) * (1 - searchProgress.get()));
 
   return (
     <motion.div
@@ -688,25 +765,41 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
       <motion.button
         type="button"
         aria-label={label}
-        title={label}
-        aria-expanded={back ? undefined : active}
-        disabled={capture?.busy || (state === 'capture' && !capture)}
+        title={search && count ? `Filter notes (${count} active)` : label}
+        data-search-filter-trigger={search ? '' : undefined}
+        aria-controls={search ? 'search-filter-panel' : undefined}
+        aria-expanded={search ? filtersOpen : back ? undefined : active}
+        disabled={!search && (capture?.busy || (state === 'capture' && !capture))}
         onPointerDown={(event) => {
-          if (active) event.preventDefault();
+          if (active || search) event.preventDefault();
         }}
         onClick={() => {
           haptics.toggle();
-          if (capture) {
+          if (search) {
+            searchFiltersOpen.set(!filtersOpen);
+          } else if (capture) {
             if (capture.canSave) capture.save();
             else capture.cancel();
           } else if (back) onBack();
           else quickNote.set(open ? 'closed' : 'open');
         }}
+        onKeyDown={(event) => {
+          if (search && event.key === 'Escape') {
+            if (filtersOpen) searchFiltersOpen.set(false);
+            else onCloseSearch();
+          }
+        }}
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
           'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
-          gradient ? 'text-brand-foreground' : 'text-foreground',
+          search
+            ? filtersOpen || count > 0
+              ? 'text-brand'
+              : 'text-foreground'
+            : gradient
+              ? 'text-brand-foreground'
+              : 'text-foreground',
           capture?.busy && 'opacity-60',
         )}
       >
@@ -714,66 +807,81 @@ function ComposeButton({ onBack }: { onBack?: () => void }) {
         <motion.span
           aria-hidden
           className="absolute inset-0 rounded-[var(--dock-radius)] bg-[image:var(--brand-gradient)] shadow-[0_8px_24px_-6px_rgb(213_123_20/0.4),inset_0_1px_0_rgb(255_255_255/0.45)]"
-          animate={{ opacity: gradient ? 1 : 0, scale: gradient ? 1 : 0.85 }}
-          transition={springs.snappy}
+          style={{ opacity: gradientOpacity }}
         />
-        <AnimatePresence initial={false} mode="popLayout">
-          {capture?.saving ? (
-            <motion.span
-              key="busy"
-              className="relative"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <LoaderCircle className="size-7 animate-spin" aria-hidden />
-            </motion.span>
-          ) : canSave ? (
-            <motion.span
-              key="save"
-              className="relative"
-              initial={{ scale: 0.4, opacity: 0, rotate: -45 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              exit={{ scale: 0.4, opacity: 0, rotate: 45 }}
-              transition={springs.snappy}
-            >
-              <SquarePen className="size-7" strokeWidth={2.25} aria-hidden />
-            </motion.span>
-          ) : back ? (
-            <motion.span
-              key="back"
-              className="relative"
-              initial={{ scale: 0.4, opacity: 0, x: 8 }}
-              animate={{ scale: 1, opacity: 1, x: 0 }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={springs.bouncy}
-            >
-              <ChevronLeft className="size-7" strokeWidth={2.25} aria-hidden />
-            </motion.span>
-          ) : !active && state === 'saved' ? (
-            <motion.span
-              key="saved"
-              className="relative"
-              initial={{ scale: 0.4, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={springs.bouncy}
-            >
-              <Check className="size-7" strokeWidth={2.5} aria-hidden />
-            </motion.span>
-          ) : (
-            <motion.span
-              key="plus"
-              className="relative"
-              initial={{ scale: 0.4, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1, rotate: active ? 45 : 0 }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={springs.bouncy}
-            >
-              <Plus className="size-7" strokeWidth={2.25} aria-hidden />
-            </motion.span>
-          )}
-        </AnimatePresence>
+        <motion.span
+          className="relative flex size-7 items-center justify-center"
+          style={{ opacity: composeOpacity, rotate: composeRotate }}
+          aria-hidden
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            {capture?.saving ? (
+              <motion.span
+                key="busy"
+                className="relative"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <LoaderCircle className="size-7 animate-spin" aria-hidden />
+              </motion.span>
+            ) : canSave ? (
+              <motion.span
+                key="save"
+                className="relative"
+                initial={{ scale: 0.4, opacity: 0, rotate: -45 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                exit={{ scale: 0.4, opacity: 0, rotate: 45 }}
+                transition={springs.snappy}
+              >
+                <SquarePen className="size-7" strokeWidth={2.25} aria-hidden />
+              </motion.span>
+            ) : back ? (
+              <motion.span
+                key="back"
+                className="relative"
+                initial={{ scale: 0.4, opacity: 0, x: 8 }}
+                animate={{ scale: 1, opacity: 1, x: 0 }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={springs.bouncy}
+              >
+                <ChevronLeft className="size-7" strokeWidth={2.25} aria-hidden />
+              </motion.span>
+            ) : !active && state === 'saved' ? (
+              <motion.span
+                key="saved"
+                className="relative"
+                initial={{ scale: 0.4, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={springs.bouncy}
+              >
+                <Check className="size-7" strokeWidth={2.5} aria-hidden />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="plus"
+                className="relative"
+                initial={{ scale: 0.4, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1, rotate: active ? 45 : 0 }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={springs.bouncy}
+              >
+                <Plus className="size-7" strokeWidth={2.25} aria-hidden />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.span>
+        <motion.span
+          aria-hidden
+          className="absolute flex size-7 items-center justify-center"
+          style={{ opacity: searchProgress, rotate: filterRotate }}
+        >
+          <SlidersHorizontal className="size-7" strokeWidth={2.25} />
+        </motion.span>
+        {search && count > 0 && (
+          <span aria-hidden className="absolute top-3 right-3 size-1.5 rounded-full bg-brand" />
+        )}
       </motion.button>
     </motion.div>
   );

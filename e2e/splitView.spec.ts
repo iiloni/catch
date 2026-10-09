@@ -94,7 +94,7 @@ test('a quick note and its dock center over the split view with one formatting b
       new Promise<{ center: number; searchOffset: number }[]>((resolve) => {
         const dock = document.querySelector('[data-dock] > div');
         const search = document.querySelector('[data-dock] a[aria-label="Search"]');
-        const icon = search?.querySelector('svg');
+        const icon = document.querySelector('[data-dock] search svg');
         if (!dock || !search || !icon) return resolve([]);
         const samples: { center: number; searchOffset: number }[] = [];
         const end = performance.now() + 650;

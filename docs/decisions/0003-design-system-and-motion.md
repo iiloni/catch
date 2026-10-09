@@ -191,6 +191,15 @@ usual layer. The container keeps opacity 1 throughout: `--header-opacity` fades 
 layers and their foreground separately (`header-fade`). Fading a blur's ancestor makes a
 backdrop root, cutting off the page until opacity reaches 1 and causing the blur to pop on.
 
+The dock's Search tab opens into its field with the note transform's emphasized curve,
+shortened to move alongside the keyboard. A rounded clip grows from the tab's bounds across the dock while one
+search icon moves into the field's left edge; the tabs yield and the text and close button
+fade in without scaling or blurring. Closing reverses the morph from its current progress.
+The field stays mounted and the dock changes on the tap, before navigation mounts Search,
+so focusing it raises the phone's keyboard alongside the morph. The side button keeps one
+surface while its compose icon and gradient give way to filters. Reduced motion swaps the
+controls immediately. The dock's glass stays in place.
+
 **Haptics.** A small local Capacitor plugin (`HapticFeedbackPlugin.java`) calls
 `View.performHapticFeedback`, which uses the device's tuned effects and respects the user's
 touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instead (its
@@ -223,6 +232,8 @@ gets a `view-transition-name` only while a transition runs and shows live, so it
 animations play on top. A named element is a backdrop root, so a permanent name would stop
 the dock's glass from blurring the page behind it. Opening a
 note changes only the search params and gets no page transition.
+The dock's transition group is anchored to `--dock-bottom` instead of its captured position,
+so it follows the keyboard while the page's snapshots slide into or out of Search.
 
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
 keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:
