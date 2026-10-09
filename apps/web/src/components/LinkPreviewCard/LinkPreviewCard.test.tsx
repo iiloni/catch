@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ResolvedLink } from '@/lib/linkPreviews';
-import { hideLinkPreview } from '@/lib/notes';
+import { hideLinkPreview, setGalleryPreview } from '@/lib/notes';
 import { makePreview } from '@/test/links';
 import { LinkNoteFace, LinkPreviewCard } from './LinkPreviewCard';
 
@@ -57,6 +57,30 @@ describe('LinkPreviewCard', () => {
     render(<LinkPreviewCard link={ready} noteId="n1" readOnly />);
     await openMenu();
     expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Remove preview' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Show as Gallery Preview' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('chooses this link as the gallery face', async () => {
+    render(<LinkPreviewCard link={ready} noteId="n1" />);
+    await openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show as Gallery Preview' }));
+    expect(setGalleryPreview).toHaveBeenCalledWith('n1', url);
+  });
+
+  it('switches the selected preview back to text', async () => {
+    render(<LinkPreviewCard link={ready} noteId="n1" galleryPreviewUrl={url} />);
+    await openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show Text in Gallery' }));
+    expect(setGalleryPreview).toHaveBeenCalledWith('n1', null);
+  });
+
+  it('allows a personal card choice for shared notes while leaving content actions hidden', async () => {
+    render(<LinkPreviewCard link={ready} noteId="n1" readOnly canChooseGalleryPreview />);
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Show as Gallery Preview' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Remove preview' })).not.toBeInTheDocument();
   });
 });

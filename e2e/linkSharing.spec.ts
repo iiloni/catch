@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import type { IncomingLinkCapture } from '../apps/web/src/lib/linkCapture';
-import { card, openDeck, openNote, seedNotes, signUp } from './helpers';
+import { openDeck, openNote, seedNotes, signUp } from './helpers';
 
 const metadata = {
   title: 'Fetched page title',
@@ -87,7 +87,7 @@ for (const view of ['Gallery', 'Deck'] as const) {
     await page.getByRole('button', { name: 'Save link', exact: true }).click();
     await expect(capture).toBeHidden();
     if (view === 'Deck') await openDeck(page);
-    await expect(card(page, 'Android shared link')).toBeVisible();
+    await expect(page.locator(`[data-note-card="${id}"]`)).toBeVisible();
   });
 }
 
@@ -175,7 +175,7 @@ test('pending native link shares recover in order and cancelled shares stay canc
   const editor = page.getByRole('dialog', { name: 'Edit note' });
   await expect(editor.getByRole('textbox')).toContainText('Existing note');
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(card(page, 'Second shared link')).toBeVisible();
+  await expect(page.locator(`[data-note-card="${second}"]`)).toBeVisible();
   await page.goto(`/share?id=${first}`);
   await expect(capture).toBeHidden();
   await expect(page.getByRole('article')).toHaveCount(2);

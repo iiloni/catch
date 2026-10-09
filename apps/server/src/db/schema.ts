@@ -137,6 +137,8 @@ export const notes = pgTable(
     position: text().notNull(),
     /** Normalized URLs of links whose previews the user removed from this note. */
     hiddenLinks: jsonb().$type<string[]>().notNull().default([]),
+    /** The link chosen as this note's card face; null shows text. */
+    galleryPreviewUrl: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     /** Set when a note is moved to the trash. DELETE removes it for good. */
@@ -362,6 +364,7 @@ export const sharedNotes = pgTable(
     isPinned: boolean().notNull().default(false),
     isArchived: boolean().notNull().default(false),
     position: text().notNull(),
+    galleryPreviewUrl: text(),
     /** The note's own dates, not this row's. */
     createdAt: timestamp({ withTimezone: true }).notNull(),
     updatedAt: timestamp({ withTimezone: true }).notNull(),

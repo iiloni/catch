@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { DEFAULT_BOARD_STATUS } from '@catch/shared';
+import { DEFAULT_BOARD_STATUS, normalizeUrl } from '@catch/shared';
 import { importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { loadShareCollections, waitForQueuedWrite, waitForWriteStored } from './collections';
@@ -78,12 +78,14 @@ export function saveLinkShare(
     if (!incomingLinkDraft(share)) throw new Error('This share is not a single web link.');
     await loadShareCollections();
     const content = capturedLinkContent(draft);
+    const galleryPreviewUrl = normalizeUrl(draft.url);
     const transaction = hasNote(id)
-      ? updateNote(id, { content })
+      ? updateNote(id, { content, galleryPreviewUrl })
       : createNote({
           id,
           userId: user.id,
           content,
+          galleryPreviewUrl,
           ...(placement && resolveLinkCapturePlacement(placement)),
         }).transaction;
     await waitForWriteStored(transaction);

@@ -18,6 +18,7 @@ function note(title: string, body: string[], overrides: Partial<Note> = {}): Not
     isArchived: false,
     position: 'a0',
     hiddenLinks: [],
+    galleryPreviewUrl: null,
     createdAt: new Date(2026, 0, counter),
     updatedAt: new Date(2026, 0, counter),
     deletedAt: null,

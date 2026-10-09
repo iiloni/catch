@@ -305,14 +305,16 @@ export function LinkCaptureForm({
       await loadShareCollections();
       // Reuse the id if admission failed: retrying must not create a second note.
       const content = capturedLinkContent({ ...draft, url: draft.url.trim() });
+      const galleryPreviewUrl = normalizeUrl(draft.url);
       const existing = savedId.current;
       const saved =
         existing && hasNote(existing)
-          ? { id: existing, transaction: updateNote(existing, { content }) }
+          ? { id: existing, transaction: updateNote(existing, { content, galleryPreviewUrl }) }
           : createNote({
               id: existing ?? undefined,
               userId: user.id,
               content,
+              galleryPreviewUrl,
               ...resolveLinkCapturePlacement(placement),
             });
       savedId.current = saved.id;

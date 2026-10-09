@@ -112,7 +112,12 @@ describe('link share preparation', () => {
     await saveLinkShare(id, editedDraft);
     expect(mocks.create).toHaveBeenCalledTimes(1);
     expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ id, userId: 'user-1', ...placement }),
+      expect.objectContaining({
+        id,
+        userId: 'user-1',
+        galleryPreviewUrl: 'https://example.com/page',
+        ...placement,
+      }),
     );
     expect(blocksToPlainText(mocks.create.mock.calls[0]?.[0]?.content ?? [])).toContain('My title');
     expect(mocks.update).toHaveBeenCalledWith(
