@@ -17,6 +17,7 @@ const copy: SharedNote = {
   isPinned: false,
   isArchived: false,
   position: 'a0',
+  galleryPreviewUrl: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

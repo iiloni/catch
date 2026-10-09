@@ -1,6 +1,9 @@
+import { Capacitor } from '@capacitor/core';
+import { DEFAULT_BOARD_STATUS, normalizeUrl } from '@catch/shared';
 import { importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { loadShareCollections, waitForQueuedWrite, waitForWriteStored } from './collections';
+import { rememberedHomePage } from './homePage';
 import {
   capturedLinkContent,
   type IncomingLinkCapture,
@@ -47,7 +50,17 @@ export async function prepareShare(id: string): Promise<PreparedShare> {
     if (share.dismissed) return { kind: 'dismissed' };
     if (share.complete) return { kind: 'note', id };
     const draft = incomingLinkDraft(share);
-    return draft ? { kind: 'link', id, draft } : null;
+    return draft
+      ? {
+          kind: 'link',
+          id,
+          draft,
+          initialStatus:
+            Capacitor.getPlatform() === 'android' && rememberedHomePage() === '/deck'
+              ? DEFAULT_BOARD_STATUS
+              : null,
+        }
+      : null;
   });
   return prepared ?? { kind: 'note', id: await receiveShare(id) };
 }
@@ -65,12 +78,14 @@ export function saveLinkShare(
     if (!incomingLinkDraft(share)) throw new Error('This share is not a single web link.');
     await loadShareCollections();
     const content = capturedLinkContent(draft);
+    const galleryPreviewUrl = normalizeUrl(draft.url);
     const transaction = hasNote(id)
-      ? updateNote(id, { content })
+      ? updateNote(id, { content, galleryPreviewUrl })
       : createNote({
           id,
           userId: user.id,
           content,
+          galleryPreviewUrl,
           ...(placement && resolveLinkCapturePlacement(placement)),
         }).transaction;
     await waitForWriteStored(transaction);

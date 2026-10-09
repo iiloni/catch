@@ -26,6 +26,7 @@ export function makeNote(overrides: Partial<Note> = {}): Note {
     isArchived: false,
     position: 'a0',
     hiddenLinks: [],
+    galleryPreviewUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const native = vi.hoisted(() => vi.fn(() => false));
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: native } }));
 
-import { rememberHomePage, restoreHomePage } from './homePage';
+import { rememberedHomePage, rememberHomePage, restoreHomePage } from './homePage';
 
 beforeEach(() => {
   localStorage.clear();
@@ -36,6 +36,7 @@ describe('home page on fresh launches', () => {
     if (saved !== null) localStorage.setItem('catch-home-page', saved);
     restoreHomePage();
     expect(window.location.pathname).toBe('/');
+    expect(rememberedHomePage()).toBe('/');
   });
 
   it.each(['/deck', '/search', '/share?id=one', '/capture#url=example', '/?note=one', '/#details'])(
@@ -66,6 +67,7 @@ describe('home page on fresh launches', () => {
     }
     restoreHomePage();
     expect(window.location.pathname).toBe('/deck');
+    expect(rememberedHomePage()).toBe('/deck');
 
     rememberHomePage('/');
     window.history.replaceState(null, '', '/');
@@ -81,6 +83,7 @@ describe('home page on fresh launches', () => {
       throw new Error('Storage unavailable');
     });
     expect(restoreHomePage).not.toThrow();
+    expect(rememberedHomePage()).toBe('/');
     expect(() => rememberHomePage('/deck')).not.toThrow();
     expect(window.location.pathname).toBe('/');
   });

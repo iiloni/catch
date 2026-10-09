@@ -116,8 +116,9 @@ and Restore and Delete forever in the Trash. Back and Escape end selecting.
 
 In the Deck, dragging a card while notes are selected gathers the whole selection: the other
 cards fold out of their columns and fly into a stack under the finger, with the count on it.
-Dropping the stack in a column places the notes there together, in board order, and ends
-selecting. While any card is held, "Send to gallery" and "Cancel" targets float above the
+Dropping the stack in a column places the notes there together, in board order, and keeps
+the selection. Moving a single card ends selecting; a long press without moving it keeps
+it selected. While any card is held, "Send to gallery" and "Cancel" targets float above the
 dock, Cancel nearest it; dropping on Cancel changes nothing and keeps the selection.
 
 **Wide screens.** On tablets and unfolded foldables (at least 672 × 480 px) an open note
@@ -127,7 +128,9 @@ pane, and the note itself is a large rounded card between its back and trash too
 top and that dock at the bottom, so it reads as the page's card opened up. Tapping another card swaps the pane's note in place (replacing the history entry, so
 back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
 at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
-saved so it survives rotation and unfolding. The pane does not use the container transform:
+saved so it survives rotation and unfolding. Below 480 px of note width, undo and redo float
+above the note's dock as on phones, leaving the header's actions and compact sync pill room
+to fit. Wider panes keep undo and redo beside Back. The pane does not use the container transform:
 opening it narrows the page, which moves the card it would grow from, so a morph chases a moving
 target and two morphs cross when switching notes. Instead the pane slides in from the screen's
 edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.

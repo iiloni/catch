@@ -1,11 +1,13 @@
 import {
   blocksHaveContent,
   DEFAULT_BOARD_STATUS,
+  extractLinks,
   MAX_NOTES_PER_REQUEST,
   mapAttachmentBlocks,
   type Note,
   type NoteColor,
   normalizeSecondaryTags,
+  normalizeUrl,
   positionBetween,
   positionsBetween,
   sharedNoteAsNote,
@@ -26,7 +28,10 @@ import { assignPrimaryTag, setPrimaryTag } from './tags';
 import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
 
 type NoteChanges = Partial<
-  Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
+  Pick<
+    Note,
+    'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt' | 'galleryPreviewUrl'
+  >
 >;
 
 /**
@@ -68,6 +73,7 @@ export function createNote(input: {
   id?: string;
   userId: string;
   content: Note['content'];
+  galleryPreviewUrl?: string | null;
   color?: NoteColor;
   status?: string | null;
   primaryTagId?: string | null;
@@ -98,6 +104,7 @@ export function createNote(input: {
         isArchived: false,
         position: firstPosition(vault),
         hiddenLinks: [],
+        galleryPreviewUrl: vault ? null : (input.galleryPreviewUrl ?? null),
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -175,8 +182,8 @@ function positionForMove(others: readonly Note[], index: number) {
 }
 
 /**
- * Places deck notes, in the order given, together at `index` among their destination
- * column's other notes, in one synced update.
+ * Places deck notes at `index` in their destination column, keeping each pin group
+ * in the order given, in one synced update. `others` is in displayed order.
  */
 export function moveDeckNotes(
   ids: readonly string[],
@@ -184,8 +191,17 @@ export function moveDeckNotes(
   others: readonly Note[],
   index: number,
 ) {
-  const positions = positionsBetween(...boundsForMove(others, index), ids.length);
-  const order = new Map(ids.map((id, i) => [id, i]));
+  const positions = new Map<string, string>();
+  // Pin groups have independent position orders: a boundary between them need not
+  // have ascending keys, so only neighbours in the same group can bound a move.
+  for (const isPinned of [true, false]) {
+    const group = ids.filter((id) => noteStore.get(id)?.isPinned === isPinned);
+    if (!group.length) continue;
+    const peers = others.filter((note) => note.isPinned === isPinned);
+    const at = others.slice(0, index).filter((note) => note.isPinned === isPinned).length;
+    const keys = positionsBetween(...boundsForMove(peers, at), group.length);
+    for (const [i, id] of group.entries()) positions.set(id, keys[i]!);
+  }
   const now = new Date();
   return write(() =>
     noteStore.update([...ids], (drafts) => {
@@ -194,7 +210,7 @@ export function moveDeckNotes(
           draft.status = status;
           draft.updatedAt = now;
         }
-        draft.position = positions[order.get(draft.id) ?? -1] ?? draft.position;
+        draft.position = positions.get(draft.id) ?? draft.position;
       }
     }),
   );
@@ -215,6 +231,31 @@ export function hideLinkPreview(id: string, url: string) {
   const transaction = setHidden(true);
   toast('Preview removed', { action: { label: 'Undo', onClick: () => setHidden(false) } });
   return transaction;
+}
+
+/** Card appearance is a personal preference, including for someone else's shared note. */
+export function setGalleryPreview(id: string, href: string | null) {
+  const note = getNote(id);
+  if (!note || note.deletedAt || isVaultNote(id)) return;
+  const url = href === null ? null : normalizeUrl(href);
+  if (
+    href !== null &&
+    (!url ||
+      note.hiddenLinks.includes(url) ||
+      !extractLinks(note.content).some((link) => link.url === url))
+  )
+    return;
+  return write(() => {
+    if (sharedNotesCollection.has(id)) {
+      sharedNotesCollection.update(id, (draft) => {
+        draft.galleryPreviewUrl = url;
+      });
+    } else {
+      noteStore.update(id, (draft) => {
+        draft.galleryPreviewUrl = url;
+      });
+    }
+  });
 }
 
 export function setNoteColor(id: string, color: NoteColor) {
@@ -553,6 +594,7 @@ export function importNotes(userId: string, notes: readonly ImportedNote[]): Imp
       isPinned: note.isPinned && !note.isArchived,
       position: positions[start + index] ?? firstPosition(),
       hiddenLinks: [],
+      galleryPreviewUrl: null,
       deletedAt: null,
     }));
     const transaction = write(() => notesCollection.insert(batch));

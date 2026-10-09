@@ -1,4 +1,3 @@
-import { comparePositions } from '@catch/shared';
 import { and, eq, isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import { Columns3Cog } from 'lucide-react';
@@ -13,6 +12,7 @@ import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
+import { sortNotes } from '@/lib/sortNotes';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
 
@@ -41,9 +41,7 @@ function DeckPage() {
     ? vault.filter((note) => !note.deletedAt && !note.isArchived && note.status !== null)
     : plainNotes;
   const awaitingSync = useAwaitingSync((isLoading && !vault) || columnsLoading, columns.length);
-  const selection = useNoteSelection(
-    [...notes].sort((a, b) => comparePositions(a.position, b.position)),
-  );
+  const selection = useNoteSelection(sortNotes(notes, 'position'));
 
   return (
     <>

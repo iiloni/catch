@@ -85,6 +85,7 @@ function SharePage() {
         <LinkCaptureForm
           key={capture.id}
           initial={capture.draft}
+          initialStatus={capture.initialStatus}
           autoFetch
           saveDraft={(draft, placement) => saveLinkShare(capture.id, draft, placement)}
           onSavingChange={setSaving}

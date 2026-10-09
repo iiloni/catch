@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { expect, type Page, test } from '@playwright/test';
-import { card, openDeck, signUp } from './helpers';
+import { expect, type Page, type Route, test } from '@playwright/test';
+import { openDeck, signUp } from './helpers';
 
 const id = () => {
   const value = randomUUID();
@@ -30,7 +30,9 @@ async function seedChoices(page: Page) {
     ).ok(),
   ).toBeTruthy();
   // Visit the form online so these server-seeded choices reach the device's cache.
-  await page.goto('/capture');
+  const intake = (route: Route) => route.fulfill({ status: 404 });
+  await page.route('**/api/link-previews/intake', intake);
+  await page.goto('/capture#url=https%3A%2F%2Fexample.com%2Fplacement');
   await page.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
   const destination = page.getByRole('dialog', { name: 'Save to', exact: true });
   await expect(destination.getByRole('button', { name: 'Inbox', exact: true })).toBeVisible();
@@ -46,6 +48,7 @@ async function seedChoices(page: Page) {
   await expect(destination.getByRole('button', { name: 'Inbox', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.goto('/');
+  await page.unroute('**/api/link-previews/intake', intake);
   return { column, reading, web, later, headers };
 }
 
@@ -102,6 +105,47 @@ async function selectInbox(page: Page, isMobile: boolean) {
   await expect(tab).toHaveAttribute('aria-selected', 'true');
 }
 
+for (const view of ['Gallery', 'Deck'] as const) {
+  test(`a quick-note link capture defaults to the current ${view} view`, async ({ page }) => {
+    await signUp(page);
+    await page.route('**/api/link-previews/intake', (route) => route.fulfill({ status: 404 }));
+    if (view === 'Deck') await openDeck(page);
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    await expect(page.locator('[contenteditable]')).toBeFocused();
+    await page.getByRole('button', { name: 'Save link', exact: true }).click();
+    const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
+    await capture.getByLabel('URL', { exact: true }).fill('https://example.com/current-view');
+    await capture.getByRole('button', { name: 'Fetch details', exact: true }).click();
+    await capture.getByLabel('Title', { exact: true }).fill('Link in current view');
+    await capture
+      .getByRole('button', {
+        name: view === 'Deck' ? 'Save to Deck · New' : 'Save to Gallery',
+        exact: true,
+      })
+      .click();
+    const destination = page.getByRole('dialog', { name: 'Save to', exact: true });
+    await expect(
+      destination.getByRole('button', {
+        name: view === 'Deck' ? 'New' : 'Send to gallery',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'location');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Save link', exact: true }).click();
+    await expect(capture).toBeHidden();
+    await expect(
+      page.locator('[data-gallery-preview="https://example.com/current-view"]'),
+    ).toBeVisible();
+    if (view === 'Deck') {
+      await expect(
+        page
+          .getByRole('region', { name: 'New column' })
+          .locator('[data-gallery-preview="https://example.com/current-view"]'),
+      ).toBeVisible();
+    }
+  });
+}
+
 test('the capture form saves to a chosen custom Deck column with primary and secondary tags', async ({
   page,
   isMobile,
@@ -121,20 +165,27 @@ test('the capture form saves to a chosen custom Deck column with primary and sec
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await expect(editor.locator('[data-note-color="blue"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
   await openDeck(page);
   await selectInbox(page, isMobile);
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
-      .getByRole('heading', { name: 'Captured link' }),
+      .locator('[data-gallery-preview="https://example.com/incoming"]'),
   ).toBeVisible();
   await page.reload();
   await selectInbox(page, isMobile);
   await expect(
-    card(page, 'Captured link').getByRole('button', { name: 'Reading / Web', exact: true }),
+    page
+      .locator('[data-note-card]')
+      .filter({ has: page.locator('[data-gallery-preview="https://example.com/incoming"]') })
+      .getByRole('button', { name: 'Reading / Web', exact: true }),
   ).toBeVisible();
   await expect(
-    card(page, 'Captured link').getByRole('button', { name: 'Later', exact: true }),
+    page
+      .locator('[data-note-card]')
+      .filter({ has: page.locator('[data-gallery-preview="https://example.com/incoming"]') })
+      .getByRole('button', { name: 'Later', exact: true }),
   ).toBeVisible();
 });
 
@@ -190,7 +241,7 @@ test('a link share uses its dialog choices offline and completed receipts preser
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toHaveCount(0);
   await expect(editor.locator('[data-note-color="red"]').first()).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(card(page, 'Shared link')).toBeVisible();
+  await expect(page.locator(`[data-note-card="${link}"]`)).toBeVisible();
 });
 
 test('a pending native link share offers placement and tag choices inside the app dialog', async ({
@@ -214,11 +265,12 @@ test('a pending native link share offers placement and tag choices inside the ap
   await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
   await openDeck(page);
   await selectInbox(page, isMobile);
   await expect(
     page
       .getByRole('region', { name: 'Inbox column' })
-      .getByRole('heading', { name: 'Shared link' }),
+      .locator('[data-gallery-preview="https://example.com/incoming"]'),
   ).toBeVisible();
 });

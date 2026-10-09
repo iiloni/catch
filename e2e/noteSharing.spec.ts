@@ -1,5 +1,7 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { z } from 'zod';
+import { noteContentSchema } from '../packages/shared/src/notes';
+import { API_PROTOCOL_HEADER } from '../packages/shared/src/protocol';
 import { sharedNoteViewSchema } from '../packages/shared/src/sharing';
 import { bearerToken, card, noteAction, seedNotes, signUp } from './helpers';
 
@@ -70,6 +72,133 @@ async function syncedRows(
 }
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: text }];
+
+test('gallery preview choices sync independently for owners and readers, preserving older writes', {
+  tag: '@api',
+}, async ({ playwright, baseURL, extraHTTPHeaders }) => {
+  const options = { baseURL, extraHTTPHeaders };
+  const owner = await account(playwright.request, options, 'Owner');
+  const reader = await account(playwright.request, options);
+  const id = noteId();
+  const token = shareToken();
+  const first = 'https://example.com/first';
+  const second = 'https://example.com/second';
+  const oldHeaders = { ...owner.headers, [API_PROTOCOL_HEADER]: '4' };
+  const content = paragraph(`Saved links ${first} ${second}`);
+  const readOwner = async () =>
+    (await syncedRows(owner.context, owner.headers, 'notes')).find((row) => row.id === id);
+  const readReader = async () => {
+    const row = (await syncedRows(reader.context, reader.headers, 'shared-notes')).find(
+      (row) => row.note_id === id,
+    );
+    return (
+      row && {
+        ...row,
+        content: noteContentSchema.parse(
+          typeof row.content === 'string' ? JSON.parse(row.content) : row.content,
+        ),
+      }
+    );
+  };
+  try {
+    expect(
+      (await owner.context.post('/api/notes', { headers: oldHeaders, data: { id, content } })).ok(),
+    ).toBeTruthy();
+    await expect.poll(readOwner).toMatchObject({ gallery_preview_url: null });
+    const before = await readOwner();
+    expect(
+      (
+        await owner.context.patch(`/api/notes/${id}`, {
+          headers: owner.headers,
+          data: { galleryPreviewUrl: second },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await expect
+      .poll(readOwner)
+      .toMatchObject({ gallery_preview_url: second, updated_at: before?.updated_at });
+    // A replayed old create and older field-only edits do not overwrite the new choice.
+    const replay = await owner.context.post('/api/notes', {
+      headers: oldHeaders,
+      data: { id, content },
+    });
+    expect(await replay.json()).toEqual({ txid: null });
+    for (const version of ['2', '3', '4']) {
+      expect(
+        (
+          await owner.context.patch(`/api/notes/${id}`, {
+            headers: { ...oldHeaders, [API_PROTOCOL_HEADER]: version },
+            data: { isPinned: true },
+          })
+        ).ok(),
+      ).toBeTruthy();
+    }
+    await expect.poll(readOwner).toMatchObject({ gallery_preview_url: second });
+    expect(
+      (
+        await reader.context.patch(`/api/notes/${id}`, {
+          headers: reader.headers,
+          data: { galleryPreviewUrl: first },
+        })
+      ).status(),
+    ).toBe(404);
+    expect(
+      (
+        await owner.context.put(`/api/note-shares/${id}`, {
+          headers: owner.headers,
+          data: { token },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    expect(
+      (await reader.context.post(`/api/shares/${token}/accept`, { headers: reader.headers })).ok(),
+    ).toBeTruthy();
+    await expect.poll(readReader).toMatchObject({ gallery_preview_url: null });
+    expect(
+      (
+        await reader.context.patch(`/api/shared-notes/${id}`, {
+          headers: reader.headers,
+          data: { galleryPreviewUrl: first },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    expect(
+      (
+        await owner.context.patch(`/api/notes/${id}`, {
+          headers: oldHeaders,
+          data: { content: paragraph(`Revised links ${first} ${second}`) },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await expect.poll(readReader).toMatchObject({
+      gallery_preview_url: first,
+      content: paragraph(`Revised links ${first} ${second}`),
+    });
+    await expect.poll(readOwner).toMatchObject({ gallery_preview_url: second });
+    // Accept replay must not reset the reader's preference either.
+    expect(
+      (
+        await reader.context.post(`/api/shares/${token}/accept`, {
+          headers: reader.headers,
+          data: { galleryPreviewUrl: null },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await expect.poll(readReader).toMatchObject({ gallery_preview_url: first });
+    expect(
+      (
+        await reader.context.patch(`/api/shared-notes/${id}`, {
+          headers: reader.headers,
+          data: { galleryPreviewUrl: null },
+        })
+      ).ok(),
+    ).toBeTruthy();
+    await expect.poll(readReader).toMatchObject({ gallery_preview_url: null });
+  } finally {
+    await owner.context.dispose();
+    await reader.context.dispose();
+  }
+});
 
 test('a share link is read without an account and added by one, until it is ended', {
   tag: '@api',

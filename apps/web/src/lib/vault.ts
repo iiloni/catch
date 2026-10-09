@@ -224,6 +224,7 @@ const fromPayload = (
     isArchived: payload.isArchived,
     position: payload.position,
     hiddenLinks: [],
+    galleryPreviewUrl: null,
     createdAt: row.createdAt,
     updatedAt: payload.updatedAt,
     deletedAt: payload.deletedAt,

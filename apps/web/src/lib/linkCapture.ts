@@ -24,7 +24,11 @@ export type LinkCaptureControls = {
 };
 export const linkCaptureControls = createStore<LinkCaptureControls | null>(null);
 
-export type IncomingLinkCapture = { id: string; draft: LinkCaptureDraft };
+export type IncomingLinkCapture = {
+  id: string;
+  draft: LinkCaptureDraft;
+  initialStatus?: string | null;
+};
 export const incomingLinkCaptures = createStore<IncomingLinkCapture[]>([]);
 
 export function enqueueLinkCapture(capture: IncomingLinkCapture) {
