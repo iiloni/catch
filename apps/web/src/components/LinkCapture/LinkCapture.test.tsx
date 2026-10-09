@@ -146,15 +146,21 @@ describe('LinkCaptureForm', () => {
     expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Description')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Your notes')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Link placement' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fetch details' }));
     expect(screen.getByRole('status')).toHaveTextContent('Fetching page details');
     expect(screen.queryByLabelText('Title')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Link placement' })).not.toBeInTheDocument();
     await act(async () => finish(metadata));
     expect(screen.getByLabelText('Title')).toHaveValue('Fetched title');
     expect(screen.getByLabelText('Your notes')).toHaveValue('Selection');
+    expect(screen.getByRole('button', { name: 'Save to Gallery' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Background color' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose tags' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'invalid' } });
     await waitFor(() => expect(screen.queryByLabelText('Title')).not.toBeInTheDocument());
     expect(screen.queryByLabelText('Your notes')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Link placement' })).not.toBeInTheDocument();
   });
 
   it('keeps the close icon while cancellation is pending', async () => {
@@ -304,6 +310,9 @@ describe('LinkCaptureForm', () => {
     mocks.intake.mockRejectedValueOnce(new ApiError(404, 'Not found'));
     const { onSaved } = mount(true);
     await screen.findByText(/Update your Catch server/);
+    expect(screen.getByRole('button', { name: 'Save to Gallery' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Background color' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose tags' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('note-1'));
     expect(mocks.create).toHaveBeenCalledWith(

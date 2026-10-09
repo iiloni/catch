@@ -22,8 +22,9 @@ and personal notes. An optional authenticated `POST /api/link-previews/intake` r
 preview fetcher before a note exists, returning metadata and local asset hashes without
 creating a synced preview row. Pasting a valid URL fetches immediately; a fetch button also
 allows manual requests and retries. Bookmarklet and shared URLs fetch when the form opens.
-The form initially shows only its URL field and fetch button; the title, description and
-personal notes appear after a valid URL's fetch completes, with animated vertical growth.
+The form initially shows only its URL field and fetch button; the title, description,
+personal notes and placement selectors appear after a valid URL's fetch completes, with
+animated vertical growth.
 A failed fetch also reveals the fields for manual entry, including offline use and older
 servers. Changing the URL hides these fields until its own fetch completes.
 Fetching respects `LINK_PREVIEWS=false`. Manual edits survive
