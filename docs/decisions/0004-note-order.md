@@ -37,16 +37,18 @@ of notes stays fast. The rest are laid out from their last measured height (kept
 column width), or a guess from their content, and measured before they scroll into view.
 Only cards on or near the screen spring to new slots; the rest jump.
 
-**Deck.** Each column shows notes by position, including pinned notes. The board's existing
-drag gesture also chooses an insertion slot within the destination column. Moving across
-columns updates status and position together; reordering within one column updates position
-only. The same fractional keys work independently in each column because only that column's
-neighbours bound a move.
+**Deck.** Each column shows pinned notes first, then other notes, with each group ordered
+by position. The board's drag gesture chooses an insertion slot within the destination
+column, constrained to the held note's pin group. A selection containing both kinds keeps
+its pin states and places each group at the nearest allowed slot. Moving across columns
+updates status and position together; reordering within one column updates position only.
+The same fractional keys work independently in each column and pin group because only
+that group's neighbours bound a move.
 
 ## Consequences
 
 - The Gallery's custom order uses `sortNotes(notes, 'position')`; the Deck sorts by position
-  without putting pinned notes first, so every card can be rearranged in its column.
+  with pinned notes first, so every card can be rearranged within its pin group.
 - Keys grow by about one character per six moves into the same gap. `notePositionSchema`
   caps them at 1024 characters, far beyond real use.
 - Cards are absolutely positioned, so nothing in the grid can rely on normal flow; its height
