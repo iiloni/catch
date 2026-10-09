@@ -15,10 +15,15 @@ describe('pageTransition', () => {
   it('slides in tab order', () => {
     expect(pageTransition('/deck', '/')).toEqual(['forward']);
     expect(pageTransition('/', '/deck')).toEqual(['back']);
-    expect(pageTransition('/deck', '/search')).toEqual(['forward']);
-    expect(pageTransition('/search', '/')).toEqual(['back']);
     expect(pageTransition('/', '/trash')).toEqual(['forward']);
     expect(pageTransition('/archive', '/')).toEqual(['back']);
+  });
+
+  it('keeps search and its dock live while the keyboard moves', () => {
+    expect(pageTransition('/deck', '/search')).toBe(false);
+    expect(pageTransition('/', '/search')).toBe(false);
+    expect(pageTransition('/search', '/')).toBe(false);
+    expect(pageTransition('/search', '/deck')).toBe(false);
   });
 
   it('slides Settings in from the right, and its pages past each other on narrow screens', () => {
