@@ -60,7 +60,11 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 
 - For new features and code fixes, use a draft PR targeting `main` by default unless the
   user explicitly requests a different workflow. Work in the assigned checkout; if it is
-  on `main`, create a feature branch there. Commit and push reviewable changes, open the
+  on `main`, create a feature branch there. If the assigned checkout is on a worktree
+  placeholder branch (e.g. `t3/<id>`), rename it to a semantic name — `<type>/<short-description>`
+  using the Conventional Commit type as prefix (e.g. `docs/squash-merge-policy`) — before
+  opening the PR, so CI runs once against the final name.
+  Commit and push reviewable changes, open the
   draft PR and include its link in progress updates. Reuse an existing PR for the branch
   rather than creating a duplicate. Read-only questions do not require a PR.
 - Assign the PR to its creator by default. With `gh pr create`, use `--assignee @me`;
@@ -101,7 +105,7 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   pass `validation`. One other file in the change makes it code. Do not add `run e2e` to
   such a PR.
 - After the user approves functionality and design for merging, mark the PR ready and add
-  `merge on pass`. Fix failures with the label left in place, then merge. If a fix changes the approved functionality or design, disable pending
+  `merge on pass`. Fix failures with the label left in place, then squash-merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.
   The local `./scripts/dev.sh check` requirement still applies.
 - Once the user approves the feature for `merge on pass`, shut down this worktree's dev
@@ -115,14 +119,15 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   update reruns the full suite.
 - When validation passes, look at what reached `main` since the branch last included it
   (`git fetch origin main`, then `git diff --stat HEAD...origin/main`) before merging. If
-  none of it touches the files or the behavior your PR changes, merge as it is. If it
+  none of it touches the files or the behavior your PR changes, squash-merge as it is (`gh pr merge <number> --squash`;
+  the repo ruleset only allows squash merges). If it
   does, or the branch conflicts, merge `main` into the branch yourself, read how the two
   changes combine, fix what does not fit, run targeted checks and push; that update is
-  worth the rerun. Merge by hand after this look rather than enabling auto-merge ahead
+  worth the rerun. Squash-merge by hand after this look rather than enabling auto-merge ahead
   of it. Also update to pick up a fix for a failure that came from `main`.
 - After approval, monitor the latest commit's checks (`gh pr checks <number> --watch`),
   investigate failures, fix them and push updates until required validation passes.
-  Continue through the authorized merge and verify the PR is actually merged, then update
+  Continue through the authorized squash-merge and verify the PR is actually merged, then update
   local `main` and clean up the worktree. Opening a PR or enabling auto-merge alone does
   not complete the task.
 - Your task ends with your PR merged. Do not watch `main` CI afterwards or take on a
@@ -200,8 +205,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   from the assigned checkout when needed.
 - Only one agent should change the database schema at a time (Drizzle migrations are
   numbered; see `WORKTREES.md`).
-- When asked to merge a worktree into `main`, merge through its GitHub PR after required
-  checks pass. Then fast-forward the primary checkout's
+- When asked to merge a worktree into `main`, squash-merge through its GitHub PR after required
+  checks pass (the repo ruleset only allows squash merges). Then fast-forward the primary checkout's
   `main` from its configured upstream, after checking its working tree. Never force-push
   `main` or bypass its required PR/check rules.
 - When your work is committed and merged, finish with `./scripts/worktree.sh self-remove -y`
