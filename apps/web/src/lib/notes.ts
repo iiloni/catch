@@ -1,11 +1,13 @@
 import {
   blocksHaveContent,
   DEFAULT_BOARD_STATUS,
+  extractLinks,
   MAX_NOTES_PER_REQUEST,
   mapAttachmentBlocks,
   type Note,
   type NoteColor,
   normalizeSecondaryTags,
+  normalizeUrl,
   positionBetween,
   positionsBetween,
   sharedNoteAsNote,
@@ -26,7 +28,10 @@ import { assignPrimaryTag, setPrimaryTag } from './tags';
 import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
 
 type NoteChanges = Partial<
-  Pick<Note, 'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt'>
+  Pick<
+    Note,
+    'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt' | 'galleryPreviewUrl'
+  >
 >;
 
 /**
@@ -68,6 +73,7 @@ export function createNote(input: {
   id?: string;
   userId: string;
   content: Note['content'];
+  galleryPreviewUrl?: string | null;
   color?: NoteColor;
   status?: string | null;
   primaryTagId?: string | null;
@@ -98,6 +104,7 @@ export function createNote(input: {
         isArchived: false,
         position: firstPosition(vault),
         hiddenLinks: [],
+        galleryPreviewUrl: vault ? null : (input.galleryPreviewUrl ?? null),
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -215,6 +222,31 @@ export function hideLinkPreview(id: string, url: string) {
   const transaction = setHidden(true);
   toast('Preview removed', { action: { label: 'Undo', onClick: () => setHidden(false) } });
   return transaction;
+}
+
+/** Card appearance is a personal preference, including for someone else's shared note. */
+export function setGalleryPreview(id: string, href: string | null) {
+  const note = getNote(id);
+  if (!note || note.deletedAt || isVaultNote(id)) return;
+  const url = href === null ? null : normalizeUrl(href);
+  if (
+    href !== null &&
+    (!url ||
+      note.hiddenLinks.includes(url) ||
+      !extractLinks(note.content).some((link) => link.url === url))
+  )
+    return;
+  return write(() => {
+    if (sharedNotesCollection.has(id)) {
+      sharedNotesCollection.update(id, (draft) => {
+        draft.galleryPreviewUrl = url;
+      });
+    } else {
+      noteStore.update(id, (draft) => {
+        draft.galleryPreviewUrl = url;
+      });
+    }
+  });
 }
 
 export function setNoteColor(id: string, color: NoteColor) {
@@ -553,6 +585,7 @@ export function importNotes(userId: string, notes: readonly ImportedNote[]): Imp
       isPinned: note.isPinned && !note.isArchived,
       position: positions[start + index] ?? firstPosition(),
       hiddenLinks: [],
+      galleryPreviewUrl: null,
       deletedAt: null,
     }));
     const transaction = write(() => notesCollection.insert(batch));

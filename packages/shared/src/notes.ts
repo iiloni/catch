@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NOTE_COLORS } from './colors';
-import { hiddenLinksSchema } from './links';
+import { hiddenLinksSchema, normalizeUrl } from './links';
 
 export const noteColorSchema = z.enum(NOTE_COLORS);
 
@@ -21,6 +21,13 @@ export const notePositionSchema = z
   .max(1024)
   .regex(/^[0-9A-Za-z]+$/);
 
+/** The explicitly chosen card face, keyed like a link preview; null shows note text. */
+export const galleryPreviewUrlSchema = z
+  .string()
+  .max(2048)
+  .refine((url) => normalizeUrl(url) === url, 'Expected a normalized HTTP(S) URL')
+  .nullable();
+
 export const noteSchema = z.object({
   id: z.uuid({ version: 'v7' }),
   userId: z.string(),
@@ -31,6 +38,7 @@ export const noteSchema = z.object({
   isArchived: z.boolean(),
   position: notePositionSchema,
   hiddenLinks: hiddenLinksSchema,
+  galleryPreviewUrl: galleryPreviewUrlSchema.default(null),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   deletedAt: z.coerce.date().nullable(),
@@ -53,6 +61,7 @@ export const createNoteSchema = noteSchema
     isArchived: true,
     position: true,
     hiddenLinks: true,
+    galleryPreviewUrl: true,
     createdAt: true,
     updatedAt: true,
     deletedAt: true,
@@ -64,10 +73,12 @@ export const createNoteSchema = noteSchema
     isArchived: true,
     position: true,
     hiddenLinks: true,
+    galleryPreviewUrl: true,
     createdAt: true,
     updatedAt: true,
     deletedAt: true,
-  });
+  })
+  .extend({ galleryPreviewUrl: galleryPreviewUrlSchema.optional() });
 
 export type CreateNote = z.infer<typeof createNoteSchema>;
 
@@ -90,8 +101,10 @@ export const updateNoteSchema = noteSchema
     isArchived: true,
     position: true,
     hiddenLinks: true,
+    galleryPreviewUrl: true,
     deletedAt: true,
   })
-  .partial();
+  .partial()
+  .extend({ galleryPreviewUrl: galleryPreviewUrlSchema.optional() });
 
 export type UpdateNote = z.infer<typeof updateNoteSchema>;

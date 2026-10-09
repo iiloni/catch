@@ -94,6 +94,9 @@ Document the compatibility decision in the change even when no counter bump is n
 - Protocol 3 adds reminders (ADR 0018) with range 2–3: protocol 2 clients are unaffected, and
   a protocol 3 client needs a server that has them.
 - Protocol 4 adds shared notes (ADR 0021) with range 2–4, on the same terms.
+- Protocol 5 adds explicit gallery preview choices (ADR 0006) with range 2–5. Old writes
+  omit the new field without clearing it; the new client requires the added shape columns
+  and write support, so the server is updated first.
 - Supporting many past protocols needs adapters and tests. The tag feature uses protocol 2 with range 2–2 (ADR 0016); narrowing a range
   deliberately requires affected clients to update.
 - Gating cannot cancel requests already accepted by a running older server. Server upgrades

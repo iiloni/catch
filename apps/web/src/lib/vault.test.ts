@@ -113,6 +113,7 @@ const note = (content: Note['content']): Note => ({
   isArchived: false,
   position: 'a0',
   hiddenLinks: [],
+  galleryPreviewUrl: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   deletedAt: null,

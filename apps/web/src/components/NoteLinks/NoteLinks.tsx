@@ -71,6 +71,8 @@ function LinkList({ note, links, variant, className }: Props & { links: Resolved
               link={link}
               noteId={note.id}
               readOnly={Boolean(note.deletedAt) || isSharedNote(note)}
+              galleryPreviewUrl={note.galleryPreviewUrl}
+              canChooseGalleryPreview={!note.deletedAt}
               onShowInNote={() => showLinkInNote(link.url)}
             />
           </li>
