@@ -764,7 +764,13 @@ export function LinkCapture() {
             <LinkCaptureForm
               key={incoming?.id ?? 'manual'}
               initial={incoming?.draft}
-              initialStatus={manual && tabFor(pathname) === '/deck' ? DEFAULT_BOARD_STATUS : null}
+              initialStatus={
+                manual
+                  ? tabFor(pathname) === '/deck'
+                    ? DEFAULT_BOARD_STATUS
+                    : null
+                  : incoming?.initialStatus
+              }
               autoFetch={Boolean(incoming)}
               closing={manual && returning}
               showActions={false}

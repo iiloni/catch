@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
-import { card, openNote, seedNotes, signUp } from './helpers';
+import type { IncomingLinkCapture } from '../apps/web/src/lib/linkCapture';
+import { card, openDeck, openNote, seedNotes, signUp } from './helpers';
 
 const metadata = {
   title: 'Fetched page title',
@@ -31,6 +32,63 @@ async function stageLink(
     },
     { url, explicit },
   );
+}
+
+for (const view of ['Gallery', 'Deck'] as const) {
+  test(`an Android link share defaults to the remembered ${view} before navigation`, async ({
+    page,
+  }) => {
+    await signUp(page);
+    await page.route('**/api/link-previews/intake', (route) => route.fulfill({ json: metadata }));
+    const id = await stageLink(page);
+    await page.evaluate(
+      async ({ id, view }) => {
+        localStorage.setItem('catch-home-page', view === 'Deck' ? '/deck' : '/');
+        const capacitor = (window as Window & { Capacitor: { getPlatform: () => string } })
+          .Capacitor;
+        const platform = capacitor.getPlatform;
+        const receivePath = '/src/lib/receiveShare.ts';
+        const linksPath = '/src/lib/linkCapture.ts';
+        const receive: {
+          prepareShare: (
+            id: string,
+          ) => Promise<
+            | ({ kind: 'link' } & IncomingLinkCapture)
+            | { kind: 'note'; id: string }
+            | { kind: 'dismissed' }
+          >;
+        } = await import(receivePath);
+        const links: { enqueueLinkCapture: (capture: IncomingLinkCapture) => void } = await import(
+          linksPath
+        );
+        // Only share preparation needs the native platform; the browser has no OS plugins.
+        capacitor.getPlatform = () => 'android';
+        let capture: Awaited<ReturnType<typeof receive.prepareShare>>;
+        try {
+          capture = await receive.prepareShare(id);
+        } finally {
+          capacitor.getPlatform = platform;
+        }
+        if (capture.kind !== 'link') throw new Error('Expected a shared link');
+        // Startup navigation may remember Gallery before the capture form is shown.
+        localStorage.setItem('catch-home-page', '/');
+        links.enqueueLinkCapture(capture);
+      },
+      { id, view },
+    );
+    const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
+    await expect(
+      capture.getByRole('button', {
+        name: view === 'Deck' ? 'Save to Deck · New' : 'Save to Gallery',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await capture.getByLabel('Title', { exact: true }).fill('Android shared link');
+    await page.getByRole('button', { name: 'Save link', exact: true }).click();
+    await expect(capture).toBeHidden();
+    if (view === 'Deck') await openDeck(page);
+    await expect(card(page, 'Android shared link')).toBeVisible();
+  });
 }
 
 test('an Android-style link share fetches details, waits for Save and reopens the same edited note', async ({

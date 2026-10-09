@@ -55,10 +55,12 @@ Account-bound staging and receipts are cleared with that account's local data on
 The Add Rich Link form offers Gallery or a specific Deck column, color or primary tag,
 and secondary tags before Save. These choices belong to the current capture, with no color
 or tags initially selected. Captures opened from the quick-note popup default to the current
-view: Gallery or the Deck's permanent default column. Bookmarklet and Android/PWA link shares
-start in Gallery and use the same controls. Ordinary file and text shares keep their existing
-intake behavior. The note and its tag assignments are queued together through the existing
-write contracts; receipts and retries preserve assignments on notes already created.
+view: Gallery or the Deck's permanent default column. Native Android link shares default to
+the remembered Gallery or Deck home page, captured before any share-related navigation.
+Bookmarklet and PWA link shares start in Gallery and use the same controls. Ordinary file and
+text shares keep their existing intake behavior. The note and its tag assignments are queued
+together through the existing write contracts; receipts and retries preserve assignments on
+notes already created.
 
 ## Compatibility
 
