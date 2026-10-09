@@ -62,10 +62,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   user explicitly requests a different workflow. Work in the assigned checkout; if it is
   on `main`, create a feature branch there. If the assigned checkout is on a worktree
   placeholder branch (e.g. `t3/<id>`), rename it to a semantic name — `<type>/<short-description>`
-  using the Conventional Commit type as prefix (e.g. `docs/squash-merge-policy`,
-  `feat/search-dock-transition`, `fix/sync-retry`). Rename through the GitHub branch-rename
-  API so an open PR retargets instead of closing, then rename locally and repoint the
-  upstream; do it before opening the PR when possible so CI runs once against the final name.
+  using the Conventional Commit type as prefix (e.g. `docs/squash-merge-policy`) — before
+  opening the PR, so CI runs once against the final name.
   Commit and push reviewable changes, open the
   draft PR and include its link in progress updates. Reuse an existing PR for the branch
   rather than creating a duplicate. Read-only questions do not require a PR.
