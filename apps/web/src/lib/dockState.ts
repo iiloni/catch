@@ -46,9 +46,6 @@ const PAGE_ORDER: Record<string, number> = {
  * search params and has its own transition; the quick note should not slide with the page).
  */
 export function pageTransition(from: string | undefined, to: string): ['forward' | 'back'] | false {
-  // A dock snapshot has a fixed position for the whole transition, so it cannot follow
-  // the keyboard opening or closing with Search. Keep the morph and its glass live.
-  if (from === '/search' || to === '/search') return false;
   const fromOrder = from === undefined ? undefined : PAGE_ORDER[from];
   const toOrder = PAGE_ORDER[to];
   if (fromOrder === undefined || toOrder === undefined || fromOrder === toOrder) return false;

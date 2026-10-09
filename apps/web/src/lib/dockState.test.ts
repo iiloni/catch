@@ -19,11 +19,11 @@ describe('pageTransition', () => {
     expect(pageTransition('/archive', '/')).toEqual(['back']);
   });
 
-  it('keeps search and its dock live while the keyboard moves', () => {
-    expect(pageTransition('/deck', '/search')).toBe(false);
-    expect(pageTransition('/', '/search')).toBe(false);
-    expect(pageTransition('/search', '/')).toBe(false);
-    expect(pageTransition('/search', '/deck')).toBe(false);
+  it('slides into and out of search in tab order', () => {
+    expect(pageTransition('/deck', '/search')).toEqual(['forward']);
+    expect(pageTransition('/', '/search')).toEqual(['forward']);
+    expect(pageTransition('/search', '/')).toEqual(['back']);
+    expect(pageTransition('/search', '/deck')).toEqual(['back']);
   });
 
   it('slides Settings in from the right, and its pages past each other on narrow screens', () => {

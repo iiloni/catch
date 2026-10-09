@@ -222,16 +222,15 @@ cards or routes remount. They never block input or wait for other content, and r
 shows elements immediately. Fixed headers and the dock have no animated page ancestor.
 
 **Page transitions.** Moving between pages slides them a short way in the direction of
-travel (Deck, Gallery, Archive, Trash, left to right) using the View Transitions API
+travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
 gets a `view-transition-name` only while a transition runs and shows live, so its own
 animations play on top. A named element is a backdrop root, so a permanent name would stop
 the dock's glass from blurring the page behind it. Opening a
 note changes only the search params and gets no page transition.
-Search also has no page snapshot transition: a named dock's snapshot is positioned once,
-so it would lag behind the keyboard while entering or leaving Search. Its live dock morph
-handles the change instead.
+The dock's transition group is anchored to `--dock-bottom` instead of its captured position,
+so it follows the keyboard while the page's snapshots slide into or out of Search.
 
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
 keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:
