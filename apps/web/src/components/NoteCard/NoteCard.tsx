@@ -130,8 +130,12 @@ export function NoteCard({
   const hidden = useIsCardHidden(note.id);
   const openBeside = paneNoteId.use() === note.id;
   const links = useNoteLinks(note);
+  const face = galleryPreviewLink(note, links);
+  // A chosen link face fills the card edge to edge, so the card ends at the preview:
+  // no reserved action row, just a glass dock over the face on hover.
+  const linkFace = face !== undefined;
   // Keep the full link list reachable when the face shows one of several links.
-  const underlay = (!galleryPreviewLink(note, links) || links.length > 1) && links.length > 0;
+  const underlay = (!linkFace || links.length > 1) && links.length > 0;
 
   // A note shrinking back into its card lands without the underlay, which slides out from
   // behind the card as the note settles, as if the card were setting it down.
@@ -209,27 +213,44 @@ export function NoteCard({
         transition={{ duration: 0.15 }}
       />
       {canPin && (note.isPinned || revealed) && (
-        <IconButton
-          label={note.isPinned ? 'Unpin' : 'Pin'}
-          onClick={() => setNotePinned(note.id, !note.isPinned)}
-          className={cn(
-            'absolute top-1.5 right-1.5 size-7 [&_svg]:size-3.5',
-            // Only pinned notes show the pin on touch; with a mouse it appears on hover.
-            !note.isPinned &&
-              (forceHover
-                ? 'pointer-coarse:hidden'
-                : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden'),
+        <span className="absolute top-1.5 right-1.5 size-7">
+          {linkFace && (
+            // The pin's own glass backing. It holds constant glass and fades as a
+            // unit with opacity, like the dock below it: toggling the glass itself
+            // lets its border arrive early and leave late. Never at rest: it only
+            // ever shows while hovered (or focused).
+            <span
+              aria-hidden
+              className={cn(
+                'glass absolute inset-0 rounded-full transition-opacity duration-200 pointer-coarse:hidden',
+                forceHover
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+              )}
+            />
           )}
-        >
-          <Pin className={cn(note.isPinned && 'fill-current')} />
-        </IconButton>
+          <IconButton
+            label={note.isPinned ? 'Unpin' : 'Pin'}
+            onClick={() => setNotePinned(note.id, !note.isPinned)}
+            className={cn(
+              'relative size-7 [&_svg]:size-3.5',
+              // Only pinned notes show the pin on touch; with a mouse it appears on hover.
+              !note.isPinned &&
+                (forceHover
+                  ? 'pointer-coarse:hidden'
+                  : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden'),
+            )}
+          >
+            <Pin className={cn(note.isPinned && 'fill-current')} />
+          </IconButton>
+        </span>
       )}
-      {actions && !revealed && (
+      {actions && !revealed && !linkFace && (
         // Holds the toolbar's height (its buttons and bottom padding), so the card does not
         // grow when it arrives.
         <div aria-hidden className="h-9 pointer-coarse:hidden" />
       )}
-      {actions && revealed && (
+      {actions && revealed && !linkFace && (
         <NoteToolbar
           note={note}
           className={cn(
@@ -239,6 +260,26 @@ export function NoteCard({
               : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100',
           )}
         />
+      )}
+      {actions && revealed && linkFace && (
+        // A glass dock over the face's bottom edge (`glass`, dock radius, `p-1`, as in
+        // FloatingToolbar), fading in the moment the card is hovered and out the
+        // moment it is left. Over the face rather than below it, so the card ends at
+        // the preview. Rounded like the card it floats over, not the screen dock.
+        // The pill re-enables pointer events: the wrapper passes them through
+        // outside it. `visibility` joins the transition so the faded-out dock
+        // never intercepts taps meant to open the note.
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center px-3 pointer-coarse:hidden">
+          <NoteToolbar
+            note={note}
+            className={cn(
+              'glass pointer-events-auto max-w-full rounded-2xl p-1 transition-[opacity,visibility] duration-200',
+              forceHover
+                ? 'visible opacity-100'
+                : 'invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100',
+            )}
+          />
+        </div>
       )}
     </motion.article>
   );

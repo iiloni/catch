@@ -297,7 +297,8 @@ test('the dock morphs from close to save, and pasting a link fetches without lea
     .filter({ has: page.locator('[data-gallery-preview="https://example.com/pasted"]') });
   await expect(captured).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(2);
-  await captured.getByRole('button', { name: 'Open note', exact: true }).click();
+  // The card's hover dock sits over the face's bottom edge, so open from its top.
+  await captured.locator('[data-gallery-preview]').click({ position: { x: 20, y: 20 } });
   const note = page.getByRole('dialog', { name: 'Edit note', exact: true });
   await expect(note.getByRole('textbox')).toContainText('Pasted reading');
   await expect(note.getByRole('textbox')).toContainText('Fetched from the pasted URL.');
