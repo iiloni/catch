@@ -1,6 +1,5 @@
 import {
   type BoardColumn as BoardColumnData,
-  comparePositions,
   DEFAULT_BOARD_STATUS,
   type Note,
 } from '@catch/shared';
@@ -35,6 +34,7 @@ import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS, LONG_PRESS_TOLERANCE, useLongPress } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { moveDeckNotes, sendNotesToGallery, sendNoteToGallery } from '@/lib/notes';
+import { sortNotes } from '@/lib/sortNotes';
 import { usePersistentState } from '@/lib/storage';
 import { cn } from '@/lib/utils';
 
@@ -77,6 +77,12 @@ type Props = {
 
 type Point = { x: number; y: number };
 type DropTarget = { column: string; index: number };
+
+/** A drop stays among notes with the same pin state as the held card. */
+function pinDropIndex(notes: readonly Note[], index: number, isPinned: boolean) {
+  const pinned = notes.filter((note) => note.isPinned).length;
+  return isPinned ? Math.min(index, pinned) : Math.max(index, pinned);
+}
 
 /** The card being dragged and, when it carries a stack, every note in it. */
 type Held = {
@@ -178,11 +184,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
   const columnOf = (note: Note) =>
     note.status && columnIds.has(note.status) ? note.status : DEFAULT_BOARD_STATUS;
 
-  // Position controls the order inside each column, including pinned notes.
-  const ordered = [...notes].sort(
-    (a, b) =>
-      comparePositions(a.position, b.position) || b.createdAt.getTime() - a.createdAt.getTime(),
-  );
+  const ordered = sortNotes(notes, 'position');
 
   const selecting = Boolean(onSelect && selected && selected.size > 0);
   const stacked = active !== null && active.group.length > 1;
@@ -220,7 +222,17 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
       )
         continue;
       const id = column.dataset.boardColumn;
-      if (id) return { column: id, index: dropIndex(column, point.y, moving) };
+      if (id && held.current) {
+        const others = ordered.filter((note) => columnOf(note) === id && !moving.has(note.id));
+        return {
+          column: id,
+          index: pinDropIndex(
+            others,
+            dropIndex(column, point.y, moving),
+            held.current.note.isPinned,
+          ),
+        };
+      }
     }
     return null;
   }
@@ -397,7 +409,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
       ...others.slice(0, destination.index),
       ...group,
       ...others.slice(destination.index),
-    ];
+    ].sort((a, b) => Number(b.isPinned) - Number(a.isPinned));
     if (next.every((note, index) => note.id === current[index]?.id)) return;
     haptics.success();
     if (stack) {
@@ -617,16 +629,30 @@ function BoardColumn({
     );
     shown.splice(preview.index, 0, active.note);
   }
-  const placeholderAt = active && preview?.column === id && !activeInColumn ? preview.index : null;
-  const placeholder = active && (
-    <DropPlaceholder key="drop-placeholder" height={active.height} count={active.group.length} />
-  );
+  const placeholders = new Map<number, ReactNode[]>();
+  if (active && preview?.column === id && !activeInColumn) {
+    const others = shown.filter((note) => !hidden.has(note.id));
+    for (const isPinned of [true, false]) {
+      const count = active.group.filter((note) => note.isPinned === isPinned).length;
+      if (!count) continue;
+      const index = pinDropIndex(others, preview.index, isPinned);
+      const at = placeholders.get(index) ?? [];
+      at.push(
+        <DropPlaceholder
+          key={`drop-placeholder-${isPinned}`}
+          height={active.height}
+          count={count}
+        />,
+      );
+      placeholders.set(index, at);
+    }
+  }
   const items: ReactNode[] = [];
   let visible = 0;
   for (const note of shown) {
     const isHidden = hidden.has(note.id);
     if (!isHidden) {
-      if (visible === placeholderAt) items.push(placeholder);
+      items.push(...(placeholders.get(visible) ?? []));
       visible++;
     }
     items.push(
@@ -643,7 +669,7 @@ function BoardColumn({
       />,
     );
   }
-  if (placeholderAt !== null && placeholderAt >= visible) items.push(placeholder);
+  items.push(...(placeholders.get(visible) ?? []));
   return (
     <section
       ref={setNodeRef}
@@ -712,7 +738,7 @@ function BoardColumn({
               </button>
             </h3>
             {items}
-            {visible === 0 && placeholderAt === null && (
+            {visible === 0 && placeholders.size === 0 && (
               <p className="flex flex-1 items-center justify-center rounded-2xl border border-foreground/10 border-dashed p-6 text-center text-muted-foreground text-sm">
                 Drop notes here
               </p>

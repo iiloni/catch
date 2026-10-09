@@ -800,6 +800,89 @@ test('deck drag reorders within a column and places notes in another', async ({
   await expect.poll(() => order(progressColumn)).toEqual(['One', 'Two']);
 });
 
+test('pinned deck notes lead their column and unpinning restores their position', async ({
+  page,
+}) => {
+  await signUp(page);
+  await seedNotes(page, ['One', 'Two', 'Three'], 'new');
+  await openDeck(page);
+  const column = page.getByRole('region', { name: 'New column' });
+  const order = () => column.getByRole('article').getByRole('heading').allTextContents();
+  await expect.poll(order).toEqual(['Three', 'Two', 'One']);
+
+  const dialog = await noteAction(page, 'One', 'Pin');
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect.poll(order).toEqual(['One', 'Three', 'Two']);
+  await page.reload();
+  await expect.poll(order).toEqual(['One', 'Three', 'Two']);
+
+  const unpin = await noteAction(page, 'One', 'Unpin');
+  await unpin.getByRole('button', { name: 'Close' }).click();
+  await expect.poll(order).toEqual(['Three', 'Two', 'One']);
+});
+
+test('deck drags keep pinned notes first within and across columns, including mixed stacks', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Mouse drags; pin ordering and touch reordering have separate coverage.');
+  await signUp(page);
+  await seedNotes(page, ['Pin one', 'Plain one', 'Pin two', 'Plain two'], 'new');
+  await seedNotes(page, ['Dest pin', 'Dest plain'], 'in_progress');
+  await openDeck(page);
+  for (const title of ['Pin one', 'Pin two', 'Dest pin']) {
+    await boardCell(page, title).hover();
+    await boardCell(page, title).getByRole('button', { name: 'Pin', exact: true }).click();
+  }
+  const column = page.getByRole('region', { name: 'New column' });
+  const destination = page.getByRole('region', { name: 'In progress column' });
+  const order = (region: typeof column) =>
+    region.locator('[data-board-card]:visible article').getByRole('heading').allTextContents();
+  await expect.poll(() => order(column)).toEqual(['Pin two', 'Pin one', 'Plain two', 'Plain one']);
+  await expect.poll(() => order(destination)).toEqual(['Dest pin', 'Dest plain']);
+
+  async function drag(title: string, to: typeof column, above?: string) {
+    const source = await settledBox(boardCell(page, title));
+    await page.mouse.move(source.x + source.width / 2, source.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + 40, { steps: 5 });
+    await expect(page.getByRole('region', { name: 'Cancel move' })).toBeVisible();
+    const box = await settledBox(
+      above
+        ? to.getByRole('article').filter({ hasText: above })
+        : to.locator('[data-board-card]').last(),
+    );
+    await page.mouse.move(box.x + box.width / 2, above ? box.y + 8 : box.y + box.height - 10, {
+      steps: 15,
+    });
+    await page.mouse.up();
+    await expect(page.getByRole('region', { name: 'Cancel move' })).toBeHidden();
+  }
+
+  await drag('Pin one', column, 'Pin two');
+  await expect.poll(() => order(column)).toEqual(['Pin one', 'Pin two', 'Plain two', 'Plain one']);
+  // Dropping an unpinned note over a pin clamps it to the start of the unpinned group.
+  await drag('Plain one', column, 'Pin one');
+  await expect.poll(() => order(column)).toEqual(['Pin one', 'Pin two', 'Plain one', 'Plain two']);
+  // Dropping a pin at the bottom still places it above every unpinned destination note.
+  await drag('Pin two', destination);
+  await expect.poll(() => order(destination)).toEqual(['Dest pin', 'Pin two', 'Dest plain']);
+
+  for (const title of ['Pin one', 'Plain two']) {
+    await boardCell(page, title).hover();
+    await boardCell(page, title).getByRole('button', { name: 'Select note' }).click();
+  }
+  await drag('Plain two', destination, 'Dest pin');
+  await expect.poll(() => order(column)).toEqual(['Plain one']);
+  await expect
+    .poll(() => order(destination))
+    .toEqual(['Dest pin', 'Pin two', 'Pin one', 'Plain two', 'Dest plain']);
+  await page.reload();
+  await expect
+    .poll(() => order(destination))
+    .toEqual(['Dest pin', 'Pin two', 'Pin one', 'Plain two', 'Dest plain']);
+});
+
 test('a long press reorders deck notes on touch', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Long press is a touch gesture.');
   await signUp(page);
