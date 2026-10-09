@@ -430,11 +430,13 @@ test('link capture stays compact during fetching and grows to reveal the details
   const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
   const compact = await settledBox(capture);
   await expect(capture.getByRole('textbox')).toHaveCount(1);
+  await expect(capture.getByRole('region', { name: 'Link placement' })).toBeHidden();
   await capture.getByLabel('URL', { exact: true }).fill('https://example.com/article');
   await expect(capture.getByRole('textbox')).toHaveCount(1);
   await capture.getByRole('button', { name: 'Fetch details' }).click();
   await expect(capture.getByText('Fetching page details…')).toBeVisible();
   await expect(capture.getByRole('textbox')).toHaveCount(1);
+  await expect(capture.getByRole('region', { name: 'Link placement' })).toBeHidden();
   await settledBox(capture);
   await page.evaluate(() => {
     const heights: number[] = [];
@@ -448,6 +450,11 @@ test('link capture stays compact during fetching and grows to reveal the details
   });
   finish();
   await expect(capture.getByLabel('Title', { exact: true })).toHaveValue('Ready to edit');
+  await expect(capture.getByRole('button', { name: 'Save to Gallery', exact: true })).toBeVisible();
+  await expect(
+    capture.getByRole('button', { name: 'Background color', exact: true }),
+  ).toBeVisible();
+  await expect(capture.getByRole('button', { name: 'Choose tags', exact: true })).toBeVisible();
   const full = await settledBox(capture);
   expect(full.height).toBeGreaterThan(compact.height + 200);
   expect(Math.abs(full.width - compact.width)).toBeLessThan(1);

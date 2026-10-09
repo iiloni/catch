@@ -1,4 +1,11 @@
-import { type LinkIntake, linkDomain, linkIntakeSchema, normalizeUrl } from '@catch/shared';
+import {
+  DEFAULT_BOARD_STATUS,
+  type LinkIntake,
+  linkDomain,
+  linkIntakeSchema,
+  normalizeUrl,
+} from '@catch/shared';
+import { useRouterState } from '@tanstack/react-router';
 import { Download, Link2, LoaderCircle, SquarePen, X } from 'lucide-react';
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
@@ -21,7 +28,7 @@ import { ApiError, api } from '@/lib/api';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { loadShareCollections, useCaptureNotes, waitForWriteStored } from '@/lib/collections';
-import { quickNote } from '@/lib/dockState';
+import { quickNote, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import {
   capturedLinkContent,
@@ -47,6 +54,7 @@ import { LinkCaptureOptions } from './LinkCaptureOptions';
 
 type FormProps = {
   initial?: Partial<LinkCaptureDraft>;
+  initialStatus?: string | null;
   autoFetch?: boolean;
   closing?: boolean;
   showActions?: boolean;
@@ -138,6 +146,7 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
 
 export function LinkCaptureForm({
   initial,
+  initialStatus = null,
   autoFetch = false,
   closing = false,
   showActions = true,
@@ -150,7 +159,7 @@ export function LinkCaptureForm({
 }: FormProps) {
   const id = useId();
   const [placement, setPlacement] = useState<LinkCapturePlacement>({
-    status: null,
+    status: initialStatus,
     color: 'default',
     primaryTagId: null,
     secondaryTagIds: [],
@@ -521,10 +530,10 @@ export function LinkCaptureForm({
                       className={areaClass}
                     />
                   </div>
+                  <LinkCaptureOptions value={placement} onChange={setPlacement} />
                 </motion.div>
               )}
             </AnimatePresence>
-            <LinkCaptureOptions value={placement} onChange={setPlacement} />
           </fieldset>
           {saveError && (
             <p ref={saveErrorElement} role="alert" className="pt-4 text-destructive text-sm">
@@ -568,6 +577,7 @@ export function LinkCaptureForm({
 
 /** The app and bookmarklet share the same form; the app keeps its current page behind it. */
 export function LinkCapture() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const manual = linkCaptureOpen.use();
   const source = linkCaptureOrigin.use();
   const origin = manual ? source : null;
@@ -756,6 +766,13 @@ export function LinkCapture() {
             <LinkCaptureForm
               key={incoming?.id ?? 'manual'}
               initial={incoming?.draft}
+              initialStatus={
+                manual
+                  ? tabFor(pathname) === '/deck'
+                    ? DEFAULT_BOARD_STATUS
+                    : null
+                  : incoming?.initialStatus
+              }
               autoFetch={Boolean(incoming)}
               closing={manual && returning}
               showActions={false}

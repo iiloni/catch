@@ -11,6 +11,8 @@ import {
 } from './shareInbox';
 
 const mocks = vi.hoisted(() => ({
+  platform: vi.fn(() => 'web'),
+  homePage: vi.fn((): '/' | '/deck' => '/'),
   user: vi.fn((): { id: string } | null => ({ id: 'user-1' })),
   create: vi.fn((_input: { id?: string; userId: string; content: Record<string, unknown>[] }) => ({
     transaction: {},
@@ -22,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   noteStored: vi.fn(async () => {}),
   fileStored: vi.fn(async () => {}),
 }));
+vi.mock('@capacitor/core', () => ({ Capacitor: { getPlatform: mocks.platform } }));
+vi.mock('./homePage', () => ({ rememberedHomePage: mocks.homePage }));
 vi.mock('./auth', () => ({ getSignedInUser: mocks.user }));
 vi.mock('./collections', () => ({
   loadShareCollections: mocks.load,
@@ -46,6 +50,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.user.mockReturnValue({ id: 'user-1' });
   mocks.hasNote.mockReturnValue(false);
+  mocks.platform.mockReturnValue('web');
+  mocks.homePage.mockReturnValue('/');
 });
 
 async function captureLink() {
@@ -69,11 +75,28 @@ describe('link share preparation', () => {
       kind: 'link',
       id,
       draft: { ...editedDraft, title: 'Shared page', description: '', notes: '' },
+      initialStatus: null,
     });
     expect(await getIncomingShare(id)).toMatchObject({ userId: 'user-1', complete: false });
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.load).not.toHaveBeenCalled();
   });
+  it.each([
+    ['android', '/deck', 'new'],
+    ['android', '/', null],
+    ['web', '/deck', null],
+  ] as const)(
+    'defaults a %s link share with remembered %s to %j',
+    async (platform, home, status) => {
+      mocks.platform.mockReturnValue(platform);
+      mocks.homePage.mockReturnValue(home);
+      const prepared = await prepareShare(await captureLink());
+      expect(prepared).toMatchObject({ kind: 'link', initialStatus: status });
+      mocks.homePage.mockReturnValue('/');
+      expect(prepared).toMatchObject({ initialStatus: status });
+      expect(mocks.create).not.toHaveBeenCalled();
+    },
+  );
   it('uses the same stable id on retry, waits for storage and preserves edits on replay', async () => {
     const id = await captureLink();
     mocks.noteStored.mockRejectedValueOnce(new Error('Storage unavailable'));

@@ -1,7 +1,9 @@
-import { normalizeUrl } from '@catch/shared';
+import { Capacitor } from '@capacitor/core';
+import { DEFAULT_BOARD_STATUS, normalizeUrl } from '@catch/shared';
 import { importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { loadShareCollections, waitForQueuedWrite, waitForWriteStored } from './collections';
+import { rememberedHomePage } from './homePage';
 import {
   capturedLinkContent,
   type IncomingLinkCapture,
@@ -48,7 +50,17 @@ export async function prepareShare(id: string): Promise<PreparedShare> {
     if (share.dismissed) return { kind: 'dismissed' };
     if (share.complete) return { kind: 'note', id };
     const draft = incomingLinkDraft(share);
-    return draft ? { kind: 'link', id, draft } : null;
+    return draft
+      ? {
+          kind: 'link',
+          id,
+          draft,
+          initialStatus:
+            Capacitor.getPlatform() === 'android' && rememberedHomePage() === '/deck'
+              ? DEFAULT_BOARD_STATUS
+              : null,
+        }
+      : null;
   });
   return prepared ?? { kind: 'note', id: await receiveShare(id) };
 }
