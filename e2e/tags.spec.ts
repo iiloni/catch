@@ -1117,6 +1117,7 @@ test('search filter glass stays above the keyboard and closes before leaving sea
   request,
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
   await signUp(page);
   const headers = await auth(page);
   const work = await addTag(request, headers, 'Work', null, 'blue');
@@ -1129,25 +1130,27 @@ test('search filter glass stays above the keyboard and closes before leaving sea
     0,
   );
   await expect(page.getByRole('button', { name: 'New note', exact: true })).toHaveCount(0);
-  // Sample real frames to catch a panel that snaps in or out instead of expanding.
+  // Advance each frame explicitly so a busy runner cannot skip the spring's middle.
+  await page.clock.pauseAt(new Date(Date.now() + 60_000));
   for (const opening of [true, false]) {
-    const heights = await button.evaluate(async (button) => {
-      button.click();
-      const heights: number[] = [];
-      for (let frame = 0; frame < 40; frame++) {
-        await new Promise(requestAnimationFrame);
-        heights.push(
-          document.getElementById('search-filter-panel')?.parentElement?.getBoundingClientRect()
-            .height ?? 0,
-        );
-      }
-      return heights;
-    });
+    await button.evaluate((button) => button.click());
+    const heights: number[] = [];
+    for (let frame = 0; frame < 40; frame++) {
+      await page.clock.runFor(16);
+      heights.push(
+        await page.evaluate(
+          () =>
+            document.getElementById('search-filter-panel')?.parentElement?.getBoundingClientRect()
+              .height ?? 0,
+        ),
+      );
+    }
     const maximum = Math.max(...heights);
     expect(heights.some((height) => height > maximum * 0.15 && height < maximum * 0.85)).toBe(true);
     if (opening) expect(heights.at(-1)!).toBeGreaterThan(maximum * 0.9);
     else expect(heights.at(-1)!).toBeLessThan(maximum * 0.1);
   }
+  await page.clock.resume();
   await button.click();
   await expect(input).toBeFocused();
   const panel = page.getByRole('region', { name: 'Search filters' });
