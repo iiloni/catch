@@ -127,7 +127,9 @@ pane, and the note itself is a large rounded card between its back and trash too
 top and that dock at the bottom, so it reads as the page's card opened up. Tapping another card swaps the pane's note in place (replacing the history entry, so
 back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
 at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
-saved so it survives rotation and unfolding. The pane does not use the container transform:
+saved so it survives rotation and unfolding. Below 480 px of note width, undo and redo float
+above the note's dock as on phones, leaving the header's actions and compact sync pill room
+to fit. Wider panes keep undo and redo beside Back. The pane does not use the container transform:
 opening it narrows the page, which moves the card it would grow from, so a morph chases a moving
 target and two morphs cross when switching notes. Instead the pane slides in from the screen's
 edge and back out (`paneReveal`), and a note opened while another is showing fades in over it.
