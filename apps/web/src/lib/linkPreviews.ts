@@ -1,6 +1,5 @@
 import {
   extractLinks,
-  isLinkOnly,
   type LinkPreview,
   MAX_NOTE_LINKS,
   type Note,
@@ -25,13 +24,24 @@ export type ResolvedLink = NoteLink & { preview: LinkPreview | undefined };
 
 /** A note's links that show previews, in reading order, without the ones the user removed. */
 export function noteLinks(
-  note: Pick<Note, 'content' | 'hiddenLinks'>,
+  note: Pick<Note, 'content' | 'hiddenLinks'> & Partial<Pick<Note, 'galleryPreviewUrl'>>,
   previews: ReadonlyMap<string, LinkPreview>,
 ): ResolvedLink[] {
   const hidden = new Set(note.hiddenLinks);
-  return extractLinks(note.content)
-    .filter((link) => !hidden.has(link.url))
-    .slice(0, MAX_NOTE_LINKS)
+  const links = extractLinks(note.content).filter((link) => !hidden.has(link.url));
+  const shown = new Set(links.slice(0, MAX_NOTE_LINKS).map((link) => link.url));
+  // Editing can move the chosen link past the limit; its card face must stay chosen.
+  if (
+    note.galleryPreviewUrl &&
+    links.some((link) => link.url === note.galleryPreviewUrl) &&
+    !shown.has(note.galleryPreviewUrl)
+  ) {
+    const last = links[MAX_NOTE_LINKS - 1];
+    if (last) shown.delete(last.url);
+    shown.add(note.galleryPreviewUrl);
+  }
+  return links
+    .filter((link) => shown.has(link.url))
     .map((link) => ({ ...link, preview: previews.get(link.url) }));
 }
 
@@ -40,26 +50,24 @@ export function noteLinks(
  * none either: the server would have to be told the link to fetch its preview (ADR 0020).
  */
 export function useNoteLinks(
-  note: Pick<Note, 'content' | 'hiddenLinks'> & Partial<Pick<Note, 'id'>>,
+  note: Pick<Note, 'content' | 'hiddenLinks'> & Partial<Pick<Note, 'id' | 'galleryPreviewUrl'>>,
 ): ResolvedLink[] {
   const previews = useLinkPreviews();
   const [enabled] = useShowLinkPreviews();
-  const { content, hiddenLinks } = note;
+  const { content, hiddenLinks, galleryPreviewUrl } = note;
   const shown = enabled && !(note.id !== undefined && isVaultNote(note.id));
   return useMemo(
-    () => (shown ? noteLinks({ content, hiddenLinks }, previews) : []),
-    [shown, content, hiddenLinks, previews],
+    () => (shown ? noteLinks({ content, hiddenLinks, galleryPreviewUrl }, previews) : []),
+    [shown, content, hiddenLinks, galleryPreviewUrl, previews],
   );
 }
 
 /**
- * Whether a note is nothing but one link, so its card is that link's preview. Hidden
- * previews and the setting turn it back into a plain card.
+ * The explicitly chosen card face. A missing or hidden link, or disabled previews,
+ * leaves the note's text on its card without choosing another link.
  */
-export function useIsLinkNote(note: Pick<Note, 'content' | 'hiddenLinks'>, links: ResolvedLink[]) {
-  const { content } = note;
-  const linkOnly = useMemo(() => isLinkOnly(content), [content]);
-  return linkOnly && links.length === 1;
+export function galleryPreviewLink(note: Pick<Note, 'galleryPreviewUrl'>, links: ResolvedLink[]) {
+  return links.find((link) => link.url === note.galleryPreviewUrl);
 }
 
 /** A thumbnail or icon stored by the server. */

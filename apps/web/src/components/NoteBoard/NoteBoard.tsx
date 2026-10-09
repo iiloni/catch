@@ -71,7 +71,7 @@ type Props = {
    */
   selected?: ReadonlySet<string>;
   onSelect?: (note: Note, selected: boolean) => void;
-  /** Ends selecting, after a stack of selected notes has been moved. */
+  /** Ends selecting after a single note has been moved. */
   onSelectionDone?: () => void;
 };
 
@@ -395,9 +395,9 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
       if (stack) {
         land({ ids, column: null });
         sendNotesToGallery(group);
-        onSelectionDone?.();
       } else {
         sendNoteToGallery(moving.note.id);
+        onSelectionDone?.();
       }
       return;
     }
@@ -414,6 +414,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
     haptics.success();
     if (stack) {
       land({ ids, column });
+    } else {
       onSelectionDone?.();
     }
     moveDeckNotes(

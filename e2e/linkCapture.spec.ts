@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { bearerToken, card, openNote, signUp } from './helpers';
+import { bearerToken, card, signUp } from './helpers';
 
 const metadata = {
   title: 'Atuin — shell history',
@@ -31,10 +31,15 @@ test('link intake fetches editable details, saves an ordinary note, and warns ab
   await form.getByLabel('Your notes').fill('Try this on the laptop.');
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(form).toBeHidden();
-  await expect(card(page, 'Terminal tools')).toContainText(metadata.description);
-  await expect(card(page, 'Terminal tools')).toContainText('Try this on the laptop.');
+  const captured = page
+    .locator('[data-note-card]')
+    .filter({ has: page.locator('[data-gallery-preview="https://atuin.sh/"]') });
+  await expect(captured).toBeVisible();
   await expect(card(page, 'Draft before capture')).toBeVisible();
-  const note = await openNote(page, 'Terminal tools');
+  await captured.getByRole('button', { name: 'Open note' }).click();
+  const note = page.getByRole('dialog', { name: 'Edit note' });
+  await expect(note.getByRole('textbox')).toContainText(metadata.description);
+  await expect(note.getByRole('textbox')).toContainText('Try this on the laptop.');
   await expect(note.getByRole('textbox')).toContainText('https://atuin.sh/#install');
   await note.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'New note' }).click();
@@ -102,7 +107,14 @@ test('an older server permits manual capture and the note survives an offline re
   await page.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Link saved', exact: true })).toBeVisible();
   await page.goto('/');
-  await expect(card(page, 'Offline reading')).toContainText('Keep this for the train.');
+  const captured = page
+    .locator('[data-note-card]')
+    .filter({ has: page.locator('[data-gallery-preview="https://example.com/"]') });
+  await expect(captured).toBeVisible();
+  await captured.getByRole('button', { name: 'Open note' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit note' }).getByRole('textbox')).toContainText(
+    'Keep this for the train.',
+  );
   await page.unroute('**/api/**');
 });
 

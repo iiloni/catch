@@ -702,10 +702,18 @@ test('deck board moves notes between columns and back to the gallery', async ({
     await expect(page.getByRole('region', { name: 'Send to gallery' })).toBeHidden();
   }
 
+  await boardCell(page, 'Ship it').hover();
+  await boardCell(page, 'Ship it').getByRole('button', { name: 'Select note' }).click();
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   await drag(newColumn, holdColumn);
   await expect(holdColumn.getByText('Ship it')).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
 
+  await boardCell(page, 'Ship it').hover();
+  await boardCell(page, 'Ship it').getByRole('button', { name: 'Select note' }).click();
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   await drag(holdColumn, page.getByRole('region', { name: 'Send to gallery' }));
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await expect(newColumn.getByText('Drop notes here')).toBeVisible();
   await page.getByRole('link', { name: 'Gallery' }).click();
   await expect(card(page, 'Ship it')).toBeVisible();
@@ -891,6 +899,7 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
   await page.waitForTimeout(400);
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   for (let step = 1; step <= 10; step++) {
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
@@ -899,8 +908,10 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
       ],
     });
   }
+  await page.waitForTimeout(100);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(order).toEqual(['One', 'Three', 'Two']);
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await page.reload();
   await expect.poll(order).toEqual(['One', 'Three', 'Two']);
 });
@@ -1208,8 +1219,13 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
   });
   await expect.poll(() => order(holdColumn)).toEqual(['Three', 'One']);
   await expect.poll(() => order(newColumn)).toEqual(['Two']);
-  // Moving the stack is done with the selection.
-  await expect(toolbar).toBeHidden();
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  for (const title of ['Three', 'One']) {
+    await expect(
+      boardCell(page, title).getByRole('button', { name: 'Select note' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  }
   await page.reload();
   await expect.poll(() => order(holdColumn)).toEqual(['Three', 'One']);
 

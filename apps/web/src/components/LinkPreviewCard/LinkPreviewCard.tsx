@@ -1,6 +1,16 @@
 import type { LinkPreview } from '@catch/shared';
 import { linkDomain } from '@catch/shared';
-import { Copy, EyeOff, Globe, MoreHorizontal, RefreshCw, Share2, TextSearch } from 'lucide-react';
+import {
+  Copy,
+  EyeOff,
+  Globe,
+  Image,
+  MoreHorizontal,
+  RefreshCw,
+  Share2,
+  Text,
+  TextSearch,
+} from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,7 +29,7 @@ import {
   refreshLinkPreview,
   shareLink,
 } from '@/lib/linkPreviews';
-import { hideLinkPreview } from '@/lib/notes';
+import { hideLinkPreview, setGalleryPreview } from '@/lib/notes';
 import { cn } from '@/lib/utils';
 
 /** Tints an element with a link's site color (see `[data-link-tint]` in styles.css). */
@@ -80,6 +90,9 @@ type Props = {
   onShowInNote?: () => void;
   /** Leaves out actions that change the note, as for a note in the trash. */
   readOnly?: boolean;
+  galleryPreviewUrl?: string | null;
+  /** Readers may choose their own card face without editing the shared note. */
+  canChooseGalleryPreview?: boolean;
   className?: string;
 };
 
@@ -87,7 +100,15 @@ type Props = {
  * A link's preview: thumbnail, title and site, tinted with the site's color. Tapping opens
  * the link; the menu copies, shares, refreshes or removes it.
  */
-export function LinkPreviewCard({ link, noteId, onShowInNote, readOnly, className }: Props) {
+export function LinkPreviewCard({
+  link,
+  noteId,
+  onShowInNote,
+  readOnly,
+  galleryPreviewUrl,
+  canChooseGalleryPreview,
+  className,
+}: Props) {
   const { preview } = link;
   const pending = !preview || preview.status === 'pending';
   const site = preview?.siteName ?? linkDomain(link.url);
@@ -128,12 +149,27 @@ export function LinkPreviewCard({ link, noteId, onShowInNote, readOnly, classNam
           </p>
         </div>
       </a>
-      <LinkMenu link={link} noteId={noteId} onShowInNote={onShowInNote} readOnly={readOnly} />
+      <LinkMenu
+        link={link}
+        noteId={noteId}
+        onShowInNote={onShowInNote}
+        readOnly={readOnly}
+        galleryPreviewUrl={galleryPreviewUrl}
+        canChooseGalleryPreview={canChooseGalleryPreview}
+      />
     </article>
   );
 }
 
-function LinkMenu({ link, noteId, onShowInNote, readOnly }: Omit<Props, 'className'>) {
+function LinkMenu({
+  link,
+  noteId,
+  onShowInNote,
+  readOnly,
+  galleryPreviewUrl,
+  canChooseGalleryPreview = !readOnly,
+}: Omit<Props, 'className'>) {
+  const selected = galleryPreviewUrl === link.url;
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -161,6 +197,12 @@ function LinkMenu({ link, noteId, onShowInNote, readOnly }: Omit<Props, 'classNa
         {onShowInNote && (
           <DropdownMenuItem onSelect={onShowInNote}>
             <TextSearch /> Show in note
+          </DropdownMenuItem>
+        )}
+        {canChooseGalleryPreview && (
+          <DropdownMenuItem onSelect={() => setGalleryPreview(noteId, selected ? null : link.url)}>
+            {selected ? <Text /> : <Image />}
+            {selected ? 'Show Text in Gallery' : 'Show as Gallery Preview'}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
@@ -194,7 +236,11 @@ export function LinkNoteFace({ link, tinted }: { link: ResolvedLink; tinted: boo
       ? Math.max(0.6, Math.min(1.91, preview.imageWidth / preview.imageHeight))
       : 1.91;
   return (
-    <div {...(tinted ? linkTint(preview) : {})} className={cn(tinted && 'bg-link', 'rounded-2xl')}>
+    <div
+      data-gallery-preview={link.url}
+      {...(tinted ? linkTint(preview) : {})}
+      className={cn(tinted && 'bg-link', 'rounded-2xl')}
+    >
       {image && (
         <img
           src={assetUrl(image)}
