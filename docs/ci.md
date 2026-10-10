@@ -171,6 +171,36 @@ requested E2E, or remove and reapply `run e2e`. Full merge validation also requi
 that event's original label state. Label changes trigger CI, so unrelated label edits can
 also rerun E2E while either test-requesting label is present.
 
+## Targeted Firefox testing
+
+The default local and CI projects use Chromium for desktop and Android emulation, plus
+the API project. Firefox is an opt-in desktop project: agents run the affected cases for
+navigation/transitions, scrolling and fixed/sticky layers, focus/keyboard management,
+browser API support, and bugs reported in Firefox or a Firefox-based browser such as Zen.
+Other features do not need another browser run or a second full suite.
+
+Install the Playwright browser once on the host, then use the same worktree stack and
+test queue:
+
+```bash
+pnpm exec playwright install firefox
+E2E_FIREFOX=1 ./scripts/dev.sh e2e e2e/searchDock.spec.ts --grep 'page slides' --project=firefox --workers=1
+```
+
+The environment variable makes the project available; `--project=firefox` selects it
+without rerunning the Chromium projects. Leaving the variable unset preserves the default
+project list. This adds no Firefox jobs to CI. Record the actual browser version tested;
+Playwright's Firefox build can differ from the reported Firefox/Zen version, and desktop
+Firefox does not establish coverage for Android Firefox or a native APK.
+
+For visual bugs, check painted frames before, during and after the interaction. Computed
+styles or DOM visibility alone do not prove that a capture is painted. Firefox's screenshot
+API can [omit active view transitions](https://bugzilla.mozilla.org/show_bug.cgi?id=2008417).
+For those transitions, run headed Firefox on an isolated virtual display (for example,
+Xvfb on Linux) and capture that display with FFmpeg's `x11grab`, keeping recordings outside
+the checkout. Continue to run the test through `./scripts/dev.sh e2e`; capture only the
+isolated test display. Ordinary screenshots remain useful outside a view transition.
+
 ## Documentation-only changes
 
 A change needs no E2E when every file it touches is one the app, its image and its tests
