@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { Dock } from '@/components/Dock/Dock';
+import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { LinkCapture } from '@/components/LinkCapture/LinkCapture';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
@@ -18,6 +19,7 @@ import { VaultEntry } from '@/components/VaultEntry/VaultEntry';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
+import { startNoteCollections } from '@/lib/collections';
 import { quickNote } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { watchNativeReminders } from '@/lib/nativeReminders';
@@ -41,8 +43,13 @@ export const Route = createFileRoute('/_app')({
     if (needsServerUrl()) throw redirect({ to: '/setup', search });
     if (!getAuthToken()) throw redirect({ to: '/login', search });
   },
-  // Fetch the editor in the background once the page is up, without blocking it.
-  onEnter: () => setTimeout(preloadNoteEditor, 1000),
+  // Get what the first note opened needs in the background once the page is up, without
+  // blocking it: the editor's code, and the collections only an open note reads.
+  onEnter: () =>
+    setTimeout(() => {
+      preloadNoteEditor();
+      startNoteCollections();
+    }, 1000),
   component: AppLayout,
 });
 
@@ -121,6 +128,7 @@ function AppLayout() {
       <PageBottomBlur />
       <Dock />
       <NoteEditorOverlay noteId={note} />
+      <GpuWarmup skip={Boolean(note)} />
       <LinkPreviewOverlay />
       <VaultEntry />
       <AppUpdatePrompt />
