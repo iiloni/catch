@@ -53,6 +53,13 @@ import phoneSharingDark from '@/screenshots/phone-sharing-dark.webp';
 import phoneSharingLight from '@/screenshots/phone-sharing-light.webp';
 import phoneVaultDark from '@/screenshots/phone-vault-dark.webp';
 import phoneVaultLight from '@/screenshots/phone-vault-light.webp';
+import siteHeroLight from '@/screenshots/site-hero-light.png';
+
+/** The real site hero, captured without navigation by `screenshots site <site-url>`. */
+export const sitePreview = {
+  image: siteHeroLight,
+  alt: 'The Catch homepage: “Catch it before it’s gone”, with desktop and Android app previews',
+};
 
 /** Captured by `scripts/screenshots.ts`; rerun it rather than editing the files. */
 export const shots = {
