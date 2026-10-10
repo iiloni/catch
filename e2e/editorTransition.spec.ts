@@ -67,12 +67,9 @@ for (const withLinks of [false, true]) {
               if (ghost && target && Number(getComputedStyle(ghost).opacity) > 0.95) {
                 const box = surface.getBoundingClientRect();
                 const cardBox = target.getBoundingClientRect();
-                const inset = getComputedStyle(surface).clipPath.match(/^inset\(([^r]+) round/);
-                if (!inset) throw new Error('Missing container clip');
-                const [top, , bottom] = inset[1].trim().split(/\s+/).map(Number.parseFloat);
                 last = {
-                  top: box.top + top,
-                  bottom: box.bottom - bottom,
+                  top: box.top,
+                  bottom: box.bottom,
                   cardTop: cardBox.top,
                   cardBottom: cardBox.bottom,
                 };

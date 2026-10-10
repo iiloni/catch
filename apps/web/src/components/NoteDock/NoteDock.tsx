@@ -327,9 +327,11 @@ export function NoteDock() {
       // Leaving, it stops taking up room so the dock can settle back to one row.
       className={cn('flex flex-col', !isPresent && 'absolute inset-x-0 bottom-0')}
       style={{ pointerEvents: isPresent ? undefined : 'none' }}
-      initial={{ opacity: 0, scale: 0.92, filter: 'blur(6px)' }}
-      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, scale: 0.92, filter: 'blur(6px)', transition: { duration: 0.16 } }}
+      // No blur as it arrives: it arrives while the note opens, and a phone builds what
+      // draws each strength of blur the first time it is asked for, in the middle of that.
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.16 } }}
       transition={springs.smooth}
     >
       <AnimatePresence initial={false}>

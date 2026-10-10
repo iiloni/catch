@@ -266,12 +266,6 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   });
   const cardRect = useRef<Rect | null>(origin);
   const [settled, setSettled] = useState(false);
-  // A card can be taller than the screen. The backing surface must contain both ends of
-  // the morph, or translating it to an off-screen card top cuts its visible bottom short.
-  const surfaceWidth = split ? target.width : Math.max(target.width, cardRect.current?.width ?? 0);
-  const surfaceHeight = split
-    ? target.height
-    : Math.max(target.height, cardRect.current?.height ?? 0);
 
   const progress = useMotionValue(0);
   const [self] = useState(() => ({}));
@@ -300,9 +294,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   );
 
   // Container transform: translate the surface so its top-left sits on the card, and
-  // clip it to the card's size. Content is never scaled, so text stays crisp. A pane
-  // slides in from the right edge instead. Every value is read up front, so each transform
-  // follows all of them whichever branch it takes.
+  // size it to the card, which can be taller than the screen. Its content keeps the
+  // editor's size and is cut off at the surface's edge, so text is never scaled and stays
+  // crisp. A pane slides in from the right edge instead. Every value is read up front, so
+  // each transform follows all of them whichever branch it takes.
   const x = useTransform(() => {
     const p = progress.get();
     const reveal = paneReveal.get();
@@ -320,18 +315,33 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     const offset = card ? (1 - p) * (card.y - targetRef.current.y) : 0;
     return offset + drag + (1 - faded) * 48;
   });
-  const clipPath = useTransform(() => {
+  // The surface's own box does the cutting, not a `clip-path`: a clip path that changes is
+  // drawn again with everything under it on every frame, and a phone cannot keep up with
+  // a screen of text. A box that changes size only moves the edge its layers are cut at.
+  const width = useTransform(() => {
     const card = cardRect.current;
     const t = targetRef.current;
     const p = progress.get();
     layoutTick.get();
-    // The pane's toolbars and card sit on its left edge, so clipping would cut their shadows.
-    if (splitRef.current) return 'none';
-    if (!card) return `inset(0px round ${t.radius}px)`;
-    const right = Math.max(t.width, card.width) - lerp(card.width, t.width, p);
-    const bottom = Math.max(t.height, card.height) - lerp(card.height, t.height, p);
-    const radius = lerp(card.radius, t.radius || 28 * Math.min(1, Math.abs(dragY.get()) / 80), p);
-    return `inset(0px ${right}px ${bottom}px 0px round ${radius}px)`;
+    return card && !splitRef.current ? lerp(card.width, t.width, p) : t.width;
+  });
+  const height = useTransform(() => {
+    const card = cardRect.current;
+    const t = targetRef.current;
+    const p = progress.get();
+    layoutTick.get();
+    return card && !splitRef.current ? lerp(card.height, t.height, p) : t.height;
+  });
+  const borderRadius = useTransform(() => {
+    const card = cardRect.current;
+    const t = targetRef.current;
+    const p = progress.get();
+    const drag = dragY.get();
+    layoutTick.get();
+    // The pane's toolbars and card sit on its left edge, and it does not cut them off.
+    if (splitRef.current) return 0;
+    if (!card) return t.radius;
+    return lerp(card.radius, t.radius || 28 * Math.min(1, Math.abs(drag) / 80), p);
   });
   const ghostOpacity = useTransform(() =>
     cardRect.current ? 1 - progress.get() / CARD_FACE_FADE_END : 0,
@@ -342,12 +352,14 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const contentY = useTransform(() => (1 - swap.get()) * 12);
   const backdropOpacity = useTransform(() => progress.get() * 0.35);
 
-  // Recompute the clip before painting a newly measured backing size, including when the
+  // Recompute the surface's box before painting a newly measured size, including when the
   // destination card grew while the note was being edited.
+  const cardWidth = cardRect.current?.width;
+  const cardHeight = cardRect.current?.height;
   // biome-ignore lint/correctness/useExhaustiveDependencies: invalidate transforms when their referenced geometry changes
   useLayoutEffect(() => {
     layoutTick.set(layoutTick.get() + 1);
-  }, [layoutTick, surfaceWidth, surfaceHeight, target.x, target.y, target.width, target.height]);
+  }, [layoutTick, cardWidth, cardHeight, target.x, target.y, target.width, target.height]);
 
   // Open: grow out of the card (or slide in as a pane, or fade in over the pane's last note),
   // then swap the preview for the real editor.
@@ -615,7 +627,8 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
         {!split && (
           <motion.div
             aria-hidden
-            className="pointer-events-none fixed inset-0 z-50 bg-black"
+            // Its own layer, so dimming the page does not draw the page again each frame.
+            className="pointer-events-none fixed inset-0 z-50 bg-black will-change-[opacity]"
             style={{ opacity: backdropOpacity }}
           />
         )}
@@ -660,11 +673,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             style={{
               left: target.x,
               top: target.y,
-              width: surfaceWidth,
-              height: surfaceHeight,
+              width,
+              height,
+              borderRadius,
               x,
               y,
-              clipPath,
               scale,
               opacity: surfaceOpacity,
               transformOrigin: `${target.width / 2}px ${target.height * 0.2}px`,
@@ -680,7 +693,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             {cardRect.current !== null && (!settled || !isPresent) && (
               <motion.div
                 aria-hidden
-                className="pointer-events-none absolute top-0 left-0"
+                className="pointer-events-none absolute top-0 left-0 will-change-[opacity]"
                 style={{ width: cardRect.current.width, opacity: ghostOpacity }}
               >
                 <NoteCardFace note={note} />
@@ -688,8 +701,13 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
             )}
 
             <motion.div
-              className="relative flex min-h-0 shrink-0 flex-col"
-              // The backing can exceed the screen; the editor keeps its viewport and scroll.
+              className={cn(
+                'relative flex min-h-0 shrink-0 flex-col',
+                // Layers of their own while the surface morphs, so its moving edge cuts
+                // them off without either being drawn again.
+                (!settled || !isPresent) && 'will-change-[opacity]',
+              )}
+              // The surface can be any size; the editor keeps its viewport and scroll.
               style={{
                 width: target.width,
                 height: target.height,

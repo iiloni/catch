@@ -169,10 +169,16 @@ panel.
 native; CSS `linear()` springs can mimic the curve but not the interruption.
 
 The card-to-editor transition is a hand-rolled container transform
-(`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor is translated onto the card and
-clipped to its size, then both animate to full screen. The backing surface contains both the
-editor and the card, which can be taller than the viewport; the editor keeps its own viewport
-while the clip animates. Content is never scaled, so text stays crisp. It runs on the main
+(`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor's surface is translated onto the
+card and given its size, which can be taller than the viewport, then both animate to full
+screen. The editor inside keeps its own size and viewport and is cut off at the surface's
+edge, so content is never scaled and text stays crisp. The surface's box does the cutting,
+not a `clip-path`: a changing clip path is drawn again with everything under it on every
+frame, which a phone's GPU cannot keep up with, while a box that changes size only moves the
+edge its layers are cut at. For the same reason the dimming backdrop, the card's face and the
+editor's content are layers of their own while they fade (`will-change`), and the dock's note
+toolbar arrives without a blur: a phone builds what draws each strength of blur the first
+time it is used, which was the first note opened. It runs on the main
 thread, where mounting the editor competes with it, so it waits for
 the mounted surface to be painted (still looking like the card) and then advances by frames
 rather than by the clock (`animateSteady`): a late frame delays it instead of skipping part of
