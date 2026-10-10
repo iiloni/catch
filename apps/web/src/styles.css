@@ -757,7 +757,8 @@ html:active-view-transition [data-dock] {
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-group(dock) {
   animation: none;
-  transform: none;
+  /* Firefox needs a transform reference frame to paint the dock's live capture. */
+  transform: translate(0, 0);
   top: auto;
   left: 0;
   bottom: var(--dock-bottom);

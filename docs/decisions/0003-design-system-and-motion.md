@@ -238,6 +238,8 @@ The outgoing dock snapshot stays visible while the router prepares the new page;
 hidden only once the incoming live dock is available.
 The dock's transition group is anchored to `--dock-bottom` instead of its captured position,
 so it follows the keyboard while the page's snapshots slide into or out of Search.
+An identity transform on that pseudo-element keeps a rendering reference frame for Firefox's
+live capture; `transform: none` makes the dock disappear during the page animation there.
 
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
 keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:

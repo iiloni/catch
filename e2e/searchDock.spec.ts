@@ -11,7 +11,11 @@ test('the dock stays visible while page navigation prepares its incoming snapsho
   const directions = await page.evaluate(async () => {
     const root = document.documentElement;
     const start = document.startViewTransition.bind(document);
-    const directions: { pending: string[]; old: string; live: string }[] = [];
+    const directions: {
+      pending: { width: string; display: string; dockOpacity: string }[];
+      old: string;
+      live: string;
+    }[] = [];
     try {
       for (const selector of [
         'a[aria-label="Deck"]',
@@ -19,7 +23,7 @@ test('the dock stays visible while page navigation prepares its incoming snapsho
         'a[aria-label="Search"]',
         'button[aria-label="Close search"]',
       ]) {
-        const pending: string[] = [];
+        const pending: { width: string; display: string; dockOpacity: string }[] = [];
         const started = new Promise<ViewTransition>((resolve) => {
           document.startViewTransition = (options) => {
             const update = typeof options === 'function' ? options : options?.update;
@@ -30,7 +34,11 @@ test('the dock stays visible while page navigation prepares its incoming snapsho
                 // Rendering is suppressed here, so sample with timers instead of animation frames.
                 for (let sample = 0; sample < 3; sample++) {
                   await new Promise((resolve) => setTimeout(resolve, 50));
-                  pending.push(getComputedStyle(root, '::view-transition-old(dock)').display);
+                  pending.push({
+                    width: getComputedStyle(root, '::view-transition-group(dock)').width,
+                    display: getComputedStyle(root, '::view-transition-old(dock)').display,
+                    dockOpacity: getComputedStyle(document.querySelector('[data-dock]')!).opacity,
+                  });
                 }
                 await update?.();
               },
@@ -58,7 +66,13 @@ test('the dock stays visible while page navigation prepares its incoming snapsho
   });
   expect(directions).toHaveLength(4);
   for (const direction of directions) {
-    expect(direction.pending).toEqual(['block', 'block', 'block']);
+    expect(direction.pending).toHaveLength(3);
+    for (const sample of direction.pending) {
+      expect(sample.dockOpacity).toBe('1');
+      // Firefox keeps the last painted frame until the update completes; its pseudo-tree
+      // does not exist yet (width is auto). Chromium already paints the outgoing snapshot.
+      if (sample.width !== 'auto') expect(sample.display).toBe('block');
+    }
     expect(direction.old).toBe('none');
     expect(direction.live).toBe('1');
   }
