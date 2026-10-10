@@ -334,6 +334,10 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   dock, which pads the pane away so its view-transition box keeps one size), and layout
   inside a page should follow its own width (container queries, `ResizeObserver`), not the
   viewport's breakpoints.
+- `GpuWarmup` (ADR 0003) draws a nearly invisible sample of an open note and its dock just
+  after launch, so a phone builds its GPU pipelines before the first note opens instead of
+  during it. When a note or its dock gains a new kind of element, add one to its samples.
+  Keep roles, labels and `data-` hooks out of it: tests and screen readers must not find it.
 - The note editor grows out of the element passed to `open(id, element)` (see `lib/openNote.ts`);
   anything that shows a note as a card should pass itself and set `data-note-card={note.id}`.
 - `NoteGrid` renders only cards near the viewport, so a note's card may not be in the DOM.

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
 import { Dock } from '@/components/Dock/Dock';
+import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { LinkCapture } from '@/components/LinkCapture/LinkCapture';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
@@ -127,6 +128,7 @@ function AppLayout() {
       <PageBottomBlur />
       <Dock />
       <NoteEditorOverlay noteId={note} />
+      <GpuWarmup skip={Boolean(note)} />
       <LinkPreviewOverlay />
       <VaultEntry />
       <AppUpdatePrompt />
