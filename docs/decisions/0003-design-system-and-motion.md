@@ -176,10 +176,13 @@ edge, so content is never scaled and text stays crisp. The surface's box does th
 not a `clip-path`: a changing clip path is drawn again with everything under it on every
 frame, which a phone's GPU cannot keep up with, while a box that changes size only moves the
 edge its layers are cut at. For the same reason the dimming backdrop, the card's face and the
-editor's content are layers of their own while they fade (`will-change`), the dock is a
-layer of its own while a note is open or moving (by `will-change: transform`, which does not
-make it a backdrop root), and its note toolbar arrives without a blur: a phone builds what draws each strength of blur the first
-time it is used, which was the first note opened.
+editor's content are layers of their own while they fade (`will-change`), the dock's
+controls are a layer of their own while a note is open or moving (by `will-change: transform`,
+which does not make a backdrop root), and its note toolbar arrives without a blur: a phone
+builds what draws each strength of blur the first time it is used, which was the first note
+opened. That layer is the wrapper inside the dock and not the dock itself, which clips
+sideways: as a layer it cut off what floats above it, so the Gallery switcher and a note's
+undo and scroll buttons could not be tapped.
 
 A phone's GPU also builds a pipeline the first time each kind of thing is drawn, and the first
 note opened after a launch drew about twenty kinds for the first time (some 50 ms, half of it
