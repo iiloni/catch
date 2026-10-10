@@ -7,8 +7,27 @@ test('cold startup stays usable during sync and arriving notes enter progressive
   await signUp(page);
   await seedNotes(page, ['First saved note', 'Second saved note']);
 
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => {
     const observer = new MutationObserver(() => {
+      if (!document.documentElement.dataset.firstHeaderOpacity) {
+        const header = document.querySelector('[data-page-header]');
+        const title = header?.querySelector('h1');
+        const brand = header?.querySelector('img[alt="Catch"]');
+        const control = header?.querySelector('button[aria-label="Settings"]');
+        if (title && brand && control) {
+          const visibleOpacity = (element: Element) => {
+            let opacity = 1;
+            for (let current: Element | null = element; current; current = current.parentElement) {
+              opacity *= Number(getComputedStyle(current).opacity);
+            }
+            return opacity;
+          };
+          document.documentElement.dataset.firstHeaderOpacity = JSON.stringify(
+            [title, brand, control].map(visibleOpacity),
+          );
+        }
+      }
       if (document.documentElement.dataset.sawNoteEntry === 'true') return;
       for (const card of document.querySelectorAll<HTMLElement>('[data-note-cell] > div')) {
         const opacity = Number(getComputedStyle(card).opacity);
@@ -31,6 +50,7 @@ test('cold startup stays usable during sync and arriving notes enter progressive
   try {
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-first-header-opacity', '[1,1,1]');
     await expect(page.getByRole('button', { name: 'New note' })).toBeEnabled();
     await expect(page.locator('#root')).not.toHaveAttribute('inert');
     await expect(page.locator('#app-launch')).toHaveCount(0);

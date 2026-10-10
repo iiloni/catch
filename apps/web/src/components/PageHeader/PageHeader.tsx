@@ -24,7 +24,6 @@ import {
 } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
-import { useEntryMotion } from '@/lib/entryMotion';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
@@ -41,15 +40,6 @@ import { cn } from '@/lib/utils';
 export type HeaderSelection = { count: number; onClose: () => void; actions: ReactNode };
 
 type HeaderLayerStyle = MotionStyle & { '--header-layer-opacity': MotionValue<number> };
-
-function useHeaderEntry(
-  key: string,
-  delayMs = 0,
-): MotionStyle & { '--header-entry-opacity': MotionValue<number> } {
-  const entry = useEntryMotion(key, true, delayMs);
-  // Keep startup's fade multiplied by the editor and toolbar transitions.
-  return { '--header-entry-opacity': entry.opacity, y: entry.y };
-}
 
 /** Bring the page's glass above the returning card as its face replaces the editor. */
 function useHeaderTransition() {
@@ -143,8 +133,6 @@ export function TabPageHeader({
   selection,
   offsetY,
 }: TabPageHeaderProps) {
-  const entry = useHeaderEntry('header:title', 20);
-  const brandEntry = useEntryMotion('header:brand');
   const transition = useHeaderTransition();
   const { scrollY } = useScroll();
   const reducedMotion = useReducedMotion();
@@ -244,9 +232,7 @@ export function TabPageHeader({
               aria-hidden={!branded}
               style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
             >
-              <motion.div style={brandEntry}>
-                <BrandLockup orientation="horizontal" iconSize={28} />
-              </motion.div>
+              <BrandLockup orientation="horizontal" iconSize={28} />
             </motion.div>
           </motion.div>
           <motion.div
@@ -282,10 +268,7 @@ export function TabPageHeader({
                 animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
                 transition={slide}
               />
-              <motion.h1
-                style={entry}
-                className="header-fade relative min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
-              >
+              <motion.h1 className="header-fade relative min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
                 {title}
               </motion.h1>
               <button
@@ -446,7 +429,6 @@ function MorphingPill({
   children: ReactNode;
   onWidthChange?: (width: number) => void;
 }) {
-  const entry = useHeaderEntry(`header:controls:${side}`);
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   // Unset until the first controls are measured, which the pill then takes on at once.
   const width = useMotionValue<number | 'auto'>('auto');
@@ -513,7 +495,6 @@ function MorphingPill({
           <motion.div
             key={mode}
             ref={measure}
-            style={entry}
             className={cn(
               'header-fade absolute inset-y-0 flex items-center p-1',
               side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',
