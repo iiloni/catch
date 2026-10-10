@@ -210,14 +210,16 @@ in-app splash or a wait for fonts or sync. Android and installed PWAs remember t
 Deck or Gallery page in device-local storage and restore it before the router renders a
 fresh launch at `/`. Other pages do not replace that preference, and URLs with a path
 other than `/`, a query or a fragment keep their destination. Ordinary browser tabs keep opening
-the requested URL. Header content and notes fade in with a 10 px
+the requested URL. The brand, page title and header controls show immediately when the
+page mounts, so a cold load does not leave the page's identity and navigation waiting for
+an entry animation. Notes fade in with a 10 px
 settle as they arrive; grid cards start after their existing measurement step. The dock
 only translates, keeping opacity 1 so its glass continues to blur the page. These 420 ms
 entries use a gentler ease than the page transitions, keeping more of the fade visible
 instead of reaching near-full opacity early. They use `animateSteady`, so startup work
 cannot skip ahead through the animation.
-Starts are staggered from top to bottom in 20 ms steps, capped at 120 ms: the brand and
-header controls start first, followed by the title and content, then the dock. Grid cards
+Content starts are staggered from top to bottom in 20 ms steps, capped at 120 ms, with
+the dock last. Grid cards
 use their existing layout positions, so the stagger adds no per-card DOM measurement.
 The short delays advance in the same frame loop, preserving the stagger during busy frames.
 Entries run once per element identity in a document, rather than replaying when virtualized
@@ -232,8 +234,12 @@ gets a `view-transition-name` only while a transition runs and shows live, so it
 animations play on top. A named element is a backdrop root, so a permanent name would stop
 the dock's glass from blurring the page behind it. Opening a
 note changes only the search params and gets no page transition.
+The outgoing dock snapshot stays visible while the router prepares the new page; it is
+hidden only once the incoming live dock is available.
 The dock's transition group is anchored to `--dock-bottom` instead of its captured position,
 so it follows the keyboard while the page's snapshots slide into or out of Search.
+An identity transform on that pseudo-element keeps a rendering reference frame for Firefox's
+live capture; `transform: none` makes the dock disappear during the page animation there.
 
 **Keyboard.** Resizing the page for the on-screen keyboard happens in one jump once the
 keyboard has finished moving. Instead, `KeyboardInsetsPlugin.java` owns the window insets:

@@ -287,11 +287,7 @@
 /* Fade glass itself and its foreground separately: a fading ancestor isolates its backdrop. */
 @utility header-fade {
   --header-layer-opacity: 1;
-  opacity: calc(
-    var(--header-opacity, 1) *
-    var(--header-layer-opacity) *
-    var(--header-entry-opacity, 1)
-  );
+  opacity: calc(var(--header-opacity, 1) * var(--header-layer-opacity));
 }
 
 @utility glass {
@@ -761,14 +757,22 @@ html:active-view-transition [data-dock] {
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-group(dock) {
   animation: none;
-  transform: none;
+  /* Firefox needs a transform reference frame to paint the dock's live capture. */
+  transform: translate(0, 0);
   top: auto;
   left: 0;
   bottom: var(--dock-bottom);
 }
+/* Hide the outgoing copy once the incoming live dock is available. */
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-old(dock) {
   display: none;
+  animation: none;
+}
+/* Keep it visible while the router prepares the incoming page. */
+/* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
+::view-transition-old(dock):only-child {
+  display: block;
 }
 /* biome-ignore lint/correctness/noUnknownTypeSelector: a view transition name */
 ::view-transition-new(dock) {
