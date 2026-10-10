@@ -209,8 +209,9 @@ that fixes or adds an entry.
 
 - Tested 2026-10-10 on `main` at `e86405f` plus the test fixes that came with this baseline,
   with Playwright 1.63.0's Firefox 155.0 (build 1543), headless, on Linux.
-- Whole suite, one worker, no retries: 217 tests, **166 passed, 11 failed, 40 skipped**
-  (22 minutes). The skips are the 39 that the Chromium `desktop` project also skips, and the
+- Whole suite, one worker, no retries: 217 tests, **174 passed, 3 failed, 40 skipped**
+  (22 minutes). The two flaky crashes below each fail about one run in three, so a run shows
+  two to four failures. The skips are the 39 that the Chromium `desktop` project also skips, and the
   one below.
 - It covers desktop Firefox in Playwright's build only. It says nothing for Firefox on
   Android or the native APK, and Zen or a released Firefox can differ from it.
@@ -225,14 +226,9 @@ navigating again.
 | Spec | Category | What happens |
 | --- | --- | --- |
 | `reminders.spec.ts:167` | Real difference | The time zone list holds UTC twice, and a search leaves a stray UTC row beside its matches. Firefox's `Intl.supportedValuesOf('timeZone')` includes UTC and `TimeZonePicker` adds another. Also seen in Zen. |
-| `accounts.spec.ts:183` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
+| `accounts.spec.ts:184` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
 | `linkCapturePlacement.spec.ts:149` | Flaky: page crash | The same crash on its `page.goto('/capture#…')`. About one run in three. |
 | `homePage.spec.ts:4` | Flaky: test artifact | A `page.goto('/')` interrupts the Search page's loading, as described above. About one run in four. |
-| `admin.spec.ts:379` | Test artifact | The same, at `page.goto('/settings/admin/backups')`. Fails every time on an idle machine and passes under load. |
-| `accounts.spec.ts:24` | Test artifact | The swipe ends at `y = -1`, above the viewport, where Playwright's Firefox delivers no `pointerup`. Ending two pixels lower passes. |
-| `attachments.spec.ts:242`, `:276`, `:426`, `:527` | Test artifact | The `pixel.png` fixture has a wrong IDAT checksum. Chromium draws it anyway; Firefox refuses it, so the note shows its placeholder. A fixture with the right checksum passes in both. |
-| `import.spec.ts:182` | Test artifact | The same fixture. |
-| `linkPreviews.spec.ts:90` | Test artifact | The same fixture. |
 
 Skipped in the `firefox` project because it cannot run there:
 
@@ -241,6 +237,11 @@ Skipped in the `firefox` project because it cannot run there:
 
 With twelve workers these three also failed once and passed on their retry, and they pass
 alone: `editorLayout.spec.ts:81`, `session.spec.ts:4` and `settings.spec.ts:134`.
+
+The `pixel.png` fixture once had a wrong IDAT checksum, which Chromium draws anyway and
+Firefox refuses; a picture a test attaches must be a valid file. A mouse gesture must end
+inside the viewport, because Playwright's Firefox sends no `pointerup` for one lifted
+outside it.
 
 Tests report an on-screen keyboard by setting `keyboardHeight`. Firefox has no
 VirtualKeyboard API, so the app measures the visual viewport and resets that height at the

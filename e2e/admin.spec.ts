@@ -193,7 +193,7 @@ test('deleting a user revokes attachment access and keeps other accounts intact'
   const target = await newAccount(request);
   const other = await newAccount(request);
   const picture = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
     'base64',
   );
   async function attach(token: string) {
@@ -391,6 +391,8 @@ test('regular users cannot see Admin or access its pages and APIs', async ({
   await page.goto('/settings/admin/users');
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(page.getByRole('table', { name: 'Users' })).toHaveCount(0);
+  // Firefox reports a navigation that interrupts the page's own loading as failed.
+  await expect(page.getByText('Appearance', { exact: true })).toBeVisible();
   await page.goto('/settings/admin/backups');
   await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(page.getByText('Server backups')).toBeHidden();
