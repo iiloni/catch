@@ -54,6 +54,8 @@ test('shared text and multiple files become one note, with no duplicate after re
 
 test('a share survives signup and its full reload', async ({ page }) => {
   await page.goto('/login');
+  // Firefox reports a navigation that interrupts the sign-in page's own loading as failed.
+  await expect(page.getByLabel('Email')).toBeVisible();
   const id = await stageShare(page);
   await page.goto(`/share?id=${id}`);
   await expect(page).toHaveURL(/\/login\?redirect=.*share/);

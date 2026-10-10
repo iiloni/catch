@@ -367,6 +367,10 @@ test.describe('live capture', () => {
   test.use({
     permissions: ['camera', 'microphone'],
   });
+  test.skip(
+    ({ browserName }) => browserName === 'firefox',
+    "Playwright's Firefox has no camera permission or Chromium's fake capture devices.",
+  );
 
   test('camera photos, video, and audio recordings attach inline and in the catalog', async ({
     page,

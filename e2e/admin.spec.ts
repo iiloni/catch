@@ -78,9 +78,12 @@ test('password reset revokes sessions, preserves login history and protects self
 test('admins confirm password reset and deletion, and users can replace the temporary password', async ({
   page,
   browser,
+  browserName,
   request,
 }) => {
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Playwright's Firefox knows no clipboard permissions, and reads the clipboard without them.
+  if (browserName !== 'firefox')
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   const admin = await adminSession(request);
   const target = await newAccount(request, 'Password reset user');
   await page.goto('/login');
