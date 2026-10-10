@@ -1,6 +1,84 @@
 import { expect, test } from '@playwright/test';
 import { openGalleryPage, settledBox, signUp, waitForPageTransition } from './helpers';
 
+test('the dock stays visible while page navigation prepares its incoming snapshot', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await signUp(page);
+  await waitForPageTransition(page);
+
+  const directions = await page.evaluate(async () => {
+    const root = document.documentElement;
+    const start = document.startViewTransition.bind(document);
+    const directions: {
+      pending: { width: string; display: string; dockOpacity: string }[];
+      old: string;
+      live: string;
+    }[] = [];
+    try {
+      for (const selector of [
+        'a[aria-label="Deck"]',
+        'a[aria-label="Gallery"]',
+        'a[aria-label="Search"]',
+        'button[aria-label="Close search"]',
+      ]) {
+        const pending: { width: string; display: string; dockOpacity: string }[] = [];
+        const started = new Promise<ViewTransition>((resolve) => {
+          document.startViewTransition = (options) => {
+            const update = typeof options === 'function' ? options : options?.update;
+            const transition = start({
+              ...(typeof options === 'object' ? options : {}),
+              update: async () => {
+                // The outgoing snapshot exists now, but the new page has not been mounted.
+                // Rendering is suppressed here, so sample with timers instead of animation frames.
+                for (let sample = 0; sample < 3; sample++) {
+                  await new Promise((resolve) => setTimeout(resolve, 50));
+                  pending.push({
+                    width: getComputedStyle(root, '::view-transition-group(dock)').width,
+                    display: getComputedStyle(root, '::view-transition-old(dock)').display,
+                    dockOpacity: getComputedStyle(document.querySelector('[data-dock]')!).opacity,
+                  });
+                }
+                await update?.();
+              },
+            });
+            resolve(transition);
+            return transition;
+          };
+        });
+        const trigger = document.querySelector<HTMLElement>(`[data-dock] ${selector}`);
+        if (!trigger) throw new Error(`Missing dock control: ${selector}`);
+        trigger.click();
+        const transition = await started;
+        await transition.ready;
+        directions.push({
+          pending,
+          old: getComputedStyle(root, '::view-transition-old(dock)').display,
+          live: getComputedStyle(root, '::view-transition-new(dock)').opacity,
+        });
+        await transition.finished;
+      }
+    } finally {
+      document.startViewTransition = start;
+    }
+    return directions;
+  });
+  expect(directions).toHaveLength(4);
+  for (const direction of directions) {
+    expect(direction.pending).toHaveLength(3);
+    for (const sample of direction.pending) {
+      expect(sample.dockOpacity).toBe('1');
+      // Firefox keeps the last painted frame until the update completes; its pseudo-tree
+      // does not exist yet (width is auto). Chromium already paints the outgoing snapshot.
+      if (sample.width !== 'auto') expect(sample.display).toBe('block');
+    }
+    expect(direction.old).toBe('none');
+    expect(direction.live).toBe('1');
+  }
+  await expect(page.locator('[data-dock]')).toHaveCSS('view-transition-name', 'none');
+});
+
 test('search reverses unfinished dock morphs without replacing the side button', async ({
   page,
 }) => {
