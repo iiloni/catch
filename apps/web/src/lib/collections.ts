@@ -801,6 +801,21 @@ export function useSyncedAttachments() {
   return synced;
 }
 
+let noteCollectionsStarted = false;
+
+/**
+ * Starts the collections that nothing reads until a note opens: its files, and the Deck's
+ * columns in its dock. Left to the first note, they read the device's database and open
+ * their streams while that note grows out of its card, which costs the transition frames.
+ */
+export function startNoteCollections() {
+  if (noteCollectionsStarted) return;
+  noteCollectionsStarted = true;
+  // Kept for the session: a collection nobody subscribes to is cleaned up and starts over.
+  attachmentsCollection.subscribeChanges(() => {});
+  boardColumnsCollection.subscribeChanges(() => {});
+}
+
 /** The signed-in user's Deck columns, unordered. */
 export function useBoardColumns() {
   const { data = [] } = useLiveQuery((q) => q.from({ column: boardColumnsCollection }));
