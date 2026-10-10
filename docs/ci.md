@@ -224,8 +224,8 @@ navigating again.
 
 | Spec | Category | What happens |
 | --- | --- | --- |
-| `reminders.spec.ts:167` | Real difference | The time zone list holds UTC twice, and a search leaves a stray UTC row beside its matches. Firefox's `Intl.supportedValuesOf('timeZone')` includes UTC and `TimeZonePicker` adds another. |
-| `accounts.spec.ts:183` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Not checked in a released Firefox. |
+| `reminders.spec.ts:167` | Real difference | The time zone list holds UTC twice, and a search leaves a stray UTC row beside its matches. Firefox's `Intl.supportedValuesOf('timeZone')` includes UTC and `TimeZonePicker` adds another. Also seen in Zen. |
+| `accounts.spec.ts:183` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
 | `linkCapturePlacement.spec.ts:149` | Flaky: page crash | The same crash on its `page.goto('/capture#…')`. About one run in three. |
 | `homePage.spec.ts:4` | Flaky: test artifact | A `page.goto('/')` interrupts the Search page's loading, as described above. About one run in four. |
 | `admin.spec.ts:379` | Test artifact | The same, at `page.goto('/settings/admin/backups')`. Fails every time on an idle machine and passes under load. |
