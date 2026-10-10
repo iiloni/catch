@@ -2,6 +2,7 @@
  * Captures the app screenshots the site shows, in light and dark, from this worktree's
  * development stack: `./scripts/dev.sh screenshots`. Each run signs up a fresh account
  * and fills it with the notes below, so the pictures only change when the app does.
+ * `./scripts/dev.sh screenshots site <site-url>` captures the site's link preview instead.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -370,6 +371,44 @@ async function save(page: Page, name: string, theme: string) {
     .webp({ quality: 86 })
     .toFile(file);
   console.log(path.relative(root, file));
+}
+
+async function captureSite(browser: Browser, url: string) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 1100 },
+    deviceScaleFactor: 1,
+    colorScheme: 'light',
+    reducedMotion: 'reduce',
+    locale: 'en-US',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(url);
+    const heading = page.getByRole('heading', { name: "Catch it before it's gone.", exact: true });
+    await heading.waitFor();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      const hero = document.querySelector('main section');
+      if (!hero) throw new Error('The site hero is missing.');
+      await Promise.all(
+        [...hero.querySelectorAll('img')]
+          .filter((img) => getComputedStyle(img).display !== 'none')
+          .map((img) => img.decode()),
+      );
+    });
+    const title = await heading.boundingBox();
+    if (!title) throw new Error('The site headline is missing.');
+    const file = path.join(output, 'site-hero-light.png');
+    // Start above the headline to leave the navigation out of the link card.
+    await page.screenshot({
+      path: file,
+      clip: { x: 0, y: title.y - 32, width: 1280, height: 900 },
+      animations: 'disabled',
+    });
+    console.log(path.relative(root, file));
+  } finally {
+    await context.close();
+  }
 }
 
 const card = (page: Page, title: string) =>
@@ -988,6 +1027,16 @@ if (process.argv[2] === 'android-docs') {
   process.exit(0);
 }
 const browser = await chromium.launch();
+if (process.argv[2] === 'site') {
+  try {
+    const url = process.argv[3];
+    if (!url) throw new Error('Usage: ./scripts/dev.sh screenshots site <site-url>');
+    await captureSite(browser, url);
+  } finally {
+    await browser.close();
+  }
+  process.exit(0);
+}
 const storageState = await createAccount(browser);
 {
   const context = await browser.newContext({ baseURL, storageState });

@@ -5,15 +5,15 @@ import { RootProvider } from 'fumadocs-ui/provider/next';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { brandVariables } from '@/lib/brand';
-import { shots } from '@/lib/screenshots';
+import { sitePreview } from '@/lib/screenshots';
 import { SITE_URL } from '@/lib/site';
 import favicon from '../../../web/public/favicon-mark.svg';
 
 const previewImage = {
-  url: shots.desktopGallery.light.src,
-  width: shots.desktopGallery.light.width,
-  height: shots.desktopGallery.light.height,
-  alt: shots.desktopGallery.alt,
+  url: sitePreview.image.src,
+  width: sitePreview.image.width,
+  height: sitePreview.image.height,
+  alt: sitePreview.alt,
 };
 
 export const metadata: Metadata = {
