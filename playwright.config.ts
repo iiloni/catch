@@ -49,5 +49,9 @@ export default defineConfig({
     { name: 'desktop', grepInvert: apiTests, use: { ...devices['Desktop Chrome'] } },
     { name: 'android', grepInvert: apiTests, use: { ...devices['Pixel 7'] } },
     { name: 'api', grep: apiTests },
+    // Opt in for affected cases without adding another browser to every local or CI run.
+    ...(process.env.E2E_FIREFOX === '1'
+      ? [{ name: 'firefox', grepInvert: apiTests, use: { ...devices['Desktop Firefox'] } }]
+      : []),
   ],
 });

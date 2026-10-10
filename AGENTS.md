@@ -33,6 +33,8 @@ checkout's stack. Never hard-code container or project names.
   `BREAKING CHANGE:` footers are published in them.
 - `./scripts/dev.sh e2e <file> [--grep <pattern>] --workers=1`: targeted Playwright tests
   against this worktree's stack. Select the affected specs or cases; see the E2E policy below.
+- `E2E_FIREFOX=1 ./scripts/dev.sh e2e <file> [--grep <pattern>] --project=firefox --workers=1`:
+  targeted Firefox tests. Install its browser once with `pnpm exec playwright install firefox`.
 - `check`, `test`, `build` and `e2e` take turns across every worktree on the machine: a
   second run waits for the first and prints what it is waiting for. Give these commands a
   long timeout or run them in the background, and let a waiting one wait. Do not go around
@@ -79,6 +81,14 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 - Iterate on the draft without `merge on pass`. Regular checks run on updates.
   Use targeted local E2E for affected behavior, with `--workers=1` to limit contention
   across active worktrees. Do not run the full local E2E suite as a routine finishing check.
+  Also run the affected cases in Firefox when changing navigation/transitions, scrolling or
+  fixed/sticky layers, focus/keyboard handling, or browser APIs with different engine support,
+  and whenever a bug is reported in Firefox or a Firefox-based browser such as Zen. Keep
+  this targeted; ordinary features and the default Chromium/Android checks do not need a
+  second full suite. Report the tested browser version and any remaining coverage limits.
+  For visual rendering bugs, verify painted frames rather than computed CSS alone. Firefox's
+  screenshot API can omit active view transitions; use an isolated display recording for
+  those transitions (see `docs/ci.md`).
   Request an early full suite only for sweeping changes that benefit from broad regression
   coverage (for example, shared navigation, sync or test infrastructure changes), or when
   the user explicitly requests one. Offload it to GitHub by adding `run e2e` to the draft
