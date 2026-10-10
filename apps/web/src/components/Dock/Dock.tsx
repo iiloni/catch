@@ -19,6 +19,7 @@ import {
   motion,
   useIsPresent,
   useMotionValue,
+  useMotionValueEvent,
   useReducedMotion,
   useTransform,
 } from 'motion/react';
@@ -172,6 +173,12 @@ export function Dock() {
   // Above the editor while it is open or animating. Motion keeps writing this value inline,
   // so the quick note overrides it in CSS to keep its close button above the scrim.
   const zIndex = useTransform(editorProgress, (progress) => (progress > 0 ? 60 : 40));
+  // While a note opens, is open or closes, the dock is a layer of its own (`will-change`),
+  // so its controls changing do not draw the note under them again on every frame. A
+  // transform, unlike opacity or a filter, leaves its glass blurring what is behind it. Not
+  // at other times: kept on, the Gallery switcher stops opening after a page transition.
+  const [overNote, setOverNote] = useState(false);
+  useMotionValueEvent(editorProgress, 'change', (progress) => setOverNote(progress > 0));
   const dockRef = useRef<HTMLDivElement>(null);
 
   // The Gallery switcher (or, in Settings, the page picker) belongs to the page it was opened
@@ -232,6 +239,7 @@ export function Dock() {
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
           'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center overflow-x-clip',
+          (mode === 'note' || overNote) && 'will-change-transform',
           quickNoteOpen && 'z-[75]!',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'

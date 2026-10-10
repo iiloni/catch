@@ -176,8 +176,9 @@ edge, so content is never scaled and text stays crisp. The surface's box does th
 not a `clip-path`: a changing clip path is drawn again with everything under it on every
 frame, which a phone's GPU cannot keep up with, while a box that changes size only moves the
 edge its layers are cut at. For the same reason the dimming backdrop, the card's face and the
-editor's content are layers of their own while they fade (`will-change`), and the dock's note
-toolbar arrives without a blur: a phone builds what draws each strength of blur the first
+editor's content are layers of their own while they fade (`will-change`), the dock is a
+layer of its own while a note is open or moving (by `will-change: transform`, which does not
+make it a backdrop root), and its note toolbar arrives without a blur: a phone builds what draws each strength of blur the first
 time it is used, which was the first note opened. It runs on the main
 thread, where mounting the editor competes with it, so it waits for
 the mounted surface to be painted (still looking like the card) and then advances by frames
