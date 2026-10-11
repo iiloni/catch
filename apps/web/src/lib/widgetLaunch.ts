@@ -2,7 +2,7 @@ import type { WidgetLaunch } from '@catch/shared';
 import { toast } from 'sonner';
 import { switchAccount } from './accounts';
 import { getAccounts, getSignedInUser } from './auth';
-import { editorNote, quickNote, quickNoteColumn } from './dockState';
+import { editorNote, quickNote, quickNoteColumn, quickNoteMounted } from './dockState';
 import { linkCaptureOpen } from './linkCapture';
 import { nativeWidgets } from './nativeWidgets';
 import { getServerUrl } from './serverUrl';
@@ -63,7 +63,9 @@ export function watchWidgetLaunch(navigate: (launch: WidgetLaunch) => Promise<vo
     pending = launch;
     ask();
   });
-  const stops = [editorNote, quickNote, linkCaptureOpen].map((store) => store.subscribe(ask));
+  const stops = [editorNote, quickNote, quickNoteMounted, linkCaptureOpen].map((store) =>
+    store.subscribe(ask),
+  );
   return () => {
     stopped = true;
     stop();

@@ -11,6 +11,8 @@ import { createStore } from './store';
 export const quickNote = createStore<'closed' | 'open' | 'capture' | 'saved'>('closed');
 /** One-shot destination from a native widget; ordinary compose follows the current page. */
 export const quickNoteColumn = createStore<string | null>(null);
+// Remains true while the composer saves and finishes its exit animation.
+export const quickNoteMounted = createStore(false);
 export const quickNoteCanSave = createStore(false);
 
 /** The search text, kept when leaving the Search tab so returning restores it. */

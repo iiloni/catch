@@ -67,7 +67,7 @@ final class WidgetTestHost {
                                 .put("theme", theme);
                 WidgetStore.configure(target, id, config);
                 AppWidgetHostView view = host.createView(target, id, manager.getAppWidgetInfo(id));
-                int height = i == 0 ? 80 : 300;
+                int height = i == 0 ? 96 : i == 1 ? 300 : 340;
                 Bundle options = new Bundle();
                 options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320);
                 options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, height);

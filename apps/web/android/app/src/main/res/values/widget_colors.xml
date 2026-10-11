@@ -20,4 +20,6 @@
   <color name="widget_surface_default">#fff9f0</color>
   <color name="widget_ink">#302e29</color>
   <color name="widget_muted">#716b60</color>
+  <color name="widget_control">#eee7dc</color>
+  <color name="widget_card_default">#ffffff</color>
 </resources>

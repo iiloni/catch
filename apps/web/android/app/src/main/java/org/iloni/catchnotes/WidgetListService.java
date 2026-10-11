@@ -48,8 +48,24 @@ public class WidgetListService extends RemoteViewsService {
                                 getPackageName(),
                                 customTheme ? R.layout.widget_row_custom : R.layout.widget_row);
                 row.setTextViewText(R.id.widget_title, note.optString("title"));
-                row.setTextViewText(R.id.widget_body, note.optString("body").replace('\n', ' '));
+                row.setTextViewText(R.id.widget_body, note.optString("body"));
+                String color = note.optString("color", "default");
+                int drawable =
+                        getResources()
+                                .getIdentifier(
+                                        "widget_card_" + color.replace('-', '_'),
+                                        "drawable",
+                                        getPackageName());
+                row.setImageViewResource(
+                        R.id.widget_card,
+                        drawable == 0 ? R.drawable.widget_card_default : drawable);
                 if (customTheme) {
+                    row.setInt(
+                            R.id.widget_card,
+                            "setColorFilter",
+                            "default".equals(color)
+                                    ? (dark ? 0xff3b3832 : 0xffffffff)
+                                    : WidgetColors.surface(WidgetListService.this, color, dark));
                     row.setTextColor(R.id.widget_title, CatchWidgetProvider.ink(dark));
                     row.setTextColor(R.id.widget_body, CatchWidgetProvider.muted(dark));
                 }

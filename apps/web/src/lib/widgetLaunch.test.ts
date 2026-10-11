@@ -23,11 +23,12 @@ vi.mock('sonner', () => ({ toast: mocks.toast }));
 vi.mock('./dockState', () => ({
   editorNote: createStore<unknown>(null),
   quickNote: createStore('closed'),
+  quickNoteMounted: createStore(false),
   quickNoteColumn: createStore<string | null>(null),
 }));
 vi.mock('./linkCapture', () => ({ linkCaptureOpen: createStore(false) }));
 
-import { editorNote, quickNote, quickNoteColumn } from './dockState';
+import { editorNote, quickNote, quickNoteColumn, quickNoteMounted } from './dockState';
 import { watchWidgetLaunch } from './widgetLaunch';
 
 const launch: WidgetLaunch = {
@@ -42,6 +43,8 @@ beforeEach(() => {
   mocks.watch.mockReturnValue(mocks.stop);
   editorNote.set(null);
   quickNote.set('closed');
+  quickNoteMounted.set(false);
+  mocks.user.mockReturnValue({ id: 'alice' });
   quickNoteColumn.set(null);
 });
 function deliver(command = launch) {
@@ -69,14 +72,37 @@ describe('widget launch delivery', () => {
     expect(mocks.ack).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     stop();
+    mocks.user.mockReturnValue({ id: 'bob' });
+    const stopAfterReload = watchWidgetLaunch(navigate);
+    deliver({ ...launch, account: 'bob' });
+    await vi.waitFor(() => expect(mocks.ack).toHaveBeenCalledWith('tap-1'));
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(quickNoteColumn.get()).toBe('garden');
+    stopAfterReload();
   });
   it('waits for an unsaved composer to close before changing accounts', async () => {
     quickNote.set('open');
+    quickNoteMounted.set(true);
     const stop = watchWidgetLaunch(vi.fn(async () => {}));
     deliver({ ...launch, account: 'bob' });
     expect(mocks.switch).not.toHaveBeenCalled();
     quickNote.set('closed');
+    expect(mocks.switch).not.toHaveBeenCalled();
+    quickNoteMounted.set(false);
     await vi.waitFor(() => expect(mocks.switch).toHaveBeenCalledWith('bob'));
+    stop();
+  });
+  it('waits for the exiting composer to unmount before applying a new destination', async () => {
+    quickNoteMounted.set(true);
+    const navigate = vi.fn(async () => {});
+    const stop = watchWidgetLaunch(navigate);
+    deliver();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(quickNoteColumn.get()).toBeNull();
+    quickNoteMounted.set(false);
+    await vi.waitFor(() => expect(mocks.ack).toHaveBeenCalledWith('tap-1'));
+    expect(quickNoteColumn.get()).toBe('garden');
+    expect(quickNote.get()).toBe('open');
     stop();
   });
   it('discards launches for a signed-out account or another server', async () => {

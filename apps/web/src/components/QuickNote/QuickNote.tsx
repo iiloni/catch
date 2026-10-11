@@ -21,7 +21,13 @@ import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { useTagReadiness, useTags } from '@/lib/collections';
-import { quickNote, quickNoteCanSave, quickNoteColumn, tabFor } from '@/lib/dockState';
+import {
+  quickNote,
+  quickNoteCanSave,
+  quickNoteColumn,
+  quickNoteMounted,
+  tabFor,
+} from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { animateSteady, curves, springs } from '@/lib/motion';
@@ -94,6 +100,10 @@ function restingBox(element: HTMLElement) {
 
 function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspended: boolean }) {
   const [isPresent, safeToRemove] = usePresence();
+  useEffect(() => {
+    quickNoteMounted.set(true);
+    return () => quickNoteMounted.set(false);
+  }, []);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: openNote } = useOpenNote();
   const ref = useRef<HTMLElement>(null);

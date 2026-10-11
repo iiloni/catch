@@ -62,7 +62,7 @@
         <activity
             android:name=".WidgetConfigurationActivity"
             android:exported="true"
-            android:theme="@style/AppTheme.NoActionBar">
+            android:theme="@style/WidgetConfigurationTheme">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

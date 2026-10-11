@@ -13,10 +13,11 @@ without becoming a second sync client or modifying TanStack's private storage.
 
 **Three native widgets.** Quick capture opens New note or Search. One note shows a
 selected note, with its color and checklist state. Note list shows pinned notes,
-a tag (including descendants), or a Deck column, in Catch's position order with
+Gallery, all notes, a tag (including descendants), or a Deck column, in Catch's position order with
 pinned notes first. Lists scroll vertically; single-note previews truncate to fit.
 The configuration activity selects an account, content and system/light/dark
-appearance for each instance. Android owns placement, resizing and reconfiguration.
+appearance for each instance through a custom Catch dialog, with accessible
+selection buttons and appearance segments. Android owns placement, resizing and reconfiguration.
 Java/XML RemoteViews fit the existing shell without introducing Kotlin or Compose.
 
 **A disposable snapshot, not a second database.** `watchWidgetSnapshot` reads only
@@ -39,7 +40,7 @@ accounts never repoints it. Startup reconciles the native account list and chang
 servers discards old configurations and previews. Sign-out clears that account's
 snapshot and pending launch, including when signing out an inactive account.
 Native session generations reject late snapshot writes after sign-out or a reload.
-Vault notes remain memory-only (ADR 0020), even when unlocked, so no widget can
+Vault plaintext remains memory-only (ADR 0020), even when unlocked, so no widget can
 select or display one. Shared notes are excluded from this release.
 
 **Edits happen in Catch.** Explicit activity PendingIntents are resolved against

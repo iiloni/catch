@@ -111,6 +111,22 @@ public class WidgetStoreTest {
     }
 
     @Test
+    public void galleryExcludesDeckNotesWhileAllNotesKeepsBoth() throws Exception {
+        WidgetStore.array(snapshot, "notes")
+                .put(new JSONObject("{id:'gallery',column:null,tags:[],pinned:false}"));
+        config.put("filter", "gallery");
+        assertEquals(1, WidgetStore.notes(snapshot, config).size());
+        assertEquals("gallery", WidgetStore.notes(snapshot, config).get(0).optString("id"));
+        assertNull(WidgetStore.launch(context, 42, "note", "one"));
+        assertEquals(
+                "gallery", WidgetStore.launch(context, 42, "note", "gallery").optString("noteId"));
+        assertFalse(WidgetStore.launch(context, 42, "compose", null).has("column"));
+        config.put("filter", "all");
+        assertEquals(3, WidgetStore.notes(snapshot, config).size());
+        assertEquals("one", WidgetStore.launch(context, 42, "note", "one").optString("noteId"));
+    }
+
+    @Test
     public void filtersTagsColumnsAndSingleNotes() throws Exception {
         assertEquals(1, WidgetStore.notes(snapshot, config).size());
         config.put("filter", "tag").put("target", "tag");

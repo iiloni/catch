@@ -153,11 +153,16 @@ final class WidgetStore {
             boolean matches =
                     "single".equals(config.optString("kind"))
                             ? target.equals(note.optString("id"))
-                            : "pinned".equals(filter)
-                                    ? note.optBoolean("pinned")
-                                    : "column".equals(filter)
-                                            ? target.equals(note.optString("column"))
-                                            : contains(array(note, "tags"), target);
+                            : "all".equals(filter)
+                                    ? true
+                                    : "gallery".equals(filter)
+                                            ? note.isNull("column")
+                                            : "pinned".equals(filter)
+                                                    ? note.optBoolean("pinned")
+                                                    : "column".equals(filter)
+                                                            ? target.equals(
+                                                                    note.optString("column"))
+                                                            : contains(array(note, "tags"), target);
             if (matches) found.add(note);
         }
         return found;

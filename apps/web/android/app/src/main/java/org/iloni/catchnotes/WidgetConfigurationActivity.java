@@ -1,42 +1,59 @@
 package org.iloni.catchnotes;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.view.Window;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** The launcher waits for RESULT_OK; cancelling never changes the existing widget. */
 public class WidgetConfigurationActivity extends AppCompatActivity {
+    private static final List<String> FILTER_IDS =
+            Arrays.asList("pinned", "gallery", "all", "tag", "column");
+    private static final List<String> FILTER_LABELS =
+            Arrays.asList("Pinned notes", "Gallery", "All notes", "Tag", "Deck column");
+    private static final List<String> THEME_IDS = Arrays.asList("system", "light", "dark");
     private int widgetId;
     private String kind;
-    private JSONObject previous;
+    private String accountId;
+    private String filter;
+    private String target;
+    private String theme;
     private LinearLayout form;
-    private Spinner accounts;
-    private Spinner filters;
-    private Spinner choices;
-    private Spinner themes;
-    private Button save;
+    private TextView accountButton;
+    private TextView filterButton;
+    private TextView choiceButton;
+    private TextView save;
     private final List<String> accountIds = new ArrayList<>();
+    private final List<String> accountLabels = new ArrayList<>();
     private final List<String> choiceIds = new ArrayList<>();
-    private String choiceGroup = "";
+    private final List<String> choiceLabels = new ArrayList<>();
+    private final List<TextView> themeButtons = new ArrayList<>();
+    private int ink;
+    private int muted;
+    private int surface;
+    private int control;
+    private static final int AMBER = 0xffffc247;
 
     @Override
     public void onCreate(Bundle state) {
@@ -48,43 +65,57 @@ public class WidgetConfigurationActivity extends AppCompatActivity {
             finish();
             return;
         }
-        previous = WidgetStore.config(this, widgetId);
+        JSONObject previous = WidgetStore.config(this, widgetId);
         if (state != null && state.containsKey("configuration")) {
             try {
                 previous = new JSONObject(state.getString("configuration"));
             } catch (org.json.JSONException ignored) {
             }
         }
-        ScrollView scroll = new ScrollView(this);
-        form = new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(24), dp(24), dp(24), dp(24));
-        scroll.addView(form);
-        setContentView(scroll);
-        ViewCompat.setOnApplyWindowInsetsListener(
-                scroll,
-                (view, insets) -> {
-                    androidx.core.graphics.Insets bars =
-                            insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                    view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                    return insets;
-                });
-        text(
-                "capture".equals(kind)
-                        ? "Quick capture"
-                        : "single".equals(kind) ? "One note" : "Note list",
-                28);
-        text("Choose what Catch shows on your home screen.", 16);
+        ink = getColor(R.color.widget_ink);
+        muted = getColor(R.color.widget_muted);
+        surface = getColor(R.color.widget_surface_default);
+        control = getColor(R.color.widget_control);
+        filter = previous.optString("filter", "pinned");
+        if (!FILTER_IDS.contains(filter)) filter = "pinned";
+        theme = previous.optString("theme", "system");
+        if (!THEME_IDS.contains(theme)) theme = "system";
+        target = previous.optString("target");
         JSONObject all = WidgetStore.object(WidgetStore.state(this), "accounts");
-        List<String> labels = new ArrayList<>();
         for (java.util.Iterator<String> ids = all.keys(); ids.hasNext(); ) {
             String id = ids.next();
             accountIds.add(id);
-            labels.add(WidgetStore.object(all, id).optString("label"));
+            accountLabels.add(WidgetStore.object(all, id).optString("label"));
         }
+        accountId =
+                accountIds.contains(previous.optString("account"))
+                        ? previous.optString("account")
+                        : accountIds.isEmpty() ? "" : accountIds.get(0);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackground(shape(surface, 28));
+        scroll.setClipToOutline(true);
+        form = column();
+        form.setPadding(dp(24), dp(24), dp(24), dp(16));
+        scroll.addView(form);
+        setContentView(scroll);
+        TextView brand = text("CATCH  /  HOME SCREEN", 11, muted);
+        brand.setLetterSpacing(0.12f);
+        add(brand, 0, 12);
+        TextView title =
+                text(
+                        "capture".equals(kind)
+                                ? "Quick capture"
+                                : "single".equals(kind) ? "One note" : "Note list",
+                        28,
+                        ink);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        ViewCompat.setAccessibilityHeading(title, true);
+        add(title, 0, 8);
+        add(text("A little Catch, right at home.", 15, muted), 0, 24);
         if (accountIds.isEmpty()) {
-            text("Open Catch and sign in, then add the widget again.", 16);
-            Button open = button("Open Catch");
+            add(text("Open Catch and sign in to set up your widget.", 16, ink), 0, 20);
+            TextView open = action("Open Catch", true);
+            add(open, 0, 0);
             open.setOnClickListener(
                     view -> {
                         startActivity(new Intent(this, MainActivity.class));
@@ -92,174 +123,300 @@ public class WidgetConfigurationActivity extends AppCompatActivity {
                     });
             return;
         }
-        accounts = spinner("Account", labels);
+        accountButton = selector("Account");
+        accountButton.setOnClickListener(
+                view ->
+                        pick(
+                                "Account",
+                                accountLabels,
+                                accountIds.indexOf(accountId),
+                                position -> {
+                                    accountId = accountIds.get(position);
+                                    target = "";
+                                    populateChoices();
+                                }));
         if ("list".equals(kind)) {
-            filters =
-                    spinner(
-                            "Show",
-                            java.util.Arrays.asList("Pinned notes", "A tag", "A Deck column"));
-            String filter = previous.optString("filter");
-            filters.setSelection("tag".equals(filter) ? 1 : "column".equals(filter) ? 2 : 0);
+            filterButton = selector("Show");
+            filterButton.setOnClickListener(
+                    view ->
+                            pick(
+                                    "Show",
+                                    FILTER_LABELS,
+                                    FILTER_IDS.indexOf(filter),
+                                    position -> {
+                                        filter = FILTER_IDS.get(position);
+                                        target = "";
+                                        populateChoices();
+                                    }));
         }
-        if (!"capture".equals(kind))
-            choices = spinner("single".equals(kind) ? "Note" : "List", new ArrayList<>());
-        themes = spinner("Appearance", java.util.Arrays.asList("Follow device", "Light", "Dark"));
-        themes.setSelection(
-                "light".equals(previous.optString("theme"))
-                        ? 1
-                        : "dark".equals(previous.optString("theme")) ? 2 : 0);
-        text(
-                "Only your ordinary notes appear here. Vault and shared notes stay in Catch."
-                    + " Previews refresh when this account is open in Catch; the last copy stays"
-                    + " available offline.",
-                14);
+        if (!"capture".equals(kind)) {
+            choiceButton = selector("single".equals(kind) ? "Note" : "Selection");
+            choiceButton.setOnClickListener(
+                    view ->
+                            pick(
+                                    "single".equals(kind)
+                                            ? "Note"
+                                            : "tag".equals(filter) ? "Tag" : "Deck column",
+                                    choiceLabels,
+                                    choiceIds.indexOf(target),
+                                    position -> {
+                                        target = choiceIds.get(position);
+                                        refresh();
+                                    }));
+        }
+        add(text("Appearance", 13, muted), 12, 8);
+        LinearLayout appearance = new LinearLayout(this);
+        String[] themeLabels = {"Device", "Light", "Dark"};
+        for (int i = 0; i < themeLabels.length; i++) {
+            final String value = THEME_IDS.get(i);
+            TextView button = action(themeLabels[i], false);
+            button.setTextSize(14);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+            if (i > 0) params.leftMargin = dp(8);
+            appearance.addView(button, params);
+            button.setOnClickListener(
+                    view -> {
+                        theme = value;
+                        refresh();
+                    });
+            themeButtons.add(button);
+        }
+        add(appearance, 0, 18);
+        add(
+                text(
+                        "Your notes stay available offline. Previews update when you open this"
+                            + " account in Catch. Vault and shared notes stay in the app.",
+                        12,
+                        muted),
+                0,
+                18);
         if ("list".equals(kind))
-            text(
-                    "New notes go to Gallery, or to the selected Deck column. They are not"
-                            + " automatically pinned or tagged.",
-                    14);
-        save = button("Save widget");
+            add(text("New notes go to Gallery or your selected Deck column.", 12, muted), 0, 18);
+        save = action("Save widget", true);
         save.setOnClickListener(view -> finishConfiguration());
-        Button cancel = button("Cancel");
+        add(save, 0, 4);
+        TextView cancel = action("Cancel", false);
+        cancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         cancel.setOnClickListener(view -> finish());
-        AdapterView.OnItemSelectedListener changed =
-                new AdapterView.OnItemSelectedListener() {
-                    public void onItemSelected(
-                            AdapterView<?> parent, View view, int position, long id) {
-                        populateChoices();
-                    }
-
-                    public void onNothingSelected(AdapterView<?> parent) {}
-                };
-        int selected = accountIds.indexOf(previous.optString("account"));
-        accounts.setSelection(Math.max(0, selected));
-        accounts.setOnItemSelectedListener(changed);
-        if (filters != null) filters.setOnItemSelectedListener(changed);
+        add(cancel, 0, 0);
         populateChoices();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        getWindow().setLayout(dialogWidth(), android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+
+    private int dialogWidth() {
+        return Math.min(getResources().getDisplayMetrics().widthPixels - dp(32), dp(440));
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private void text(String value, int size) {
+    private LinearLayout column() {
+        LinearLayout view = new LinearLayout(this);
+        view.setOrientation(LinearLayout.VERTICAL);
+        return view;
+    }
+
+    private GradientDrawable shape(int color, int radius) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radius));
+        return drawable;
+    }
+
+    private TextView text(String value, int size, int color) {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
-        view.setPadding(0, dp(12), 0, dp(12));
-        form.addView(view);
+        view.setTextColor(color);
+        return view;
     }
 
-    private Spinner spinner(String label, List<String> labels) {
-        text(label, 14);
-        Spinner spinner = new Spinner(this);
-        spinner.setContentDescription(label);
-        spinner.setMinimumHeight(dp(48));
-        spinner.setAdapter(adapter(labels));
-        form.addView(spinner, new LinearLayout.LayoutParams(-1, -2));
-        return spinner;
+    private void add(View view, int top, int bottom) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(top);
+        params.bottomMargin = dp(bottom);
+        form.addView(view, params);
     }
 
-    private ArrayAdapter<String> adapter(List<String> labels) {
-        ArrayAdapter<String> adapter =
-                new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        return adapter;
-    }
-
-    private Button button(String text) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setAllCaps(false);
-        button.setMinHeight(dp(48));
-        form.addView(button, new LinearLayout.LayoutParams(-1, -2));
+    private TextView action(String value, boolean primary) {
+        TextView button = text(value, 16, primary ? 0xff302e29 : ink);
+        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setGravity(Gravity.CENTER);
+        button.setMinHeight(dp(primary ? 56 : 48));
+        button.setPadding(dp(12), dp(12), dp(12), dp(12));
+        button.setBackground(
+                new RippleDrawable(
+                        ColorStateList.valueOf(0x22716b60),
+                        shape(primary ? AMBER : control, 16),
+                        null));
+        button.setFocusable(true);
+        ViewCompat.setAccessibilityDelegate(
+                button,
+                new androidx.core.view.AccessibilityDelegateCompat() {
+                    @Override
+                    public void onInitializeAccessibilityNodeInfo(
+                            View view,
+                            androidx.core.view.accessibility.AccessibilityNodeInfoCompat info) {
+                        super.onInitializeAccessibilityNodeInfo(view, info);
+                        info.setClassName(android.widget.Button.class.getName());
+                    }
+                });
         return button;
     }
 
-    private String filter() {
-        return filters == null || filters.getSelectedItemPosition() == 0
-                ? "pinned"
-                : filters.getSelectedItemPosition() == 1 ? "tag" : "column";
+    private TextView selector(String label) {
+        TextView button = action("", false);
+        button.setGravity(Gravity.CENTER_VERTICAL);
+        button.setMinHeight(dp(64));
+        button.setTag(label);
+        add(button, 0, 10);
+        return button;
+    }
+
+    private void selection(TextView button, String label, String value) {
+        android.text.SpannableString content =
+                new android.text.SpannableString(label + "\n" + value + "  ›");
+        content.setSpan(new android.text.style.AbsoluteSizeSpan(12, true), 0, label.length(), 0);
+        content.setSpan(new android.text.style.ForegroundColorSpan(muted), 0, label.length(), 0);
+        button.setText(content);
+        button.setContentDescription(label + ": " + value);
+    }
+
+    private interface Selected {
+        void select(int position);
+    }
+
+    private void pick(String title, List<String> labels, int selected, Selected callback) {
+        if (labels.isEmpty()) return;
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout panel = column();
+        panel.setPadding(dp(20), dp(20), dp(20), dp(12));
+        panel.setBackground(shape(surface, 24));
+        TextView heading = text(title, 22, ink);
+        heading.setPadding(dp(4), 0, 0, dp(16));
+        ViewCompat.setAccessibilityHeading(heading, true);
+        panel.addView(heading);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout options = column();
+        for (int i = 0; i < labels.size(); i++) {
+            final int position = i;
+            TextView option = action(labels.get(i) + (i == selected ? "  ✓" : ""), i == selected);
+            option.setGravity(Gravity.CENTER_VERTICAL);
+            option.setMinHeight(dp(56));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.bottomMargin = dp(6);
+            options.addView(option, params);
+            option.setOnClickListener(
+                    view -> {
+                        callback.select(position);
+                        dialog.dismiss();
+                    });
+        }
+        scroll.addView(options);
+        // Bound long note/tag pickers while allowing the outer dialog to fit a small screen.
+        panel.addView(
+                scroll,
+                new LinearLayout.LayoutParams(
+                        -1,
+                        Math.min(
+                                dp(labels.size() * 62),
+                                getResources().getDisplayMetrics().heightPixels / 2)));
+        TextView cancel = action("Cancel", false);
+        cancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        cancel.setOnClickListener(view -> dialog.dismiss());
+        panel.addView(cancel);
+        dialog.setContentView(panel);
+        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.show();
+        dialog.getWindow().setLayout(dialogWidth(), -2);
+    }
+
+    private boolean needsChoice() {
+        return "single".equals(kind)
+                || "list".equals(kind) && ("tag".equals(filter) || "column".equals(filter));
     }
 
     private void populateChoices() {
-        if (choices == null) return;
-        int selection = accounts.getSelectedItemPosition();
-        if (selection < 0 || selection >= accountIds.size()) return;
-        JSONObject snapshot =
-                WidgetStore.object(
-                        WidgetStore.account(this, accountIds.get(selection)), "snapshot");
-        String group = accountIds.get(selection) + ":" + filter();
-        if (group.equals(choiceGroup)) return;
-        choiceGroup = group;
         choiceIds.clear();
-        List<String> labels = new ArrayList<>();
-        String key = "single".equals(kind) ? "notes" : "tag".equals(filter()) ? "tags" : "columns";
-        if ("list".equals(kind) && "pinned".equals(filter())) {
-            labels.add("All pinned notes");
-            choiceIds.add("");
-        } else {
-            JSONArray entries = WidgetStore.array(snapshot, key);
+        choiceLabels.clear();
+        if (needsChoice()) {
+            JSONObject snapshot =
+                    WidgetStore.object(WidgetStore.account(this, accountId), "snapshot");
+            JSONArray entries =
+                    WidgetStore.array(
+                            snapshot,
+                            "single".equals(kind)
+                                    ? "notes"
+                                    : "tag".equals(filter) ? "tags" : "columns");
             for (int i = 0; i < entries.length(); i++) {
                 JSONObject entry = entries.optJSONObject(i);
                 if (entry == null) continue;
                 choiceIds.add(entry.optString("id"));
-                labels.add(entry.optString("single".equals(kind) ? "title" : "name"));
+                choiceLabels.add(entry.optString("single".equals(kind) ? "title" : "name"));
             }
+            if (!choiceIds.contains(target)) target = choiceIds.isEmpty() ? "" : choiceIds.get(0);
+        } else target = "";
+        refresh();
+    }
+
+    private void refresh() {
+        selection(accountButton, "Account", accountLabels.get(accountIds.indexOf(accountId)));
+        if (filterButton != null)
+            selection(filterButton, "Show", FILTER_LABELS.get(FILTER_IDS.indexOf(filter)));
+        if (choiceButton != null) {
+            choiceButton.setVisibility(needsChoice() ? View.VISIBLE : View.GONE);
+            choiceButton.setEnabled(!choiceIds.isEmpty());
+            selection(
+                    choiceButton,
+                    "single".equals(kind) ? "Note" : "tag".equals(filter) ? "Tag" : "Deck column",
+                    choiceIds.isEmpty()
+                            ? "Open this account in Catch to load choices"
+                            : choiceLabels.get(choiceIds.indexOf(target)));
         }
-        save.setEnabled(!choiceIds.isEmpty());
-        if (labels.isEmpty()) labels.add("Open this account in Catch to load choices");
-        choices.setAdapter(adapter(labels));
-        if (accountIds.get(selection).equals(previous.optString("account"))
-                && filter().equals(previous.optString("filter", "pinned"))) {
-            choices.setSelection(Math.max(0, choiceIds.indexOf(previous.optString("target"))));
+        for (int i = 0; i < themeButtons.size(); i++) {
+            TextView button = themeButtons.get(i);
+            boolean selected = THEME_IDS.get(i).equals(theme);
+            button.setSelected(selected);
+            button.setTextColor(selected ? 0xff302e29 : ink);
+            button.setBackground(
+                    new RippleDrawable(
+                            ColorStateList.valueOf(0x22716b60),
+                            shape(selected ? AMBER : control, 14),
+                            null));
         }
+        save.setEnabled(!needsChoice() || !choiceIds.isEmpty());
+        save.setAlpha(save.isEnabled() ? 1f : 0.45f);
+    }
+
+    private JSONObject draft() {
+        JSONObject config = new JSONObject();
+        WidgetStore.put(config, "account", accountId);
+        WidgetStore.put(config, "kind", kind);
+        WidgetStore.put(config, "filter", filter);
+        WidgetStore.put(config, "target", target);
+        WidgetStore.put(config, "theme", theme);
+        return config;
     }
 
     @Override
     protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
-        if (accounts == null || accounts.getSelectedItemPosition() < 0) return;
-        JSONObject draft = new JSONObject();
-        WidgetStore.put(draft, "account", accountIds.get(accounts.getSelectedItemPosition()));
-        WidgetStore.put(draft, "filter", filter());
-        int selected = choices == null ? -1 : choices.getSelectedItemPosition();
-        WidgetStore.put(
-                draft,
-                "target",
-                selected >= 0 && selected < choiceIds.size() ? choiceIds.get(selected) : "");
-        WidgetStore.put(
-                draft,
-                "theme",
-                themes.getSelectedItemPosition() == 1
-                        ? "light"
-                        : themes.getSelectedItemPosition() == 2 ? "dark" : "system");
-        state.putString("configuration", draft.toString());
+        state.putString("configuration", draft().toString());
     }
 
     private void finishConfiguration() {
-        int account = accounts.getSelectedItemPosition();
-        if (account < 0 || account >= accountIds.size()) return;
-        String id = accountIds.get(account);
-        if (WidgetStore.account(this, id).length() == 0) {
-            finish();
-            return;
-        }
-        JSONObject config = new JSONObject();
-        WidgetStore.put(config, "account", id);
-        WidgetStore.put(config, "kind", kind);
-        WidgetStore.put(config, "filter", filter());
-        int selected = choices == null ? -1 : choices.getSelectedItemPosition();
-        if (choices != null && (selected < 0 || selected >= choiceIds.size())) return;
-        WidgetStore.put(config, "target", choices == null ? "" : choiceIds.get(selected));
-        WidgetStore.put(
-                config,
-                "theme",
-                themes.getSelectedItemPosition() == 1
-                        ? "light"
-                        : themes.getSelectedItemPosition() == 2 ? "dark" : "system");
+        if (WidgetStore.account(this, accountId).length() == 0
+                || needsChoice() && !choiceIds.contains(target)) return;
         try {
-            WidgetStore.configure(this, widgetId, config);
+            WidgetStore.configure(this, widgetId, draft());
+            CatchWidgetProvider.update(this, widgetId);
         } catch (RuntimeException error) {
             android.widget.Toast.makeText(
                             this,
@@ -268,7 +425,6 @@ public class WidgetConfigurationActivity extends AppCompatActivity {
                     .show();
             return;
         }
-        CatchWidgetProvider.update(this, widgetId);
         setResult(
                 Activity.RESULT_OK,
                 new Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId));

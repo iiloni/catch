@@ -130,8 +130,7 @@ public class CatchWidgetProvider extends AppWidgetProvider {
         views.setImageViewResource(R.id.widget_surface, R.drawable.widget_surface);
         if (customTheme) {
             views.setInt(R.id.widget_surface, "setColorFilter", dark ? 0xff302e29 : 0xfffff9f0);
-            if (!"capture".equals(kind))
-                views.setInt(R.id.widget_settings, "setColorFilter", ink(dark));
+            views.setInt(R.id.widget_settings, "setColorFilter", ink(dark));
         }
         views.setOnClickPendingIntent(R.id.widget_settings, configureIntent(context, id));
         boolean signedIn = account.length() > 0;
@@ -150,13 +149,18 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                     signedIn
                             ? openIntent(context, id, "search", null, false)
                             : configureIntent(context, id));
-            if (customTheme) views.setInt(R.id.widget_search, "setColorFilter", ink(dark));
+            if (customTheme) {
+                views.setInt(R.id.widget_search, "setColorFilter", ink(dark));
+                int button = dark ? R.drawable.widget_button_dark : R.drawable.widget_button_light;
+                views.setInt(R.id.widget_settings, "setBackgroundResource", button);
+                views.setInt(R.id.widget_search, "setBackgroundResource", button);
+            }
             int width =
                     AppWidgetManager.getInstance(context)
                             .getAppWidgetOptions(id)
                             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
             views.setViewVisibility(
-                    R.id.widget_search, width > 0 && width < 230 ? View.GONE : View.VISIBLE);
+                    R.id.widget_search, width > 0 && width < 250 ? View.GONE : View.VISIBLE);
         } else {
             if (customTheme) {
                 views.setTextColor(R.id.widget_heading, ink(dark));
@@ -179,6 +183,23 @@ public class CatchWidgetProvider extends AppWidgetProvider {
             List<JSONObject> notes = WidgetStore.notes(snapshot, config);
             if ("single".equals(kind)) {
                 JSONObject note = notes.isEmpty() ? null : notes.get(0);
+                int height =
+                        AppWidgetManager.getInstance(context)
+                                .getAppWidgetOptions(id)
+                                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250);
+                float fontScale = context.getResources().getConfiguration().fontScale;
+                boolean compact = height < 220;
+                views.setViewVisibility(R.id.widget_footer, compact ? View.GONE : View.VISIBLE);
+                views.setInt(R.id.widget_title, "setMaxLines", compact ? 1 : 2);
+                int lines =
+                        Math.max(
+                                1,
+                                (int)
+                                        ((height
+                                                        - (compact ? 98 : 128)
+                                                        - (compact ? 28 : 56) * fontScale)
+                                                / (23 * fontScale)));
+                views.setInt(R.id.widget_body, "setMaxLines", lines);
                 views.setTextViewText(R.id.widget_heading, "Catch");
                 views.setTextViewText(
                         R.id.widget_title,
@@ -216,11 +237,15 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                 String heading =
                         "pinned".equals(filter)
                                 ? "Pinned"
-                                : WidgetStore.choiceName(
-                                        snapshot,
-                                        "tag".equals(filter) ? "tags" : "columns",
-                                        config.optString("target"));
-                boolean missing = !"pinned".equals(filter) && heading.isEmpty();
+                                : "gallery".equals(filter)
+                                        ? "Gallery"
+                                        : "all".equals(filter)
+                                                ? "All notes"
+                                                : WidgetStore.choiceName(
+                                                        snapshot,
+                                                        "tag".equals(filter) ? "tags" : "columns",
+                                                        config.optString("target"));
+                boolean missing = heading.isEmpty();
                 views.setTextViewText(R.id.widget_heading, missing ? "Choose a list" : heading);
                 views.setTextViewText(
                         R.id.widget_empty,
