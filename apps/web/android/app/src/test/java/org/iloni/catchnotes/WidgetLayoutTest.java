@@ -110,6 +110,15 @@ public class WidgetLayoutTest {
         View area = (View) card.getParent();
         assertTrue(card.getHeight() + area.getPaddingTop() <= area.getHeight());
         assertTrue(list.findViewById(R.id.widget_body).getHeight() > 0);
+        View previewFooter = (View) list.findViewById(R.id.widget_compose).getParent();
+        assertTrue(previewFooter.getTop() > area.getBottom());
+        RemoteViews liveList = new RemoteViews(context.getPackageName(), R.layout.widget_list);
+        liveList.setViewVisibility(R.id.widget_empty, View.GONE);
+        View live = liveList.apply(context, new FrameLayout(context));
+        measure(live, Math.round(220 * density), Math.round(180 * density));
+        View footer = (View) live.findViewById(R.id.widget_compose).getParent();
+        assertTrue(footer.getTop() > live.findViewById(R.id.widget_list).getBottom());
+        assertTrue(live.findViewById(R.id.widget_compose).getHeight() >= Math.round(48 * density));
     }
 
     private static void measure(View view, int width, int height) {
