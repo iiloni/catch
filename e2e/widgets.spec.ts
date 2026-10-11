@@ -19,8 +19,9 @@ async function widgetBridge(page: Page) {
             let stopped = false;
             const deliver = () => { const launch = read(); if (!stopped && launch) listener(launch); };
             window.addEventListener('widget-test-tap', deliver);
-            queueMicrotask(deliver);
-            return () => { stopped = true; window.removeEventListener('widget-test-tap', deliver); };
+            // A real bridge reply can arrive after the first page has painted.
+            const initial = setTimeout(deliver, 250);
+            return () => { stopped = true; clearTimeout(initial); window.removeEventListener('widget-test-tap', deliver); };
           }
         };
         export function watchNativeWidgets() { return () => {}; }
@@ -63,24 +64,114 @@ async function stored(page: Page) {
   });
 }
 
-test('cold widget taps open directly without painting the browsing page', async ({
-  page,
-}, info) => {
+type StartupFrames = {
+  count: number;
+  browsing: number[];
+  sawNote: boolean;
+  running: boolean;
+  captured: boolean;
+};
+
+async function recordStartupFrames(page: Page, screenshotPath: string) {
+  let capture: (image: Buffer) => void = () => {};
+  let fail: (error: unknown) => void = () => {};
+  const firstFrame = new Promise<Buffer>((resolve, reject) => {
+    capture = resolve;
+    fail = reject;
+  });
+  await page.exposeBinding('captureWidgetStartup', async () => {
+    try {
+      capture(await page.screenshot({ path: screenshotPath }));
+    } catch (error) {
+      fail(error);
+    }
+  });
+  await page.addInitScript(() => {
+    const frames: StartupFrames = {
+      count: 0,
+      browsing: [],
+      sawNote: false,
+      running: true,
+      captured: false,
+    };
+    (window as Window & { widgetStartupFrames: StartupFrames }).widgetStartupFrames = frames;
+    const visible = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      if (
+        !box.width ||
+        !box.height ||
+        box.right <= 0 ||
+        box.bottom <= 0 ||
+        box.left >= innerWidth ||
+        box.top >= innerHeight
+      )
+        return false;
+      if (getComputedStyle(element).visibility === 'hidden') return false;
+      for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor);
+        if (style.display === 'none' || Number(style.opacity) === 0) return false;
+      }
+      return true;
+    };
+    const sample = () => {
+      if (!frames.running) return;
+      frames.count++;
+      const browsing = [...document.querySelectorAll('h1')].some(
+        (heading) => /^(Gallery|Deck)$/.test(heading.textContent ?? '') && visible(heading),
+      );
+      const note = document.querySelector('[role="dialog"][data-note-color]');
+      const noteVisible = Boolean(note && visible(note));
+      // A wide-screen pane may show the browsing page beside the note once it is open.
+      if (browsing && !noteVisible && !frames.sawNote) frames.browsing.push(frames.count);
+      if (noteVisible) frames.sawNote = true;
+      const opening = [...document.querySelectorAll('[role="status"]')].some(
+        (status) => status.textContent === 'Opening note…' && visible(status),
+      );
+      if (!frames.captured && (browsing || noteVisible || opening)) {
+        frames.captured = true;
+        void (
+          window as Window & { captureWidgetStartup: () => Promise<void> }
+        ).captureWidgetStartup();
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  return { firstFrame };
+}
+
+test('cold widget taps do not paint the browsing page before the note', async ({ page }, info) => {
   await widgetBridge(page);
   await signUp(page);
   await seedNotes(page, ['Direct widget note']);
   const id = await noteId(page, 'Direct widget note');
   await stageTap(page, 'note', id, false);
+  const { firstFrame } = await recordStartupFrames(page, info.outputPath('widget-first-frame.png'));
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page).toHaveURL(new RegExp(`note=${id}`));
-  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeHidden();
   await info.attach('direct-widget-first-frame', {
-    body: await page.screenshot({ path: info.outputPath('widget-first-frame.png') }),
+    body: await firstFrame,
     contentType: 'image/png',
   });
   const editor = page.getByRole('dialog', { name: 'Edit note' });
   await expect(editor).toContainText('Direct widget note');
   await expect(editor.getByRole('textbox')).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { widgetStartupFrames: StartupFrames }).widgetStartupFrames.sawNote,
+      ),
+    )
+    .toBe(true);
+  const frames = await page.evaluate(() => {
+    const frames = (window as Window & { widgetStartupFrames: StartupFrames }).widgetStartupFrames;
+    frames.running = false;
+    return frames;
+  });
+  expect(frames.count).toBeGreaterThan(0);
+  expect(frames.browsing, 'Gallery/Deck must not appear before the first note frame').toEqual([]);
+  await expect(page).toHaveURL(new RegExp(`note=${id}`));
+
   await info.attach('direct-widget-editor', {
     body: await page.screenshot({ path: info.outputPath('widget-editor.png') }),
     contentType: 'image/png',

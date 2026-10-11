@@ -126,6 +126,7 @@ function AppLayout() {
   const activeNote = editorNote.use();
   const directNote = Boolean(note && widgetNote === note);
   const waitingForWidgetNote = directNote && activeNote?.id !== note;
+  const hideBrowsingPage = directNote && (waitingForWidgetNote || !pane.split);
 
   return (
     <>
@@ -142,7 +143,9 @@ function AppLayout() {
         style={{
           paddingRight: pane.shown ? pane.noteWidth : 0,
           top: pageBounceY,
-          visibility: directNote && !pane.split ? 'hidden' : undefined,
+          visibility: hideBrowsingPage ? 'hidden' : undefined,
+          // Headers set their own visibility; opacity also hides those descendants.
+          opacity: hideBrowsingPage ? 0 : undefined,
         }}
         inert={
           (Boolean(note) && !pane.split) ||
