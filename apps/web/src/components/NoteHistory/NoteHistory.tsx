@@ -532,6 +532,15 @@ export function NoteHistory({
       };
     });
   }, [versions, local]);
+  // Opening a version caches it, which rebuilds the list; reading these through refs keeps
+  // that from starting the work below over for every version it opens.
+  const availableNow = useRef(available);
+  availableNow.current = available;
+  const exactNow = useRef(exact);
+  exactNow.current = exact;
+  const exactKey = exact
+    .map((snapshot) => snapshot.versions.map((version) => version.id).join())
+    .join('|');
   const readSnapshot = useCallback(
     async (snapshot: Snapshot) => {
       for (const version of snapshot.versions) {
@@ -540,7 +549,7 @@ export function NoteHistory({
         const known = opened.current.get(version.id);
         if (known) return known;
         // Not on this device: it is tried once there is a connection to download it over.
-        if (!connected && !available.has(version.id)) continue;
+        if (!connected && !availableNow.current.has(version.id)) continue;
         try {
           const content = await readHistoryVersion(note.id, version.id);
           opened.current.set(version.id, content);
@@ -549,15 +558,15 @@ export function NoteHistory({
       }
       return null;
     },
-    [note.id, connected, available],
+    [note.id, connected],
   );
   // Equal content keys fold versions without opening them. Versions that differ only in
   // what does not show have different keys, so each is opened and compared with the next;
   // one that cannot be opened (not cached, offline) stays a row of its own.
   const [folds, setFolds] = useState<{
-    of: Snapshot[];
     same: Set<string>;
-    current: boolean;
+    /** The newest version, when it reads the same as the note. */
+    current: string | null;
   } | null>(null);
   const [waited, setWaited] = useState(false);
   useEffect(() => {
@@ -565,17 +574,18 @@ export function NoteHistory({
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!exact.length) return;
+    if (!exactKey) return;
+    const exact = exactNow.current;
     const controller = new AbortController();
     const alike = async (before: HistoryState, after: HistoryState) =>
       canonicalHistory(before.content) === canonicalHistory(after.content) ||
       (await compareHistoryInWorker(before, after, controller.signal)).changes === 0;
     void (async () => {
       const same = new Set<string>();
-      let current = false;
+      let current: string | null = null;
       let newer = await readSnapshot(exact[0]!);
       try {
-        if (newer) current = await alike(newer, compared);
+        if (newer && (await alike(newer, compared))) current = exact[0]!.newest.id;
         for (let index = 1; index < exact.length; index++) {
           if (controller.signal.aborted) return;
           const older = await readSnapshot(exact[index]!);
@@ -591,10 +601,10 @@ export function NoteHistory({
       } catch {
         // A comparison that fails leaves the rest as they are listed.
       }
-      if (!controller.signal.aborted && mounted.current) setFolds({ of: exact, same, current });
+      if (!controller.signal.aborted && mounted.current) setFolds({ same, current });
     })();
     return () => controller.abort();
-  }, [exact, readSnapshot, compared]);
+  }, [exactKey, readSnapshot, compared]);
   const snapshots = useMemo(() => {
     // Nothing is listed until it has been folded, so rows do not vanish under a finger.
     if (!folds && !waited) return [];
@@ -624,7 +634,8 @@ export function NoteHistory({
   const saved = useMemo(() => {
     const newest = snapshots[0]?.newest;
     if (!newest) return null;
-    return folds?.current || currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
+    return folds?.current === newest.id ||
+      currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
       ? snapshots[0]!
       : null;
   }, [entryNote, snapshots, folds]);
