@@ -17,7 +17,13 @@ import {
   RotateCcw,
   WifiOff,
 } from 'lucide-react';
-import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  type HTMLMotionProps,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
 import {
   type PointerEvent as ReactPointerEvent,
   type Ref,
@@ -164,6 +170,12 @@ const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
       ['image', 'video', 'audio', 'file'].includes(String(block.type)) ||
       (Array.isArray(block.children) && hasFiles(block.children)),
   );
+
+// A dismissed list or confirmation must stop accepting clicks while it folds away.
+function DockPanel(props: HTMLMotionProps<'div'>) {
+  const present = useIsPresent();
+  return <motion.div {...props} inert={!present} aria-hidden={!present || undefined} />;
+}
 
 /** A separate reader: choosing a version never changes the working editor. */
 export function NoteHistory({
@@ -1043,7 +1055,7 @@ export function NoteHistory({
           <div ref={dock} className="flex flex-col">
             <AnimatePresence initial={false}>
               {dockPanel && isPresent && (
-                <motion.div
+                <DockPanel
                   key="panel"
                   className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
                   initial={{ height: 0, opacity: 0 }}
@@ -1155,7 +1167,7 @@ export function NoteHistory({
                       </div>
                     )}
                   </AnimatedHeight>
-                </motion.div>
+                </DockPanel>
               )}
             </AnimatePresence>
             <div
