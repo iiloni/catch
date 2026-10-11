@@ -185,7 +185,7 @@ public class WidgetConfigurationActivity extends AppCompatActivity {
         add(
                 text(
                         "Your notes stay available offline. Previews update when you open this"
-                            + " account in Catch. Vault and shared notes stay in the app.",
+                                + " account in Catch. Vault and shared notes stay in the app.",
                         12,
                         muted),
                 0,
@@ -303,31 +303,61 @@ public class WidgetConfigurationActivity extends AppCompatActivity {
         heading.setPadding(dp(4), 0, 0, dp(16));
         ViewCompat.setAccessibilityHeading(heading, true);
         panel.addView(heading);
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout options = column();
-        for (int i = 0; i < labels.size(); i++) {
-            final int position = i;
-            TextView option = action(labels.get(i) + (i == selected ? "  ✓" : ""), i == selected);
-            option.setGravity(Gravity.CENTER_VERTICAL);
-            option.setMinHeight(dp(56));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-            params.bottomMargin = dp(6);
-            options.addView(option, params);
-            option.setOnClickListener(
-                    view -> {
-                        callback.select(position);
-                        dialog.dismiss();
-                    });
-        }
-        scroll.addView(options);
-        // Bound long note/tag pickers while allowing the outer dialog to fit a small screen.
+        android.widget.ListView options = new android.widget.ListView(this);
+        options.setDivider(
+                new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        options.setDividerHeight(dp(6));
+        options.setAdapter(
+                new android.widget.BaseAdapter() {
+                    @Override
+                    public int getCount() {
+                        return labels.size();
+                    }
+
+                    @Override
+                    public String getItem(int position) {
+                        return labels.get(position);
+                    }
+
+                    @Override
+                    public long getItemId(int position) {
+                        return position;
+                    }
+
+                    @Override
+                    public View getView(
+                            int position, View recycled, android.view.ViewGroup parent) {
+                        boolean chosen = position == selected;
+                        TextView option =
+                                recycled instanceof TextView
+                                        ? (TextView) recycled
+                                        : action("", false);
+                        option.setText(labels.get(position) + (chosen ? "  ✓" : ""));
+                        option.setTextColor(chosen ? 0xff302e29 : ink);
+                        option.setBackground(
+                                new RippleDrawable(
+                                        ColorStateList.valueOf(0x22716b60),
+                                        shape(chosen ? AMBER : control, 16),
+                                        null));
+                        option.setGravity(Gravity.CENTER_VERTICAL);
+                        option.setMinHeight(dp(56));
+                        option.setOnClickListener(
+                                view -> {
+                                    callback.select(position);
+                                    dialog.dismiss();
+                                });
+                        return option;
+                    }
+                });
+        // Recycle rows and bound the picker to half the screen, even for large accounts.
         panel.addView(
-                scroll,
+                options,
                 new LinearLayout.LayoutParams(
                         -1,
-                        Math.min(
-                                dp(labels.size() * 62),
-                                getResources().getDisplayMetrics().heightPixels / 2)));
+                        (int)
+                                Math.min(
+                                        (long) dp(62) * labels.size(),
+                                        getResources().getDisplayMetrics().heightPixels / 2)));
         TextView cancel = action("Cancel", false);
         cancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         cancel.setOnClickListener(view -> dialog.dismiss());

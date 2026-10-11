@@ -63,8 +63,7 @@ public class WidgetConfigurationTest {
                 Robolectric.buildActivity(WidgetConfigurationActivity.class, intent).setup();
         View root = controller.get().getWindow().getDecorView();
         find(root, "Show\n").performClick();
-        Dialog picker = ShadowDialog.getLatestDialog();
-        find(picker.getWindow().getDecorView(), "Gallery").performClick();
+        find(pickerRoot(), "Gallery").performClick();
         find(root, "Save widget").performClick();
         assertEquals("gallery", WidgetStore.config(context, id).optString("filter"));
         assertEquals("", WidgetStore.config(context, id).optString("target"));
@@ -78,7 +77,7 @@ public class WidgetConfigurationTest {
         ActivityController<WidgetConfigurationActivity> controller =
                 Robolectric.buildActivity(WidgetConfigurationActivity.class, intent).setup();
         find(controller.get().getWindow().getDecorView(), "Show\n").performClick();
-        find(ShadowDialog.getLatestDialog().getWindow().getDecorView(), "All notes").performClick();
+        find(pickerRoot(), "All notes").performClick();
         Bundle draft = new Bundle();
         controller.saveInstanceState(draft).pause().stop().destroy();
         controller =
@@ -98,6 +97,64 @@ public class WidgetConfigurationTest {
                 android.app.Activity.RESULT_CANCELED,
                 Shadows.shadowOf(controller.get()).getResultCode());
         controller.pause().stop().destroy();
+    }
+
+    @Test
+    public void largeNotePickerCreatesOnlyVisibleRows() throws Exception {
+        org.robolectric.shadows.ShadowAppWidgetManager manager =
+                Shadows.shadowOf(AppWidgetManager.getInstance(context));
+        AppWidgetProviderInfo info = new AppWidgetProviderInfo();
+        info.provider = new ComponentName(context, CatchWidgetProvider.Single.class);
+        manager.putWidgetInfo(id, info);
+        String session =
+                WidgetStore.begin(
+                        context,
+                        "alice",
+                        "https://catch.example",
+                        new JSONArray("[{id:'alice',label:'Alice'}]"));
+        JSONArray notes = new JSONArray();
+        for (int i = 0; i < 5000; i++)
+            notes.put(new JSONObject().put("id", "note-" + i).put("title", "Note " + i));
+        WidgetStore.sync(context, session, new JSONObject().put("version", 1).put("notes", notes));
+        ActivityController<WidgetConfigurationActivity> controller =
+                Robolectric.buildActivity(WidgetConfigurationActivity.class, intent).setup();
+        find(controller.get().getWindow().getDecorView(), "Note\n").performClick();
+        Dialog picker = ShadowDialog.getLatestDialog();
+        android.widget.ListView list = findList(picker.getWindow().getDecorView());
+        assertNotNull(list);
+        assertEquals(5000, list.getAdapter().getCount());
+        list.measure(
+                View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY));
+        list.layout(0, 0, 320, 300);
+        assertTrue(list.getChildCount() > 0);
+        assertTrue(list.getChildCount() < 20);
+        ((TextView) list.getChildAt(1)).performClick();
+        find(controller.get().getWindow().getDecorView(), "Save widget").performClick();
+        assertEquals("note-1", WidgetStore.config(context, id).optString("target"));
+        controller.pause().stop().destroy();
+    }
+
+    private static View pickerRoot() {
+        View root = ShadowDialog.getLatestDialog().getWindow().getDecorView();
+        android.widget.ListView list = findList(root);
+        list.measure(
+                View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY));
+        list.layout(0, 0, 320, 300);
+        return root;
+    }
+
+    private static android.widget.ListView findList(View view) {
+        if (view instanceof android.widget.ListView) return (android.widget.ListView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                android.widget.ListView found = findList(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private static TextView find(View view, String prefix) {

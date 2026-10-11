@@ -39,6 +39,36 @@ public class WidgetLayoutTest {
     }
 
     @Test
+    @Config(sdk = 36)
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void pickerPreviewsFitTheirMinimumSizes() {
+        Context context = RuntimeEnvironment.getApplication();
+        float density = context.getResources().getDisplayMetrics().density;
+        View capture =
+                new RemoteViews(context.getPackageName(), R.layout.widget_capture)
+                        .apply(context, new FrameLayout(context));
+        measure(capture, Math.round(260 * density), Math.round(80 * density));
+        android.widget.TextView compose = capture.findViewById(R.id.widget_compose);
+        assertTrue(
+                compose.getPaint().measureText(compose.getText().toString()) <= compose.getWidth());
+        View list =
+                new RemoteViews(context.getPackageName(), R.layout.widget_preview_list)
+                        .apply(context, new FrameLayout(context));
+        measure(list, Math.round(260 * density), Math.round(180 * density));
+        View card = (View) list.findViewById(R.id.widget_body).getParent();
+        View area = (View) card.getParent();
+        assertTrue(card.getHeight() + area.getPaddingTop() <= area.getHeight());
+        assertTrue(list.findViewById(R.id.widget_body).getHeight() > 0);
+    }
+
+    private static void measure(View view, int width, int height) {
+        view.measure(
+                View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        view.layout(0, 0, width, height);
+    }
+
+    @Test
     public void returningToDeviceAppearanceReinflatesAndDropsExplicitColors() {
         Context context = RuntimeEnvironment.getApplication();
         android.appwidget.AppWidgetHostView host = new android.appwidget.AppWidgetHostView(context);
