@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { BrandLockup } from './BrandLockup';
 
@@ -49,41 +49,53 @@ it.each([28, 40, 48, 127, 128])('keeps full detail at a %i px displayed icon', (
   );
 });
 
-it('preserves full detail when shrinking and uses an icon below the revised lockup minimum', () => {
+it('preserves full detail when shrinking and uses an icon below the revised lockup minimum', async () => {
   render(<BrandLockup orientation="horizontal" iconSize={128} channel="preview" />);
   act(() => state.resize(184.34375));
-  expect(screen.getByRole('img')).toHaveAttribute(
-    'src',
-    '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+    ),
   );
   act(() => state.resize(154));
-  expect(screen.getByRole('img')).toHaveAttribute(
-    'src',
-    '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+    ),
   );
   act(() => state.resize(120));
-  expect(screen.getByRole('img')).toHaveAttribute(
-    'src',
-    '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/wordmark/catch-lockup-horizontal-preview-dark.svg',
+    ),
   );
   act(() => state.resize(100));
-  expect(screen.getByRole('img')).toHaveAttribute('src', '/preview/favicon-mark.svg');
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/preview/icon-small.svg'),
+  );
 });
 
-it('falls back below the stacked minimum and supports a surface differing from the theme', () => {
+it('falls back below the stacked minimum and supports a surface differing from the theme', async () => {
   const { rerender } = render(
     <BrandLockup orientation="stacked" iconSize={64} channel="stable" surface="dark" />,
   );
-  expect(screen.getByRole('img')).toHaveAttribute(
-    'src',
-    '/wordmark/catch-lockup-stacked-stable-light.svg',
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/wordmark/catch-lockup-stacked-stable-light.svg',
+    ),
   );
   act(() => state.resize(119));
-  expect(screen.getByRole('img')).toHaveAttribute('src', '/icon-small.svg');
+  await waitFor(() => expect(screen.getByRole('img')).toHaveAttribute('src', '/icon-small.svg'));
   rerender(<BrandLockup orientation="horizontal" iconSize={48} />);
   act(() => state.resize(185));
-  expect(screen.getByRole('img')).toHaveAttribute(
-    'src',
-    '/wordmark/catch-lockup-horizontal-stable-dark.svg',
+  await waitFor(() =>
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/wordmark/catch-lockup-horizontal-stable-dark.svg',
+    ),
   );
 });

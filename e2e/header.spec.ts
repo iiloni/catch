@@ -189,3 +189,58 @@ test('the title and brand stay clear of the controls and status bar while the pa
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(brand).toBeVisible();
 });
+
+test('a page too narrow for the wordmark and the title pill shows their icons instead', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'A phone has no split view.');
+  // A small tablet: beside a note, the page is about as wide as a small phone.
+  await page.setViewportSize({ width: 720, height: 800 });
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 24 }, (_, index) => ({
+      title: `Note ${index + 1}`,
+      body: 'Something to scroll past',
+    })),
+  );
+  const header = page.getByRole('banner');
+  const brand = header.getByRole('img', { name: 'Catch' });
+  const pill = header.getByRole('button', { name: 'Scroll to top' });
+  const controls = header.locator('button:not([aria-label="Scroll to top"])');
+  const clearOfControls = async (box: { x: number; width: number }) => {
+    for (const control of await controls.all()) {
+      const other = await control.boundingBox();
+      if (!other) continue;
+      expect(box.x + box.width <= other.x || box.x >= other.x + other.width).toBe(true);
+    }
+  };
+
+  const wordmark = await settledBox(brand);
+  expect(wordmark.width).toBeGreaterThan(90);
+
+  await openNote(page, 'Note 24');
+  await expect(brand).toHaveAttribute('src', /favicon-mark\.svg$/);
+  await expect(brand).toHaveCount(1);
+  const icon = await settledBox(brand);
+  // The icon alone keeps the size and the place it had in the wordmark.
+  expect(icon.width).toBeCloseTo(28, 0);
+  expect(icon.x).toBeCloseTo(wordmark.x, 0);
+  expect(icon.y).toBeCloseTo(wordmark.y, 0);
+  await clearOfControls(icon);
+
+  await page.evaluate(() => window.scrollTo(0, 180));
+  await expect(brand).toBeHidden();
+  await expect(header.getByRole('heading', { name: 'Gallery' })).toBeAttached();
+  await expect(header.locator('h1 + span svg')).toBeVisible();
+  const round = await settledBox(pill);
+  expect(round.width).toBeCloseTo(50, 0);
+  await clearOfControls(round);
+
+  // With the note closed the page has the screen back, and the pill its title.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(header.locator('h1 + span svg')).toBeHidden();
+  expect((await settledBox(pill)).width).toBeGreaterThan(80);
+});

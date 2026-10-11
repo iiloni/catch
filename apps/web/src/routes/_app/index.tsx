@@ -1,6 +1,13 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { ArrowDownUp, LayoutGrid, Lightbulb, LockKeyholeOpen, Rows3 } from 'lucide-react';
+import {
+  ArrowDownUp,
+  LayoutDashboard,
+  LayoutGrid,
+  Lightbulb,
+  LockKeyholeOpen,
+  Rows3,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
@@ -103,6 +110,7 @@ function GalleryPage() {
     <>
       <TabPageHeader
         title={vault ? 'Vault' : 'Gallery'}
+        icon={LayoutDashboard}
         selection={selectionHeader(selection, 'gallery')}
         trailing={
           <>
