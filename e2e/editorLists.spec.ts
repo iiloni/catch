@@ -355,11 +355,32 @@ test('only checkbox items have a trailing delete button, with undo and persisted
   expect(target?.width).toBeGreaterThanOrEqual(44);
   expect(target?.height).toBeGreaterThanOrEqual(44);
   // An empty item's placeholder sits where its text goes, before the delete button.
-  await dialog.locator('.bn-editor [data-id="item-2"] p').click();
-  await page.keyboard.press('End');
-  // Typing lets the editor catch up with the caret before Enter splits the item there.
+  const lastItem = dialog.locator('.bn-editor [data-id="item-2"] p');
+  const textBox = await settledBox(lastItem);
+  // A center click followed immediately by End can race ProseMirror's selection sync.
+  // Click at the text's end and verify the caret before editing it.
+  await lastItem.click({ position: { x: textBox.width - 1, y: textBox.height / 2 } });
+  await expect(dialog.locator('[contenteditable="true"]')).toBeFocused();
+  await expect
+    .poll(() =>
+      lastItem.evaluate((paragraph) => {
+        const selection = window.getSelection();
+        if (
+          !selection?.isCollapsed ||
+          !selection.focusNode ||
+          !paragraph.contains(selection.focusNode)
+        ) {
+          return false;
+        }
+        const remaining = document.createRange();
+        remaining.selectNodeContents(paragraph);
+        remaining.setStart(selection.focusNode, selection.focusOffset);
+        return remaining.toString() === '';
+      }),
+    )
+    .toBe(true);
   await page.keyboard.type('!');
-  await expect(dialog.locator('.bn-editor [data-id="item-2"] p')).toHaveText('Item 2!');
+  await expect(lastItem).toHaveText('Item 2!');
   await page.keyboard.press('Enter');
   await expect(buttons).toHaveCount(4);
   const emptyRow = dialog.locator('[data-content-type="checkListItem"][data-is-empty-and-focused]');
