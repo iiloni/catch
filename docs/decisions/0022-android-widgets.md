@@ -49,8 +49,13 @@ select or display one. Shared notes are excluded from this release.
 
 **Edits happen in Catch.** Explicit activity PendingIntents are resolved against
 current widget configuration. A launch stays pending natively until acknowledged,
-so a cold start or account-switch reload does not lose it. An open editor/composer
-must close before a widget replaces it. Compose leaves the vault and uses the
+so a cold start or account-switch reload does not lose it. Taps have bounded ripple feedback. A cold note tap is resolved before the router
+mounts, and its editor appears directly without a Gallery/Deck frame or card morph.
+A warm note tap replaces the open editor in place; its edits are flushed first.
+An open composer saves and finishes closing automatically before a widget replaces it.
+Account changes also wait for queued writes to reach durable device storage before
+reloading. A valid link capture saves first; an incomplete capture remains open for
+correction or cancellation. Compose leaves the vault and uses the
 existing quick-note editor and outbox. A column widget supplies that column as the
 initial destination; other widgets create ordinary Gallery notes without inheriting
 pins or tags. Tapping a checklist opens its note; it does not change the checkbox.

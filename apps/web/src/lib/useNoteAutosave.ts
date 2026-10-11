@@ -1,7 +1,9 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { waitForWriteStored } from './collections';
 import { getNote, updateNote } from './notes';
 import { beforeVaultLock } from './vault';
+import { beforeWidgetOpen } from './widgetNavigation';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -16,6 +18,7 @@ export function useNoteAutosave(noteId: string) {
   const pending = useRef<Note['content'] | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const generation = useRef(0);
+  const lastWrite = useRef<ReturnType<typeof updateNote> | null>(null);
 
   const flush = useCallback(() => {
     window.clearTimeout(timer.current);
@@ -25,7 +28,9 @@ export function useNoteAutosave(noteId: string) {
     // Deleted elsewhere, or in a vault that has since locked: there is nothing to save to.
     if (!getNote(noteId)) return;
     const current = ++generation.current;
-    updateNote(noteId, { content }).isPersisted.promise.then(
+    const transaction = updateNote(noteId, { content });
+    lastWrite.current = transaction;
+    transaction.isPersisted.promise.then(
       () => {
         if (current === generation.current && !pending.current) setState('saved');
       },
@@ -48,8 +53,16 @@ export function useNoteAutosave(noteId: string) {
   useEffect(() => flush, [flush]);
   // A vault note must be saved while its key is still here to seal it with.
   useEffect(() => {
+    const prepare = async () => {
+      flush();
+      if (lastWrite.current) await waitForWriteStored(lastWrite.current);
+    };
     beforeVaultLock.add(flush);
-    return () => void beforeVaultLock.delete(flush);
+    beforeWidgetOpen.add(prepare);
+    return () => {
+      beforeVaultLock.delete(flush);
+      beforeWidgetOpen.delete(prepare);
+    };
   }, [flush]);
 
   return { state, save, flush };

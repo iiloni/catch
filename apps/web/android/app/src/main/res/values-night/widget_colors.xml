@@ -22,4 +22,5 @@
   <color name="widget_muted">#c4bbaa</color>
   <color name="widget_control">#454137</color>
   <color name="widget_card_default">#3b3832</color>
+  <color name="widget_feedback">#33FFFFFF</color>
 </resources>

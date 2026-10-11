@@ -29,6 +29,11 @@ export const nativeWidgets = {
     else clearedAll = true;
     if (available) await Widgets.clear({ account });
   },
+  async pending(): Promise<WidgetLaunch | null> {
+    if (!available) return null;
+    const parsed = widgetLaunchSchema.safeParse(await Widgets.pending());
+    return parsed.success ? parsed.data : null;
+  },
   acknowledge: (id: string) => Widgets.acknowledge({ id }),
   watchLaunch(listener: (launch: WidgetLaunch) => void) {
     if (!available) return () => {};

@@ -91,6 +91,7 @@ import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
 type Props = {
   noteId: string | undefined;
+  direct?: boolean;
 };
 
 /**
@@ -101,7 +102,7 @@ type Props = {
  * slides in from the screen's edge, and another note fades in over the one it replaces: the
  * page narrows under the pane, so its cards move and a morph to or from them would chase them.
  */
-export function NoteEditorOverlay({ noteId }: Props) {
+export function NoteEditorOverlay({ noteId, direct = false }: Props) {
   const { open, close } = useOpenNote();
   const { data: matches = [], isReady } = useLiveQuery(
     (q) => q.from({ note: notesCollection }).where(({ note }) => eq(note.id, noteId ?? '')),
@@ -128,7 +129,7 @@ export function NoteEditorOverlay({ noteId }: Props) {
 
   return (
     <AnimatePresence>
-      {note && <EditorSurface key={note.id} note={note} onClose={close} />}
+      {note && <EditorSurface key={note.id} note={note} onClose={close} direct={direct} />}
     </AnimatePresence>
   );
 }
@@ -197,7 +198,15 @@ const leavingPanes = new Set<() => void>();
 /** How long a note takes to fade in over the one it replaces in the pane. */
 const SWAP_MS = 250;
 
-function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
+function EditorSurface({
+  note,
+  onClose,
+  direct,
+}: {
+  note: Note;
+  onClose: () => void;
+  direct: boolean;
+}) {
   const reminder = useReminders().get(note.id);
   const popupState = quickNote.use();
   const capture = linkCaptureControls.use();
@@ -262,12 +271,12 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   // morph with, so the editor fades instead. A pane never morphs.
   const [origin] = useState(() => {
     const rect = takeOrigin(note.id);
-    return split ? null : rect;
+    return split || direct ? null : rect;
   });
   const cardRect = useRef<Rect | null>(origin);
-  const [settled, setSettled] = useState(false);
+  const [settled, setSettled] = useState(direct);
 
-  const progress = useMotionValue(0);
+  const progress = useMotionValue(direct ? 1 : 0);
   const [self] = useState(() => ({}));
   useMotionValueEvent(progress, 'change', (value) => {
     if (leadSurface === self) editorProgress.set(value);
@@ -278,7 +287,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
       if (leadSurface === self) leadSurface = null;
     };
   }, [self]);
-  const fade = useMotionValue(origin || split ? 1 : 0);
+  const fade = useMotionValue(direct || origin || split ? 1 : 0);
   const dragY = useMotionValue(0);
   // In the pane: this note fading in over the one it replaces, and that one's text fading out.
   const swap = useMotionValue(1);
@@ -365,6 +374,12 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   // then swap the preview for the real editor.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once; the key fixes the note
   useLayoutEffect(() => {
+    if (direct) {
+      editorProgress.set(1);
+      if (split) paneReveal.jump(1);
+      setSettled(true);
+      return;
+    }
     if (split) {
       for (const leave of leavingPanes) leave();
       progress.set(1);

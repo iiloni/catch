@@ -82,7 +82,44 @@ public class WidgetsInstrumentedTest {
                                         button.getHeight() >= Math.round(48 * density) - 1);
                             }
                         });
-                saveScreenshot(instrumentation, host, "widgets-" + theme + ".png");
+                saveScreenshot(instrumentation, host, "widgets-" + theme + ".png").recycle();
+                for (int id :
+                        new int[] {R.id.widget_settings, R.id.widget_compose, R.id.widget_search}) {
+                    assertPressedFeedback(
+                            instrumentation,
+                            host,
+                            () ->
+                                    ((android.view.View)
+                                                    findText(
+                                                                    host.getWindow().getDecorView(),
+                                                                    "New note")
+                                                            .getParent())
+                                            .findViewById(id),
+                            "capture-"
+                                    + host.getResources().getResourceEntryName(id)
+                                    + "-"
+                                    + theme);
+                }
+                assertPressedFeedback(
+                        instrumentation,
+                        host,
+                        () -> findById(host.getWindow().getDecorView(), R.id.widget_note),
+                        "single-" + theme);
+                assertPressedFeedback(
+                        instrumentation,
+                        host,
+                        () ->
+                                ((android.view.View)
+                                                findList(host.getWindow().getDecorView())
+                                                        .getParent())
+                                        .findViewById(R.id.widget_compose),
+                        "fab-" + theme);
+                assertPressedFeedback(
+                        instrumentation,
+                        host,
+                        () -> findList(host.getWindow().getDecorView()).getChildAt(0),
+                        "card-" + theme);
+
                 instrumentation.runOnMainSync(
                         () -> {
                             android.widget.ListView list =
@@ -135,7 +172,7 @@ public class WidgetsInstrumentedTest {
                                     configuration.setShowWhenLocked(true);
                             });
                     instrumentation.waitForIdleSync();
-                    saveScreenshot(instrumentation, configuration, "widget-setup.png");
+                    saveScreenshot(instrumentation, configuration, "widget-setup.png").recycle();
                     instrumentation.runOnMainSync(
                             () ->
                                     findText(configuration.getWindow().getDecorView(), "Show\n")
@@ -183,7 +220,75 @@ public class WidgetsInstrumentedTest {
         }
     }
 
-    private static void saveScreenshot(
+    private static void assertPressedFeedback(
+            Instrumentation instrumentation,
+            Activity activity,
+            java.util.function.Supplier<android.view.View> target,
+            String name)
+            throws Exception {
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        long down = android.os.SystemClock.uptimeMillis();
+        instrumentation.runOnMainSync(
+                () -> {
+                    android.view.View control = target.get();
+                    assertNotNull(control);
+                    assertTrue(control.getGlobalVisibleRect(bounds));
+                });
+        Bitmap before = saveScreenshot(instrumentation, activity, "feedback-before.png");
+        instrumentation.runOnMainSync(
+                () -> {
+                    android.view.MotionEvent event =
+                            android.view.MotionEvent.obtain(
+                                    down,
+                                    down,
+                                    android.view.MotionEvent.ACTION_DOWN,
+                                    bounds.centerX(),
+                                    bounds.centerY(),
+                                    0);
+                    activity.dispatchTouchEvent(event);
+                    event.recycle();
+                });
+        // Hold the finger through Android's list tap timeout and the ripple's first painted frames.
+        Thread.sleep(180);
+        Bitmap pressed =
+                saveScreenshot(instrumentation, activity, "widget-pressed-" + name + ".png");
+        instrumentation.runOnMainSync(
+                () -> {
+                    android.view.MotionEvent event =
+                            android.view.MotionEvent.obtain(
+                                    down,
+                                    android.os.SystemClock.uptimeMillis(),
+                                    android.view.MotionEvent.ACTION_CANCEL,
+                                    bounds.centerX(),
+                                    bounds.centerY(),
+                                    0);
+                    activity.dispatchTouchEvent(event);
+                    event.recycle();
+                });
+        int changed = 0;
+        for (int y = Math.max(0, bounds.top); y < Math.min(before.getHeight(), bounds.bottom); y++)
+            for (int x = Math.max(0, bounds.left);
+                    x < Math.min(before.getWidth(), bounds.right);
+                    x++) if (before.getPixel(x, y) != pressed.getPixel(x, y)) changed++;
+        before.recycle();
+        pressed.recycle();
+        assertTrue("No painted pressed feedback for " + name + ": " + changed, changed > 20);
+        Thread.sleep(250);
+    }
+
+    private static android.view.View findById(android.view.View root, int id) {
+        if (root.getId() == id) return root;
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                android.view.View found = findById(group.getChildAt(i), id);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static Bitmap saveScreenshot(
             Instrumentation instrumentation, Activity activity, String name) throws Exception {
         // Capture only this app window, never a keyguard, notification or another overlay.
         android.view.View decor = activity.getWindow().getDecorView();
@@ -208,6 +313,7 @@ public class WidgetsInstrumentedTest {
                                 name))) {
             screenshot.compress(Bitmap.CompressFormat.PNG, 100, stream);
         }
+        return screenshot;
     }
 
     private static android.widget.ListView findList(android.view.View view) {
@@ -249,7 +355,7 @@ public class WidgetsInstrumentedTest {
                     });
             if (!ready[0]) Thread.sleep(50);
         }
-        if (!ready[0]) saveScreenshot(instrumentation, host, "widgets-failed.png");
+        if (!ready[0]) saveScreenshot(instrumentation, host, "widgets-failed.png").recycle();
         assertTrue("Expected " + expected + " visible note titles, found " + actual[0], ready[0]);
     }
 

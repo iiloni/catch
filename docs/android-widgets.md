@@ -12,7 +12,10 @@ and One note keep their settings buttons.
 
 Previews refresh while that account is open in Catch, including offline edits.
 The last preview remains available with Catch closed. Vault notes and shared
-copies never appear. Taps open Catch; checklists are read-only in the launcher.
+copies never appear. Buttons and cards show ripple feedback when pressed. A note opens directly in
+Catch without briefly showing Gallery or Deck. Tapping another note switches the
+editor automatically and saves the previous note or composer first. Account switches
+wait for those edits to reach device storage. Checklists are read-only in the launcher.
 New notes from a Deck-column list start in that column; other widgets create
 Gallery notes without automatically adding tags or pins.
 
@@ -39,6 +42,8 @@ The instrumented test renders all three widgets through a real AppWidgetHost in
 light and dark, then verifies visible content clears and recovers as the account
 snapshot is removed and restored. It verifies the last list card scrolls above the
 floating New note button and that launcher reconfiguration remains registered.
+It holds touches on capture buttons, the single note, list cards and the floating
+New note button, comparing painted window pixels to verify ripple feedback in both themes.
 It also opens the custom setup dialog, chooses All notes and saves the configuration.
 This test requires API 29 or newer;
 Robolectric covers the minimum API separately. **Run it only on a disposable emulator**: it
@@ -64,3 +69,11 @@ install. The screenshots below were captured this way on Android API 37. They sh
 [Dark appearance](screenshots/android-widgets-dark.png)
 
 [Custom setup](screenshots/android-widget-setup.png)
+
+[Pressed note card](screenshots/android-widget-pressed.png)
+
+`./scripts/dev.sh e2e e2e/widgets.spec.ts --workers=1` exercises cold routing,
+editor replacement with pending keystrokes, automatic composer saving and capture
+from an open editor. These tests use the real editor and outbox with the native
+launch bridge mocked, and save painted startup/editor frames. Run the same cases
+with `E2E_FIREFOX=1` and `--project=firefox` for desktop Firefox coverage.

@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { type Rect, setOrigin } from './noteTransition';
+import { widgetNoteOpening } from './widgetNavigation';
 
 /** The note whose editor was opened by pushing a history entry in this session. */
 let pushedNoteId: string | null = null;
@@ -52,21 +53,24 @@ export function useOpenNote() {
     (id: string, source?: Element | Rect) => {
       const current = new URLSearchParams(window.location.search).get('note');
       if (current === id) return;
-      if (source) setOrigin(id, source);
+      if (source) {
+        widgetNoteOpening.set(null);
+        setOrigin(id, source);
+      }
       // Switching notes (in the pane beside the page) swaps the entry, so back still closes
       // the note in one step and never walks through every note opened on the way.
       if (current) {
         if (current === pushedNoteId) pushedNoteId = id;
-        void navigate({ to: '.', search: (prev) => ({ ...prev, note: id }), ...IN_PLACE });
-        return;
+        return navigate({ to: '.', search: (prev) => ({ ...prev, note: id }), ...IN_PLACE });
       }
       pushedNoteId = id;
-      void navigate({ to: '.', search: (prev) => ({ ...prev, note: id }), resetScroll: false });
+      return navigate({ to: '.', search: (prev) => ({ ...prev, note: id }), resetScroll: false });
     },
     [navigate],
   );
 
   const close = useCallback(() => {
+    widgetNoteOpening.set(null);
     const current = new URLSearchParams(window.location.search).get('note');
     // Going back (rather than pushing a note-less URL) keeps history free of editor
     // entries, so the back gesture never reopens a note that was just closed.

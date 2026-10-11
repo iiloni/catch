@@ -10,10 +10,12 @@ import { rememberHomePage, restoreHomePage } from './lib/homePage';
 import { startKeyboardTracking } from './lib/keyboard';
 import { keepScrollAcrossNotes } from './lib/openNote';
 import { initializeWebUpdates } from './lib/webUpdates';
+import { prepareInitialWidgetLaunch } from './lib/widgetLaunch';
 import { routeTree } from './routeTree.gen';
 import './styles.css';
 
 document.documentElement.dataset.platform = Capacitor.getPlatform();
+const switchingWidgetAccount = await prepareInitialWidgetLaunch();
 restoreHomePage();
 
 const router = createRouter({
@@ -44,8 +46,9 @@ initializeWebUpdates();
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');
 
-createRoot(root).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>,
-);
+if (!switchingWidgetAccount)
+  createRoot(root).render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>,
+  );
