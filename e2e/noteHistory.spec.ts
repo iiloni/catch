@@ -562,8 +562,28 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   await expect(removed).toHaveCount(0);
   await changes.click();
   await expect(removed).toBeVisible();
-  // The earliest version has none before it to be read against.
-  await chooseVersion(page, 'Earlier content');
+  // The earliest version has none before it to be read against. Holding the dock's
+  // selector opens the list under the finger, and letting go on a version reads it.
+  const selector = await settledBox(dock.getByRole('button', { name: 'Choose a version' }));
+  const start = { x: selector.x + selector.width / 2, y: selector.y + selector.height / 2 };
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+  await expect(list).toBeVisible();
+  const row = await settledBox(list.getByRole('option').filter({ hasText: 'Earlier content' }));
+  const end = row.y + row.height / 2;
+  for (let step = 1; step <= 6; step++)
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: start.x, y: start.y + ((end - start.y) * step) / 6 }],
+    });
+  // Rest before lifting: a touch lifted while moving is a fling, which drops the next tap.
+  await page.waitForTimeout(200);
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: start.x, y: end }],
+  });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(list).toBeHidden();
   const version = history.getByRole('region', { name: 'Version preview' });
   await expect(version).toContainText('Dock history original');
   await expect(history).toContainText('This is the earliest saved version.');

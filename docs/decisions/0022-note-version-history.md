@@ -138,7 +138,9 @@ portal so its state stays in one place). Where the reader is at least 640 pixels
 versions are listed beside the one being read, with Clear history under them, and the dock
 holds Save as new note and Restore original. Narrower, the dock names the version being
 read and grows upward into the list, as it grows for a note's palette; the list has no
-search, since a note keeps at most 128 versions named by their times. Clear history sits at
+search, since a note keeps at most 128 versions named by their times. Holding the dock's
+selector, or sliding off it, opens the list under the finger and letting go on a version
+reads it, as the dock picks a Settings page (ADR 0003). Clear history sits at
 the top of that list and its confirmation takes the list's place. Clearing leaves the
 reader, which has nothing left to show. Versions that follow each other with the same
 content key are listed as one snapshot, at the time of the earliest: saving a note that has

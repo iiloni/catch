@@ -24,7 +24,16 @@ import {
   useIsPresent,
   useReducedMotion,
 } from 'motion/react';
-import { type Ref, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  type PointerEvent as ReactPointerEvent,
+  type Ref,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -40,6 +49,7 @@ import { waitForWriteStored } from '@/lib/collections';
 import { historyDockSlot } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { historyRecordsForNote, subscribeHistoryStorage } from '@/lib/historyStorage';
+import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import {
   clearNoteHistory,
@@ -109,6 +119,39 @@ type Snapshot = {
   newest: HistoryVersion;
 };
 
+/**
+ * The version under a point on screen, for a finger sliding up from the dock's selector. The
+ * selector holds pointer capture, so this is a geometric hit test, as for Settings' pages:
+ * a row takes the finger anywhere across the list's width. Rows scrolled out of the list
+ * are not under it.
+ */
+function historyEntryAt(root: ParentNode | null, x: number, y: number): string | null {
+  const list = root?.querySelector<HTMLElement>('[role=listbox]');
+  if (!list) return null;
+  const bounds = list.getBoundingClientRect();
+  if (x < bounds.left - 24 || x > bounds.right + 24) return null;
+  if (y < bounds.top - 32 || y > bounds.bottom + 8) return null;
+  let nearest: { id: string; distance: number } | null = null;
+  for (const row of list.querySelectorAll<HTMLElement>('[data-history-entry]')) {
+    const rect = row.getBoundingClientRect();
+    const middle = (rect.top + rect.bottom) / 2;
+    if (middle < bounds.top || middle > bounds.bottom) continue;
+    const distance = Math.abs(y - middle);
+    const id = row.dataset.historyEntry;
+    if (id && (!nearest || distance < nearest.distance)) nearest = { id, distance };
+  }
+  return nearest?.id ?? null;
+}
+type Hold = {
+  pointerId: number;
+  x: number;
+  y: number;
+  timer: number;
+  /** The list is open under the finger. */
+  holding: boolean;
+  entry: string | null;
+};
+
 /** A version keeps its files' places, not their bytes, which may since have been deleted. */
 const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
   blocks.some(
@@ -141,6 +184,10 @@ export function NoteHistory({
   const dock = useRef<HTMLDivElement>(null);
   const controlId = useId();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The version under a finger held on the dock's selector; the list marks it.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hold = useRef<Hold | null>(null);
+  useEffect(() => () => window.clearTimeout(hold.current?.timer), []);
   // Beside the reader the versions are always listed, and the dock has no list to open.
   const panelOpen = pickerOpen && !wide;
   useEffect(() => {
@@ -541,6 +588,63 @@ export function NoteHistory({
     };
   }, [before, showChanges, note.id, connected, available]);
   const earlierState = before && earlier?.id === before.id ? earlier.state : undefined;
+  // Holding the dock's selector (or sliding off it) opens the list under the finger, and
+  // letting go on a version reads it, as the dock picks a Settings page.
+  function endHold() {
+    window.clearTimeout(hold.current?.timer);
+    hold.current = null;
+    setHovered(null);
+  }
+  function openUnderFinger() {
+    const held = hold.current;
+    if (!held || held.holding) return;
+    window.clearTimeout(held.timer);
+    held.holding = true;
+    haptics.longPress();
+    setClearContext(null);
+    setPickerOpen(true);
+  }
+  function onHoldStart(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    endHold();
+    hold.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: window.setTimeout(openUnderFinger, HOLD_MS),
+      holding: false,
+      entry: null,
+    };
+  }
+  function onHoldMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const held = hold.current;
+    if (held?.pointerId !== event.pointerId) return;
+    if (!held.holding) {
+      const distance = Math.hypot(event.clientX - held.x, event.clientY - held.y);
+      if (distance <= LONG_PRESS_TOLERANCE) return;
+      openUnderFinger();
+    }
+    const entry = historyEntryAt(dock.current, event.clientX, event.clientY);
+    if (entry === held.entry) return;
+    held.entry = entry;
+    if (entry) haptics.selection();
+    setHovered(entry);
+  }
+  function onHoldEnd(event: ReactPointerEvent<HTMLButtonElement>) {
+    const held = hold.current;
+    if (held?.pointerId !== event.pointerId) return;
+    endHold();
+    if (!held.holding) return;
+    swallowNextClick();
+    // Hit-test at release too: the last move may have been dropped. Letting go anywhere
+    // else leaves the list open to tap.
+    const id = historyEntryAt(dock.current, event.clientX, event.clientY) ?? held.entry;
+    const entry = entries.find((row) => row.id === id);
+    if (!entry) return;
+    setPickerOpen(false);
+    void select(entry.snapshot);
+  }
   const transition = reducedMotion ? { duration: 0 } : springs.snappy;
   const { review, failed: reviewFailed } = useHistoryReview(
     showChanges ? (earlierState ?? null) : null,
@@ -963,11 +1067,13 @@ export function NoteHistory({
                         >
                           {entries.map((entry) => {
                             const chosen = chosenId === entry.id;
+                            const marked = hovered ? hovered === entry.id : chosen;
                             return (
                               <button
                                 key={entry.id}
                                 type="button"
                                 role="option"
+                                data-history-entry={entry.id}
                                 aria-selected={chosen}
                                 disabled={busy}
                                 onClick={() => {
@@ -978,7 +1084,7 @@ export function NoteHistory({
                                 className={cn(
                                   dockButton,
                                   'flex min-h-14 shrink-0 items-center gap-3 px-4 py-2 text-left disabled:opacity-50',
-                                  chosen
+                                  marked
                                     ? 'bg-foreground/[0.08] text-foreground shadow-[inset_0_1px_0_var(--glass-highlight)]'
                                     : 'text-foreground/80',
                                 )}
@@ -1017,9 +1123,14 @@ export function NoteHistory({
                     setClearContext(null);
                     setPickerOpen(!panelOpen);
                   }}
+                  onPointerDown={onHoldStart}
+                  onPointerMove={onHoldMove}
+                  onPointerUp={onHoldEnd}
+                  onPointerCancel={endHold}
+                  onContextMenu={(event) => event.preventDefault()}
                   className={cn(
                     dockButton,
-                    'flex h-full min-w-0 flex-1 items-center gap-2.5 pr-2 pl-3 text-left disabled:opacity-50',
+                    'flex h-full min-w-0 flex-1 touch-none select-none items-center gap-2.5 pr-2 pl-3 text-left [-webkit-touch-callout:none] disabled:opacity-50',
                     panelOpen &&
                       'bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]',
                   )}
