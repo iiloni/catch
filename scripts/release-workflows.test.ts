@@ -310,6 +310,7 @@ function promote(
           return { data: { object: target() } };
         },
         getTag: async (input: Record<string, unknown>) => {
+          assert.equal(input.tag_sha, target().sha);
           record('getTag', input);
           annotationDepth--;
           return { data: { object: target() } };

@@ -33,7 +33,8 @@ jobs:
             echo '::error::Configure signing secrets and set RELEASES_ENABLED=true before creating a release.'
             exit 1
           fi
-      # Only pinned inline code executes; neither the selected ref nor the preview is checked out.
+      # The action is pinned; inline code comes from the dispatched workflow ref.
+      # No repository checkout or preview-tag code executes in this job.
       - name: Promote preview tag
         id: promotion
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8

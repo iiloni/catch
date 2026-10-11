@@ -30,8 +30,11 @@ and preview must advance independently, including preview versions ahead of stab
 - The manually dispatched `promote-release.yml` workflow accepts an explicit preview tag,
   resolves its commit through the GitHub API (for annotated or lightweight tags), and
   creates the matching annotated stable tag at that commit. It then dispatches `release.yml`
-  on the stable tag to check CI and build stable artifacts. Only pinned inline action code
-  executes, with no checkout or repository dependencies. Promotion shares the tag-creation
+  on the stable tag to check CI and build stable artifacts. A pinned action executes inline
+  code from the dispatched workflow ref, with no checkout or repository dependencies.
+  As with the existing release workflows, workflow YAML and authorized repository writers
+  are trusted; dispatch promotion from the default branch to use its reviewed workflow.
+  Promotion shares the tag-creation
   queue, requires releases to be enabled, and never overwrites an existing stable tag.
   The selected workflow ref does not choose the release commit; newer work can remain on
   main while an earlier preview is promoted. The local helper remains available too.
