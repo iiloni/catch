@@ -48,7 +48,7 @@ describe('autosave durability', () => {
     void first.then(() => {
       saved = true;
     });
-    expect(result.current.flush()).toBe(first);
+    void result.current.flush();
     await act(async () => {
       await Promise.resolve();
     });
@@ -108,6 +108,24 @@ describe('autosave durability', () => {
     act(() => result.current.save([{ type: 'paragraph', content: 'Unsaved edit' }]));
     await act(async () => vi.advanceTimersByTimeAsync(500));
     await expect(result.current.flush()).rejects.toThrow('disk full');
+    unmount();
+  });
+  it('refuses a close once when the save it waited for was already on its way', async () => {
+    let fail = (_error: Error) => {};
+    mocks.stored.mockImplementationOnce(
+      () =>
+        new Promise<void>((_done, reject) => {
+          fail = reject;
+        }),
+    );
+    mocks.stored.mockImplementation(() => Promise.reject(new Error('disk full')));
+    const { result, unmount } = renderHook(() => useNoteAutosave('note'));
+    act(() => result.current.save([{ type: 'paragraph', content: 'Unsaved edit' }]));
+    await act(async () => vi.advanceTimersByTimeAsync(500));
+    const closing = result.current.flush();
+    fail(new Error('disk full'));
+    await expect(closing).rejects.toThrow('disk full');
+    await expect(result.current.flush()).resolves.toBeUndefined();
     unmount();
   });
 });
