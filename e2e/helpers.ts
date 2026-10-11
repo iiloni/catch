@@ -20,6 +20,23 @@ export function bearerToken(response: APIResponse) {
 }
 
 /**
+ * Tests report an on-screen keyboard by setting `keyboardHeight`, which holds in Chromium
+ * because its VirtualKeyboard API never fires there. Firefox lacks that API, so the app
+ * measures the visual viewport instead and puts the height back to zero at the next focus
+ * change. A keyboard that never moves, in the API's place, lets the reported height stand.
+ */
+async function keepReportedKeyboard(page: Page) {
+  await page.addInitScript(() => {
+    if ('virtualKeyboard' in navigator) return;
+    const keyboard = Object.assign(new EventTarget(), {
+      overlaysContent: false,
+      boundingRect: new DOMRect(),
+    });
+    Object.defineProperty(navigator, 'virtualKeyboard', { value: keyboard });
+  });
+}
+
+/**
  * Signs up a fresh user, so each test starts with no notes. The account is made through the
  * API and its session stored as the app stores one, which takes one page load where the form
  * takes two. `auth.spec.ts` covers the form.
@@ -47,6 +64,7 @@ export async function signUp(page: Page) {
       },
     ],
   });
+  if (context.browser()?.browserType().name() === 'firefox') await keepReportedKeyboard(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,

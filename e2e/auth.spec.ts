@@ -20,6 +20,8 @@ test('signing in returns to the linked note, including after a failed attempt an
   await page.goto(destination);
   await expect(page).toHaveURL(/\/login\?/);
   expect(new URL(page.url()).searchParams.get('redirect')).toBe(destination);
+  // Firefox reports a reload that interrupts the sign-in page's own loading as failed.
+  await expect(page.getByLabel('Email')).toBeVisible();
   await page.reload();
 
   await page.getByLabel('Email').fill(email);

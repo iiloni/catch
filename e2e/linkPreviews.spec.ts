@@ -112,7 +112,7 @@ test('the dock tray fades away and its overlay gathers media above links', async
     const { addAttachment } = await import('/src/lib/attachments.ts');
     const bytes = Uint8Array.from(
       atob(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=',
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
       ),
       (char) => char.charCodeAt(0),
     );
