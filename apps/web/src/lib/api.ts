@@ -12,6 +12,15 @@ import type {
   CreateNotes,
   CreateTag,
   CreateVaultNote,
+  HistoryArchive,
+  HistoryCapture,
+  HistoryCaptureResult,
+  HistoryClear,
+  HistoryClearResult,
+  HistoryList,
+  HistoryRestore,
+  HistoryRestoreContext,
+  HistoryRestoreResult,
   InvitesResponse,
   LinkIntake,
   ListUsers,
@@ -81,6 +90,47 @@ async function request<T>(path: string, init: RequestInit & { as?: string }): Pr
 }
 
 export const api = {
+  history: (id: string, cursor?: number, signal?: AbortSignal) =>
+    request<HistoryList>(`/note-history/${id}${cursor ? `?cursor=${cursor}` : ''}`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal,
+    }),
+  historyVersion: (id: string, versionId: string, signal?: AbortSignal) =>
+    request<HistoryArchive>(`/note-history/${id}/versions/${versionId}`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal,
+    }),
+  captureHistory: (id: string, body: HistoryCapture) =>
+    request<HistoryCaptureResult>(`/note-history/${id}/captures`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  clearHistory: (id: string, body: HistoryClear) =>
+    request<HistoryClearResult>(`/note-history/${id}/clear`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    }),
+  historyRestoreContext: (id: string) =>
+    request<HistoryRestoreContext>(`/note-history/${id}/restore-context`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
+    }),
+  restoreHistory: (id: string, body: HistoryRestore) =>
+    request<HistoryRestoreResult>(`/note-history/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    }),
+  historyRestoreReceipt: (id: string, operationId: string) =>
+    request<HistoryRestoreResult>(`/note-history/${id}/restores/${operationId}`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
+    }),
   createTag: (body: CreateTag) =>
     request<TxidResponse>('/tags', { method: 'POST', body: JSON.stringify(body) }),
   updateTag: (id: string, body: UpdateTag) =>

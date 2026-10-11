@@ -89,6 +89,8 @@ test('a code block highlights its language and can be set to another', async ({ 
   await expect(dialog).toBeVisible();
   await expect(language).toHaveText('JavaScript');
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page).not.toHaveURL(/[?&]note=/);
+  await expect(dialog).toBeHidden();
   await page.reload();
   const reopened = await openNote(page, 'Snippet');
   await expect(reopened.getByRole('button', { name: /^Code language/ })).toHaveText('JavaScript');

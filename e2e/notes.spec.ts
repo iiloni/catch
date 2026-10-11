@@ -520,6 +520,7 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   await expect(toolbar.getByRole('button')).toHaveCount(5);
   await expect(toolbar.getByRole('button').nth(1)).toHaveAccessibleName('Tags');
   await expect(toolbar.getByRole('button').nth(2)).toHaveAccessibleName('Attach files');
+  await expect(toolbar.getByRole('button').nth(4)).toHaveAccessibleName('Reminder');
   await expect(toolbar.getByRole('button').last()).toHaveAccessibleName('Reminder');
   await opened.getByRole('button', { name: 'Pin', exact: true }).click();
   await opened.getByRole('button', { name: 'Archive', exact: true }).click();
@@ -533,6 +534,7 @@ test('archive from the note header, undo restoring the pin, and unarchive', asyn
   const restored = await openNote(page, 'Old receipts');
   await expect(restored.getByRole('button', { name: 'Unpin' })).toBeVisible();
   await restored.getByRole('button', { name: 'Close' }).click();
+  await expect(page).not.toHaveURL(/note=/);
 
   // Reopened while it is still closing, the editor has to close again.
   const reopened = await noteAction(page, 'Old receipts', 'Archive');

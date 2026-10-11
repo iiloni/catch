@@ -185,3 +185,32 @@ describe('recovery codes', () => {
     expect(parseRecoveryCode('1'.repeat(32))).toBeNull();
   });
 });
+
+describe('vault history', () => {
+  it('deduplicates identities within a note while binding ciphertext to owner, epoch and representation', async () => {
+    const { vaultHistoryIdentity, sealVaultHistory, openVaultHistory } = await import(
+      './vaultCrypto'
+    );
+    const key = (await createVaultKey(USER, 'history', ROUNDS)).raw;
+    const context = { userId: USER, noteId: NOTE, epoch: NOTE };
+    const bytes = new TextEncoder().encode('private version content');
+    const payloadKey = vaultHistoryIdentity(key, context, 'payload:snapshot', bytes);
+    const sealed = sealVaultHistory(key, context, 'snapshot', payloadKey, bytes);
+    expect(openVaultHistory(key, context, 'snapshot', payloadKey, sealed)).toEqual(bytes);
+    expect(sealVaultHistory(key, context, 'snapshot', payloadKey, bytes)).not.toBe(sealed);
+    for (const other of [
+      { ...context, userId: 'other' },
+      { ...context, noteId: 'other' },
+      { ...context, epoch: 'other' },
+    ]) {
+      expect(vaultHistoryIdentity(key, other, 'payload:snapshot', bytes)).not.toBe(payloadKey);
+      expect(() => openVaultHistory(key, other, 'snapshot', payloadKey, sealed)).toThrow();
+    }
+    expect(() => openVaultHistory(key, context, 'delta', payloadKey, sealed)).toThrow();
+    const tampered = fromBase64(sealed);
+    tampered[tampered.length - 1] = tampered[tampered.length - 1]! ^ 1;
+    expect(() =>
+      openVaultHistory(key, context, 'snapshot', payloadKey, toBase64(tampered)),
+    ).toThrow();
+  });
+});

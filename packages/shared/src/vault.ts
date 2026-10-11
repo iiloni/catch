@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { attachmentSchema } from './attachments';
+import { historyWriteSchema } from './historyWrite';
 import { noteColorSchema, noteContentSchema, notePositionSchema, noteStatusSchema } from './notes';
 import { reminderSchema } from './reminders';
 
@@ -65,7 +66,9 @@ export const createVaultNoteSchema = vaultNoteSchema
   .partial({ createdAt: true });
 export type CreateVaultNote = z.infer<typeof createVaultNoteSchema>;
 
-export const updateVaultNoteSchema = vaultNoteSchema.pick({ data: true });
+export const updateVaultNoteSchema = vaultNoteSchema.pick({ data: true }).extend({
+  history: historyWriteSchema.optional(),
+});
 export type UpdateVaultNote = z.infer<typeof updateVaultNoteSchema>;
 
 /**

@@ -1,4 +1,4 @@
-import type { Note } from '@catch/shared';
+import type { HistoryRestoreResult, Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
 import { Archive, ArchiveRestore, ChevronLeft, Pin, Share2, Trash2 } from 'lucide-react';
 import {
@@ -8,15 +8,18 @@ import {
   useMotionValue,
   useMotionValueEvent,
   usePresence,
+  useReducedMotion,
   useTransform,
 } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
+import { NoteHistory } from '@/components/NoteHistory/NoteHistory';
 import { NoteLinks } from '@/components/NoteLinks/NoteLinks';
 import { NoteMedia } from '@/components/NoteMedia/NoteMedia';
 import { NotePreview } from '@/components/NotePreview/NotePreview';
@@ -39,6 +42,7 @@ import {
   editorControls,
   editorScrollToBottom,
   noteDockPanelOpen,
+  noteHistoryOpen,
   noteReminderRequest,
   quickNote,
   tagFormOpen,
@@ -54,6 +58,7 @@ import {
   springs,
   stopSteady,
 } from '@/lib/motion';
+import { freezeHistory } from '@/lib/noteHistory';
 import {
   deleteNoteForever,
   discardIfEmpty,
@@ -85,7 +90,7 @@ import {
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
 import { cn } from '@/lib/utils';
-import { isVaultNote, openIfVaultNote, useVaultNote } from '@/lib/vault';
+import { isVaultNote, openIfVaultNote, openVaultHistoryNote, useVaultNote } from '@/lib/vault';
 import { useEditorDock } from './useEditorDock';
 import { MAX_DRAG, useSwipeToDismiss } from './useSwipeToDismiss';
 
@@ -185,6 +190,9 @@ function cssPixels(length: string) {
   return pixels;
 }
 
+/** The narrowest note that lists its versions beside the one being read. */
+const HISTORY_LIST_MIN = 640;
+
 const SCROLL_OPTIONS = { capture: true, passive: true } as const;
 
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
@@ -205,21 +213,73 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   const hasTags = useResolvedNoteTags(note.id).length > 0;
   const [isPresent, safeToRemove] = usePresence();
   const [, rerender] = useState(0);
+  const { state, save, flush, cancel } = useNoteAutosave(note.id);
   // The back button, Escape and an outside click can all fire for one close.
   const closing = useRef(false);
   /** Calls off the pane's slide in while it is still waiting to start. */
   const cancelSlide = useRef(() => {});
-  const requestClose = () => {
+  const requestClose = async () => {
+    if (noteHistoryOpen.get()) {
+      noteHistoryOpen.set(false);
+      return;
+    }
     if (closing.current) return;
     closing.current = true;
-    onClose();
+    try {
+      await flush();
+      // History reports its own storage failures; the working note has already been saved.
+      await freezeHistory(note.id).catch(() => {});
+      onClose();
+    } catch (error) {
+      closing.current = false;
+      toast.error('Could not save this note on your device', {
+        description: error instanceof Error ? error.message : 'Try closing the note again.',
+      });
+    }
   };
   // AnimatePresence brings the same instance back if its note is reopened before it finishes
   // closing, and that note has to be able to close again.
   useEffect(() => {
     if (isPresent) closing.current = false;
   }, [isPresent]);
-  const { state, save, flush } = useNoteAutosave(note.id);
+  const historyOpen = noteHistoryOpen.use();
+  const historyReturnScroll = useRef<number | null>(null);
+  const [historyReady, setHistoryReady] = useState(false);
+  const [restoredContent, setRestoredContent] = useState<Note['content'] | null>(null);
+  const [editorGeneration, setEditorGeneration] = useState(0);
+  useEffect(() => {
+    if (historyOpen && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (!historyOpen) {
+      setHistoryReady(false);
+      return;
+    }
+    let active = true;
+    void flush()
+      .then(() => freezeHistory(note.id))
+      .then(() => {
+        if (active) setHistoryReady(true);
+      })
+      .catch(() => {
+        if (active) setHistoryReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyOpen, flush, note.id]);
+  // One flag serves every surface, so a note opened over another's reader starts as a note.
+  useLayoutEffect(() => {
+    noteHistoryOpen.set(false);
+    return () => noteHistoryOpen.set(false);
+  }, []);
+  const historyRestored = (result: HistoryRestoreResult) => {
+    cancel();
+    historyReturnScroll.current = 0;
+    setRestoredContent(
+      result.note?.content ??
+        (result.vaultNote ? openVaultHistoryNote(note.id, result.vaultNote.data).content : null),
+    );
+    setEditorGeneration((value) => value + 1);
+  };
   const pane = useNotePane();
   // Leaving for the Deck closes the note on a page that does not split, so a closing note
   // keeps the layout it had: a pane slides away rather than turning into a panel.
@@ -242,10 +302,10 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   targetRef.current = target;
   const shared = isSharedNote(note);
   const owner = useSharedNoteOwner(note.id);
-  const editable = !note.deletedAt && !shared;
+  const editable = !note.deletedAt && !shared && !historyOpen;
   const hasLink = useNoteShares().has(note.id);
   const [controls, setControls] = useState<EditorControls | null>(null);
-  useEditorDock(note, controls, isPresent);
+  useEditorDock(note, historyOpen ? null : controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
   const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia || hasTags);
@@ -410,7 +470,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
   // shrink into the note's card, or fade out when it has none.
   useEffect(() => {
     if (isPresent) return;
-    flush();
+    void flush().catch(() => {});
     const discarded = discardIfEmpty(note.id);
 
     if (splitRef.current) {
@@ -492,6 +552,26 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     enabled: isPresent && !split,
   });
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (!scrollElement) return;
+    if (historyOpen) {
+      historyReturnScroll.current ??= scrollElement.scrollTop;
+      return;
+    }
+    const top = historyReturnScroll.current;
+    if (top === null) return;
+    historyReturnScroll.current = null;
+    scrollElement.scrollTop = top;
+    // BlockNote updates its editable view after commit. Restore again after that work,
+    // and focus the footer without scrolling the caret into view or raising the keyboard.
+    const frame = requestAnimationFrame(() => {
+      scrollElement
+        .querySelector<HTMLElement>('[data-note-history-entry]')
+        ?.focus({ preventScroll: true });
+      scrollElement.scrollTop = top;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [historyOpen, scrollElement]);
   const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false, far: false });
   const attachScroll = useCallback(
     (element: HTMLDivElement | null) => {
@@ -540,6 +620,25 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
     };
   }, [offerScrollToBottom, scrollElement]);
 
+  const reducedMotion = useReducedMotion();
+  const closeHistory = () => {
+    noteHistoryOpen.set(false);
+  };
+  // The reader leaves by the pull that closes a note, and the note it was over stays.
+  const historyScrollRef = useSwipeToDismiss({
+    dragY,
+    onDismiss: () => {
+      closeHistory();
+      animate(dragY, 0, springs.snappy);
+    },
+    enabled: isPresent && !split && historyOpen,
+  });
+  // Shared with the reader, whose toolbar takes this one's place without moving.
+  const headerSpacing = cn(
+    // In the pane the toolbars line up with the card's edges below them.
+    split ? 'pr-3 pb-3' : 'px-3 pb-1 sm:px-4',
+    target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
+  );
   const scrollArea = (
     <ScrollArea
       data-note-color={color}
@@ -569,9 +668,9 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           {settled ? (
             <LazyNoteEditor
               // The editor reads its content once, and a shared note changes under its reader.
-              key={shared ? note.updatedAt.getTime() : undefined}
+              key={shared ? note.updatedAt.getTime() : editorGeneration}
               noteId={note.id}
-              initialContent={note.content}
+              initialContent={restoredContent ?? note.content}
               onChange={save}
               onControls={setControls}
               editable={editable}
@@ -604,7 +703,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
               {owner ? `Shared by ${owner}` : 'Shared with you'} · Read only
             </p>
           )}
-          <NoteTimestamp updatedAt={note.updatedAt} />
+          <NoteTimestamp updatedAt={note.updatedAt} history={!shared} />
           {/* Tapping the blank space below the note writes at its end, as tapping paper would. */}
           <div
             aria-hidden
@@ -628,7 +727,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           <motion.div
             aria-hidden
             // Its own layer, so dimming the page does not draw the page again each frame.
-            className="pointer-events-none fixed inset-0 z-50 bg-black will-change-[opacity]"
+            className="pointer-events-none fixed inset-0 z-[49] bg-black will-change-[opacity]"
             style={{ opacity: backdropOpacity }}
           />
         )}
@@ -640,7 +739,11 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => {
             // Fold a picker or editor menu before Escape leaves the note.
-            if (noteDockPanelOpen.get() || document.querySelector('.bn-menu-dropdown[data-open]')) {
+            if (
+              historyOpen ||
+              noteDockPanelOpen.get() ||
+              document.querySelector('.bn-menu-dropdown[data-open]')
+            ) {
               event.preventDefault();
             }
           }}
@@ -648,7 +751,7 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
           // target on click, after a re-render may have replaced it (Pin becomes Unpin), so a
           // detached target counts as ours too. Beside the page, the page is not outside.
           onInteractOutside={(event) => {
-            if (split || tagFormOpen.get() || capture) {
+            if (historyOpen || split || tagFormOpen.get() || capture) {
               event.preventDefault();
               return;
             }
@@ -715,167 +818,226 @@ function EditorSurface({ note, onClose }: { note: Note; onClose: () => void }) {
                 y: contentY,
               }}
             >
-              {fullscreen && (
-                <>
-                  <div
-                    aria-hidden
-                    className="page-top-blur pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(var(--safe-top)+8rem)] transition-opacity duration-200"
-                    style={{ opacity: scrollEdges.top ? 1 : 0 }}
-                  />
-                  <div
-                    aria-hidden
-                    className="page-bottom-blur pointer-events-none absolute inset-x-0 bottom-[var(--keyboard)] z-10 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
-                    style={{ opacity: scrollEdges.bottom ? 1 : 0 }}
-                  />
-                </>
-              )}
-              <header
-                data-note-header
-                className={cn(
-                  'flex shrink-0 items-center gap-2',
-                  fullscreen && 'absolute inset-x-0 top-0 z-20',
-                  // In the pane the toolbars line up with the card's edges below them.
-                  split ? 'pr-3 pb-3' : 'px-3 pb-1 sm:px-4',
-                  target.radius === 0 ? 'pt-[calc(var(--safe-top)+0.5rem)]' : 'pt-3',
-                )}
+              <motion.div
+                inert={historyOpen}
+                aria-hidden={historyOpen || undefined}
+                className="flex min-h-0 flex-1 flex-col"
+                initial={false}
+                animate={{
+                  opacity: historyOpen ? 0 : 1,
+                  x: historyOpen && !reducedMotion ? -16 : 0,
+                }}
+                transition={reducedMotion ? { duration: 0 } : springs.smooth}
               >
-                <div className="relative shrink-0">
-                  <div className="glass flex rounded-[var(--dock-radius)] p-1">
-                    <IconButton
-                      label="Close"
-                      onClick={requestClose}
-                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
-                    >
-                      <ChevronLeft />
-                    </IconButton>
-                  </div>
-                  {editable && (
-                    <HistoryToolbar
-                      controls={controls}
-                      className={cn(
-                        'absolute top-0 left-[calc(100%+0.25rem)] hidden',
-                        !narrowPane && 'sm:flex',
-                      )}
+                {fullscreen && (
+                  <>
+                    <div
+                      aria-hidden
+                      className="page-top-blur pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(var(--safe-top)+8rem)] transition-opacity duration-200"
+                      style={{ opacity: scrollEdges.top ? 1 : 0 }}
                     />
-                  )}
-                </div>
-                <div
+                    <div
+                      aria-hidden
+                      className="page-bottom-blur pointer-events-none absolute inset-x-0 bottom-[var(--keyboard)] z-10 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
+                      style={{ opacity: scrollEdges.bottom ? 1 : 0 }}
+                    />
+                  </>
+                )}
+                <header
+                  data-note-header
                   className={cn(
-                    'pointer-events-none relative h-[50px] min-w-0 flex-1',
-                    // Balance the buttons on the right so the centered pill clears history in
-                    // narrow panes. A phone has no history there and no width to spare.
-                    editable && !narrowPane && (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
+                    'flex shrink-0 items-center gap-2',
+                    fullscreen && 'absolute inset-x-0 top-0 z-20',
+                    headerSpacing,
                   )}
                 >
-                  <SaveStatus state={state} compact={narrowPane} />
-                </div>
-                <div className="glass flex shrink-0 items-center rounded-[var(--dock-radius)] p-1">
-                  {!note.deletedAt && !note.isArchived && (
-                    <>
+                  <div className="relative shrink-0">
+                    <div className="glass flex rounded-[var(--dock-radius)] p-1">
                       <IconButton
-                        label={note.isPinned ? 'Unpin' : 'Pin'}
-                        aria-pressed={note.isPinned}
+                        label="Close"
+                        onClick={requestClose}
+                        className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                      >
+                        <ChevronLeft />
+                      </IconButton>
+                    </div>
+                    {editable && (
+                      <HistoryToolbar
+                        controls={controls}
+                        className={cn(
+                          'absolute top-0 left-[calc(100%+0.25rem)] hidden',
+                          !narrowPane && 'sm:flex',
+                        )}
+                      />
+                    )}
+                  </div>
+                  <div
+                    className={cn(
+                      'pointer-events-none relative h-[50px] min-w-0 flex-1',
+                      // Balance the buttons on the right so the centered pill clears history in
+                      // narrow panes. A phone has no history there and no width to spare.
+                      editable &&
+                        !narrowPane &&
+                        (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
+                    )}
+                  >
+                    <SaveStatus state={state} compact={narrowPane} />
+                  </div>
+                  <div className="glass flex shrink-0 items-center rounded-[var(--dock-radius)] p-1">
+                    {!note.deletedAt && !note.isArchived && (
+                      <>
+                        <IconButton
+                          label={note.isPinned ? 'Unpin' : 'Pin'}
+                          aria-pressed={note.isPinned}
+                          onPointerDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            haptics.toggle();
+                            setNotePinned(note.id, !note.isPinned);
+                          }}
+                          className={cn(
+                            'size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6',
+                            note.isPinned && 'bg-foreground/[0.08]',
+                          )}
+                        >
+                          <Pin className={cn(note.isPinned && 'fill-current')} />
+                        </IconButton>
+                        <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
+                      </>
+                    )}
+                    {editable && !isVaultNote(note.id) && (
+                      <>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <IconButton
+                              label="Share"
+                              onClick={() => haptics.toggle()}
+                              className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                            >
+                              <Share2 className={cn(hasLink && 'fill-current')} />
+                            </IconButton>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            aria-label="Share"
+                            align="end"
+                            sideOffset={12}
+                            collisionPadding={16}
+                            // Named so the note does not take a tap in here for a tap outside it.
+                            data-share-panel
+                            className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
+                          >
+                            <SharePanel note={note} getContent={controls?.getContent} />
+                          </PopoverContent>
+                        </Popover>
+                        <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
+                      </>
+                    )}
+                    {!note.deletedAt && (
+                      <IconButton
+                        label={note.isArchived ? 'Unarchive' : 'Archive'}
                         onPointerDown={(event) => event.preventDefault()}
                         onClick={() => {
-                          haptics.toggle();
-                          setNotePinned(note.id, !note.isPinned);
+                          haptics.selection();
+                          void flush().catch(() => {});
+                          setNoteArchived(note.id, !note.isArchived);
+                          if (!note.isArchived) requestClose();
                         }}
-                        className={cn(
-                          'size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6',
-                          note.isPinned && 'bg-foreground/[0.08]',
-                        )}
+                        className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
                       >
-                        <Pin className={cn(note.isPinned && 'fill-current')} />
+                        {note.isArchived ? <ArchiveRestore /> : <Archive />}
                       </IconButton>
-                      <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
-                    </>
+                    )}
+                    {/* A shared note is not the reader's to trash; the dock removes it. */}
+                    {!shared && (
+                      <IconButton
+                        label={editable ? 'Move to trash' : 'Delete forever'}
+                        onClick={() => {
+                          haptics.warning();
+                          if (editable) trashNote(note.id);
+                          else deleteNoteForever(note.id);
+                          requestClose();
+                        }}
+                        className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] text-destructive hover:text-destructive [&_svg]:size-6"
+                      >
+                        <Trash2 />
+                      </IconButton>
+                    )}
+                  </div>
+                </header>
+
+                <div
+                  className={cn(
+                    'flex min-h-0 flex-1',
+                    sideLinks &&
+                      'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] gap-3',
                   )}
-                  {editable && !isVaultNote(note.id) && (
-                    <>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <IconButton
-                            label="Share"
-                            onClick={() => haptics.toggle()}
-                            className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
-                          >
-                            <Share2 className={cn(hasLink && 'fill-current')} />
-                          </IconButton>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          aria-label="Share"
-                          align="end"
-                          sideOffset={12}
-                          collisionPadding={16}
-                          // Named so the note does not take a tap in here for a tap outside it.
-                          data-share-panel
-                          className="z-[70] w-96 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
-                        >
-                          <SharePanel note={note} getContent={controls?.getContent} />
-                        </PopoverContent>
-                      </Popover>
-                      <span aria-hidden className="mx-1 h-6 w-px bg-foreground/15" />
-                    </>
-                  )}
-                  {!note.deletedAt && (
-                    <IconButton
-                      label={note.isArchived ? 'Unarchive' : 'Archive'}
-                      onPointerDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        haptics.selection();
-                        flush();
-                        setNoteArchived(note.id, !note.isArchived);
-                        if (!note.isArchived) requestClose();
-                      }}
-                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                >
+                  {scrollArea}
+                  {sideLinks && (
+                    <motion.aside
+                      className="min-h-0 w-64 shrink-0"
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={springs.smooth}
                     >
-                      {note.isArchived ? <ArchiveRestore /> : <Archive />}
-                    </IconButton>
-                  )}
-                  {/* A shared note is not the reader's to trash; the dock removes it. */}
-                  {!shared && (
-                    <IconButton
-                      label={editable ? 'Move to trash' : 'Delete forever'}
-                      onClick={() => {
-                        haptics.warning();
-                        if (editable) trashNote(note.id);
-                        else deleteNoteForever(note.id);
-                        requestClose();
-                      }}
-                      className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] text-destructive hover:text-destructive [&_svg]:size-6"
-                    >
-                      <Trash2 />
-                    </IconButton>
+                      <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
+                        <ScrollAreaViewport className="pb-6">
+                          <NoteTags noteId={note.id} className="mb-4" />
+                          <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
+                          <NoteLinks note={note} variant="side" />
+                        </ScrollAreaViewport>
+                        <ScrollBar />
+                      </ScrollArea>
+                    </motion.aside>
                   )}
                 </div>
-              </header>
-
-              <div
-                className={cn(
-                  'flex min-h-0 flex-1',
-                  sideLinks &&
-                    'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] gap-3',
-                )}
-              >
-                {scrollArea}
-                {sideLinks && (
-                  <motion.aside
-                    className="min-h-0 w-64 shrink-0"
-                    initial={{ opacity: 0, x: 16 }}
+              </motion.div>
+              <AnimatePresence>
+                {historyOpen && (
+                  <motion.div
+                    key="note-history"
+                    className={cn(
+                      'absolute inset-0 z-30 flex min-h-0 flex-col',
+                      // Full screen it covers the note and stops above the dock, which holds
+                      // its versions; a panel or a pane already ends there.
+                      fullscreen &&
+                        'bg-note pb-[calc(var(--dock-height)+var(--dock-bottom)+0.5rem)]',
+                    )}
+                    initial={{ opacity: 0, x: reducedMotion ? 0 : 24 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={springs.smooth}
+                    exit={{ opacity: 0, x: reducedMotion ? 0 : 24, pointerEvents: 'none' }}
+                    transition={reducedMotion ? { duration: 0 } : springs.smooth}
                   >
-                    <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
-                      <ScrollAreaViewport className="pb-6">
-                        <NoteTags noteId={note.id} className="mb-4" />
-                        <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
-                        <NoteLinks note={note} variant="side" />
-                      </ScrollAreaViewport>
-                      <ScrollBar />
-                    </ScrollArea>
-                  </motion.aside>
+                    {historyReady ? (
+                      <NoteHistory
+                        note={note}
+                        onClose={closeHistory}
+                        onRestored={historyRestored}
+                        split={split}
+                        wide={target.width >= HISTORY_LIST_MIN}
+                        headerClassName={headerSpacing}
+                        scrollRef={historyScrollRef}
+                      />
+                    ) : (
+                      <div className="flex flex-1 flex-col">
+                        <div className={cn('flex', headerSpacing)}>
+                          <div className="glass flex rounded-[var(--dock-radius)] p-1">
+                            <IconButton
+                              label="Back to note"
+                              onClick={closeHistory}
+                              className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-6"
+                            >
+                              <ChevronLeft />
+                            </IconButton>
+                          </div>
+                        </div>
+                        <p role="status" className="px-5 pt-4 text-muted-foreground text-sm">
+                          Saving the current version…
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
                 )}
-              </div>
+              </AnimatePresence>
             </motion.div>
           </motion.div>
         </DialogPrimitive.Content>

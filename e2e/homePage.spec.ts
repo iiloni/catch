@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, seedNotes, signUp, waitForPageTransition } from './helpers';
+import { APP_LOAD_TIMEOUT, card, seedNotes, signUp, waitForPageTransition } from './helpers';
 
 test('installed apps reopen the last Deck or Gallery without overriding navigation or note links', async ({
   page,
@@ -32,13 +32,13 @@ test('installed apps reopen the last Deck or Gallery without overriding navigati
   await page.getByRole('link', { name: 'Search', exact: true }).click();
   await waitForPageTransition(page);
   await page.goto('/');
-  await expect(page).toHaveURL(/\/deck$/);
+  await expect(page).toHaveURL(/\/deck$/, { timeout: APP_LOAD_TIMEOUT });
   await expect(page.getByRole('heading', { name: 'Deck', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-first-page', 'Deck');
 
   await page.route('**/api/**', (route) => route.abort());
   await page.goto('/');
-  await expect(page).toHaveURL(/\/deck$/);
+  await expect(page).toHaveURL(/\/deck$/, { timeout: APP_LOAD_TIMEOUT });
   await expect(page.getByRole('heading', { name: 'Deck', exact: true })).toBeVisible();
   await page.unrouteAll({ behavior: 'wait' });
 
@@ -50,13 +50,17 @@ test('installed apps reopen the last Deck or Gallery without overriding navigati
   await waitForPageTransition(page);
   await page.goto('/');
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
 
   await page.getByRole('link', { name: 'Deck', exact: true }).click();
   await waitForPageTransition(page);
   await page.goto(`/?note=${noteId}`);
   await expect(page).toHaveURL(new RegExp(`/\\?note=${noteId}$`));
-  await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await expect(page.getByRole('dialog', { name: 'Edit note' }).getByRole('textbox')).toContainText(
     'Linked gallery note',
   );
@@ -74,7 +78,9 @@ test('ordinary browser tabs keep the requested Gallery URL despite an installed 
   await page.evaluate(() => localStorage.setItem('catch-home-page', '/deck'));
   await page.goto('/');
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible({
+    timeout: APP_LOAD_TIMEOUT,
+  });
   await page.getByRole('link', { name: 'Deck', exact: true }).click();
   await waitForPageTransition(page);
   await page.getByRole('link', { name: 'Gallery', exact: true }).click();

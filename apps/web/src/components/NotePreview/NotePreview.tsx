@@ -1,3 +1,4 @@
+import { REVIEW_DELETED, REVIEW_INSERTED } from '@catch/shared';
 import type { ReactNode } from 'react';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { codeLanguageName } from '@/lib/codeLanguages';
@@ -64,10 +65,14 @@ function renderInline(content: unknown, variant: Variant, key = 0, reading = fal
   if (typeof content.text !== 'string') return null;
 
   const styles = isObject(content.styles) ? content.styles : {};
+  // A comparison of two versions marks the words one of them lacks (ADR 0022).
+  const Run = styles[REVIEW_INSERTED] ? 'ins' : styles[REVIEW_DELETED] ? 'del' : 'span';
   return (
-    <span
+    <Run
       key={key}
       className={cn(
+        Run === 'ins' && 'review-inserted',
+        Run === 'del' && 'review-deleted',
         Boolean(styles.bold) && (variant === 'editor' ? 'font-bold' : 'font-semibold'),
         Boolean(styles.italic) && 'italic',
         Boolean(styles.underline) && 'underline',
@@ -76,7 +81,7 @@ function renderInline(content: unknown, variant: Variant, key = 0, reading = fal
       )}
     >
       {content.text}
-    </span>
+    </Run>
   );
 }
 

@@ -10,6 +10,9 @@ import {
   createNoteShareSchema,
   createTagSchema,
   createVaultNoteSchema,
+  historyArchiveSchema,
+  historyCaptureResultSchema,
+  historySummarySchema,
   type LinkPreview,
   linkPreviewSchema,
   MAX_NOTES_PER_REQUEST,
@@ -73,6 +76,15 @@ import {
 } from './attachmentFiles';
 import { getAuthToken, resolveSignedInUser } from './auth';
 import { CompatibilityError } from './compatibility';
+import { historyOriginId, historyUploaded, takeHistoryContentKey } from './historyEvents';
+import {
+  cacheHistoryVersion,
+  deleteHistoryStorage,
+  getHistoryRecord,
+  markHistoryRejected,
+  markHistoryUploaded,
+  storeHistoryRecord,
+} from './historyStorage';
 import {
   createOnlineDetector,
   createOutboxStorage,
@@ -364,6 +376,28 @@ export const vaultNotesCollection = createCollection(
   ),
 );
 
+/** Only the small control row is synced; history payloads are fetched on demand. */
+export const noteHistoryCollection = createCollection(
+  persisted(
+    electricCollectionOptions({
+      id: 'note-history',
+      schema: historySummarySchema,
+      getKey: (row) => row.id,
+      shapeOptions: {
+        url: `${getServerUrl()}/api/shapes/note-history`,
+        fetchClient: shapeFetch,
+        headers: { Authorization: () => `Bearer ${getAuthToken() ?? ''}` },
+        columnMapper: snakeCamelMapper(),
+        parser: { timestamptz: (value: string) => new Date(value) },
+      },
+    }),
+    1,
+  ),
+);
+
+// Controls must stay hydrated even before the viewer opens: queued captures await this shape.
+if (user) noteHistoryCollection.subscribeChanges(() => {}, { includeInitialState: true });
+
 /** Settles once a change the vault's own requests made has synced back, or after a wait. */
 export const awaitVaultSync = (txid: number | null) =>
   txid === null
@@ -371,6 +405,7 @@ export const awaitVaultSync = (txid: number | null) =>
     : vaultCollection.utils.awaitTxId(txid, SYNC_WAIT_MS).catch(() => false);
 
 const writableCollections = {
+  noteHistory: noteHistoryCollection,
   noteShares: noteSharesCollection,
   sharedNotes: sharedNotesCollection,
   notes: notesCollection,
@@ -390,13 +425,19 @@ const SYNC_WAIT_MS = 30_000;
  * optimistic state hands over to synced rows without flicker. The outbox retries whatever
  * this throws, except `NonRetriableError`, which drops the write and rolls it back.
  */
-async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
+async function pushWrites({
+  transaction,
+  idempotencyKey,
+}: Parameters<OfflineConfig['mutationFns'][string]>[0]) {
   let sent: { collectionId: string; txid: TxidResponse['txid'] }[];
   try {
     sent = [];
     // Notes and parents must exist before dependent rows. Preserve mutation order,
     // also during a retry after only the first requests reached the server.
-    for (const { collectionId, request } of requestsFor(transaction.mutations)) {
+    for (const { collectionId, request } of requestsFor(transaction.mutations, {
+      idempotencyKey,
+      metadata: transaction.metadata,
+    })) {
       sent.push({ collectionId, txid: (await request())?.txid ?? null });
     }
   } catch (error) {
@@ -422,7 +463,10 @@ async function pushWrites({ transaction }: Parameters<OfflineConfig['mutationFns
  * The API calls a transaction makes. New notes go together, a request's worth at a time,
  * so an import or a copy of many notes does not send a request for each.
  */
-function requestsFor(mutations: readonly PendingMutation[]) {
+function requestsFor(
+  mutations: readonly PendingMutation[],
+  transaction: { idempotencyKey: string; metadata: unknown },
+) {
   const newNotes = mutations.filter(
     (mutation) => mutation.collection.id === notesCollection.id && mutation.type === 'insert',
   );
@@ -456,7 +500,10 @@ function requestsFor(mutations: readonly PendingMutation[]) {
           Object.keys(mutation.changes).every((key) => key === 'color')
         ),
     )
-    .map((mutation) => ({ collectionId: mutation.collection.id, request: () => send(mutation) }));
+    .map((mutation) => ({
+      collectionId: mutation.collection.id,
+      request: () => send(mutation, transaction),
+    }));
   for (let start = 0; start < batched.size; start += MAX_NOTES_PER_REQUEST) {
     const chunk = newNotes.slice(start, start + MAX_NOTES_PER_REQUEST);
     requests.splice(start / MAX_NOTES_PER_REQUEST, 0, {
@@ -471,8 +518,21 @@ function requestsFor(mutations: readonly PendingMutation[]) {
 }
 
 /** The API call for one mutation, or null when there is nothing to send. */
-function send(mutation: PendingMutation): Promise<TxidResponse> | null {
+function send(
+  mutation: PendingMutation,
+  transaction: { idempotencyKey: string; metadata: unknown },
+): Promise<TxidResponse> | null {
   const key = String(mutation.key);
+  const metadata = z
+    .object({ originId: z.string(), contentKeys: z.record(z.string(), z.string()).optional() })
+    .safeParse(transaction.metadata);
+  const history = {
+    operationId: transaction.idempotencyKey,
+    originId: metadata.success ? metadata.data.originId : transaction.idempotencyKey,
+    contentKey: metadata.success ? metadata.data.contentKeys?.[key] : undefined,
+  };
+  if (mutation.collection.id === noteHistoryCollection.id)
+    return sendHistoryCapture(String(mutation.modified.latestCaptureId));
   if (mutation.collection.id === notesCollection.id) {
     switch (mutation.type) {
       case 'insert':
@@ -482,7 +542,7 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
         // Saving unchanged content leaves only `updatedAt`, which the server owns. Such a
         // write changes no synced column, so Electric would never stream its txid back.
         if (Object.keys(changes).length === 0) return null;
-        return api.updateNote(key, changes);
+        return api.updateNote(key, { ...changes, history });
       }
       case 'delete':
         return api.deleteNote(key);
@@ -562,7 +622,10 @@ function send(mutation: PendingMutation): Promise<TxidResponse> | null {
         return api.createVaultNote(createVaultNoteSchema.parse(mutation.modified));
       case 'update':
         // A note is sealed whole, so the latest `data` is the whole change.
-        return api.updateVaultNote(key, updateVaultNoteSchema.parse(mutation.modified));
+        return api.updateVaultNote(key, {
+          ...updateVaultNoteSchema.parse(mutation.modified),
+          history,
+        });
       case 'delete':
         return api.deleteVaultNote(key);
     }
@@ -667,13 +730,25 @@ for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
  * them, which offline can be much later.
  */
 export function write(mutate: () => void): Transaction {
+  const contentKeys: Record<string, string> = {};
+  const metadata = { originId: historyOriginId, contentKeys };
   const offline = executor.createOfflineTransaction({
     mutationFnName: 'push',
     autoCommit: false,
     // Ordered within a millisecond, unlike the outbox's own times (see `mergeQueuedWrites`).
     idempotencyKey: uuidv7(),
+    metadata,
   });
   const transaction = offline.mutate(mutate);
+  for (const mutation of transaction.mutations) {
+    if (
+      mutation.collection.id !== vaultNotesCollection.id ||
+      typeof mutation.modified.data !== 'string'
+    )
+      continue;
+    const key = takeHistoryContentKey(mutation.modified.data);
+    if (key) contentKeys[String(mutation.key)] = key;
+  }
   addPendingWrite(transaction.id);
   offline.commit().then(
     () => settlePendingWrite(transaction.id),
@@ -759,6 +834,7 @@ export async function clearLocalData() {
   await clearAttachmentFiles();
   if (user) await clearIncomingShares(user.id);
   if (user) await forgetVault(user.id);
+  if (user) await deleteHistoryStorage(user.id);
   await database?.destroy();
   if (user) deleteOutbox(user.id);
 }
@@ -1081,3 +1157,79 @@ export function useSharedNotesReady() {
   useEffect(() => sharedNotesCollection.onFirstReady(() => setReady(true)), []);
   return ready;
 }
+
+function historyErrorCode(error: unknown) {
+  if (!(error instanceof ApiError)) return null;
+  try {
+    return z.object({ code: z.string() }).parse(JSON.parse(error.message)).code;
+  } catch {
+    return null;
+  }
+}
+async function sendHistoryCapture(id: string): Promise<TxidResponse> {
+  let record = await getHistoryRecord(id);
+  if (!record?.capture || record.rejected) return { txid: null };
+  try {
+    let result: Awaited<ReturnType<typeof api.captureHistory>>;
+    try {
+      result = await api.captureHistory(record.noteId, record.capture);
+    } catch (error) {
+      if (historyErrorCode(error) !== 'HISTORY_PARENT_MISSING' || !record.fallback) throw error;
+      record = { ...record, capture: record.fallback };
+      await storeHistoryRecord(record);
+      result = await api.captureHistory(record.noteId, record.capture!);
+    }
+    const parsed = historyCaptureResultSchema.parse(result);
+    if (parsed.version && parsed.version.id !== id) {
+      const archive = historyArchiveSchema.parse(
+        await api.historyVersion(record.noteId, parsed.version.id),
+      );
+      for (const version of archive.versions) await cacheHistoryVersion(version);
+    }
+    if (parsed.version)
+      for (const listener of historyUploaded) listener(record.noteId, id, parsed.version);
+    await markHistoryUploaded(id, parsed.version);
+    return { txid: parsed.txid };
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      (error.status === 404 || error.status === 409 || error.status === 413)
+    ) {
+      await markHistoryRejected(id);
+      toast.error('A local version could not be added to history', {
+        description: 'It is still available on this device to save as a new note.',
+      });
+      return { txid: null };
+    }
+    throw error;
+  }
+}
+/** A restore waits for this note's queued edits, not unrelated uploads. */
+export async function waitForNoteWritesSynced(noteId: string) {
+  await waitForPendingWritesStored();
+  const deadline = Date.now() + 15_000;
+  while (
+    (await executor.peekOutbox()).some((tx) =>
+      tx.mutations.some((mutation) => String(mutation.key) === noteId),
+    )
+  ) {
+    if (!onlineDetector.isConnected()) throw new Error('Connect to restore the original note.');
+    if (Date.now() >= deadline)
+      throw new Error('This note is still syncing. Try again in a moment.');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+export async function queuedHistoryCaptureIds() {
+  return new Set(
+    (await executor.peekOutbox()).flatMap((tx) =>
+      tx.mutations
+        .filter((mutation) => mutation.collection.id === noteHistoryCollection.id)
+        .map((mutation) => String(mutation.modified.latestCaptureId)),
+    ),
+  );
+}
+// Import after collection initialization so recovery can queue durable history jobs.
+if (user)
+  void import('./noteHistory')
+    .then((history) => history.startHistory())
+    .catch(() => toast.error('History could not start on this device.'));

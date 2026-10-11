@@ -4,6 +4,7 @@ import {
   type AnyPgColumn,
   boolean,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -429,4 +430,123 @@ export const vaultNotes = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [index().on(table.userId)],
+);
+
+/** Small synced controls; payloads and timeline entries are fetched on demand (ADR 0022). */
+export const noteHistory = pgTable(
+  'note_history',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: text({ enum: ['note', 'vault'] }).notNull(),
+    epoch: uuid().notNull(),
+    contentToken: uuid().notNull(),
+    latestCaptureId: uuid(),
+    versionCount: integer().notNull().default(0),
+    nextSequence: integer().notNull().default(0),
+    firstSequence: integer().notNull().default(1),
+    lastOriginId: uuid(),
+    lastContentKey: text(),
+    lastCheckpointAt: timestamp({ withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index().on(table.userId), uniqueIndex().on(table.userId, table.id)],
+);
+
+/** Payload equality is scoped to one note/epoch; vault bytes and identities are sealed. */
+export const historyPayloads = pgTable(
+  'history_payloads',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid().notNull(),
+    epoch: uuid().notNull(),
+    key: text().notNull(),
+    data: bytea().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.noteId, table.epoch, table.key] }),
+    foreignKey({
+      columns: [table.userId, table.noteId],
+      foreignColumns: [noteHistory.userId, noteHistory.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+export const historyVersions = pgTable(
+  'history_versions',
+  {
+    id: uuid().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid().notNull(),
+    epoch: uuid().notNull(),
+    sequence: integer().notNull(),
+    capturedAt: timestamp({ withTimezone: true }).notNull(),
+    receivedAt: createdAt(),
+    reason: text({
+      enum: ['baseline', 'edit', 'before-restore', 'restored', 'recovered'],
+    }).notNull(),
+    representation: text({ enum: ['snapshot', 'delta', 'vault-note'] }).notNull(),
+    parentId: uuid(),
+    depth: integer().notNull(),
+    contentKey: text().notNull(),
+    payloadKey: text().notNull(),
+    sourceKey: text(),
+    format: integer().notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex().on(table.userId, table.noteId, table.epoch, table.sequence),
+    foreignKey({
+      columns: [table.userId, table.noteId],
+      foreignColumns: [noteHistory.userId, noteHistory.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+/** High-water marks outlive retention: an old queued operation cannot become a new edit. */
+export const historyOrigins = pgTable(
+  'history_origins',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid().notNull(),
+    originId: uuid().notNull(),
+    kind: text({ enum: ['write', 'capture'] }).notNull(),
+    lastOperationId: uuid().notNull(),
+    digest: text().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.noteId, table.originId, table.kind] }),
+    foreignKey({
+      columns: [table.userId, table.noteId],
+      foreignColumns: [noteHistory.userId, noteHistory.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+/** Restore receipts keep only identity/outcome, never another copy of note content. */
+export const historyRestores = pgTable(
+  'history_restores',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: uuid().notNull(),
+    operationId: uuid().notNull(),
+    digest: text().notNull(),
+    resultToken: uuid().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.noteId, table.operationId] }),
+    foreignKey({
+      columns: [table.userId, table.noteId],
+      foreignColumns: [noteHistory.userId, noteHistory.id],
+    }).onDelete('cascade'),
+  ],
 );

@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Signing in reloads the page to open that user's local database. The dev server sends the
 // app unbundled, so on a busy machine that load far outlasts the default five seconds.
-const APP_LOAD_TIMEOUT = 30_000;
+export const APP_LOAD_TIMEOUT = 30_000;
 
 const signUpResponse = z.object({
   user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
@@ -57,7 +57,7 @@ export async function signUp(page: Page) {
 /** Signs in as a user `signUp` created, as on another device. */
 export async function signIn(page: Page, email: string) {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await expect(page).toHaveURL(/\/login(?:\?|$)/, { timeout: APP_LOAD_TIMEOUT });
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in' }).click();
