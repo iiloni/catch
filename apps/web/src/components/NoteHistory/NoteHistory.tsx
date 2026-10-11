@@ -49,13 +49,13 @@ import { waitForWriteStored } from '@/lib/collections';
 import { historyDockSlot } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { historyRecordsForNote, subscribeHistoryStorage } from '@/lib/historyStorage';
-import { compareHistoryInWorker } from '@/lib/historyWorker';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import {
   clearNoteHistory,
   currentHistoryKey,
   historyList,
+  historyReadingKey,
   prepareHistoryRestore,
   readHistoryVersion,
   resolveHistoryRestore,
@@ -110,8 +110,12 @@ const failure = (error: unknown) => {
 /**
  * Versions that follow each other and read the same, listed as one: saving a note that has
  * not changed, the server and this device both keeping what an edit replaced, or a save that
- * only changed what does not show (a block's id, a default the editor wrote out).
+ * only changed what does not show (a block's id, a default the editor wrote out). Each
+ * version carries a key naming how it reads, so none has to be opened to tell.
  */
+const readsSame = (one: HistoryVersion, other: HistoryVersion) =>
+  one.contentKey === other.contentKey ||
+  (one.readingKey !== null && one.readingKey === other.readingKey);
 type Snapshot = {
   id: string;
   /** The ones to read, a restorable one first; any of them is the snapshot. */
@@ -154,14 +158,6 @@ type Hold = {
   holding: boolean;
   entry: string | null;
 };
-
-/**
- * Whether one version reads the same as the next, by their ids. Versions never change, so
- * an answer holds for as long as the page does; it is kept in memory only, as a vault's is.
- */
-const readsSame = new Map<string, boolean>();
-/** The list waits this long for versions to be compared before showing them unfolded. */
-const FOLD_WAIT_MS = 4000;
 
 /** A version keeps its files' places, not their bytes, which may since have been deleted. */
 const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
@@ -514,11 +510,12 @@ export function NoteHistory({
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
   const detail = (version: HistoryVersion) =>
     `${label(version)} · ${local.has(version.id) ? 'On this device' : available.has(version.id) ? 'Cached' : 'Download to review'}`;
-  const exact = useMemo(() => {
+  const snapshots = useMemo(() => {
     const runs: HistoryVersion[][] = [];
     for (const version of versions) {
       const run = runs.at(-1);
-      if (run?.[0]?.contentKey === version.contentKey) run.push(version);
+      const newer = run?.at(-1);
+      if (run && newer && readsSame(newer, version)) run.push(version);
       else runs.push([version]);
     }
     return runs.map((run): Snapshot => {
@@ -535,15 +532,10 @@ export function NoteHistory({
       };
     });
   }, [versions, local]);
-  // Opening a version caches it, which rebuilds the list; reading these through refs keeps
-  // that from starting the work below over for every version it opens.
+  // Opening a version caches it, which rebuilds the list; read through a ref, that does not
+  // start the reads below over.
   const availableNow = useRef(available);
   availableNow.current = available;
-  const exactNow = useRef(exact);
-  exactNow.current = exact;
-  const exactKey = exact
-    .map((snapshot) => snapshot.versions.map((version) => version.id).join())
-    .join('|');
   const readSnapshot = useCallback(
     async (snapshot: Snapshot) => {
       for (const version of snapshot.versions) {
@@ -563,93 +555,17 @@ export function NoteHistory({
     },
     [note.id, connected],
   );
-  // Equal content keys fold versions without opening them. Versions that differ only in
-  // what does not show have different keys, so each is opened and compared with the next;
-  // one that cannot be opened (not cached, offline) stays a row of its own.
-  const [folds, setFolds] = useState<{
-    same: Set<string>;
-    /** The newest version, when it reads the same as the note. */
-    current: string | null;
-  } | null>(null);
-  const [waited, setWaited] = useState(false);
-  const listed = exact.length > 0;
-  useEffect(() => {
-    if (!listed) return;
-    const timer = window.setTimeout(() => setWaited(true), FOLD_WAIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [listed]);
-  useEffect(() => {
-    if (!exactKey) return;
-    const exact = exactNow.current;
-    const controller = new AbortController();
-    const alike = async (before: HistoryState, after: HistoryState) =>
-      canonicalHistory(before.content) === canonicalHistory(after.content) ||
-      (await compareHistoryInWorker(before, after, controller.signal)).changes === 0;
-    void (async () => {
-      const same = new Set<string>();
-      let current: string | null = null;
-      // A version is opened only for a pair whose answer is not already known.
-      const states: Promise<HistoryState | null>[] = [];
-      const state = (index: number) => (states[index] ??= readSnapshot(exact[index]!));
-      try {
-        const newest = await state(0);
-        if (newest && (await alike(newest, compared))) current = exact[0]!.newest.id;
-        for (let index = 1; index < exact.length; index++) {
-          if (controller.signal.aborted) return;
-          const pair = `${exact[index]!.newest.id}:${exact[index - 1]!.first.id}`;
-          let answer = readsSame.get(pair);
-          if (answer === undefined) {
-            const older = await state(index);
-            const newer = await state(index - 1);
-            if (older && newer) {
-              answer = await alike(older, newer);
-              readsSame.set(pair, answer);
-            }
-          }
-          if (answer) same.add(exact[index]!.id);
-        }
-      } catch {
-        // A comparison that fails leaves the rest as they are listed.
-      }
-      if (!controller.signal.aborted && mounted.current) setFolds({ same, current });
-    })();
-    return () => controller.abort();
-  }, [exactKey, readSnapshot, compared]);
-  // Nothing is listed until it has been folded, so rows do not vanish under a finger.
-  const folding = exact.length > 0 && !folds && !waited;
-  const snapshots = useMemo(() => {
-    if (folding) return [];
-    // Answers for an earlier list still hold: they are about versions, which do not change.
-    const result: Snapshot[] = [];
-    for (const snapshot of exact) {
-      const newer = result.at(-1);
-      if (!newer || !folds?.same.has(snapshot.id)) {
-        result.push(snapshot);
-        continue;
-      }
-      const all = [...snapshot.versions, ...newer.versions];
-      result[result.length - 1] = {
-        id: snapshot.id,
-        versions: [
-          ...all.filter((version) => !local.has(version.id)),
-          ...all.filter((version) => local.has(version.id)),
-        ],
-        first: snapshot.first,
-        newest: newer.newest,
-      };
-    }
-    return result;
-  }, [exact, folds, folding, local]);
   // Opening history saves the note as it is, so the newest snapshot is usually the note
   // itself. It is listed once, as the current note, with the time it was saved.
   const saved = useMemo(() => {
     const newest = snapshots[0]?.newest;
     if (!newest) return null;
-    return folds?.current === newest.id ||
+    const reading = newest.readingKey && historyReadingKey(entryNote.id, entryNote.content);
+    return reading === newest.readingKey ||
       currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
       ? snapshots[0]!
       : null;
-  }, [entryNote, snapshots, folds]);
+  }, [entryNote, snapshots]);
   const reading = selected
     ? (snapshots.find((snapshot) => snapshot.versions.some((row) => row.id === selected.id)) ??
       null)
@@ -860,9 +776,7 @@ export function NoteHistory({
             Version history
           </h2>
           <p className="truncate text-muted-foreground text-xs">
-            Read only
-            {!folding &&
-              ` · ${snapshots.length} saved ${snapshots.length === 1 ? 'version' : 'versions'}`}
+            Read only · {snapshots.length} saved {snapshots.length === 1 ? 'version' : 'versions'}
           </p>
         </div>
         <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
@@ -1008,7 +922,7 @@ export function NoteHistory({
                       Earlier content appears here as you edit this note.
                     </p>
                   )}
-                  {(loading || folding) && (
+                  {loading && (
                     <p role="status" className="px-5 pt-5 text-muted-foreground text-sm">
                       Loading history…
                     </p>

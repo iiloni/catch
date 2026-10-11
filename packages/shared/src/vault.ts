@@ -63,7 +63,8 @@ export type VaultNote = z.infer<typeof vaultNoteSchema>;
 
 export const createVaultNoteSchema = vaultNoteSchema
   .pick({ id: true, data: true, createdAt: true })
-  .partial({ createdAt: true });
+  .partial({ createdAt: true })
+  .extend({ history: historyWriteSchema.optional() });
 export type CreateVaultNote = z.infer<typeof createVaultNoteSchema>;
 
 export const updateVaultNoteSchema = vaultNoteSchema.pick({ data: true }).extend({

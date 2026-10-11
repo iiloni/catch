@@ -449,6 +449,8 @@ export const noteHistory = pgTable(
     firstSequence: integer().notNull().default(1),
     lastOriginId: uuid(),
     lastContentKey: text(),
+    /** How the live vault note reads, as the device that wrote it said; see `readingKey`. */
+    lastReadingKey: text(),
     lastCheckpointAt: timestamp({ withTimezone: true }),
     updatedAt: updatedAt(),
   },
@@ -496,6 +498,8 @@ export const historyVersions = pgTable(
     depth: integer().notNull(),
     contentKey: text().notNull(),
     payloadKey: text().notNull(),
+    /** Names how the version reads, to fold versions that read the same in a list. */
+    readingKey: text(),
     sourceKey: text(),
     format: integer().notNull().default(1),
   },

@@ -13,6 +13,7 @@ import {
   decodeHistory,
   encodeHistory,
 } from '../packages/shared/src/historyCodec';
+import { historyReading } from '../packages/shared/src/historyReading';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '../packages/shared/src/protocol';
 import { bearerToken, card, openNote, seedNotes, settledBox, signUp } from './helpers';
 
@@ -108,6 +109,35 @@ test('a batch that repeats an id keeps history of the note that was stored', {
   const { versions } = await list(request, headers, noteId);
   expect(versions).toHaveLength(1);
   expect(versions[0]?.contentKey).toBe(digest(canonicalHistory(state('Stored words'))));
+});
+
+test('the server names how a version reads, whatever its block ids and written-out defaults', {
+  tag: '@api',
+}, async ({ request }) => {
+  const headers = await account(request);
+  const typed = state('The same words').content;
+  const rewritten = [
+    {
+      id: 'pasted',
+      type: 'paragraph',
+      props: { textColor: 'default', textAlignment: 'left' },
+      content: [
+        { type: 'text', text: 'The same ', styles: { bold: false } },
+        { type: 'text', text: 'words', styles: {} },
+      ],
+      children: [],
+    },
+  ];
+  const first = (await list(request, headers, await newNote(request, headers, typed))).versions[0];
+  const second = (await list(request, headers, await newNote(request, headers, rewritten)))
+    .versions[0];
+  expect(first?.readingKey).toBe(digest(historyReading(typed)));
+  expect(second?.readingKey).toBe(first?.readingKey);
+  expect(second?.contentKey).not.toBe(first?.contentKey);
+  const other = (
+    await list(request, headers, await newNote(request, headers, state('Other words').content))
+  ).versions[0];
+  expect(other?.readingKey).not.toBe(first?.readingKey);
 });
 
 test('history restores atomically, preserves note settings, rejects newer edits and never replays an old write over a restore', {

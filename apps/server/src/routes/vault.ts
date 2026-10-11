@@ -132,7 +132,12 @@ export const vaultRoutes = new Hono<AppEnv>()
         .returning({ id: vaultNotes.id });
       if (inserted.length > 0) {
         const control = await ensureHistory(tx, userId, body.id, 'vault');
-        await preserveVault(tx, control, body.data, 'baseline');
+        const readingKey = body.history?.readingKey ?? null;
+        await preserveVault(tx, control, body.data, 'baseline', readingKey);
+        await tx
+          .update(noteHistory)
+          .set({ lastReadingKey: readingKey })
+          .where(and(eq(noteHistory.userId, userId), eq(noteHistory.id, body.id)));
         return { txid: await currentTxid(tx) };
       }
       const [mine] = await tx

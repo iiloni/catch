@@ -9,7 +9,7 @@ import type {
   VaultNote,
   VaultNotePayload,
 } from '@catch/shared';
-import { canonicalHistory } from '@catch/shared';
+import { canonicalHistory, historyReading } from '@catch/shared';
 import { useEffect } from 'react';
 import { ApiError, api } from './api';
 import { closeSealedFiles, setSealedFiles } from './attachmentFiles';
@@ -586,13 +586,13 @@ function store(entry: Entry, exists: boolean) {
   const { id: owner, key } = unlocked();
   const payload = toPayload(entry);
   const data = sealNote(key, owner, entry.note.id, payload);
-  rememberHistoryContentKey(
-    data,
-    vaultHistoryContentIdentity(entry.note.id, entry.note.id, {
+  rememberHistoryContentKey(data, {
+    contentKey: vaultHistoryContentIdentity(entry.note.id, entry.note.id, {
       content: payload.content,
       files: [],
     }),
-  );
+    readingKey: vaultHistoryReadingIdentity(entry.note.id, payload.content),
+  });
   opened.set(data, payload);
   shown.set(entry.note.id, payload);
   if (exists) {
@@ -681,6 +681,20 @@ export function vaultHistoryContentIdentity(noteId: string, epoch: string, state
     { userId, noteId, epoch },
     'content',
     new TextEncoder().encode(canonicalHistory(state)),
+  );
+}
+/**
+ * How a vault note reads, for folding versions that read the same (ADR 0022). Keyed per
+ * note and not per epoch, like the identity a note write carries: a version the server kept
+ * from a write must fold with the one the device captured of the same words.
+ */
+export function vaultHistoryReadingIdentity(noteId: string, content: Note['content']) {
+  const { id: userId, key } = unlocked();
+  return vaultHistoryIdentity(
+    key,
+    { userId, noteId, epoch: noteId },
+    'reading',
+    new TextEncoder().encode(historyReading(content)),
   );
 }
 export function vaultHistorySeal(

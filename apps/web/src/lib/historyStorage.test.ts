@@ -30,6 +30,7 @@ const parent: HistoryVersion & { data: string; format: 1 } = {
   depth: 0,
   contentKey: 'a'.repeat(64),
   payloadKey: 'b'.repeat(64),
+  readingKey: null,
   format: HISTORY_FORMAT,
   data: 'YWJj',
 };

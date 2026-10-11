@@ -524,12 +524,17 @@ function send(
 ): Promise<TxidResponse> | null {
   const key = String(mutation.key);
   const metadata = z
-    .object({ originId: z.string(), contentKeys: z.record(z.string(), z.string()).optional() })
+    .object({
+      originId: z.string(),
+      contentKeys: z.record(z.string(), z.string()).optional(),
+      readingKeys: z.record(z.string(), z.string()).optional(),
+    })
     .safeParse(transaction.metadata);
   const history = {
     operationId: transaction.idempotencyKey,
     originId: metadata.success ? metadata.data.originId : transaction.idempotencyKey,
     contentKey: metadata.success ? metadata.data.contentKeys?.[key] : undefined,
+    readingKey: metadata.success ? metadata.data.readingKeys?.[key] : undefined,
   };
   if (mutation.collection.id === noteHistoryCollection.id)
     return sendHistoryCapture(String(mutation.modified.latestCaptureId));
@@ -619,7 +624,10 @@ function send(
   if (mutation.collection.id === vaultNotesCollection.id) {
     switch (mutation.type) {
       case 'insert':
-        return api.createVaultNote(createVaultNoteSchema.parse(mutation.modified));
+        return api.createVaultNote({
+          ...createVaultNoteSchema.parse(mutation.modified),
+          history,
+        });
       case 'update':
         // A note is sealed whole, so the latest `data` is the whole change.
         return api.updateVaultNote(key, {
@@ -731,7 +739,8 @@ for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
  */
 export function write(mutate: () => void): Transaction {
   const contentKeys: Record<string, string> = {};
-  const metadata = { originId: historyOriginId, contentKeys };
+  const readingKeys: Record<string, string> = {};
+  const metadata = { originId: historyOriginId, contentKeys, readingKeys };
   const offline = executor.createOfflineTransaction({
     mutationFnName: 'push',
     autoCommit: false,
@@ -746,8 +755,10 @@ export function write(mutate: () => void): Transaction {
       typeof mutation.modified.data !== 'string'
     )
       continue;
-    const key = takeHistoryContentKey(mutation.modified.data);
-    if (key) contentKeys[String(mutation.key)] = key;
+    const keys = takeHistoryContentKey(mutation.modified.data);
+    if (!keys) continue;
+    contentKeys[String(mutation.key)] = keys.contentKey;
+    readingKeys[String(mutation.key)] = keys.readingKey;
   }
   addPendingWrite(transaction.id);
   offline.commit().then(

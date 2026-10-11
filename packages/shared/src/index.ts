@@ -6,6 +6,7 @@ export * from './content';
 export * from './history';
 export * from './historyCanonical';
 export * from './historyChanges';
+export * from './historyReading';
 export * from './historyWrite';
 export * from './invites';
 export * from './links';

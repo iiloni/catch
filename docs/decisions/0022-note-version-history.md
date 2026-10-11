@@ -149,13 +149,21 @@ the top of that list and its confirmation takes the list's place. Clearing leave
 reader, which has nothing left to show. Versions that follow each other and read
 the same are listed as one snapshot, at the time of the earliest: saving a note that has
 not changed, or the server and the device both keeping what an edit replaced, adds no row.
-Equal content keys fold versions unopened. Keys differ where nothing a reader sees does (a
-block's id, a default the editor wrote out, a vault note kept as ciphertext), so the reader
-also opens each version, downloading what the device lacks, and compares it with the next
-by the comparison below; the answers are kept in memory only. The list waits for this, up
-to four seconds, so rows do not vanish once shown. A version that cannot be opened (not
-cached, offline) stays a row of its own. A key that names how a version reads would fold
-them unopened, but needs a stored column and a protocol change.
+Equal content keys fold versions, and so does an equal reading key. A content key names a
+version's exact data, which differs where nothing a reader sees does (a block's id, a
+default the editor wrote out, a vault note kept as ciphertext). So each version also carries
+a reading key: a digest of `historyReading`, the document without block ids, written-out
+defaults, switched-off styles or the way text is split into runs. The server works it out
+for a note when the version arrives. For a vault note only the device can, so it sends a
+keyed one with each capture, and with each note write and restore so that a version the
+server keeps from a write has one too (`last_reading_key`); it is keyed per note, like the
+write identity below, for those to match the device's captures. The list folds without
+opening or downloading a version, offline too. The reading is a one-way test: documents
+that read the same may still get different keys (a prop whose default this does not know),
+and such versions stay separate rows that compare as unchanged. It only ever folds rows; a
+version is never stored or restored as another, and the server does not drop one for
+reading like the last, because a later delta may depend on its exact data. A version with
+no reading key (a vault write from a device that sent none) is a row of its own.
 A snapshot is read and restored through any of its versions, a synced one first. Opening
 history saves the note as it is, so the newest snapshot is usually the note itself: when
 its content key is the note's, the list names it once, as the current note with the time

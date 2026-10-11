@@ -11,6 +11,7 @@ import {
   historyArchiveSchema,
   historyClearResultSchema,
   historyListSchema,
+  historyReading,
   historyRestoreContextSchema,
   historyRestoreResultSchema,
   type Note,
@@ -58,6 +59,7 @@ import {
   sealVaultHistoryRestore,
   vaultHistoryContentIdentity,
   vaultHistoryOpen,
+  vaultHistoryReadingIdentity,
   vaultHistorySeal,
 } from './vault';
 import { fromBase64, toBase64 } from './vaultCrypto';
@@ -120,6 +122,19 @@ function identity(session: Session, state: HistoryState) {
  * What a version of this note is known by, were it saved as it is now: the newest version
  * is the note itself when it has this key. Null when that cannot be told (a locked vault).
  */
+/**
+ * How a note's content reads, as a version's `readingKey` names it. Null when that cannot
+ * be told (a locked vault).
+ */
+export function historyReadingKey(noteId: string, content: Note['content']): string | null {
+  try {
+    return isVaultNote(noteId)
+      ? vaultHistoryReadingIdentity(noteId, content)
+      : hash(new TextEncoder().encode(historyReading(content)));
+  } catch {
+    return null;
+  }
+}
 export function currentHistoryKey(note: Note, epoch: string): string | null {
   try {
     return isVaultNote(note.id)
@@ -158,6 +173,7 @@ async function encodedCapture(
     capturedAt: new Date(),
     reason,
     contentKey,
+    readingKey: historyReadingKey(session.note.id, state.content),
     sourceKey: null,
     format: 1 as const,
   };
@@ -420,6 +436,7 @@ export async function restoreHistoryVersion(
         epoch: version.epoch,
         expectedToken: context.summary.contentToken,
         data,
+        readingKey: (data && historyReadingKey(noteId, state.content)) || undefined,
       }),
     );
     await deletePendingRestore(noteId);

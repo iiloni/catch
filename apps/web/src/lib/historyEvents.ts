@@ -6,9 +6,10 @@ export const historyChanges = new Set<
   (change: { note: Note; before: Note['content']; after: Note['content'] }) => void
 >();
 /** Keyed content identities are copied into transaction metadata before the vault can lock. */
-const sealedContentKeys = new Map<string, string>();
-export const rememberHistoryContentKey = (data: string, key: string) =>
-  sealedContentKeys.set(data, key);
+export type SealedContentKeys = { contentKey: string; readingKey: string };
+const sealedContentKeys = new Map<string, SealedContentKeys>();
+export const rememberHistoryContentKey = (data: string, keys: SealedContentKeys) =>
+  sealedContentKeys.set(data, keys);
 /** Each ciphertext is written once, so its identity is handed over rather than kept. */
 export function takeHistoryContentKey(data: string) {
   const key = sealedContentKeys.get(data);

@@ -8,5 +8,10 @@ export const historyWriteSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
+  /** For a vault note, how the content being written reads; see `historyVersionSchema`. */
+  readingKey: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 export type HistoryWrite = z.infer<typeof historyWriteSchema>;

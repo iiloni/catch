@@ -63,6 +63,12 @@ export const historyVersionSchema = z.object({
     .max(HISTORY_ANCHOR_INTERVAL - 1),
   contentKey: digest,
   payloadKey: digest,
+  /**
+   * Names how the version reads (`historyReading`), so versions that read the same fold in
+   * a list without being opened. The server works it out for a note; a vault's device
+   * sends a keyed one. Null where neither could: such a version is a row of its own.
+   */
+  readingKey: digest.nullable().default(null),
 });
 export type HistoryVersion = z.infer<typeof historyVersionSchema>;
 
@@ -107,6 +113,8 @@ export const historyRestoreSchema = z.object({
   expectedToken: z.uuid({ version: 'v7' }),
   /** Vault content is merged with authoritative current settings and sealed on the device. */
   data: vaultNoteSchema.shape.data.optional(),
+  /** How that sealed content reads, which only the device can tell. */
+  readingKey: digest.optional(),
 });
 export type HistoryRestore = z.infer<typeof historyRestoreSchema>;
 export const historyRestoreResultSchema = historyRestoreContextSchema.extend({

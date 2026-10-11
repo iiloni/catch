@@ -355,7 +355,13 @@ export const historyRoutes = new Hono<AppEnv>()
               'HISTORY_INTEGRITY',
               'The vault needs content sealed on an unlocked device.',
             );
-          await preserveVault(tx, control, live.vaultNote.data, 'before-restore');
+          await preserveVault(
+            tx,
+            control,
+            live.vaultNote.data,
+            'before-restore',
+            control.lastReadingKey,
+          );
           updatedVaultNote =
             (
               await tx
@@ -364,12 +370,16 @@ export const historyRoutes = new Hono<AppEnv>()
                 .where(and(eq(vaultNotes.userId, userId), eq(vaultNotes.id, id)))
                 .returning()
             )[0] ?? null;
-          await preserveVault(tx, control, body.data, 'restored');
+          await preserveVault(tx, control, body.data, 'restored', body.readingKey ?? null);
         }
         control.contentToken = uuidv7();
         await tx
           .update(noteHistory)
-          .set({ contentToken: control.contentToken, lastOriginId: null })
+          .set({
+            contentToken: control.contentToken,
+            lastOriginId: null,
+            lastReadingKey: body.readingKey ?? null,
+          })
           .where(and(eq(noteHistory.userId, userId), eq(noteHistory.id, id)));
         await tx.insert(historyRestores).values({
           userId,

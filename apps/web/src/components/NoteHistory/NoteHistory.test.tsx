@@ -3,10 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { historyDockSlot } from '@/lib/dockState';
-import { compareHistoryInWorker } from '@/lib/historyWorker';
 import {
   clearNoteHistory,
   currentHistoryKey,
+  historyReadingKey,
   prepareHistoryRestore,
   readHistoryVersion,
   restoreHistoryVersion,
@@ -42,6 +42,7 @@ const version: HistoryVersion = {
   depth: 0,
   contentKey: 'a'.repeat(64),
   payloadKey: 'b'.repeat(64),
+  readingKey: 'd'.repeat(64),
 };
 /** What the note held before `version`. */
 const older: HistoryVersion = {
@@ -52,6 +53,7 @@ const older: HistoryVersion = {
   receivedAt: new Date(-86_400_000),
   reason: 'recovered',
   contentKey: 'c'.repeat(64),
+  readingKey: 'e'.repeat(64),
 };
 const state: HistoryState = { content: [{ content: 'Earlier words' }], files: [] };
 vi.mock('@/lib/historyStorage', () => ({
@@ -61,13 +63,13 @@ vi.mock('@/lib/historyStorage', () => ({
 vi.mock('@/lib/noteHistory', () => ({
   historyList: vi.fn(),
   currentHistoryKey: vi.fn(() => null),
+  historyReadingKey: vi.fn(() => null),
   readHistoryVersion: vi.fn(),
   resolveHistoryRestore: async () => null,
   prepareHistoryRestore: vi.fn(),
   restoreHistoryVersion: vi.fn(),
   clearNoteHistory: vi.fn(),
 }));
-vi.mock('@/lib/historyWorker', () => ({ compareHistoryInWorker: vi.fn() }));
 vi.mock('@/lib/notes', () => ({ duplicateNotes: vi.fn() }));
 vi.mock('@/lib/collections', () => ({ waitForWriteStored: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/vault', () => ({ openVaultHistoryNote: vi.fn() }));
@@ -98,7 +100,7 @@ const summary = {
 };
 beforeEach(() => {
   vi.mocked(currentHistoryKey).mockReturnValue(null);
-  vi.mocked(compareHistoryInWorker).mockResolvedValue({ items: [], changes: 1 });
+  vi.mocked(historyReadingKey).mockReturnValue(null);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -180,14 +182,8 @@ describe('version review', () => {
     expect(screen.getByText(/1 saved version$/)).toBeVisible();
   });
   it('folds versions that read the same though their data differs', async () => {
-    const reads = (id: string) => ({ content: [{ id, content: 'Earlier words' }], files: [] });
-    vi.mocked(readHistoryVersion).mockImplementation(async (_note, id) => reads(id));
-    vi.mocked(compareHistoryInWorker).mockImplementation(async (before, after) => ({
-      items: [],
-      changes: before.content[0]?.content === after.content[0]?.content ? 0 : 1,
-    }));
-    // Its own id: what is learned of a pair of versions is kept for as long as the page is.
-    const rewritten = { ...older, id: '0199a0a0-0000-7000-8000-000000000004' };
+    const rewritten = { ...older, readingKey: version.readingKey };
+    vi.mocked(readHistoryVersion).mockResolvedValue(state);
     await open({
       wide: true,
       read: false,
@@ -199,6 +195,19 @@ describe('version review', () => {
       within(versions).getAllByRole('button', { name: /Earlier content|Recovered version/ }),
     ).toHaveLength(1);
     expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
+    expect(readHistoryVersion).toHaveBeenCalledTimes(1);
+  });
+  it('lists the newest version as the current note when it reads as the note does', async () => {
+    vi.mocked(historyReadingKey).mockReturnValue(version.readingKey);
+    vi.mocked(historyList).mockResolvedValue({ summary, versions: [version], nextCursor: null });
+    render(
+      <TooltipProvider>
+        <NoteHistory note={note} wide onClose={onClose} onRestored={vi.fn()} />
+      </TooltipProvider>,
+    );
+    const versions = screen.getByRole('navigation', { name: 'Saved versions' });
+    expect(await within(versions).findByText(/^Saved /)).toBeVisible();
+    expect(within(versions).queryByRole('button', { name: /Earlier content/ })).toBeNull();
   });
   it('marks what a version changed from the one before it, and nothing in the earliest', async () => {
     await open({ wide: true, changes: true, versions: [version, older] });

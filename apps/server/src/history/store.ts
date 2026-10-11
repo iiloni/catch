@@ -11,6 +11,7 @@ import {
   type HistorySummary,
   type HistoryVersion,
   type HistoryWrite,
+  historyReading,
 } from '@catch/shared';
 import {
   canonicalHistory,
@@ -120,6 +121,7 @@ export function publicVersion(row: typeof historyVersions.$inferSelect): History
     depth: row.depth,
     contentKey: row.contentKey,
     payloadKey: row.payloadKey,
+    readingKey: row.readingKey,
   };
 }
 
@@ -327,6 +329,8 @@ export async function appendHistory(
   )
     return { id: latest.id, added: false };
   const bytes = Buffer.from(input.data, 'base64');
+  // A vault's device says how its version reads; a note's is worked out here, below.
+  let readingKey = control.kind === 'vault' ? input.readingKey : null;
   if (input.representation === 'delta') {
     const [parent] = await tx
       .select()
@@ -368,6 +372,7 @@ export async function appendHistory(
     }
     if (state.files.length || digest(canonicalHistory(state)) !== input.contentKey)
       throw new HistoryFailure('HISTORY_INTEGRITY', 'History failed its content check.');
+    readingKey = digest(historyReading(state.content));
   }
   await tx
     .insert(historyPayloads)
@@ -388,6 +393,7 @@ export async function appendHistory(
     .insert(historyVersions)
     .values({
       ...descriptor,
+      readingKey,
       noteId: control.id,
       epoch: control.epoch,
       userId: control.userId,
@@ -447,6 +453,7 @@ export async function preserveOrdinary(
     depth: encoded.depth,
     contentKey,
     payloadKey: digest(encoded.data),
+    readingKey: null,
     sourceKey: contentKey,
     format: 1 as const,
     data: Buffer.from(encoded.data).toString('base64'),
@@ -467,11 +474,13 @@ export async function preserveOrdinary(
   }
 }
 
+/** `readingKey` is how the sealed note reads, as the device that wrote it said, if it did. */
 export async function preserveVault(
   tx: HistoryTx,
   control: HistoryControl,
   data: string,
   reason: HistoryVersion['reason'],
+  readingKey: string | null,
 ) {
   const sourceKey = digest(data);
   const [known] = await tx
@@ -493,6 +502,7 @@ export async function preserveVault(
       id: uuidv7(),
       capturedAt: new Date(),
       reason,
+      readingKey: selected.readingKey ?? readingKey,
       sourceKey,
     });
   }
@@ -508,6 +518,7 @@ export async function preserveVault(
     depth: 0,
     contentKey: sourceKey,
     payloadKey: digest(bytes),
+    readingKey,
     sourceKey,
     format: 1,
     data,
@@ -544,7 +555,7 @@ export async function beforeContentWrite(
       Date.now() - control.lastCheckpointAt.getTime() >= HISTORY_CONTINUOUS_MS)
   ) {
     if ('content' in current) await preserveOrdinary(tx, control, current.content, 'baseline');
-    else await preserveVault(tx, control, current.data, 'baseline');
+    else await preserveVault(tx, control, current.data, 'baseline', control.lastReadingKey);
   }
   control.contentToken = uuidv7();
   await tx
@@ -553,6 +564,7 @@ export async function beforeContentWrite(
       contentToken: control.contentToken,
       lastOriginId: envelope?.originId ?? null,
       lastContentKey: envelope?.contentKey ?? null,
+      lastReadingKey: envelope?.readingKey ?? null,
     })
     .where(scope(control.userId, control.id));
   return true;
