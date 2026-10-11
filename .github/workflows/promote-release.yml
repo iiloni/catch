@@ -1,0 +1,101 @@
+name: Promote release
+
+on:
+  workflow_dispatch:
+    inputs:
+      preview_tag:
+        description: Preview tag to promote (vMAJOR.MINOR.PATCH-preview)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Share the tagging queue so promotions and version bumps cannot race.
+concurrency:
+  group: catch-tag-release
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Require releases to be enabled
+        env:
+          ENABLED: ${{ vars.RELEASES_ENABLED == 'true' }}
+        run: |
+          if [[ "$ENABLED" != true ]]; then
+            echo '::error::Configure signing secrets and set RELEASES_ENABLED=true before creating a release.'
+            exit 1
+          fi
+      # The action is pinned; inline code comes from the dispatched workflow ref.
+      # No repository checkout or preview-tag code executes in this job.
+      - name: Promote preview tag
+        id: promotion
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          PREVIEW_TAG: ${{ inputs.preview_tag }}
+        with:
+          script: |
+            const preview = process.env.PREVIEW_TAG ?? '';
+            if (preview.length > 128 || preview.trim() !== preview ||
+                !/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-preview$/.test(preview)) {
+              throw new Error('Enter a preview tag in the form vMAJOR.MINOR.PATCH-preview.');
+            }
+            const tag = preview.slice(0, -'-preview'.length);
+            const { data: reference } = await github.rest.git.getRef({
+              ...context.repo,
+              ref: `tags/${preview}`,
+            });
+            // Peel annotated tags, including nested ones; lightweight tags already name a commit.
+            let target = reference.object;
+            const visited = new Set();
+            while (target.type === 'tag') {
+              if (visited.has(target.sha)) throw new Error('Preview tag contains a tag cycle.');
+              visited.add(target.sha);
+              const { data: annotation } = await github.rest.git.getTag({
+                ...context.repo,
+                tag_sha: target.sha,
+              });
+              target = annotation.object;
+            }
+            if (target.type !== 'commit') throw new Error('Preview tag must point to a commit.');
+            const { data: object } = await github.rest.git.createTag({
+              ...context.repo,
+              tag,
+              message: `Catch ${tag.slice(1)}`,
+              object: target.sha,
+              type: 'commit',
+              tagger: {
+                name: 'github-actions[bot]',
+                email: '41898282+github-actions[bot]@users.noreply.github.com',
+              },
+            });
+            // createRef fails if the stable tag already exists, without moving it.
+            await github.rest.git.createRef({
+              ...context.repo,
+              ref: `refs/tags/${tag}`,
+              sha: object.sha,
+            });
+            core.setOutput('tag', tag);
+            await core.summary
+              .addRaw(`Promoted ${preview} to ${tag} at ${target.sha}.\n`)
+              .addRaw(`If dispatch or builds fail, run Release on ${tag}; the stable tag already exists.\n`)
+              .write();
+      # GITHUB_TOKEN ref creation does not trigger the tag-push workflow.
+      - name: Start stable release builds
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ steps.promotion.outputs.tag }}
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'release.yml',
+              ref: process.env.RELEASE_TAG,
+            });

@@ -76,6 +76,11 @@ commit messages, but choose release versions explicitly.
   A separate job with write permissions creates the tag and dispatches Release through
   the GitHub API, without checking out or executing repository code.
   Requires `RELEASES_ENABLED=true` before creating any tag.
+- `promote-release.yml`: manual preview-tag input creates the matching annotated stable tag
+  at the preview's exact commit, then dispatches `release.yml` on the stable tag. It uses
+  only the GitHub API, without checking out or executing repository code, and shares the
+  tag-creation queue with `tag-release.yml`. Requires `RELEASES_ENABLED=true` and refuses
+  to overwrite an existing stable tag.
 - `release.yml`: a pushed `v*` tag or manual dispatch on a release tag validates the version.
   Branch refs, including branches named like version tags, are rejected before checkout.
   Builds and publishing proceed only when the Actions repository variable `RELEASES_ENABLED`
@@ -96,6 +101,21 @@ release whose notes cannot be generated stops there; the publishing job generate
 again for the release body, including when a rerun edits an existing draft. Both jobs
 fetch full history and tags for this. There is no deployment job. Actions artifacts expire after seven days; APKs
 attached to a published GitHub Release remain available there.
+
+To promote a tested preview, open **Actions > Promote release > Run workflow**, leave the
+workflow branch on `main`, and enter the full preview tag, for example `v0.4.1-preview`.
+This creates `v0.4.1` at that preview's commit even if newer work has landed on `main`.
+The workflow branch does not choose the release commit. The existing Release workflow
+checks CI and rebuilds the stable APK and Docker image with stable channel branding; it
+does not reuse preview artifacts or deploy to a server. The preview tag remains unchanged.
+The same action is available through the GitHub CLI:
+
+```bash
+gh workflow run promote-release.yml --ref main -f preview_tag=v0.4.1-preview
+```
+
+If the stable tag was created but dispatch or builds failed, run **Release** on that stable
+tag to retry. Running **Promote release** again will fail because the tag already exists.
 
 ## One-time GitHub configuration
 

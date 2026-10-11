@@ -26,8 +26,18 @@ and preview must advance independently, including preview versions ahead of stab
   and dispatches `release.yml` on that tag. This job uses only a pinned action's inline
   code, with no checkout, package installation or runner state from preparation.
   `GITHUB_TOKEN` ref creation does not trigger another workflow itself.
-  Tag creation requests queue to avoid competing manual bumps. Preview promotion remains
-  available through the local helper.
+  Tag creation requests queue to avoid competing manual bumps.
+- The manually dispatched `promote-release.yml` workflow accepts an explicit preview tag,
+  resolves its commit through the GitHub API (for annotated or lightweight tags), and
+  creates the matching annotated stable tag at that commit. It then dispatches `release.yml`
+  on the stable tag to check CI and build stable artifacts. A pinned action executes inline
+  code from the dispatched workflow ref, with no checkout or repository dependencies.
+  As with the existing release workflows, workflow YAML and authorized repository writers
+  are trusted; dispatch promotion from the default branch to use its reviewed workflow.
+  Promotion shares the tag-creation
+  queue, requires releases to be enabled, and never overwrites an existing stable tag.
+  The selected workflow ref does not choose the release commit; newer work can remain on
+  main while an earlier preview is promoted. The local helper remains available too.
 - Ordinary CI runs checks on every pull request update; the `merge on pass` label records
   approval of functionality and design, authorizes merging once required checks pass and
   opts a PR into full Docker-backed E2E, including later pushes while the label remains.
