@@ -44,21 +44,22 @@ describe('autosave durability', () => {
     const { result, unmount } = renderHook(() => useNoteAutosave('note'));
     act(() => result.current.save([{ type: 'paragraph', content: 'Latest edit' }]));
     const first = result.current.flush();
-    let saved = false;
-    void first.then(() => {
-      saved = true;
-    });
-    void result.current.flush();
+    const repeated = result.current.flush();
+    let saved = 0;
+    for (const flush of [first, repeated])
+      void flush.then(() => {
+        saved++;
+      });
     await act(async () => {
       await Promise.resolve();
     });
-    expect(saved).toBe(false);
+    expect(saved).toBe(0);
     expect(mocks.update).toHaveBeenCalledTimes(1);
     await act(async () => {
       storage.resolve();
-      await first;
+      await Promise.all([first, repeated]);
     });
-    expect(saved).toBe(true);
+    expect(saved).toBe(2);
     unmount();
   });
 
