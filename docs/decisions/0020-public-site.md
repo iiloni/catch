@@ -53,7 +53,12 @@ product they describe.
   than publish an empty changelog.
 - **Deployed from GitHub Actions to Cloudflare Workers with static assets**, not by
   Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` builds
-  on pushes to `main` that touch the site or its inputs and uploads the export; it is skipped
+  on pushes to `main` that touch the site or its inputs, external tag pushes or release
+  publication, and successful **Release** workflow completions in this repository.
+  The completed-run trigger handles automated releases because `GITHUB_TOKEN` suppresses
+  the tag-push and release-published triggers; it works even when the released commit
+  predates this site workflow. The deploy always checks out `main` with all tags and does
+  not consume the Release run's code or artifacts. It uploads the export and is skipped
   until the repository has the Cloudflare credentials and enables `CLOUDFLARE_SITE_ENABLED`.
   `apps/site/wrangler.jsonc`
   names the `catch-site` Worker and serves the export directly, without a Worker script,

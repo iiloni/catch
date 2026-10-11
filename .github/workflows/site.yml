@@ -15,13 +15,14 @@ on:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
       - .github/workflows/site.yml
-    # A release adds a version to the changelog page. Tags created by the Tag release
-    # workflow via the API do not emit push events (see tag-release.yml), so a published
-    # release also triggers a deploy; that covers API-created tags and manual Release
-    # retries, after their artifacts exist.
+    # These events cover tags and releases created outside Actions. GITHUB_TOKEN
+    # suppresses both, so automated releases use the completed Release run below.
     tags: ['v*']
   release:
     types: [published]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +35,11 @@ concurrency:
 jobs:
   deploy:
     # Enabled after the repository has its Cloudflare credentials (docs/ci.md).
-    if: vars.CLOUDFLARE_SITE_ENABLED == 'true'
+    if: >-
+      vars.CLOUDFLARE_SITE_ENABLED == 'true' &&
+      (github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

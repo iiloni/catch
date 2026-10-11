@@ -65,6 +65,52 @@ function stepValues(
   return values;
 }
 
+test('Site follows completed Release runs and builds main with every release tag', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  assert.match(
+    workflow,
+    /\n {2}workflow_run:\n {4}workflows: \[Release\]\n {4}types: \[completed\]\n/,
+  );
+  assert.match(workflow, /\n {2}workflow_dispatch:\n/);
+  assert.match(workflow, /ref: main\n\s+fetch-depth: 0\n\s+fetch-tags: true\n/);
+  assert.match(workflow, /SITE_CHANGELOG: required/);
+  const release = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(release, /^name: Release\n/);
+});
+
+test('Site deploys only successful same-repository Release runs when enabled', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  const condition = /\n {4}if: >-\n((?: {6}.+\n)+)/.exec(workflow)?.[1];
+  assert.ok(condition, 'Missing deployment condition');
+  const repository = 'iiloni/catch';
+  for (const enabled of ['true', 'false', '']) {
+    for (const event of ['push', 'release', 'workflow_dispatch', 'workflow_run']) {
+      for (const conclusion of ['success', 'failure', 'cancelled', 'skipped', 'timed_out']) {
+        for (const source of [repository, 'someone/catch']) {
+          const actual: unknown = runInNewContext(condition, {
+            vars: { CLOUDFLARE_SITE_ENABLED: enabled },
+            github: {
+              repository,
+              event_name: event,
+              event:
+                event === 'workflow_run'
+                  ? { workflow_run: { conclusion, head_repository: { full_name: source } } }
+                  : {},
+            },
+          });
+          const expected =
+            enabled === 'true' &&
+            (event !== 'workflow_run' || (conclusion === 'success' && source === repository));
+          assert.equal(actual, expected, `${enabled}, ${event}, ${conclusion}, ${source}`);
+        }
+      }
+    }
+  }
+});
+
 // GitHub drops a job output that contains a secret's value, and the documented key alias
 // is "catch", so these names must be built in the jobs that use them.
 test('Release names the image and APK without passing them between jobs', () => {
