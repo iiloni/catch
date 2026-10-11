@@ -54,7 +54,7 @@ public class WidgetLayoutTest {
         View list =
                 new RemoteViews(context.getPackageName(), R.layout.widget_preview_list)
                         .apply(context, new FrameLayout(context));
-        measure(list, Math.round(260 * density), Math.round(180 * density));
+        measure(list, Math.round(220 * density), Math.round(180 * density));
         View card = (View) list.findViewById(R.id.widget_body).getParent();
         View area = (View) card.getParent();
         assertTrue(card.getHeight() + area.getPaddingTop() <= area.getHeight());
