@@ -430,6 +430,10 @@ test('history keeps the working editor and scroll position, and closes its picke
   await editor.click();
   await page.keyboard.press('ControlOrMeta+Z');
   await expect(editor).not.toContainText('Paragraph 12:');
+  // Undo can bring back the selection it replaced, and at this width the formatting
+  // toolbar of a selection covers the header.
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.bn-formatting-toolbar')).toBeHidden();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
 });
 
