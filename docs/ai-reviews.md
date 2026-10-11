@@ -6,6 +6,13 @@ including while it is a draft. The
 [AI review workflow](../.github/workflows/ai-review.yml) posts
 `@cubic-dev-ai review this PR` and records the current head commit.
 
+Agents may recommend a review using the criteria in
+[AGENTS.md](../AGENTS.md#ai-code-review), but need explicit developer approval
+before applying or reapplying `ai review`, or posting a direct cubic review
+request. A developer's review request or label application authorizes that review.
+Further full or incremental reviews need approval unless explicitly covered by
+the earlier approval.
+
 Reviews are advisory. The `ai review` label does not approve functionality or
 design, request Docker E2E, or authorize merging. `merge on pass` retains those
 meanings from [the CI guide](ci.md). A successful **Request cubic review** job does
@@ -87,13 +94,13 @@ control to stop a running review.
 ## Handling review results
 
 Agents follow the [AI review instructions in AGENTS.md](../AGENTS.md#ai-code-review)
-when you request a review or apply the label. They also request one full review on
-their own for changes to the higher-risk areas listed there (API compatibility, auth
+when you request or approve a review, or apply the label. They recommend a review
+for changes to the higher-risk areas listed there (API compatibility, auth
 and security, schema and backups, the outbox and local persistence, CI and release),
-and skip it for docs, tests, styling and small contained fixes. A review an agent
-requested itself does not hold the PR if cubic stays silent; one you requested does.
-Review remains optional for merging; agents do not spend another review simply
-because a label is still present after a push.
+and skip it for docs, tests, styling and small contained fixes unless you ask.
+They wait for your approval before requesting a review. A requested or approved
+review must complete before merging. Review remains optional unless you require
+it; a label still present after a push does not authorize another review.
 
 Read cubic's completed summary, inline findings and follow-up discussion, and
 confirm the reviewed revision. `gh pr view <number> --comments` shows the PR
@@ -111,8 +118,9 @@ evidence: fixed, already addressed, false positive, or deferred with its remaini
 impact. A thread should reflect the actual outcome, not be resolved merely to
 clear the review. Material scope or design changes need the maintainer's decision.
 
-Run relevant checks after fixes and request an incremental review for meaningful
-changes. Summarize the reviewed commit, fixes, rejected findings and outstanding
+Run relevant checks after fixes. Agents recommend an incremental review for
+meaningful changes and obtain approval before requesting it, unless already
+authorized. Summarize the reviewed commit, fixes, rejected findings and outstanding
 risks in the PR description and final update. If cubic cannot complete a review,
 report it as pending and use the troubleshooting below. A clean AI review does
 not authorize merging; fixes that change approved behavior still follow Catch's

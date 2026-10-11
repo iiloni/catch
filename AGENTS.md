@@ -102,8 +102,9 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   Wait until the run finishes before removing it: label changes cancel superseded CI runs.
   `run e2e` requests tests only: keep the PR a draft and do not enable auto-merge or merge
   without separate approval. See `docs/ci.md` for repository setup and commands.
-- Use the AI review process below when the user requests a review, has applied
-  `ai review`, or the PR changes one of the areas listed there. The label is advisory
+- Use the AI review process below when the developer requests or approves a review,
+  or has applied `ai review`. Recommend a review for changes to the areas listed
+  there, but wait for developer approval before requesting it. The label is advisory
   and does not authorize merging.
 - A PR without `merge on pass` deliberately fails `validation`, even if `run e2e` tests
   pass; require that check in branch protection so testing alone cannot permit merging.
@@ -158,8 +159,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
 
 ### AI code review
 
-- AI review is advisory and never required for merging. Request one, without being
-  asked, when the PR changes any of:
+- AI review is advisory and never required for merging unless the developer requires
+  it. Recommend one to the developer when the PR changes any of:
   - API requests/responses, synced shapes, note encoding or write/replay behavior
     (anything ADR 0013 covers), or the protocol version;
   - auth, sessions, invites, admin guards, the CSP, `safeFetch` or shape-proxy
@@ -170,19 +171,20 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   - CI, release or deployment workflows and scripts.
 
   Skip it for docs-only, test-only, formatting, copy and styling changes, and for
-  small fixes confined to one component, unless the user asks. When unsure, say in
-  the progress update that you did not request a review and why; the user can add
-  `ai review` themselves.
-- Follow `docs/ai-reviews.md`. Finish the implementation and local checks, then add
-  `ai review` to the draft using the normal GitHub login. If the user already
-  applied it, inspect that request before creating another. Do not request a review on
-  every push or treat a label left on a PR as a request for another review.
-- Request at most one full review per PR on your own initiative, before asking for
-  merge approval. Further full reviews need the user's request; incremental reviews
-  after meaningful fixes are still allowed. A self-requested review does not block
-  the task: if cubic has not completed after a reasonable wait, report it as pending
-  instead of holding the PR. A review the user asked for must still complete before
-  merging.
+  small fixes confined to one component, unless the developer asks. When unsure,
+  explain in a progress update whether you recommend a review and why.
+- Follow `docs/ai-reviews.md`. Finish the implementation and local checks before
+  recommending a review, and explain which criteria it meets. Applying or reapplying
+  `ai review` requires explicit developer approval for that review. Direct cubic
+  review comments require the same approval. A developer's request for a review
+  authorizes it; if they already applied the label, inspect that request before
+  creating another. Do not request a review on every push or treat a label left on
+  a PR as approval for another review.
+- Recommend at most one full review per PR on your own initiative, before asking
+  for merge approval. Further full or incremental reviews require developer approval
+  unless their earlier approval explicitly covered them. A developer-requested or
+  approved review must complete before merging; report it as pending if cubic has
+  not completed after a reasonable wait.
 - Wait for cubic's completed review and read its summary, inline comments and discussion
   replies. A green request workflow or an acknowledgement is not a completed review.
   Check which commit was reviewed; findings from an older revision must be checked
@@ -197,7 +199,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   deferred (with the reason and remaining impact). Do not silently dismiss findings,
   resolve a thread just to clear it, or expand the task into unrelated refactoring.
   Ask the user about a valid finding that requires a material scope or design change.
-- After meaningful fixes, request one incremental review and evaluate its results.
+- After meaningful fixes, recommend one incremental review, obtain developer approval
+  unless already authorized, then request it and evaluate its results.
   A full rerun is for a deliberate fresh review or when incremental review cannot
   establish a safe range. Do not keep requesting full reviews to obtain a clean result.
   Summarize the reviewed commit, fixes, rejected findings and unresolved risks in the
