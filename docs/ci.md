@@ -209,9 +209,10 @@ that fixes or adds an entry.
 
 - Tested 2026-10-10 on `main` at `e86405f` plus the test fixes that came with this baseline,
   with Playwright 1.63.0's Firefox 155.0 (build 1543), headless, on Linux.
-- Whole suite, one worker, no retries: 217 tests, **174 passed, 3 failed, 40 skipped**
-  (22 minutes). The two flaky crashes below each fail about one run in three, so a run shows
-  two to four failures. The skips are the 39 that the Chromium `desktop` project also skips, and the
+- Whole suite, one worker, no retries: 217 tests, 174 passed, 3 failed, 40 skipped
+  (22 minutes). One of the three was a real difference, UTC listed twice in the time zone
+  picker, fixed since in #98 and confirmed passing. That leaves **175 passing and 2 failing**
+  in that run. Every entry below is flaky, so a run shows from none to three failures. The skips are the 39 that the Chromium `desktop` project also skips, and the
   one below.
 - It covers desktop Firefox in Playwright's build only. It says nothing for Firefox on
   Android or the native APK, and Zen or a released Firefox can differ from it.
@@ -225,7 +226,6 @@ navigating again.
 
 | Spec | Category | What happens |
 | --- | --- | --- |
-| `reminders.spec.ts:167` | Real difference | The time zone list holds UTC twice, and a search leaves a stray UTC row beside its matches. Firefox's `Intl.supportedValuesOf('timeZone')` includes UTC and `TimeZonePicker` adds another. Also seen in Zen. |
 | `accounts.spec.ts:184` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
 | `linkCapturePlacement.spec.ts:149` | Flaky: page crash | The same crash on its `page.goto('/capture#…')`. About one run in three. |
 | `homePage.spec.ts:4` | Flaky: test artifact | A `page.goto('/')` interrupts the Search page's loading, as described above. About one run in four. |
