@@ -67,13 +67,15 @@ final class WidgetTestHost {
                                 .put("theme", theme);
                 WidgetStore.configure(target, id, config);
                 AppWidgetHostView view = host.createView(target, id, manager.getAppWidgetInfo(id));
-                int height = i == 0 ? 96 : i == 1 ? 300 : 340;
+                int height = i == 0 ? 56 : i == 1 ? 300 : 340;
                 Bundle options = new Bundle();
                 options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320);
                 options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, height);
                 manager.updateAppWidgetOptions(id, options);
-                LinearLayout.LayoutParams params =
-                        new LinearLayout.LayoutParams(-1, dp(activity, height));
+                // Capture's declared one-row minimum plus the host's own outer padding.
+                int hostHeight = dp(activity, height);
+                if (i == 0) hostHeight += view.getPaddingTop() + view.getPaddingBottom();
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, hostHeight);
                 params.bottomMargin = dp(activity, 14);
                 content.addView(view, params);
                 CatchWidgetProvider.update(target, id);

@@ -41,13 +41,41 @@ public class WidgetLayoutTest {
     @Test
     @Config(sdk = 36)
     @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
-    public void pickerPreviewsFitTheirMinimumSizes() {
+    public void pickerPreviewsFitTheirMinimumSizes() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         float density = context.getResources().getDisplayMetrics().density;
         View capture =
                 new RemoteViews(context.getPackageName(), R.layout.widget_capture)
                         .apply(context, new FrameLayout(context));
-        measure(capture, Math.round(260 * density), Math.round(80 * density));
+        // Exercise the declared minimum, including launchers that size by dp rather than cells.
+        try (android.content.res.XmlResourceParser metadata =
+                context.getResources().getXml(R.xml.widget_capture)) {
+            while (metadata.next() != org.xmlpull.v1.XmlPullParser.START_TAG) {}
+            android.content.res.TypedArray sizes =
+                    context.obtainStyledAttributes(
+                            metadata,
+                            new int[] {
+                                android.R.attr.minWidth,
+                                android.R.attr.minHeight,
+                                android.R.attr.minResizeHeight,
+                                android.R.attr.targetCellWidth,
+                                android.R.attr.targetCellHeight
+                            });
+            try {
+                int height = sizes.getDimensionPixelSize(1, 0);
+                assertTrue(height > 0 && height <= Math.round(56 * density));
+                assertEquals(height, sizes.getDimensionPixelSize(2, 0));
+                assertEquals(4, sizes.getInt(3, 0));
+                assertEquals(1, sizes.getInt(4, 0));
+                measure(capture, sizes.getDimensionPixelSize(0, 0), height);
+            } finally {
+                sizes.recycle();
+            }
+        }
+        for (int button :
+                new int[] {R.id.widget_settings, R.id.widget_compose, R.id.widget_search}) {
+            assertTrue(capture.findViewById(button).getHeight() >= Math.round(48 * density));
+        }
         android.widget.TextView compose = capture.findViewById(R.id.widget_compose);
         assertTrue(
                 compose.getPaint().measureText(compose.getText().toString()) <= compose.getWidth());

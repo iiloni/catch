@@ -46,6 +46,42 @@ public class WidgetsInstrumentedTest {
                 instrumentation.waitForIdleSync();
                 // The collection binds asynchronously; check its actually visible row.
                 awaitVisibleTitles(instrumentation, host, 2);
+                long captureDeadline = android.os.SystemClock.uptimeMillis() + 10000;
+                boolean[] captureReady = {false};
+                while (!captureReady[0]
+                        && android.os.SystemClock.uptimeMillis() < captureDeadline) {
+                    instrumentation.runOnMainSync(
+                            () ->
+                                    captureReady[0] =
+                                            findText(host.getWindow().getDecorView(), "New note")
+                                                    != null);
+                    if (!captureReady[0]) Thread.sleep(50);
+                }
+                assertTrue("Capture widget has not rendered", captureReady[0]);
+                instrumentation.runOnMainSync(
+                        () -> {
+                            float density = host.getResources().getDisplayMetrics().density;
+                            // RemoteViews are root namespaces, so locate controls inside the
+                            // widget.
+                            android.view.View controls =
+                                    (android.view.View)
+                                            findText(host.getWindow().getDecorView(), "New note")
+                                                    .getParent();
+                            for (int id :
+                                    new int[] {
+                                        R.id.widget_settings,
+                                        R.id.widget_compose,
+                                        R.id.widget_search
+                                    }) {
+                                android.view.View button = controls.findViewById(id);
+                                assertNotNull("Missing capture control " + id, button);
+                                // Separately rounded insets can subtract one pixel at fractional
+                                // dp.
+                                assertTrue(
+                                        "Capture control height " + button.getHeight(),
+                                        button.getHeight() >= Math.round(48 * density) - 1);
+                            }
+                        });
                 saveScreenshot(instrumentation, host, "widgets-" + theme + ".png");
                 android.content.Context targetContext = instrumentation.getTargetContext();
                 WidgetStore.clear(targetContext, "widget-test");
