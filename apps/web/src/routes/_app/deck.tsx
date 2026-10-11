@@ -1,6 +1,6 @@
 import { and, eq, isNull, not, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { Columns3Cog } from 'lucide-react';
+import { Columns3, Columns3Cog } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { ColumnManager } from '@/components/NoteBoard/ColumnManager';
@@ -47,6 +47,7 @@ function DeckPage() {
     <>
       <TabPageHeader
         title={vault ? 'Vault deck' : 'Deck'}
+        icon={Columns3}
         selection={selectionHeader(selection, 'deck')}
         trailing={
           <>

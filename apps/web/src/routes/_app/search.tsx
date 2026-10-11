@@ -1,7 +1,7 @@
 import { type BoardColumn, type Note, type NoteColor, tagColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { Clock, SearchX } from 'lucide-react';
+import { Clock, Search, SearchX } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
@@ -182,6 +182,7 @@ function SearchPage() {
       </AnimatePresence>
       <TabPageHeader
         title={vault ? 'Search the vault' : 'Search'}
+        icon={Search}
         selection={selectionHeader(selection, place)}
         trailing={<VaultToggle />}
       />

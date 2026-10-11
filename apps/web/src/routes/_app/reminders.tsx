@@ -57,6 +57,7 @@ function RemindersPage() {
     <>
       <TabPageHeader
         title={vault ? 'Vault reminders' : 'Reminders'}
+        icon={Bell}
         leading={<BackToGallery />}
         selection={selectionHeader(selection, place)}
       />

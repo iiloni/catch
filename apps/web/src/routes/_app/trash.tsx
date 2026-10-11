@@ -53,6 +53,7 @@ function TrashPage() {
     <>
       <TabPageHeader
         title={vault ? 'Vault trash' : 'Trash'}
+        icon={Trash2}
         leading={<BackToGallery />}
         trailing={
           notes.length > 0 && (

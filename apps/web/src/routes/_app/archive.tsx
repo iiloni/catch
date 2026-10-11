@@ -40,6 +40,7 @@ function ArchivePage() {
     <>
       <TabPageHeader
         title={vault ? 'Vault archive' : 'Archive'}
+        icon={Archive}
         leading={<BackToGallery />}
         selection={selectionHeader(selection, 'archive')}
       />
