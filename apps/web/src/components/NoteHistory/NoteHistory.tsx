@@ -395,6 +395,7 @@ export function NoteHistory({
       const current = await prepareHistoryRestore(note.id);
       // The confirmation takes the list's place; the list must not come back under it.
       setPickerOpen(false);
+      setClearContext(null);
       setContext(current);
       setReviewCurrent(false);
       const content =
@@ -585,20 +586,25 @@ export function NoteHistory({
     void (async () => {
       const same = new Set<string>();
       let current: string | null = null;
-      let newer = await readSnapshot(exact[0]!);
+      // A version is opened only for a pair whose answer is not already known.
+      const states: Promise<HistoryState | null>[] = [];
+      const state = (index: number) => (states[index] ??= readSnapshot(exact[index]!));
       try {
-        if (newer && (await alike(newer, compared))) current = exact[0]!.newest.id;
+        const newest = await state(0);
+        if (newest && (await alike(newest, compared))) current = exact[0]!.newest.id;
         for (let index = 1; index < exact.length; index++) {
           if (controller.signal.aborted) return;
-          const older = await readSnapshot(exact[index]!);
           const pair = `${exact[index]!.newest.id}:${exact[index - 1]!.first.id}`;
           let answer = readsSame.get(pair);
-          if (answer === undefined && older && newer) {
-            answer = await alike(older, newer);
-            readsSame.set(pair, answer);
+          if (answer === undefined) {
+            const older = await state(index);
+            const newer = await state(index - 1);
+            if (older && newer) {
+              answer = await alike(older, newer);
+              readsSame.set(pair, answer);
+            }
           }
           if (answer) same.add(exact[index]!.id);
-          newer = older;
         }
       } catch {
         // A comparison that fails leaves the rest as they are listed.
