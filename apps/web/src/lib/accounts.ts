@@ -18,6 +18,7 @@ import { forgetImport } from './imports';
 import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
 import { nativeReminders } from './nativeReminders';
+import { nativeWidgets } from './nativeWidgets';
 import { dropPushSubscription, leavePush, syncPush } from './push';
 import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
@@ -152,6 +153,7 @@ export async function signOutAccount(account: Account) {
   localStorage.setItem(removedKey(account.user.id), 'true');
   await stopRinging(account);
   await nativeReminders.clear(account.user.id).catch(() => undefined);
+  await nativeWidgets.clear(account.user.id);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await fetch(`${getServerUrl()}/api/auth/sign-out`, {
     method: 'POST',
@@ -203,6 +205,7 @@ export async function signOutCurrentAccount() {
   else await dropPushSubscription().catch(() => undefined);
   // The phone keeps reminders and a token of its own to ring with the app closed.
   await nativeReminders.clear(user?.id).catch(() => undefined);
+  await nativeWidgets.clear(user?.id);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();

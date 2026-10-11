@@ -386,3 +386,11 @@ shift the content.
   also limit their height to the space above the keyboard and scroll focused fields into view.
   The browser no longer
   scrolls focused fields above it on its own.
+
+**Android widgets.** The launcher has Quick capture, One note and Note list widgets
+(ADR 0022). They use Catch amber for capture, solid cream/warm graphite surfaces,
+and native system text. A selected note keeps its effective card color. Native
+palette resources mirror the note surface tokens above; change them together.
+Launcher-owned resizing reveals more content rather than scaling text. Widget taps
+open Catch; checklist marks are previews. Each widget has its own account and
+appearance, and its configuration explains when cached content refreshes.

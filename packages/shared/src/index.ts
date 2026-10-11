@@ -16,3 +16,4 @@ export * from './sync';
 export * from './tags';
 export * from './users';
 export * from './vault';
+export * from './widgets';

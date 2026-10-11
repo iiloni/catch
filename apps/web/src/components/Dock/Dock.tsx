@@ -51,6 +51,7 @@ import {
   quickNoteCanSave,
   searchFilterCount,
   searchFiltersOpen,
+  searchFocusRequest,
   searchQuery,
   type TabPath,
   tabFor,
@@ -135,6 +136,10 @@ export function Dock() {
   const settingsY = useSettingsSwipeY();
   const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestedSearchFocus = searchFocusRequest.use();
+  useEffect(() => {
+    if (requestedSearchFocus > 0) inputRef.current?.focus();
+  }, [requestedSearchFocus]);
   // The tap that opens search trails a compatibility click; by the time it arrives
   // the close button has mounted under the finger, so the button discards clicks
   // within this window of the tap. Mouse clicks retarget to the tab instead and

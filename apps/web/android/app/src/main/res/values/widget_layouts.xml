@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Distinct IDs force the launcher to inflate fresh views when leaving an explicit
+         appearance. Reapplying the same layout preserves omitted color overrides. -->
+    <item type="layout" name="widget_capture_custom">@layout/widget_capture</item>
+    <item type="layout" name="widget_single_custom">@layout/widget_single</item>
+    <item type="layout" name="widget_list_custom">@layout/widget_list</item>
+    <item type="layout" name="widget_row_custom">@layout/widget_row</item>
+</resources>

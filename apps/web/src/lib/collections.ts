@@ -38,6 +38,7 @@ import {
   VAULT_REMINDER_TEXT,
   vaultNoteSchema,
   vaultSchema,
+  type WidgetSnapshot,
 } from '@catch/shared';
 import { snakeCamelMapper } from '@electric-sql/client';
 import {
@@ -93,6 +94,7 @@ import {
   useAwaitingSync,
 } from './syncStatus';
 import { forgetVault } from './vaultKeyStore';
+import { widgetSnapshot } from './widgetSnapshot';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
@@ -731,14 +733,20 @@ export async function waitForQueuedWrite(id: string, completion: Promise<unknown
 
 /** Hydrate device rows without waiting for Electric's first online snapshot. */
 export async function loadShareCollections() {
+  await hydrateLocalCollections([
+    notesCollection,
+    attachmentsCollection,
+    boardColumnsCollection,
+    tagsCollection,
+    noteTagsCollection,
+  ]);
+}
+
+async function hydrateLocalCollections(
+  collections: readonly { id: string; startSyncImmediate(): void }[],
+) {
   await Promise.all(
-    [
-      notesCollection,
-      attachmentsCollection,
-      boardColumnsCollection,
-      tagsCollection,
-      noteTagsCollection,
-    ].map(async (collection) => {
+    collections.map(async (collection) => {
       collection.startSyncImmediate();
       // Electric is eager, so collection._sync.loadSubset is a no-op. The persistence
       // wrapper's loader waits for cached rows without waiting for an online snapshot.
@@ -1080,4 +1088,49 @@ export function useSharedNotesReady() {
   const [ready, setReady] = useState(() => sharedNotesCollection.isReady());
   useEffect(() => sharedNotesCollection.onFirstReady(() => setReady(true)), []);
   return ready;
+}
+
+/** Subscribe only after local hydration, including offline; never export the vault view. */
+export function watchWidgetSnapshot(listener: (snapshot: WidgetSnapshot) => void) {
+  let stopped = false;
+  let hydrated = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const changed = () => {
+    if (!hydrated || stopped || timer !== undefined) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (!stopped && user)
+        listener(
+          widgetSnapshot(
+            user.id,
+            [...notesCollection.values()],
+            [...tagsCollection.values()],
+            [...noteTagsCollection.values()],
+            [...boardColumnsCollection.values()],
+          ),
+        );
+    }, 250);
+  };
+  const subscriptions = [
+    notesCollection,
+    tagsCollection,
+    noteTagsCollection,
+    boardColumnsCollection,
+  ].map((collection) => collection.subscribeChanges(changed));
+  void hydrateLocalCollections([
+    notesCollection,
+    tagsCollection,
+    noteTagsCollection,
+    boardColumnsCollection,
+  ])
+    .then(() => {
+      hydrated = true;
+      changed();
+    })
+    .catch((error: unknown) => console.error('Widget notes could not be loaded', error));
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    for (const subscription of subscriptions) subscription.unsubscribe();
+  };
 }

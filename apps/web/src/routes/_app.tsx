@@ -1,6 +1,6 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -20,9 +20,10 @@ import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { startNoteCollections } from '@/lib/collections';
-import { quickNote } from '@/lib/dockState';
+import { quickNote, searchFocusRequest } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { watchNativeReminders } from '@/lib/nativeReminders';
+import { watchNativeWidgets } from '@/lib/nativeWidgets';
 import { useOpenNote } from '@/lib/openNote';
 import { onNotificationOpen, syncPush } from '@/lib/push';
 import { syncReminderSettings } from '@/lib/reminders';
@@ -31,6 +32,7 @@ import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
 import { watchUpdates } from '@/lib/updates';
 import { inVaultFor } from '@/lib/vault';
+import { watchWidgetLaunch } from '@/lib/widgetLaunch';
 
 /**
  * Signed-in layout: the page, the dock, the quick-note window, and the editor for `?note=<id>`.
@@ -68,6 +70,19 @@ function AppLayout() {
     [open],
   );
   useEffect(watchNativeReminders, []);
+  useEffect(watchNativeWidgets, []);
+  const navigate = useNavigate();
+  useEffect(
+    () =>
+      watchWidgetLaunch(async (launch) => {
+        await navigate({
+          to: launch.action === 'search' ? '/search' : '/',
+          search: launch.action === 'note' && launch.noteId ? { note: launch.noteId } : {},
+        });
+        if (launch.action === 'search') searchFocusRequest.set(searchFocusRequest.get() + 1);
+      }),
+    [navigate],
+  );
   useEffect(followAccountChanges, []);
   useEffect(() => {
     // The page looks much the same for every account, so a switch says whose it is now.

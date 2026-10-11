@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<resources>
+  <color name="widget_surface_red">#5a2a28</color>
+  <color name="widget_surface_orange">#572e16</color>
+  <color name="widget_surface_amber">#513407</color>
+  <color name="widget_surface_lime">#324114</color>
+  <color name="widget_surface_green">#1b4526</color>
+  <color name="widget_surface_mint">#024633</color>
+  <color name="widget_surface_teal">#004643</color>
+  <color name="widget_surface_cyan">#004351</color>
+  <color name="widget_surface_blue">#153e5c</color>
+  <color name="widget_surface_dark_blue">#2c385f</color>
+  <color name="widget_surface_violet">#3c335c</color>
+  <color name="widget_surface_purple">#472f55</color>
+  <color name="widget_surface_magenta">#502c49</color>
+  <color name="widget_surface_pink">#562a3c</color>
+  <color name="widget_surface_yellow">#554308</color>
+  <color name="widget_surface_brown">#463425</color>
+  <color name="widget_surface_gray">#33363a</color>
+  <color name="widget_surface_default">#302e29</color>
+  <color name="widget_ink">#f6f0e5</color>
+  <color name="widget_muted">#c4bbaa</color>
+</resources>

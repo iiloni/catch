@@ -21,7 +21,7 @@ import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { useTagReadiness, useTags } from '@/lib/collections';
-import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
+import { quickNote, quickNoteCanSave, quickNoteColumn, tabFor } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { animateSteady, curves, springs } from '@/lib/motion';
@@ -110,8 +110,12 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   const attachments = useNoteAttachments(draftId ?? '');
   const draft = useRef<string | null>(null);
   const [tools, setTools] = useState<'format' | 'color'>('format');
+  const [widgetColumn] = useState(() => quickNoteColumn.get());
+  useEffect(() => {
+    quickNoteColumn.set(null);
+  }, []);
   const [destination, setDestination] = useState<Destination>(
-    tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
+    widgetColumn || tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
   );
   // Read by the exit effect, which runs after the last render.
   const latest = useRef({ content, color, destination });
@@ -180,7 +184,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     if (draft.current) {
       updateNote(draft.current, {
         content,
-        status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+        status: destination === 'deck' ? (widgetColumn ?? DEFAULT_BOARD_STATUS) : null,
       });
       setNoteColor(draft.current, color);
       return draft.current;
@@ -189,7 +193,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       userId: user.id,
       content,
       color,
-      status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+      status: destination === 'deck' ? (widgetColumn ?? DEFAULT_BOARD_STATUS) : null,
       vault: inVault.current,
     }).id;
   }

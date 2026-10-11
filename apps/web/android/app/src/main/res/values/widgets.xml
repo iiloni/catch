@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<resources>
+  <string name="widget_capture_name">Catch &#xB7; Quick capture</string>
+  <string name="widget_single_name">Catch &#xB7; One note</string>
+  <string name="widget_list_name">Catch &#xB7; Note list</string>
+  <string name="widget_capture_description">Write or search in your chosen account.</string>
+  <string name="widget_single_description">Keep one note close, even offline.</string>
+  <string name="widget_list_description">Pinned notes, a tag, or a Deck column.</string>
+  <string name="widget_configure">Configure widget</string>
+  <string name="widget_new_note">New note</string>
+  <string name="widget_search">Search notes</string>
+</resources>
