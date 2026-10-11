@@ -1,6 +1,7 @@
 import type { BackupOverview, BackupSchedule } from '@catch/shared';
 import { backupDueDate, localDateTime } from '@catch/shared';
 import { eq } from 'drizzle-orm';
+import { pauseEmbeddingWorker, resumeEmbeddingWorker } from '../ai/worker';
 import type { AuthSession } from '../auth';
 import { db } from '../db/client';
 import * as schema from '../db/schema';
@@ -71,6 +72,7 @@ export async function runBackup(
 export async function runRestore(name: string, session: AuthSession['session'] | null) {
   begin('restore');
   try {
+    await pauseEmbeddingWorker();
     const outcome = await restoreBackup(backupConfig, backupPath(backupConfig.backupsDir, name));
     if (session) await keepSession(session);
     lastRestore = {
@@ -92,6 +94,7 @@ export async function runRestore(name: string, session: AuthSession['session'] |
   } finally {
     running = null;
   }
+  resumeEmbeddingWorker();
   forgetVapidKeys();
   // The restored notes may hold links whose previews were still waiting when it was made.
   resumePendingPreviews().catch((error: unknown) => {

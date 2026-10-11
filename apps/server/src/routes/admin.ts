@@ -10,6 +10,7 @@ import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { account, attachments, session, user } from '../db/schema';
 import { requireAdmin } from '../lib/requireAdmin';
+import { aiRoutes } from './ai';
 import { backupRoutes } from './backups';
 import { inviteRoutes } from './invites';
 
@@ -145,4 +146,5 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .route('/invites', inviteRoutes)
+  .route('/ai', aiRoutes)
   .route('/backups', backupRoutes);

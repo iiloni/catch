@@ -219,7 +219,42 @@ export async function restoreDatabase(
     }
     await run(
       'pg_restore',
-      ['--no-owner', '--no-privileges', '--exit-on-error', '--dbname', scratchName, dumpFile],
+      ['--list', '--file', join(workDir, 'restore.list'), dumpFile],
+      scratchUrl,
+    );
+    // Only our installed vector extension runs with privileges, before any uploaded SQL.
+    // Its dump metadata must not try to install it or change its comment as the lesser role.
+    const provision = connect(withDatabase(url, scratchName));
+    try {
+      await provision`CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public`;
+    } finally {
+      await provision.end();
+    }
+    const restoreList = join(workDir, 'restore.list');
+    const entries = (await readFile(restoreList, 'utf8')).split('\n');
+    await writeFile(
+      restoreList,
+      entries
+        .filter(
+          (line) =>
+            !/^\d+; \d+ \d+ (?:EXTENSION - vector(?: |$)|COMMENT - EXTENSION vector(?: |$))/.test(
+              line,
+            ),
+        )
+        .join('\n'),
+    );
+    await run(
+      'pg_restore',
+      [
+        '--no-owner',
+        '--no-privileges',
+        '--exit-on-error',
+        '--use-list',
+        restoreList,
+        '--dbname',
+        scratchName,
+        dumpFile,
+      ],
       scratchUrl,
     );
 
@@ -253,7 +288,7 @@ export async function restoreDatabase(
     const clearFile = join(workDir, 'clear.sql');
     await writeFile(
       clearFile,
-      tables.length > 0 ? `TRUNCATE TABLE ${tables.join(', ')} CASCADE;\n` : '',
+      `SET LOCAL catch.restoring = 'true';\n${tables.length > 0 ? `TRUNCATE TABLE ${tables.join(', ')} CASCADE;\n` : ''}`,
     );
     await run(
       'psql',

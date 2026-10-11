@@ -10,6 +10,8 @@ services:
     # channel (`:preview`) or an exact version (`:0.3.2`).
     image: ${CATCH_IMAGE:-ghcr.io/iiloni/catch:stable}
     restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - '${CATCH_BIND_ADDRESS:-0.0.0.0}:${CATCH_PORT:-3000}:3000'
     environment:

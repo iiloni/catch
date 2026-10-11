@@ -2,6 +2,7 @@ import { useRouter } from '@tanstack/react-router';
 import {
   Bell,
   CircleUser,
+  Cpu,
   Database,
   DatabaseBackup,
   Download,
@@ -27,6 +28,7 @@ export const SETTINGS_TABS = [
   { path: '/settings/data', label: 'Data Management', icon: Database, section: 'User' },
   { path: '/settings/update', label: 'Update', icon: Download, section: 'User' },
   { path: '/settings/admin/users', label: 'Users', icon: Users, section: 'Admin' },
+  { path: '/settings/admin/ai', label: 'AI configuration', icon: Cpu, section: 'Admin' },
   { path: '/settings/admin/backups', label: 'Backups', icon: DatabaseBackup, section: 'Admin' },
 ] as const satisfies ReadonlyArray<{
   path: string;

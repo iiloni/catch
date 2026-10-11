@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { startEmbeddingWorker } from './ai/worker';
 import { createApp } from './app';
 import { startBackupSchedule } from './backups/service';
 import { env } from './env';
@@ -43,4 +44,5 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   });
   startBackupSchedule();
   startReminderSchedule();
+  startEmbeddingWorker();
 });
