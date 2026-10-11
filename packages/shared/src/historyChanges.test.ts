@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryState } from './history';
-import { REVIEW_DELETED, REVIEW_FORMATTED, REVIEW_INSERTED, reviewHistory } from './historyChanges';
+import { REVIEW_DELETED, REVIEW_INSERTED, reviewHistory } from './historyChanges';
 
 const state = (content: HistoryState['content']): HistoryState => ({ content, files: [] });
 const text = (value: string, styles = {}) => ({ type: 'text', text: value, styles });
@@ -13,9 +13,7 @@ const reading = (block: Record<string, unknown>) =>
         ? `[-${run.text}-]`
         : run.styles[REVIEW_INSERTED]
           ? `{+${run.text}+}`
-          : run.styles[REVIEW_FORMATTED]
-            ? `{~${run.text}~}`
-            : run.text,
+          : run.text,
     )
     .join('');
 
@@ -109,12 +107,16 @@ describe('history review', () => {
     const written = { ...image, props: { ...image.props, caption: '', previewWidth: 512 } };
     expect(reviewHistory(state([image]), state([written])).changes).toBe(0);
   });
-  it('marks words set differently, and not a style that is only switched off', () => {
+  it('reads words set differently as rewritten, and not a style that is only switched off', () => {
     const plain = paragraph('a', text('And whatnot', { bold: false, textColor: 'default' }));
     const bold = paragraph('a', text('And '), text('whatnot', { bold: true }));
     const review = reviewHistory(state([plain]), state([bold]));
-    expect(reading(review.items[0]!.block)).toBe('And {~whatnot~}');
-    expect(review.items[0]!.block.content).toMatchObject([{}, { styles: { bold: true } }]);
+    expect(reading(review.items[0]!.block)).toBe('And [-whatnot-]{+whatnot+}');
+    expect(review.items[0]!.block.content).toMatchObject([
+      {},
+      { styles: { bold: false } },
+      { styles: { bold: true } },
+    ]);
     expect(review.changes).toBe(1);
     expect(reviewHistory(state([bold]), state([plain])).changes).toBe(1);
     expect(

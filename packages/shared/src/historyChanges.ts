@@ -6,8 +6,6 @@ type Block = Record<string, unknown>;
 /** Inline styles that mark words the comparison added or removed; no stored note has them. */
 export const REVIEW_INSERTED = 'reviewInserted';
 export const REVIEW_DELETED = 'reviewDeleted';
-/** Words that stayed and are set differently: bold since, or a color they did not have. */
-export const REVIEW_FORMATTED = 'reviewFormatted';
 
 export type HistoryReviewItem = {
   key: string;
@@ -36,9 +34,7 @@ const own = (block: Block) => {
 };
 
 type Token = { text: string; styles: Block; stylesKey: string; href: string | null };
-type Marked = Token & {
-  mark: typeof REVIEW_INSERTED | typeof REVIEW_DELETED | typeof REVIEW_FORMATTED | null;
-};
+type Marked = Token & { mark: typeof REVIEW_INSERTED | typeof REVIEW_DELETED | null };
 
 const blank = (value: unknown): boolean =>
   !value || (typeof value === 'object' && Object.values(value).every(blank));
@@ -79,8 +75,12 @@ function tokens(content: unknown): Token[] | null {
   return result;
 }
 
-/** Formatting aside, the same word; where a link leads is part of what it says. */
-const sameWord = (was: Token, now: Token) => was.text === now.text && was.href === now.href;
+/**
+ * The same word, set the same way and leading to the same place. A word made bold reads as
+ * the plain one removed and the bold one added, like any other rewrite.
+ */
+const sameWord = (was: Token, now: Token) =>
+  was.text === now.text && was.href === now.href && was.stylesKey === now.stylesKey;
 
 /** The words of both sides in reading order: removed words, then the ones that replaced them. */
 function diffTokens(before: Token[], after: Token[]): Marked[] | null {
@@ -109,11 +109,7 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
         ? table[(row + 1) * width + column + 1]! + 1
         : Math.max(table[(row + 1) * width + column]!, table[row * width + column + 1]!);
 
-  type Step = { same: Token; formatted: boolean } | { removed: Token[]; added: Token[] };
-  const kept = (was: Token, now: Token): Step => ({
-    same: now,
-    formatted: was.stylesKey !== now.stylesKey,
-  });
+  type Step = { same: Token } | { removed: Token[]; added: Token[] };
   const steps: Step[] = [];
   const change = () => {
     const last = steps.at(-1);
@@ -122,12 +118,12 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
     steps.push(next);
     return next;
   };
-  for (let index = 0; index < start; index++) steps.push(kept(before[index]!, after[index]!));
+  for (let index = 0; index < start; index++) steps.push({ same: after[index]! });
   let row = 0,
     column = 0;
   while (row < rows || column < columns) {
     if (row < rows && column < columns && sameWord(before[start + row]!, after[start + column]!)) {
-      steps.push(kept(before[start + row]!, after[start + column]!));
+      steps.push({ same: after[start + column]! });
       row++;
       column++;
     } else if (
@@ -137,8 +133,7 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
       change().added.push(after[start + column++]!);
     else change().removed.push(before[start + row++]!);
   }
-  for (let index = endAfter; index < after.length; index++)
-    steps.push(kept(before[endBefore + index - endAfter]!, after[index]!));
+  for (let index = endAfter; index < after.length; index++) steps.push({ same: after[index]! });
 
   // A space left standing between two rewritten words reads as confetti; rewrite it with them.
   const joined: Step[] = [];
@@ -161,7 +156,7 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
   }
   return joined.flatMap((step): Marked[] =>
     'same' in step
-      ? [{ ...step.same, mark: step.formatted ? REVIEW_FORMATTED : null }]
+      ? [{ ...step.same, mark: null }]
       : [
           ...step.removed.map((token): Marked => ({ ...token, mark: REVIEW_DELETED })),
           ...step.added.map((token): Marked => ({ ...token, mark: REVIEW_INSERTED })),

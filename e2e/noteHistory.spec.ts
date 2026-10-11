@@ -321,9 +321,9 @@ test('the newest version is listed as the current note, and new formatting is ma
   await expect(list.getByText(/^Saved [A-Z]/)).toHaveCount(1);
   await expect(list.getByText('Saved version ·')).toHaveCount(0);
   await list.getByText('Earlier content').last().click();
-  await expect(
-    history.locator('mark.review-formatted').filter({ hasText: 'Words made bold' }),
-  ).toBeVisible();
+  // The plain words are struck out and the bold ones added.
+  await expect(history.locator('del').filter({ hasText: 'Words made bold' })).toBeVisible();
+  await expect(history.locator('ins').filter({ hasText: 'Words made bold' })).toHaveClass(/font-/);
 });
 
 test('history preview leaves the editor alone, restores online, and saves a cached version as a new note offline', async ({

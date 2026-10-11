@@ -805,7 +805,6 @@ export function NoteHistory({
                       <span className="flex items-center gap-2 text-foreground">
                         <ins className="review-inserted px-1.5">Added</ins>
                         <del className="review-deleted px-1.5">Removed</del>
-                        <mark className="review-formatted px-1.5">Formatted</mark>
                       </span>
                     </>
                   )}

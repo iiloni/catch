@@ -174,10 +174,10 @@ reordering from index shifts caused by additions, and nested blocks are compared
 way inside their parent. Words are split with `Intl.Segmenter` and aligned by longest
 common subsequence; a block whose content is not text (a table, a file) or is too long to
 align is shown as removed and added. A checklist item ticked or cleared is named
-(Checked, Unchecked), as is a block that moved. Formatting is a change too: words that
-stayed and are set differently (bold, a color) get a third mark, a tint over a dotted
-line, and a block whose kind or props changed (a paragraph made a heading) is named
-Formatting changed. A style that is only switched off or left at its default is no
+(Checked, Unchecked), as is a block that moved. Formatting is a change too: a word set
+differently (bold, a color) is a rewrite like any other, shown removed in its old style
+and added in its new one, and a block whose kind or props changed (a paragraph made a
+heading) is named Formatting changed. A style that is only switched off or left at its default is no
 difference, nor is a prop only one side names, which imported notes leave out. Storage deltas are never presented as a user-facing
 diff.
 
