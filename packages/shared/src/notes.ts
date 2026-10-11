@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NOTE_COLORS } from './colors';
+import { historyWriteSchema } from './historyWrite';
 import { hiddenLinksSchema, normalizeUrl } from './links';
 
 export const noteColorSchema = z.enum(NOTE_COLORS);
@@ -105,6 +106,9 @@ export const updateNoteSchema = noteSchema
     deletedAt: true,
   })
   .partial()
-  .extend({ galleryPreviewUrl: galleryPreviewUrlSchema.optional() });
+  .extend({
+    galleryPreviewUrl: galleryPreviewUrlSchema.optional(),
+    history: historyWriteSchema.optional(),
+  });
 
 export type UpdateNote = z.infer<typeof updateNoteSchema>;

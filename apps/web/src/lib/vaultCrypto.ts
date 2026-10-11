@@ -6,6 +6,9 @@ import {
   vaultNotePayloadSchema,
 } from '@catch/shared';
 import { gcm } from '@noble/ciphers/aes.js';
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 /**
  * The vault's cryptography (ADR 0020).
@@ -328,3 +331,77 @@ export async function sealForDevice(raw: Bytes) {
 
 export const openFromDevice = (deviceKey: CryptoKey, sealed: string) =>
   unseal(deviceKey, sealed, 'catch-vault-key:device');
+
+export type VaultHistoryContext = { userId: string; noteId: string; epoch: string };
+const historyDomain = (context: VaultHistoryContext) =>
+  `catch-vault-history:1:${context.userId}:${context.noteId}:${context.epoch}`;
+function historyKey(raw: Bytes, context: VaultHistoryContext, role: 'encryption' | 'identity') {
+  return hkdf(sha256, raw, undefined, utf8(`${historyDomain(context)}:${role}`), KEY_BYTES);
+}
+function concatHistoryBytes(prefix: Uint8Array, data: Uint8Array) {
+  const result = new Uint8Array(prefix.length + data.length);
+  result.set(prefix);
+  result.set(data, prefix.length);
+  return result;
+}
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+/** Keyed, domain-separated identities reveal equality only within this note and epoch. */
+export function vaultHistoryIdentity(
+  raw: Bytes,
+  context: VaultHistoryContext,
+  role: string,
+  data: Uint8Array,
+) {
+  const derived = historyKey(raw, context, 'identity');
+  try {
+    return hex(hmac(sha256, derived, concatHistoryBytes(utf8(`${role}:`), data)));
+  } finally {
+    derived.fill(0);
+  }
+}
+export function sealVaultHistory(
+  raw: Bytes,
+  context: VaultHistoryContext,
+  representation: 'snapshot' | 'delta',
+  payloadKey: string,
+  bytes: Uint8Array,
+) {
+  const derived = historyKey(raw, context, 'encryption');
+  try {
+    const nonce = random(NONCE_BYTES);
+    const sealed = gcm(
+      derived,
+      nonce,
+      utf8(`${historyDomain(context)}:${representation}:${payloadKey}`),
+    ).encrypt(bytes);
+    const result = new Uint8Array(nonce.length + sealed.length);
+    result.set(nonce);
+    result.set(sealed, nonce.length);
+    return toBase64(result);
+  } finally {
+    derived.fill(0);
+  }
+}
+export function openVaultHistory(
+  raw: Bytes,
+  context: VaultHistoryContext,
+  representation: 'snapshot' | 'delta',
+  payloadKey: string,
+  data: string,
+): Bytes {
+  const derived = historyKey(raw, context, 'encryption');
+  try {
+    const bytes = fromBase64(data);
+    const plain = gcm(
+      derived,
+      bytes.subarray(0, NONCE_BYTES),
+      utf8(`${historyDomain(context)}:${representation}:${payloadKey}`),
+    ).decrypt(bytes.subarray(NONCE_BYTES));
+    if (vaultHistoryIdentity(raw, context, `payload:${representation}`, plain) !== payloadKey)
+      throw new Error('Invalid history identity.');
+    return new Uint8Array(plain);
+  } finally {
+    derived.fill(0);
+  }
+}

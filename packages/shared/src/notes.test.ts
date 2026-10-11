@@ -64,6 +64,14 @@ describe('updateNoteSchema', () => {
     });
   });
 
+  it('keeps a history envelope without resetting an omitted preview choice', () => {
+    const history = { operationId: id, originId: id };
+    expect(updateNoteSchema.parse({ content: [], history })).toEqual({ content: [], history });
+    expect(
+      updateNoteSchema.parse({ content: [], galleryPreviewUrl: 'https://example.com/', history }),
+    ).toEqual({ content: [], galleryPreviewUrl: 'https://example.com/', history });
+  });
+
   it.each(['javascript:alert(1)', 'https://example.com/#part', 'not a url'])(
     'rejects invalid or unnormalized preview choices: %s',
     (galleryPreviewUrl) => {

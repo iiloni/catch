@@ -51,6 +51,7 @@ test('checkboxes have a 44px target and toggle from its padding', async ({ page,
   await checkbox.click();
   await expect(checkbox).toBeChecked();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.reload();
   await openNote(page, 'Touch list');
   await expect(page.getByRole('dialog').getByRole('checkbox').first()).toBeChecked();
@@ -92,6 +93,7 @@ test('an empty checklist item can be edited after dismissing the keyboard', asyn
   await expect(emptyItem.getByRole('checkbox')).not.toBeChecked();
   await expect(dialog.locator('.bn-editor h3')).toHaveText('Touch list');
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.reload();
   const reopened = await openNote(page, 'Touch list');
   await expect(reopened.locator('[data-content-type="checkListItem"] p').last()).toHaveText(
@@ -132,6 +134,7 @@ for (const kind of ['checkListItem', 'bulletListItem', 'numberedListItem']) {
     await page.keyboard.press('Control+Shift+z');
     await expect(rows).toHaveText(['Touch list', 'Item 1', 'Item 2', 'Item 0Child']);
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden();
     await page.reload();
     await openNote(page, 'Touch list');
     await expect(
@@ -331,6 +334,7 @@ for (const kind of ['checkListItem', 'bulletListItem', 'numberedListItem']) {
     await expect(rows).toHaveText(['Touch list', 'Item 1', 'Item 0!Child', 'Item 2']);
     await dragListItem(page, row, 64, isMobile);
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden();
     await page.reload();
     const reopened = await openNote(page, 'Touch list');
     await expect(reopened.locator('.bn-editor > .bn-block-group > .bn-block-outer')).toHaveText([
@@ -385,6 +389,7 @@ test('only checkbox items have a trailing delete button, with undo and persisted
   await page.keyboard.press('Control+Shift+z');
   await expect(buttons).toHaveCount(2);
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.reload();
   const reopened = await openNote(page, 'Touch list');
   await expect(

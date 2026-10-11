@@ -1,5 +1,6 @@
 import type { Note, NoteTags } from '@catch/shared';
 import { notesCollection, noteTagsCollection } from './collections';
+import { historyChanges } from './historyEvents';
 import {
   changeVaultNote,
   changeVaultNoteTags,
@@ -28,10 +29,25 @@ function update(
   ids: string | readonly string[],
   change: ((draft: Note) => void) | ((drafts: Note[]) => void),
 ) {
+  const before = new Map(
+    asList(ids).flatMap((id) => {
+      const note = getVaultNote(id) ?? notesCollection.get(id);
+      return note ? [[id, note] as const] : [];
+    }),
+  );
+  const notify = () => {
+    for (const [id, note] of before) {
+      const after = getVaultNote(id) ?? notesCollection.get(id);
+      if (after && JSON.stringify(note.content) !== JSON.stringify(after.content))
+        for (const listener of historyChanges)
+          listener({ note, before: note.content, after: after.content });
+    }
+  };
   if (typeof ids === 'string') {
     const one = change as (draft: Note) => void;
     if (isVaultNote(ids)) changeVaultNote(ids, one);
     else notesCollection.update(ids, (draft) => one(draft as Note));
+    notify();
     return;
   }
   const many = change as (drafts: Note[]) => void;
@@ -46,6 +62,7 @@ function update(
   }
   const plain = ids.filter((id) => !isVaultNote(id));
   if (plain.length > 0) notesCollection.update(plain, (drafts) => many(drafts as Note[]));
+  notify();
 }
 
 export const noteStore = {

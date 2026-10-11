@@ -80,6 +80,7 @@ describe('client compatibility transport', () => {
     ['client-too-old', newer, 200],
     ['server-too-old', null, 404],
     ['server-too-old', { min: 1, max: 1 }, 200],
+    ['server-too-old', { min: 2, max: 5 }, 200],
   ] as const)('blocks %s before sending data', async (issue, range, status) => {
     fetcher.mockResolvedValueOnce(json(range, status));
     const { compatibleFetch, CompatibilityError } = await import('./compatibility');

@@ -6,7 +6,14 @@ import { z } from 'zod';
 import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
-import { attachments, notes, reminders, vaultNotes, vaults } from '../db/schema';
+import { attachments, noteHistory, notes, reminders, vaultNotes, vaults } from '../db/schema';
+import {
+  beforeContentWrite,
+  deleteHistory,
+  ensureHistory,
+  HistoryFailure,
+  preserveVault,
+} from '../history/store';
 import { requireUser } from '../lib/requireUser';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -25,6 +32,11 @@ const idParam = zValidator('param', z.object({ id: z.uuid() }));
  * these routes store and return ciphertext and never see a password, a key or a note.
  */
 export const vaultRoutes = new Hono<AppEnv>()
+  .onError((error, c) => {
+    if (error instanceof HistoryFailure)
+      return c.json({ code: error.code, error: error.message }, 409);
+    throw error;
+  })
   .use(requireUser)
   .post('/', zValidator('json', saveVaultSchema), async (c) => {
     const userId = c.get('user')!.id;
@@ -83,6 +95,9 @@ export const vaultRoutes = new Hono<AppEnv>()
         .delete(attachments)
         .where(and(eq(attachments.userId, userId), inArray(attachments.noteId, noteIds)))
         .returning({ id: attachments.id });
+      await tx
+        .delete(noteHistory)
+        .where(and(eq(noteHistory.userId, userId), eq(noteHistory.kind, 'vault')));
       const deleted = await tx
         .delete(vaults)
         .where(eq(vaults.userId, userId))
@@ -115,7 +130,11 @@ export const vaultRoutes = new Hono<AppEnv>()
         // Clients replay queued writes, so the note may be here from an earlier try.
         .onConflictDoNothing()
         .returning({ id: vaultNotes.id });
-      if (inserted.length > 0) return { txid: await currentTxid(tx) };
+      if (inserted.length > 0) {
+        const control = await ensureHistory(tx, userId, body.id, 'vault');
+        await preserveVault(tx, control, body.data, 'baseline');
+        return { txid: await currentTxid(tx) };
+      }
       const [mine] = await tx
         .select({ id: vaultNotes.id })
         .from(vaultNotes)
@@ -129,17 +148,26 @@ export const vaultRoutes = new Hono<AppEnv>()
   .patch('/notes/:id', idParam, zValidator('json', updateVaultNoteSchema), async (c) => {
     const userId = c.get('user')!.id;
     const { id } = c.req.valid('param');
-    const { data } = c.req.valid('json');
-    const txid = await db.transaction(async (tx) => {
+    const { data, history } = c.req.valid('json');
+    const result = await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(vaultNotes)
+        .where(and(eq(vaultNotes.id, id), eq(vaultNotes.userId, userId)))
+        .for('update');
+      if (!current) return null;
+      const control = await ensureHistory(tx, userId, id, 'vault');
+      if (!(await beforeContentWrite(tx, control, current, history, { data })))
+        return { txid: null };
       const updated = await tx
         .update(vaultNotes)
         .set({ data })
         .where(and(eq(vaultNotes.id, id), eq(vaultNotes.userId, userId)))
         .returning({ id: vaultNotes.id });
-      return updated.length > 0 ? currentTxid(tx) : null;
+      return updated.length > 0 ? { txid: await currentTxid(tx) } : null;
     });
-    if (txid === null) return c.json({ error: 'Note not found' }, 404);
-    return c.json({ txid });
+    if (result === null) return c.json({ error: 'Note not found' }, 404);
+    return c.json(result);
   })
   .delete('/notes/:id', idParam, async (c) => {
     const userId = c.get('user')!.id;
@@ -150,6 +178,7 @@ export const vaultRoutes = new Hono<AppEnv>()
         .where(and(eq(vaultNotes.id, id), eq(vaultNotes.userId, userId)))
         .returning({ id: vaultNotes.id });
       if (deleted.length === 0) return null;
+      await deleteHistory(tx, userId, id);
       await tx.delete(reminders).where(and(eq(reminders.noteId, id), eq(reminders.userId, userId)));
       const files = await tx
         .delete(attachments)

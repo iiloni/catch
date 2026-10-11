@@ -78,3 +78,12 @@ export const tagFormOpen = createStore(false);
 
 /** Bumped to ask the open note's dock for its reminder panel, from the reminder under the note. */
 export const noteReminderRequest = createStore(0);
+
+/** Version review owns the note surface while the working editor stays mounted. */
+export const noteHistoryOpen = createStore(false);
+
+/**
+ * The dock's row while a note's versions are reviewed. The reader draws its controls there
+ * through a portal, so its state stays with the reader.
+ */
+export const historyDockSlot = createStore<HTMLElement | null>(null);

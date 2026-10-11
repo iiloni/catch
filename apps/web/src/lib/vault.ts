@@ -1,12 +1,15 @@
 import type {
   Attachment,
+  HistoryState,
   Note,
   NoteTags,
   Reminder,
   Vault,
   VaultFile,
+  VaultNote,
   VaultNotePayload,
 } from '@catch/shared';
+import { canonicalHistory } from '@catch/shared';
 import { useEffect } from 'react';
 import { ApiError, api } from './api';
 import { closeSealedFiles, setSealedFiles } from './attachmentFiles';
@@ -18,6 +21,12 @@ import {
   vaultCollection,
   vaultNotesCollection,
 } from './collections';
+import {
+  clearHistoryContentKeys,
+  historyVaultLocked,
+  rememberHistoryContentKey,
+} from './historyEvents';
+import { stopHistoryWorker } from './historyWorker';
 import { createStore } from './store';
 import {
   createVaultKey,
@@ -25,10 +34,13 @@ import {
   openFile,
   openFromDevice,
   openNote,
+  openVaultHistory,
   openVaultKey,
   sealForDevice,
   sealNote,
   sealUnderPassword,
+  sealVaultHistory,
+  vaultHistoryIdentity,
 } from './vaultCrypto';
 import { forgetVaultKey, loadVaultKey, rememberVaultKey, vaultSeenKey } from './vaultKeyStore';
 
@@ -88,7 +100,7 @@ const shown = new Map<string, VaultNotePayload>();
 let started = false;
 
 /** Called before the key goes, so an editor can save what it still holds. */
-export const beforeVaultLock = new Set<() => void>();
+export const beforeVaultLock = new Set<() => void | Promise<void>>();
 
 const userId = () => getSignedInUser()?.id ?? null;
 const vaultRow = (): Vault | undefined => {
@@ -174,8 +186,19 @@ function publish(next: ReadonlyMap<string, Entry>, unreadable = vaultUnreadable.
 }
 
 /** Locks: forgets the key and the notes it opened, in memory and in the device's keeping. */
-function dropKey() {
-  if (key) for (const save of beforeVaultLock) save();
+let dropping: Promise<void> | null = null;
+function dropKey(): Promise<void> {
+  if (dropping) return dropping;
+  dropping = dropKeyNow().finally(() => {
+    dropping = null;
+  });
+  return dropping;
+}
+async function dropKeyNow() {
+  if (key) for (const save of beforeVaultLock) await save();
+  stopHistoryWorker();
+  clearHistoryContentKeys();
+  for (const clear of historyVaultLocked) clear();
   key?.fill(0);
   key = null;
   fileKey = null;
@@ -557,6 +580,13 @@ function store(entry: Entry, exists: boolean) {
   const { id: owner, key } = unlocked();
   const payload = toPayload(entry);
   const data = sealNote(key, owner, entry.note.id, payload);
+  rememberHistoryContentKey(
+    data,
+    vaultHistoryContentIdentity(entry.note.id, entry.note.id, {
+      content: payload.content,
+      files: [],
+    }),
+  );
   opened.set(data, payload);
   shown.set(entry.note.id, payload);
   if (exists) {
@@ -635,4 +665,50 @@ export function removeVaultNote(id: string) {
   next.delete(id);
   shown.delete(id);
   publish(next);
+}
+
+/** History never exposes the vault key to a worker or durable store. */
+export function vaultHistoryContentIdentity(noteId: string, epoch: string, state: HistoryState) {
+  const { id: userId, key } = unlocked();
+  return vaultHistoryIdentity(
+    key,
+    { userId, noteId, epoch },
+    'content',
+    new TextEncoder().encode(canonicalHistory(state)),
+  );
+}
+export function vaultHistorySeal(
+  noteId: string,
+  epoch: string,
+  representation: 'snapshot' | 'delta',
+  bytes: Uint8Array,
+) {
+  const { id: userId, key } = unlocked();
+  const context = { userId, noteId, epoch };
+  const payloadKey = vaultHistoryIdentity(key, context, `payload:${representation}`, bytes);
+  return { payloadKey, data: sealVaultHistory(key, context, representation, payloadKey, bytes) };
+}
+export function vaultHistoryOpen(
+  noteId: string,
+  epoch: string,
+  representation: 'snapshot' | 'delta',
+  payloadKey: string,
+  data: string,
+) {
+  const { id: userId, key } = unlocked();
+  return openVaultHistory(key, { userId, noteId, epoch }, representation, payloadKey, data);
+}
+export function openVaultHistoryNote(noteId: string, data: string): HistoryState {
+  const { id: userId, key } = unlocked();
+  const payload = openNote(key, userId, noteId, data);
+  if (!payload) throw new VaultError('This version could not be opened.');
+  return { content: payload.content, files: payload.files };
+}
+/** Preserve current placement, tags, reminder and files when replacing only content. */
+export function sealVaultHistoryRestore(current: VaultNote, content: Note['content']) {
+  const { id: userId, key } = unlocked();
+  const payload = openNote(key, userId, current.id, current.data);
+  if (!payload) throw new VaultError('The current note could not be opened.');
+  if (payload.deletedAt) throw new VaultError('Restore this note from Trash first.');
+  return sealNote(key, userId, current.id, { ...payload, content, updatedAt: new Date() });
 }

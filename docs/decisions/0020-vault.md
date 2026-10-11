@@ -126,3 +126,11 @@ cost: Web Crypto measured about 1 GB/s on a 2019 laptop, and phones have hardwar
   server, which has no such shapes, the lock button keeps looking for a vault and the rest of
   the app is unaffected.
 - Backups need no change (ADR 0012): the new tables are dumped and restored like any other.
+
+Vault history (ADR 0022) derives separate per-note/per-epoch encryption and identity keys.
+Compressed snapshots/deltas, drafts and cached versions are sealed before persistence or
+upload; the server sees sizes, timing and equality within one note's epoch. Lock waits for
+pending sealing and durable history jobs, then stops workers and clears session plaintext.
+The server can keep an opaque original note ciphertext as a preimage for a legacy write;
+an unlocked device opens it with the original note context. Restoring content online merges
+it with the authoritative current settings on the device before sealing the live note again.
