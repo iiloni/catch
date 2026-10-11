@@ -393,6 +393,8 @@ export function NoteHistory({
     setError(null);
     try {
       const current = await prepareHistoryRestore(note.id);
+      // The confirmation takes the list's place; the list must not come back under it.
+      setPickerOpen(false);
       setContext(current);
       setReviewCurrent(false);
       const content =
@@ -605,9 +607,10 @@ export function NoteHistory({
     })();
     return () => controller.abort();
   }, [exactKey, readSnapshot, compared]);
+  // Nothing is listed until it has been folded, so rows do not vanish under a finger.
+  const folding = exact.length > 0 && !folds && !waited;
   const snapshots = useMemo(() => {
-    // Nothing is listed until it has been folded, so rows do not vanish under a finger.
-    if (!folds && !waited) return [];
+    if (folding) return [];
     // Answers for an earlier list still hold: they are about versions, which do not change.
     const result: Snapshot[] = [];
     for (const snapshot of exact) {
@@ -628,7 +631,7 @@ export function NoteHistory({
       };
     }
     return result;
-  }, [exact, folds, waited, local]);
+  }, [exact, folds, folding, local]);
   // Opening history saves the note as it is, so the newest snapshot is usually the note
   // itself. It is listed once, as the current note, with the time it was saved.
   const saved = useMemo(() => {
@@ -849,7 +852,9 @@ export function NoteHistory({
             Version history
           </h2>
           <p className="truncate text-muted-foreground text-xs">
-            Read only · {snapshots.length} saved {snapshots.length === 1 ? 'version' : 'versions'}
+            Read only
+            {!folding &&
+              ` · ${snapshots.length} saved ${snapshots.length === 1 ? 'version' : 'versions'}`}
           </p>
         </div>
         <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
@@ -995,7 +1000,7 @@ export function NoteHistory({
                       Earlier content appears here as you edit this note.
                     </p>
                   )}
-                  {loading && (
+                  {(loading || folding) && (
                     <p role="status" className="px-5 pt-5 text-muted-foreground text-sm">
                       Loading history…
                     </p>
