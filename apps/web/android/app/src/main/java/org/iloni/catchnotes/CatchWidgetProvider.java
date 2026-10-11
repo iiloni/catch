@@ -151,7 +151,10 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                             : configureIntent(context, id));
             if (customTheme) {
                 views.setInt(R.id.widget_search, "setColorFilter", ink(dark));
-                int button = dark ? R.drawable.widget_button_dark : R.drawable.widget_button_light;
+                int button =
+                        dark
+                                ? R.drawable.widget_capture_button_dark
+                                : R.drawable.widget_capture_button_light;
                 views.setInt(R.id.widget_settings, "setBackgroundResource", button);
                 views.setInt(R.id.widget_search, "setBackgroundResource", button);
             }

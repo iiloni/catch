@@ -79,6 +79,29 @@ public class WidgetLayoutTest {
         android.widget.TextView compose = capture.findViewById(R.id.widget_compose);
         assertTrue(
                 compose.getPaint().measureText(compose.getText().toString()) <= compose.getWidth());
+        assertTrue(
+                compose.getLayout().getHeight()
+                        <= compose.getHeight()
+                                - compose.getCompoundPaddingTop()
+                                - compose.getCompoundPaddingBottom());
+        android.graphics.Bitmap painted =
+                android.graphics.Bitmap.createBitmap(
+                        capture.getWidth(),
+                        capture.getHeight(),
+                        android.graphics.Bitmap.Config.ARGB_8888);
+        capture.draw(new android.graphics.Canvas(painted));
+        for (int button :
+                new int[] {R.id.widget_settings, R.id.widget_compose, R.id.widget_search}) {
+            View control = capture.findViewById(button);
+            android.graphics.Rect bounds =
+                    new android.graphics.Rect(0, 0, control.getWidth(), control.getHeight());
+            ((android.view.ViewGroup) capture).offsetDescendantRectToMyCoords(control, bounds);
+            int inset = Math.round(4 * density);
+            int surface = context.getResources().getColor(R.color.widget_surface_default);
+            assertEquals(surface, painted.getPixel(bounds.centerX(), bounds.top + inset));
+            assertEquals(surface, painted.getPixel(bounds.centerX(), bounds.bottom - inset - 1));
+        }
+        painted.recycle();
         View list =
                 new RemoteViews(context.getPackageName(), R.layout.widget_preview_list)
                         .apply(context, new FrameLayout(context));
