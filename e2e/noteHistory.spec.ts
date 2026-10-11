@@ -86,6 +86,30 @@ async function list(request: APIRequestContext, headers: Record<string, string>,
   return historyListSchema.parse(await response.json());
 }
 
+test('a batch that repeats an id keeps history of the note that was stored', {
+  tag: '@api',
+}, async ({ request }) => {
+  const headers = await account(request);
+  const noteId = id();
+  const note = (text: string) => ({
+    id: noteId,
+    content: state(text).content,
+    color: 'default',
+    isPinned: false,
+    isArchived: false,
+    position: 'a0',
+    hiddenLinks: [],
+  });
+  const response = await request.post('/api/notes/batch', {
+    headers,
+    data: { notes: [note('Stored words'), note('Skipped words')] },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const { versions } = await list(request, headers, noteId);
+  expect(versions).toHaveLength(1);
+  expect(versions[0]?.contentKey).toBe(digest(canonicalHistory(state('Stored words'))));
+});
+
 test('history restores atomically, preserves note settings, rejects newer edits and never replays an old write over a restore', {
   tag: '@api',
 }, async ({ request }) => {

@@ -90,13 +90,24 @@ describe('autosave durability', () => {
     });
     expect(mocks.finish).toHaveBeenCalledWith('note');
   });
-  it('reports a failed device save once, then lets the note close', async () => {
-    mocks.stored.mockReturnValue(Promise.reject(new Error('disk full')));
+  it('reports a failed device save once, writes it again, then lets the note close', async () => {
+    mocks.stored.mockImplementation(() => Promise.reject(new Error('disk full')));
+    const { result, unmount } = renderHook(() => useNoteAutosave('note'));
+    const content = [{ type: 'paragraph', content: 'Unsaved edit' }];
+    act(() => result.current.save(content));
+    await expect(result.current.flush()).rejects.toThrow('disk full');
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    await expect(result.current.flush()).resolves.toBeUndefined();
+    expect(mocks.update).toHaveBeenCalledTimes(2);
+    expect(mocks.update).toHaveBeenLastCalledWith('note', { content });
+    unmount();
+  });
+  it('tells a close of a save that failed while typing', async () => {
+    mocks.stored.mockImplementation(() => Promise.reject(new Error('disk full')));
     const { result, unmount } = renderHook(() => useNoteAutosave('note'));
     act(() => result.current.save([{ type: 'paragraph', content: 'Unsaved edit' }]));
+    await act(async () => vi.advanceTimersByTimeAsync(500));
     await expect(result.current.flush()).rejects.toThrow('disk full');
-    await expect(result.current.flush()).rejects.toThrow('disk full');
-    await expect(result.current.flush()).resolves.toBeUndefined();
     unmount();
   });
 });

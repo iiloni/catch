@@ -98,7 +98,11 @@ confirmed result; selecting or canceling a preview never reseeds it.
 for encryption and keyed identities from the vault key. AES-256-GCM uses a fresh nonce and
 additional data binding owner, note, epoch, format, representation and payload identity.
 HMAC-SHA256 content/payload identities allow within-note deduplication while revealing no
-cross-note content equality. Compression and comparison workers receive plaintext only
+cross-note content equality. A note write carries one more identity, of its content
+alone, so the server can tell a change of words from a pin or a tag; it is derived per note
+and not per epoch, since a device sealing a note offline may not know the epoch, and the
+server compares it only with the write before. A file renamed without a change of content
+is therefore no version, as on the device, where history follows content. Compression and comparison workers receive plaintext only
 while the vault is unlocked and never receive its key. Lock waits for draft/checkpoint
 sealing and durable storage, stops workers and clears history session plaintext. Password
 changes keep history readable because the raw vault key is unchanged. A server preimage

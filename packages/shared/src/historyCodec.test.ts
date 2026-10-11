@@ -78,7 +78,15 @@ describe('history encoding', () => {
     expect(() => unpackHistory(bad)).toThrow();
     expect(() => unpackHistory(payload.subarray(0, 3))).toThrow();
     expect(() => decodeHistory(packHistory({ content: 'not blocks' }), 'snapshot')).toThrow();
-    expect(() => decodeHistory(packHistory({ __proto__: { dangerous: true } }), 'delta')).toThrow();
+    // An own `__proto__` key, as JSON gives one, and a state to patch: only the guard refuses.
+    const unsafe: unknown = JSON.parse('{"__proto__":{"dangerous":true}}');
+    expect(Object.hasOwn(unsafe as object, '__proto__')).toBe(true);
+    expect(() => decodeHistory(packHistory(unsafe), 'delta', state('before'))).toThrow(
+      'Invalid history delta.',
+    );
+    expect(() => decodeHistory(packHistory({}), 'delta', state('before'))).not.toThrow(
+      'Invalid history delta.',
+    );
   });
 });
 

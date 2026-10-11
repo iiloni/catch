@@ -19,16 +19,22 @@ const untouched = (item: HistoryReviewItem): boolean =>
 
 function ReviewItems({ items, fold }: { items: HistoryReviewItem[]; fold: boolean }) {
   const [opened, setOpened] = useState(new Set<string>());
-  // A numbered list counts on through what was added to it; a removed item keeps its number.
+  // A numbered list counts on through what was added to it. Removed items count on from
+  // the item before them, as they did, and the ones that stayed are numbered without them.
   let number = 0;
+  let removed = 0;
   const numbered = items.map((item) => {
     if (item.block.type !== 'numberedListItem') {
-      number = 0;
+      number = removed = 0;
       return item.block;
     }
     const props = isObject(item.block.props) ? item.block.props : {};
-    const start = number > 0 ? number + 1 : typeof props.start === 'number' ? props.start : 1;
-    if (item.status !== 'removed') number = start;
+    const next = number > 0 ? number + 1 : typeof props.start === 'number' ? props.start : 1;
+    const start = item.status === 'removed' ? next + removed++ : next;
+    if (item.status !== 'removed') {
+      number = start;
+      removed = 0;
+    }
     return { ...item.block, props: { ...props, start } };
   });
 

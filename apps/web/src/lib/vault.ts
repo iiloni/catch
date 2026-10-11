@@ -195,7 +195,13 @@ function dropKey(): Promise<void> {
   return dropping;
 }
 async function dropKeyNow() {
-  if (key) for (const save of beforeVaultLock) await save();
+  // A save that fails must not leave the vault open: its owner reports it, and the key goes.
+  if (key)
+    for (const save of beforeVaultLock) {
+      try {
+        await save();
+      } catch {}
+    }
   stopHistoryWorker();
   clearHistoryContentKeys();
   for (const clear of historyVaultLocked) clear();

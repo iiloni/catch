@@ -4,6 +4,9 @@ import { historyDockSlot } from '@/lib/dockState';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
+/** Every slot on the page, oldest first: the page's dock and a pane's can pass each other. */
+const slots: HTMLDivElement[] = [];
+
 /**
  * What the dock shows while a note's versions are reviewed, in the note's dock's place. It
  * is only the room: the reader fills it (see `historyDockSlot`), growing it upward for the
@@ -14,10 +17,12 @@ export function HistoryDockSlot() {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!element) return;
+    slots.push(element);
     historyDockSlot.set(element);
-    // The page's dock and a pane's can pass each other; the newer one keeps the reader.
+    // The newest one keeps the reader, and gives it back to one that outlives it.
     return () => {
-      if (historyDockSlot.get() === element) historyDockSlot.set(null);
+      slots.splice(slots.indexOf(element), 1);
+      historyDockSlot.set(slots.at(-1) ?? null);
     };
   }, [element]);
   return (

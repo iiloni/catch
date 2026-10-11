@@ -67,7 +67,11 @@ async function insertNotes(tx: Tx, userId: string, bodies: readonly CreateNote[]
     userId,
     bodies.filter((body) => !body.position).length,
   );
-  const rows = bodies.map((body) => ({
+  // One row per id, the first: Postgres skips a repeat inside the batch as it does a replay,
+  // and history and links must be told of the note that was stored.
+  const ids = new Set<string>();
+  const unique = bodies.filter((body) => !ids.has(body.id) && ids.add(body.id));
+  const rows = unique.map((body) => ({
     ...body,
     position: body.position ?? (positions.shift() as string),
     createdAt: notLater(body.createdAt, now),

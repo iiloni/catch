@@ -20,45 +20,52 @@ export function useNoteAutosave(noteId: string) {
   const generation = useRef(0);
   // Debouncing clears pending content before its write reaches the durable outbox.
   const storedWrite = useRef<Promise<void>>(Promise.resolve());
+  // Content whose failed save a caller has been told of.
+  const told = useRef<Note['content'] | null>(null);
 
-  const flush = useCallback(() => {
-    window.clearTimeout(timer.current);
-    // A save that failed on the device is reported to whoever asks next, once: kept, it
-    // would refuse every later close of a note that has nothing new to save.
-    const lastWrite = () => {
-      const stored = storedWrite.current;
-      stored.catch(() => {
+  const attempt = useCallback(
+    (report: boolean) => {
+      window.clearTimeout(timer.current);
+      const content = pending.current;
+      if (!content) return storedWrite.current;
+      pending.current = null;
+      // Deleted elsewhere, or in a vault that has since locked: there is nothing to save to.
+      if (!getNote(noteId)) return storedWrite.current;
+      const current = ++generation.current;
+      const transaction = updateNote(noteId, { content });
+      transaction.isPersisted.promise.then(
+        () => {
+          if (current === generation.current && !pending.current) setState('saved');
+        },
+        () => {
+          if (current === generation.current) setState('error');
+        },
+      );
+      const stored: Promise<void> = waitForWriteStored(transaction).catch((error: unknown) => {
         if (storedWrite.current === stored) storedWrite.current = Promise.resolve();
+        // Kept, so the next save or close writes it again.
+        if (current === generation.current && !pending.current) pending.current = content;
+        // A close is refused once for it. Refused every time, a device that cannot store
+        // would hold the note open for good.
+        if (report && told.current === content) return;
+        if (report) told.current = content;
+        throw error;
       });
+      storedWrite.current = stored;
       return stored;
-    };
-    const content = pending.current;
-    if (!content) return lastWrite();
-    pending.current = null;
-    // Deleted elsewhere, or in a vault that has since locked: there is nothing to save to.
-    if (!getNote(noteId)) return lastWrite();
-    const current = ++generation.current;
-    const transaction = updateNote(noteId, { content });
-    transaction.isPersisted.promise.then(
-      () => {
-        if (current === generation.current && !pending.current) setState('saved');
-      },
-      () => {
-        if (current === generation.current) setState('error');
-      },
-    );
-    storedWrite.current = waitForWriteStored(transaction);
-    return storedWrite.current;
-  }, [noteId]);
+    },
+    [noteId],
+  );
+  const flush = useCallback(() => attempt(true), [attempt]);
 
   const save = useCallback(
     (content: Note['content']) => {
       pending.current = content;
       setState('saving');
       window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => void flush().catch(() => {}), SAVE_DELAY_MS);
+      timer.current = window.setTimeout(() => void attempt(false).catch(() => {}), SAVE_DELAY_MS);
     },
-    [flush],
+    [attempt],
   );
 
   useEffect(
