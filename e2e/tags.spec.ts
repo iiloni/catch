@@ -537,11 +537,21 @@ test('nested primary tags, secondary selection, recoloring and deletion work on 
   await noteToolbar(page).getByRole('button', { name: 'Tags', exact: true }).click();
   await expect(dialog.getByRole('region', { name: 'Tags' }).getByRole('button')).toHaveCount(2);
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  // Optimistic changes can appear before their outbox entry is durable. Forced page
+  // loads must wait for storage so both the assignments and deletion survive them.
+  const waitForStoredWrites = () =>
+    page.evaluate(async () => {
+      const { waitForPendingWritesStored } = await import('/src/lib/collections.ts');
+      await waitForPendingWritesStored();
+    });
+  await waitForStoredWrites();
   await page.goto('/settings/tags');
+  await expect(page.getByRole('button', { name: 'Manage Release', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Manage Work', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Delete Work', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete tag', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Manage Release', exact: true })).toHaveCount(0);
+  await waitForStoredWrites();
   await page.goto('/');
   await expect(card(page, 'Tagged note')).toBeVisible();
   await expect(
