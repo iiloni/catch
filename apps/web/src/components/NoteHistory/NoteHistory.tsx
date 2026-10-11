@@ -95,6 +95,14 @@ const failure = (error: unknown) => {
     : 'Could not reach the server. Your selected version is still here.';
 };
 
+/** A version keeps its files' places, not their bytes, which may since have been deleted. */
+const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
+  blocks.some(
+    (block) =>
+      ['image', 'video', 'audio', 'file'].includes(String(block.type)) ||
+      (Array.isArray(block.children) && hasFiles(block.children)),
+  );
+
 // A dismissed confirmation must stop accepting clicks while its surface folds away.
 function HistoryConfirmation(props: HTMLMotionProps<'section'>) {
   const present = useIsPresent();
@@ -447,6 +455,19 @@ export function NoteHistory({
     local.has(selected.id) ||
     uncertain ||
     !!confirming;
+  // What a reader should know before restoring or copying this version, if anything.
+  const notes = !selected
+    ? []
+    : [
+        state && (state.files.length > 0 || hasFiles(state.content))
+          ? 'File contents may no longer be available.'
+          : null,
+        !connected
+          ? 'Restoring the original requires a connection to check for newer edits.'
+          : local.has(selected.id)
+            ? 'This local version can be restored after it syncs.'
+            : null,
+      ].filter((note) => note !== null);
   const dockButton =
     'rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70';
   const clearCopy = (
@@ -739,15 +760,8 @@ export function NoteHistory({
                       Loading history…
                     </p>
                   )}
-                  {selected && !confirming && (
-                    <p className="px-5 pt-6 text-muted-foreground text-xs">
-                      {label(selected)} · File contents may no longer be available.
-                      {!connected &&
-                        ' Restoring the original requires a connection to check for newer edits.'}
-                      {local.has(selected.id) &&
-                        connected &&
-                        ' This local version can be restored after it syncs.'}
-                    </p>
+                  {notes.length > 0 && !confirming && (
+                    <p className="px-5 pt-6 text-muted-foreground text-xs">{notes.join(' ')}</p>
                   )}
                 </section>
               </ScrollAreaViewport>

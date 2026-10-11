@@ -104,7 +104,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const onClose = vi.fn();
-async function open({ wide = false, changes = false } = {}) {
+async function open({ wide = false, changes = false, read = true } = {}) {
   if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
@@ -112,7 +112,7 @@ async function open({ wide = false, changes = false } = {}) {
     attachmentsTransaction: undefined,
   });
   vi.mocked(historyList).mockResolvedValue({ summary, versions: [version], nextCursor: null });
-  vi.mocked(readHistoryVersion).mockResolvedValue(state);
+  if (read) vi.mocked(readHistoryVersion).mockResolvedValue(state);
   render(
     <TooltipProvider>
       <NoteHistory note={note} wide={wide} onClose={onClose} onRestored={vi.fn()} />
@@ -184,6 +184,18 @@ describe('version review', () => {
     expect(screen.getByText('Earlier words')).toBeVisible();
     expect(screen.queryByText('Comparison')).toBeNull();
     expect(localStorage.getItem('catch-history-changes')).toBe('false');
+  });
+  it('says nothing about files for a version without any', async () => {
+    await open();
+    expect(screen.queryByText(/File contents may no longer be available/)).toBeNull();
+  });
+  it('warns that a version with files may have lost them', async () => {
+    vi.mocked(readHistoryVersion).mockResolvedValueOnce({
+      content: [{ content: 'Earlier words' }, { type: 'image', props: { url: '/files/1' } }],
+      files: [],
+    });
+    await open({ read: false });
+    expect(await screen.findByText(/File contents may no longer be available/)).toBeVisible();
   });
   it('allows a cached copy offline and leaves original restore disabled', async () => {
     vi.stubGlobal('navigator', { onLine: false });

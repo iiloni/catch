@@ -29,7 +29,7 @@ export function NoteTimestamp({
           data-note-history-entry
           whileTap={reducedMotion ? undefined : { scale: 0.96 }}
           transition={springs.snappy}
-          className="mx-auto flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
+          className="mx-auto mt-3 flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => {
             haptics.toggle();
             noteHistoryOpen.set(true);
