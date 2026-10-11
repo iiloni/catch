@@ -197,6 +197,11 @@ describe('version review', () => {
     expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
     expect(readHistoryVersion).toHaveBeenCalledTimes(1);
   });
+  it('does not take a version with no reading key for the note', async () => {
+    await open({ wide: true, versions: [{ ...version, readingKey: null }] });
+    const versions = screen.getByRole('navigation', { name: 'Saved versions' });
+    expect(within(versions).getByText('When history opened')).toBeVisible();
+  });
   it('lists the newest version as the current note when it reads as the note does', async () => {
     vi.mocked(historyReadingKey).mockReturnValue(version.readingKey);
     vi.mocked(historyList).mockResolvedValue({ summary, versions: [version], nextCursor: null });

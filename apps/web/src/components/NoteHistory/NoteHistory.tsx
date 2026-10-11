@@ -560,9 +560,10 @@ export function NoteHistory({
   const saved = useMemo(() => {
     const newest = snapshots[0]?.newest;
     if (!newest) return null;
-    const reading = newest.readingKey && historyReadingKey(entryNote.id, entryNote.content);
-    return reading === newest.readingKey ||
-      currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
+    const reads =
+      newest.readingKey !== null &&
+      historyReadingKey(entryNote.id, entryNote.content) === newest.readingKey;
+    return reads || currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
       ? snapshots[0]!
       : null;
   }, [entryNote, snapshots]);
