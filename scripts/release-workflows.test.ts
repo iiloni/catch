@@ -65,6 +65,127 @@ function stepValues(
   return values;
 }
 
+test('Site follows completed Release runs and builds main with every release tag', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  assert.match(
+    workflow,
+    /\n {2}workflow_run:\n {4}workflows: \[Release\]\n {4}types: \[completed\]\n/,
+  );
+  assert.match(workflow, /\n {2}workflow_dispatch:\n/);
+  assert.match(workflow, /\n {2}push:\n {4}branches: \[main\]\n/);
+  assert.match(workflow, /\n {4}tags: \['v\*'\]\n/);
+  assert.match(workflow, /\n {2}release:\n {4}types: \[published\]\n/);
+  assert.match(
+    workflow,
+    /needs: eligibility\n {4}if: needs\.eligibility\.outputs\.published == 'true'\n/,
+  );
+  assert.match(workflow, /ref: main\n\s+fetch-depth: 0\n\s+fetch-tags: true\n/);
+  assert.match(workflow, /SITE_CHANGELOG: required/);
+  const release = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(release, /^name: Release\n/);
+});
+
+test('Site accepts only successful same-repository dispatched Release runs when enabled', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  const condition = /\n {4}if: >-\n((?: {6}.+\n)+)/.exec(workflow)?.[1];
+  assert.ok(condition, 'Missing deployment condition');
+  const repository = 'iiloni/catch';
+  for (const enabled of ['true', 'false', '']) {
+    for (const event of ['push', 'release', 'workflow_dispatch', 'workflow_run']) {
+      for (const conclusion of ['success', 'failure', 'cancelled', 'skipped', 'timed_out']) {
+        for (const [source, trigger] of [
+          [repository, 'workflow_dispatch'],
+          [repository, 'push'],
+          ['someone/catch', 'workflow_dispatch'],
+        ]) {
+          const actual: unknown = runInNewContext(condition, {
+            vars: { CLOUDFLARE_SITE_ENABLED: enabled },
+            github: {
+              repository,
+              event_name: event,
+              event:
+                event === 'workflow_run'
+                  ? {
+                      workflow_run: {
+                        event: trigger,
+                        conclusion,
+                        head_repository: { full_name: source },
+                      },
+                    }
+                  : {},
+            },
+          });
+          const expected =
+            enabled === 'true' &&
+            (event !== 'workflow_run' ||
+              (trigger === 'workflow_dispatch' &&
+                conclusion === 'success' &&
+                source === repository));
+          assert.equal(
+            actual,
+            expected,
+            `${enabled}, ${event}, ${trigger}, ${conclusion}, ${source}`,
+          );
+        }
+      }
+    }
+  }
+});
+
+test('Site completion fallback requires a published GitHub Release and preserves API failures', async () => {
+  for (const event of ['workflow_run', 'push', 'release', 'workflow_dispatch']) {
+    for (const state of ['published', 'draft', 'missing', 'unavailable']) {
+      const outputs: Record<string, string> = {};
+      const calls: Record<string, unknown>[] = [];
+      const result = runInNewContext(
+        `(async () => { ${stepBody('site.yml', 'Verify release publication', 'script')} })()`,
+        {
+          context: { ...context, eventName: event },
+          process: {
+            env: stepValues('site.yml', 'Verify release publication', 'env', {
+              'github.event.workflow_run.head_branch': 'v0.6.3-preview',
+            }),
+          },
+          core: {
+            setOutput: (key: string, value: string) => {
+              outputs[key] = value;
+            },
+          },
+          github: {
+            rest: {
+              repos: {
+                getReleaseByTag: async (input: Record<string, unknown>) => {
+                  calls.push(structuredClone(input));
+                  if (state === 'missing' || state === 'unavailable') {
+                    throw Object.assign(new Error(state), {
+                      status: state === 'missing' ? 404 : 503,
+                    });
+                  }
+                  return { data: { draft: state === 'draft' } };
+                },
+              },
+            },
+          },
+        },
+      ) as Promise<void>;
+      if (event === 'workflow_run' && state === 'unavailable') {
+        await assert.rejects(result, /unavailable/);
+        assert.deepEqual(outputs, {});
+      } else {
+        await result;
+        assert.equal(outputs.published, String(event !== 'workflow_run' || state === 'published'));
+      }
+      assert.deepEqual(
+        calls,
+        event === 'workflow_run' ? [{ ...context.repo, tag: 'v0.6.3-preview' }] : [],
+      );
+    }
+  }
+});
+
 // GitHub drops a job output that contains a secret's value, and the documented key alias
 // is "catch", so these names must be built in the jobs that use them.
 test('Release names the image and APK without passing them between jobs', () => {
