@@ -130,7 +130,8 @@ function historyEntryAt(root: ParentNode | null, x: number, y: number): string |
   if (!list) return null;
   const bounds = list.getBoundingClientRect();
   if (x < bounds.left - 24 || x > bounds.right + 24) return null;
-  if (y < bounds.top - 32 || y > bounds.bottom + 8) return null;
+  // The selector sits right under the list: a finger still on it is on no version.
+  if (y < bounds.top - 32 || y > bounds.bottom) return null;
   let nearest: { id: string; distance: number } | null = null;
   for (const row of list.querySelectorAll<HTMLElement>('[data-history-entry]')) {
     const rect = row.getBoundingClientRect();
