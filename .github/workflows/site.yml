@@ -33,13 +33,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  eligibility:
     # Enabled after the repository has its Cloudflare credentials (docs/ci.md).
     if: >-
       vars.CLOUDFLARE_SITE_ENABLED == 'true' &&
       (github.event_name != 'workflow_run' ||
-        (github.event.workflow_run.conclusion == 'success' &&
+        (github.event.workflow_run.event == 'workflow_dispatch' &&
+          github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      published: ${{ steps.publication.outputs.published }}
+    steps:
+      # A disabled Release can complete successfully without publishing any artifacts.
+      - name: Verify release publication
+        id: publication
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+        with:
+          script: |
+            if (context.eventName !== 'workflow_run') {
+              core.setOutput('published', 'true');
+              return;
+            }
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                ...context.repo,
+                tag: process.env.RELEASE_TAG,
+              });
+              core.setOutput('published', String(!release.draft));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('published', 'false');
+            }
+
+  deploy:
+    needs: eligibility
+    if: needs.eligibility.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

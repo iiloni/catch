@@ -54,7 +54,9 @@ product they describe.
 - **Deployed from GitHub Actions to Cloudflare Workers with static assets**, not by
   Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` builds
   on pushes to `main` that touch the site or its inputs, external tag pushes or release
-  publication, and successful **Release** workflow completions in this repository.
+  publication, and successful dispatched **Release** workflow completions in this repository
+  whose GitHub Release is published. Tag-push completions skip the fallback to avoid a
+  second deployment; disabled or unpublished dispatched runs do not deploy.
   The completed-run trigger handles automated releases because `GITHUB_TOKEN` suppresses
   the tag-push and release-published triggers; it works even when the released commit
   predates this site workflow. The deploy always checks out `main` with all tags and does

@@ -313,9 +313,11 @@ or through `merge on pass` before merging.
 [`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
 Workers with static assets when `main` changes the site or its inputs, when a release tag
 is pushed or published, after a successful **Release** run in this repository, and on
-request. The completed-run trigger covers automated tagging and publication: GitHub
+request. The completed-run trigger covers successful dispatched Release runs with a
+published GitHub Release, including automated tagging and publication: GitHub
 suppresses both tag-push and release-published workflow triggers when the changes use
-`GITHUB_TOKEN`. Failed or cancelled Release runs do not deploy the site. It always builds
+`GITHUB_TOKEN`. Failed, cancelled or unpublished Release runs do not deploy the site;
+tag-push Release completions skip the fallback because the push already deployed it. It always builds
 `main` from a full clone, because the changelog is derived from tags and history, and fails
 if that changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds
 the site for them. To refresh the changelog after a missed deployment, run
