@@ -28,6 +28,11 @@ test('installed apps reopen the last Deck or Gallery without overriding navigati
   expect(noteId).toBeTruthy();
 
   await page.getByRole('link', { name: 'Deck', exact: true }).click();
+  // The Deck is remembered once its navigation resolves, which a tap on Search before
+  // then would call off; no transition running does not mean it has.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('catch-home-page')))
+    .toBe('/deck');
   await waitForPageTransition(page);
   await page.getByRole('link', { name: 'Search', exact: true }).click();
   await waitForPageTransition(page);
