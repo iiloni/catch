@@ -63,6 +63,29 @@ volumes:
   backup_data:
 ```
 
+## Database roles and pgvector
+
+The bundled Postgres service needs no extra setup. With an external Postgres service, install
+pgvector on the database host. If Catch's role is not a superuser, an administrator must install
+`vector` in the live database before migrations and provide an empty trusted template for
+scratch restores. For example, run as the database administrator:
+
+```sql
+CREATE DATABASE catch_vector_template TEMPLATE template0;
+-- Connect to catch_vector_template before running the following statements:
+CREATE EXTENSION vector WITH SCHEMA public;
+-- Connect back to the administration database, leaving no connections to the template:
+ALTER DATABASE catch_vector_template IS_TEMPLATE true;
+```
+
+Set `BACKUP_TEMPLATE_DATABASE=catch_vector_template` in Catch's environment. Its ordinary
+role needs `CREATEDB` and ownership of the live Catch tables, without `CREATEROLE` or host-file
+or program privileges. The template must contain only pgvector and standard PostgreSQL
+objects, never Catch tables or uploaded SQL. Both in-app and CLI restores use it. A superuser
+may use the default `template1`; Catch then installs only the known extension before loading
+the dump with a throwaway restricted role. Uploaded SQL never receives extension-installation
+privileges. See [ADR 0012](decisions/0012-server-backups.md) for the restore boundary.
+
 ## In the app
 
 Settings > Admin > Backups is there for admins only (the first account is the admin, and

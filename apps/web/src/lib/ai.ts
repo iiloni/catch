@@ -60,7 +60,8 @@ export const ai = {
   test: async (input: ProviderRequest) =>
     aiTestResultSchema.parse(await send('/admin/ai/test', 'POST', input)),
   retry: async () => aiConfigurationSchema.parse(await send('/admin/ai/retry', 'POST')),
-  rebuild: async () => aiConfigurationSchema.parse(await send('/admin/ai/rebuild', 'POST')),
+  rebuild: async (revision: string | null) =>
+    aiConfigurationSchema.parse(await send('/admin/ai/rebuild', 'POST', { revision })),
   capabilities: async (signal?: AbortSignal) =>
     searchCapabilitiesSchema.parse(await send('/search/capabilities', 'GET', undefined, signal)),
   search: async (input: HybridSearch, signal?: AbortSignal) =>

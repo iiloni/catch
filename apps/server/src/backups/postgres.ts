@@ -178,7 +178,15 @@ async function publicTables(sql: postgres.Sql) {
 export async function restoreDatabase(
   url: string,
   dumpFile: string,
-  { workDir, migrationsFolder }: { workDir: string; migrationsFolder: string },
+  {
+    workDir,
+    migrationsFolder,
+    templateDatabase = 'template1',
+  }: {
+    workDir: string;
+    migrationsFolder: string;
+    templateDatabase?: string;
+  },
 ) {
   const live = connect(url);
   const scratchName = `catch_restore_${randomBytes(6).toString('hex')}`;
@@ -206,9 +214,9 @@ export async function restoreDatabase(
         sandboxed = true;
         scratchUrl = withDatabase(url, scratchName, { user: scratchName, password });
       }
-      await live.unsafe(
-        `CREATE DATABASE "${scratchName}"${sandboxed ? ` OWNER "${scratchName}"` : ''}`,
-      );
+      await live`CREATE DATABASE ${live(scratchName)}
+        ${sandboxed ? live`OWNER ${live(scratchName)}` : live``}
+        TEMPLATE ${live(templateDatabase)}`;
     } catch (error) {
       if (error instanceof BackupError) throw error;
       throw new BackupError(
@@ -222,7 +230,8 @@ export async function restoreDatabase(
       ['--list', '--file', join(workDir, 'restore.list'), dumpFile],
       scratchUrl,
     );
-    // Only our installed vector extension runs with privileges, before any uploaded SQL.
+    // A plain role inherits vector from an administrator-provisioned template.
+    // A superuser installs only this known extension before any uploaded SQL.
     // Its dump metadata must not try to install it or change its comment as the lesser role.
     const provision = connect(withDatabase(url, scratchName));
     try {
@@ -290,6 +299,12 @@ export async function restoreDatabase(
       clearFile,
       `SET LOCAL catch.restoring = 'true';\n${tables.length > 0 ? `TRUNCATE TABLE ${tables.join(', ')} CASCADE;\n` : ''}`,
     );
+    const resumeFile = join(workDir, 'resume.sql');
+    // Leases describe work in the old process, never work running against restored rows.
+    await writeFile(
+      resumeFile,
+      'UPDATE public.embedding_jobs SET lease = NULL, leased_until = NULL;\n',
+    );
     await run(
       'psql',
       [
@@ -302,6 +317,8 @@ export async function restoreDatabase(
         clearFile,
         '--file',
         dataFile,
+        '--file',
+        resumeFile,
       ],
       url,
     );

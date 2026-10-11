@@ -1,24 +1,59 @@
 # 0002: Hybrid search in Postgres
 
-Status: accepted, partially implemented (2026-09-27)
+Status: accepted (2026-10-11)
 
 ## Decision
 
-Search runs entirely inside Postgres so results are filtered by user inside the query:
+Local keyword search is the permanent default, online and offline. The Search page's
+optional **Semantic search** switch starts off and combines local keyword matches with
+server hybrid ranking. It requires connectivity to Catch's server even with a local
+embedding provider. Switching it off changes this view, not background indexing.
 
-- **Keyword**: `notes.search`, a generated `tsvector` over `search_text` with a GIN index
-  (implemented).
-- **Semantic**: pgvector embeddings in a separate `note_embeddings` table that stores the
-  model name and dimensions per row, and is never synced to clients (not implemented yet).
-- **Fusion**: reciprocal rank fusion of both rankings in one SQL query.
+Settings > Admin > AI configuration enables indexing for every user's ordinary notes,
+including archived notes, without per-user consent. The page discloses that note text and
+semantic queries go to the selected provider. Vault content is never indexed; vault search
+stays on the device and never calls the search API. Entering the vault turns semantic mode
+off, including on exit, so vault queries cannot be sent automatically afterwards.
 
-Embeddings come from an OpenAI-compatible endpoint or Ollama over HTTP, configured by the
-instance admin. A Postgres-table job queue processed inside the API process computes them;
-changing the model triggers a re-index. If keyword ranking proves weak, ParadeDB's
-`pg_search` adds BM25 without another service.
+The server uses Postgres for hybrid ranking:
 
-Offline, keyword search runs on the client over the synced collection; semantic search
-needs the server.
+- **Keyword**: the generated `notes.search` tsvector and English rank, together with literal
+  all-word substring matching (including punctuation). Ordinary local keywords retain
+  their existing all-word matching and title-first ordering.
+- **Semantic**: normalized pgvector embeddings in server-only `note_embeddings`, one row
+  per overlapping note chunk. Exact cosine retrieval currently scans eligible embeddings;
+  there is no approximate index or separate vector service.
+- **Fusion**: reciprocal rank fusion with constant 60, up to 120 candidates from each list,
+  returning at most 60 hits. Each ranking applies user authorization and the same tag,
+  color and archive filters before limiting. Reader copies require a current share token;
+  revocation excludes them in the next server query without waiting for device sync.
+
+The client renders its local notes from server ids and checks their edit timestamps. Stale
+semantic hits are discarded, and pending local keyword matches are included ahead of server
+hits. Shared keyword copies are included in a successful hybrid response only when the
+server confirms them. On a disabled, missing, unavailable or incompatible server, local
+keyword search remains available. Offline shared copies retain the existing sync semantics.
+
+Native Ollama and OpenAI-compatible HTTP endpoints supply embeddings. Admin configuration
+stores provider, endpoint, model and input profile under an embedding field; chat configuration
+and generation are outside this decision. Model discovery does not verify embeddings: tests
+and enabling saves embed both a document and a query and check their dimensions.
+
+A durable per-note Postgres queue is processed inside the API. A note trigger invalidates
+stale chunks and coalesces text/trash changes; periodic reconciliation handles backfill and
+enablement races. Jobs have leases and bounded retries. Publication rechecks the configuration,
+content and lease after the HTTP call, so edits, disabling, rebuilding and model changes cannot
+install obsolete results. Endpoint/model/profile/dimension changes start a new generation;
+API-key rotation alone preserves it. Configuration writes and rebuilds use optimistic revisions
+and recheck the actor's live admin role transactionally. Disabling pauses indexing and search;
+re-enabling catches up changes. Embeddings and jobs never sync to devices or include vault rows.
+
+The addition preserves existing REST/write/shape contracts and collection versions (ADR 0013).
+Old clients ignore these routes and settings; new clients handle missing search routes with
+local keyword fallback. No protocol or local collection schema-version bump is needed.
+
+See [AI configuration](../ai.md) for networking, formats, limits and validation coverage;
+ADR 0012 covers vector provisioning, credential backups and restore leases.
 
 ## Current search page
 

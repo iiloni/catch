@@ -31,6 +31,7 @@ import { Route as AppSettingsNotificationsRouteImport } from './routes/_app/sett
 import { Route as AppSettingsTagsRouteImport } from './routes/_app/settings/tags'
 import { Route as AppSettingsUpdateRouteImport } from './routes/_app/settings/update'
 import { Route as AppSettingsVaultRouteImport } from './routes/_app/settings/vault'
+import { Route as AppSettingsAdminAiRouteImport } from './routes/_app/settings/admin/ai'
 import { Route as AppSettingsAdminBackupsRouteImport } from './routes/_app/settings/admin/backups'
 import { Route as AppSettingsAdminUsersRouteImport } from './routes/_app/settings/admin/users'
 
@@ -144,6 +145,11 @@ const AppSettingsVaultRoute = AppSettingsVaultRouteImport.update({
   path: '/vault',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsAdminAiRoute = AppSettingsAdminAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AppSettingsAdminRoute,
+} as any)
 const AppSettingsAdminBackupsRoute = AppSettingsAdminBackupsRouteImport.update({
   id: '/backups',
   path: '/backups',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/vault': typeof AppSettingsVaultRoute
   '/settings/': typeof AppSettingsIndexRoute
+  '/settings/admin/ai': typeof AppSettingsAdminAiRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
@@ -201,6 +208,7 @@ export interface FileRoutesByTo {
   '/settings/update': typeof AppSettingsUpdateRoute
   '/settings/vault': typeof AppSettingsVaultRoute
   '/settings': typeof AppSettingsIndexRoute
+  '/settings/admin/ai': typeof AppSettingsAdminAiRoute
   '/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
@@ -228,6 +236,7 @@ export interface FileRoutesById {
   '/_app/settings/update': typeof AppSettingsUpdateRoute
   '/_app/settings/vault': typeof AppSettingsVaultRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/settings/admin/ai': typeof AppSettingsAdminAiRoute
   '/_app/settings/admin/backups': typeof AppSettingsAdminBackupsRoute
   '/_app/settings/admin/users': typeof AppSettingsAdminUsersRoute
 }
@@ -255,6 +264,7 @@ export interface FileRouteTypes {
     | '/settings/update'
     | '/settings/vault'
     | '/settings/'
+    | '/settings/admin/ai'
     | '/settings/admin/backups'
     | '/settings/admin/users'
   fileRoutesByTo: FileRoutesByTo
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/settings/update'
     | '/settings/vault'
     | '/settings'
+    | '/settings/admin/ai'
     | '/settings/admin/backups'
     | '/settings/admin/users'
   id:
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/_app/settings/update'
     | '/_app/settings/vault'
     | '/_app/settings/'
+    | '/_app/settings/admin/ai'
     | '/_app/settings/admin/backups'
     | '/_app/settings/admin/users'
   fileRoutesById: FileRoutesById
@@ -474,6 +486,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsVaultRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/admin/ai': {
+      id: '/_app/settings/admin/ai'
+      path: '/ai'
+      fullPath: '/settings/admin/ai'
+      preLoaderRoute: typeof AppSettingsAdminAiRouteImport
+      parentRoute: typeof AppSettingsAdminRoute
+    }
     '/_app/settings/admin/backups': {
       id: '/_app/settings/admin/backups'
       path: '/backups'
@@ -492,11 +511,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppSettingsAdminRouteChildren {
+  AppSettingsAdminAiRoute: typeof AppSettingsAdminAiRoute
   AppSettingsAdminBackupsRoute: typeof AppSettingsAdminBackupsRoute
   AppSettingsAdminUsersRoute: typeof AppSettingsAdminUsersRoute
 }
 
 const AppSettingsAdminRouteChildren: AppSettingsAdminRouteChildren = {
+  AppSettingsAdminAiRoute: AppSettingsAdminAiRoute,
   AppSettingsAdminBackupsRoute: AppSettingsAdminBackupsRoute,
   AppSettingsAdminUsersRoute: AppSettingsAdminUsersRoute,
 }

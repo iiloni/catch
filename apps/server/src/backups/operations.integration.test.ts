@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrationsFolder } from '../db/migrations';
 import { backUpBeforeUpdate } from './beforeUpdate';
 import { createBackup, restoreBackup } from './operations';
-import { restoreDatabase } from './postgres';
+import { dumpDatabase, restoreDatabase } from './postgres';
 import { type BackupConfig, listBackups } from './store';
 
 /**
@@ -73,6 +73,11 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     await sql`INSERT INTO tags (id, user_id, name, color, icon) VALUES (${ROOT}, 'ada', 'Work', 'blue', 'briefcase')`;
     await sql`INSERT INTO tags (id, user_id, name, parent_id) VALUES (${CHILD}, 'ada', 'Catch', ${ROOT})`;
     await sql`INSERT INTO note_tags (id, user_id, primary_tag_id, secondary_tag_ids) VALUES (${NOTE}, 'ada', ${CHILD}, ${JSON.stringify([ROOT])}::jsonb)`;
+    await sql`INSERT INTO ai_configuration (id, enabled, embedding, api_key, dimensions, generation, revision)
+      VALUES ('default', true, '{"provider":"compatible","baseUrl":"http://fake/v1","model":"fake","profile":"plain"}'::jsonb,
+        'sealed-key', 3, '0199a0a0-0000-7000-8000-000000000001', '0199a0a0-0000-7000-8000-000000000002')`;
+    await sql`INSERT INTO note_embeddings (note_id, user_id, chunk, generation, content_hash, embedding)
+      VALUES (${NOTE}, 'ada', 0, '0199a0a0-0000-7000-8000-000000000001', md5('kept'), '[1,0,0]'::vector)`;
     await writeFile(join(config.attachmentsDir, FILE), 'photo');
   }, 60_000);
 
@@ -110,6 +115,11 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     await change();
     const outcome = await restoreBackup(config, join(config.backupsDir, name));
     expect(await notes()).toEqual(['kept']);
+    expect(await sql`SELECT embedding::text AS vector FROM note_embeddings`).toEqual([
+      { vector: '[1,0,0]' },
+    ]);
+    expect(await sql`SELECT * FROM embedding_jobs`).toHaveLength(0);
+    expect(await sql`SELECT api_key FROM ai_configuration`).toEqual([{ api_key: 'sealed-key' }]);
     expect(await users()).toEqual(['ada']);
     expect(await sql`SELECT id, parent_id, color, icon FROM tags ORDER BY id`).toEqual([
       { id: ROOT, parent_id: null, color: 'blue', icon: 'briefcase' },
@@ -134,6 +144,18 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     expect(await users()).toEqual(['ada', 'eve']);
     await restoreBackup(config, join(config.backupsDir, name));
     expect(await notes()).toEqual(['kept']);
+  }, 120_000);
+
+  it('restores durable indexing jobs once and releases leases from the former process', async () => {
+    await sql`INSERT INTO embedding_jobs (note_id, user_id, generation, content_hash, lease, leased_until)
+      SELECT ${NOTE}, 'ada', generation, md5('kept'), gen_random_uuid(), now() + interval '5 minutes'
+      FROM ai_configuration WHERE id = 'default'`;
+    const name = await createBackup(config, { kind: 'manual', includeAttachments: false });
+    await restoreBackup(config, join(config.backupsDir, name));
+    expect(await sql`SELECT note_id, lease, leased_until FROM embedding_jobs`).toEqual([
+      { note_id: NOTE, lease: null, leased_until: null },
+    ]);
+    await sql`DELETE FROM embedding_jobs`;
   }, 120_000);
 
   it('says which attachments a database-only backup has no files for', async () => {
@@ -200,12 +222,61 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     );
   }, 120_000);
 
+  it('restores with a plain CREATEDB role using a trusted vector template', async () => {
+    const role = `catch_test_${suffix}_plain_role`;
+    const template = `catch_test_${suffix}_template`;
+    const database = `catch_test_${suffix}_plain`;
+    await admin.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD 'secret' CREATEDB`);
+    await admin.unsafe(`CREATE DATABASE "${template}" TEMPLATE template0`);
+    const provision = connect(urlOf(template));
+    await provision`CREATE EXTENSION vector WITH SCHEMA public`;
+    await provision.end();
+    await admin.unsafe(`ALTER DATABASE "${template}" IS_TEMPLATE true`);
+    const url = new URL(urlOf(database));
+    url.username = role;
+    url.password = 'secret';
+    let plain: postgres.Sql | undefined;
+    try {
+      await admin.unsafe(`CREATE DATABASE "${database}" OWNER "${role}" TEMPLATE "${template}"`);
+      plain = connect(url.toString());
+      await migrate(drizzle(plain), { migrationsFolder });
+      await plain`INSERT INTO "user" (id, name, email) VALUES ('plain', 'Plain', 'plain@example.com')`;
+      await plain`INSERT INTO notes (id, user_id, search_text, position) VALUES (${NOTE}, 'plain', 'plain role text', 'a0')`;
+      const dump = join(dir, 'plain.dump');
+      await dumpDatabase(url.toString(), dump);
+      await plain`DELETE FROM notes`;
+      await restoreDatabase(url.toString(), dump, {
+        workDir: dir,
+        migrationsFolder,
+        templateDatabase: template,
+      });
+      expect(await plain`SELECT search_text FROM notes`).toEqual([
+        { search_text: 'plain role text' },
+      ]);
+      expect(
+        await plain`SELECT rolsuper, rolcreaterole FROM pg_roles WHERE rolname = current_user`,
+      ).toEqual([{ rolsuper: false, rolcreaterole: false }]);
+      expect(
+        await admin`SELECT datname FROM pg_database WHERE datname LIKE 'catch_restore_%'`,
+      ).toHaveLength(0);
+    } finally {
+      await plain?.end();
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
+      await admin.unsafe(`ALTER DATABASE "${template}" IS_TEMPLATE false`);
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${template}" WITH (FORCE)`);
+      await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
+    }
+  }, 120_000);
+
   it('does not load a dump as a role that reaches the host without being a superuser', async () => {
     const role = `catch_test_${suffix}_role`;
     const database = `catch_test_${suffix}_owned`;
     await admin.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD 'secret' CREATEDB`);
     await admin.unsafe(`GRANT pg_read_server_files TO "${role}"`);
     await admin.unsafe(`CREATE DATABASE "${database}" OWNER "${role}"`);
+    const provision = connect(urlOf(database));
+    await provision`CREATE EXTENSION vector`;
+    await provision.end();
     try {
       const url = new URL(urlOf(database));
       url.username = role;
@@ -224,6 +295,62 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
       await admin.unsafe(`DROP ROLE IF EXISTS "${role}"`);
     }
   }, 60_000);
+
+  it('restores a pre-AI dump, migrates with the restricted role and queues subsequent writes', async () => {
+    const oldName = `catch_test_${suffix}_old`;
+    const folder = join(dir, 'pre-ai-migrations');
+    await mkdir(join(folder, 'meta'), { recursive: true });
+    const journal = JSON.parse(
+      await readFile(join(migrationsFolder, 'meta', '_journal.json'), 'utf8'),
+    ) as { entries: { idx: number; tag: string }[] };
+    journal.entries = journal.entries.filter((entry) => entry.idx < 16);
+    await writeFile(join(folder, 'meta', '_journal.json'), JSON.stringify(journal));
+    for (const entry of journal.entries)
+      await copyFile(join(migrationsFolder, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+    await admin.unsafe(`CREATE DATABASE "${oldName}"`);
+    const old = connect(urlOf(oldName));
+    const dump = join(dir, 'pre-ai.dump');
+    try {
+      await migrate(drizzle(old), { migrationsFolder: folder });
+      await old`INSERT INTO "user" (id, name, email) VALUES ('ada', 'Ada', 'ada@example.com')`;
+      await old`INSERT INTO notes (id, user_id, search_text, position) VALUES (${NOTE}, 'ada', 'old text', 'a0')`;
+      await dumpDatabase(urlOf(oldName), dump);
+      await restoreDatabase(config.databaseUrl, dump, { workDir: dir, migrationsFolder });
+      expect(await notes()).toEqual(['old text']);
+      expect(await sql`SELECT * FROM ai_configuration`).toHaveLength(0);
+      expect(await sql`SELECT * FROM embedding_jobs`).toHaveLength(0);
+      // Restore guards are transaction-local: future writes must still invalidate and enqueue.
+      await sql`INSERT INTO ai_configuration (id, enabled, embedding, dimensions, generation, revision)
+        VALUES ('default', true, '{}'::jsonb, 3, gen_random_uuid(), gen_random_uuid())`;
+      await sql`UPDATE notes SET search_text = 'after restore' WHERE id = ${NOTE}`;
+      expect(await sql`SELECT note_id FROM embedding_jobs`).toEqual([{ note_id: NOTE }]);
+    } finally {
+      await old.end();
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${oldName}" WITH (FORCE)`);
+    }
+  }, 120_000);
+
+  it('cannot execute uploaded SQL with superuser privileges', async () => {
+    const attackName = `catch_test_${suffix}_attack`;
+    await admin.unsafe(`CREATE DATABASE "${attackName}"`);
+    const attack = connect(urlOf(attackName));
+    const dump = join(dir, 'attack.dump');
+    try {
+      await migrate(drizzle(attack), { migrationsFolder });
+      await attack.unsafe(
+        `CREATE FUNCTION public.attack() RETURNS integer LANGUAGE sql AS 'SELECT count(*)::integer FROM pg_authid'; CREATE MATERIALIZED VIEW public.attack_view AS SELECT public.attack()`,
+      );
+      await dumpDatabase(urlOf(attackName), dump);
+      const before = await notes();
+      await expect(
+        restoreDatabase(config.databaseUrl, dump, { workDir: dir, migrationsFolder }),
+      ).rejects.toThrow(/permission denied.*pg_authid/s);
+      expect(await notes()).toEqual(before);
+    } finally {
+      await attack.end();
+      await admin.unsafe(`DROP DATABASE IF EXISTS "${attackName}" WITH (FORCE)`);
+    }
+  }, 120_000);
 
   it('backs up before an update, once', async () => {
     const backupsDir = join(dir, 'update-backups');

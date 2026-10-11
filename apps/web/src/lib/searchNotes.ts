@@ -23,6 +23,8 @@ export function mergeHybridResults(
   keyword: SearchResult[],
   response: HybridSearchResult | undefined,
   query: string,
+  userId: string,
+  pendingIds: ReadonlySet<string> = new Set(),
 ): SearchResult[] {
   if (!response) return keyword;
   const byId = new Map(notes.map((note) => [note.id, note]));
@@ -36,8 +38,15 @@ export function mergeHybridResults(
     ranked.push({ ...result, semantic: hit.semantic });
     seen.add(hit.id);
   }
-  // Local-only matches include notes whose writes or embedding jobs have not reached the server.
-  return [...keyword.filter((result) => !seen.has(result.note.id)), ...ranked];
+  const unranked = keyword.filter(
+    (result) => !seen.has(result.note.id) && result.note.userId === userId,
+  );
+  // Synced matches beyond the server limit must not displace its hybrid ranking.
+  return [
+    ...unranked.filter((result) => pendingIds.has(result.note.id)),
+    ...ranked,
+    ...unranked.filter((result) => !pendingIds.has(result.note.id)),
+  ];
 }
 
 function describeResult(note: Note, words: readonly string[]): SearchResult {

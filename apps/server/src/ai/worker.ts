@@ -12,7 +12,7 @@ let controller: AbortController | null = null;
 
 export async function processEmbeddingJob(signal?: AbortSignal) {
   const config = await readConfiguration();
-  if (!config?.enabled || !config.dimensions) return;
+  if (!config?.enabled || !config.dimensions || signal?.aborted) return false;
   const lease = randomUUID();
   const [job] = await db.execute<{
     note_id: string;
@@ -32,13 +32,13 @@ export async function processEmbeddingJob(signal?: AbortSignal) {
       FROM candidate c WHERE j.note_id = c.note_id RETURNING j.*
     ) SELECT c.*, n.search_text FROM claimed c JOIN notes n ON n.id = c.note_id
   `);
-  if (!job) return;
+  if (!job) return false;
   try {
     const chunks = chunkText(job.search_text);
     const vectors: number[][] = [];
     const provider = { ...config.embedding, apiKey: openCredential(config.apiKey) };
     for (let offset = 0; offset < chunks.length; offset += 8) {
-      if (signal?.aborted) return;
+      if (signal?.aborted) return false;
       vectors.push(...(await embed(provider, chunks.slice(offset, offset + 8), false, signal)));
       // Bound the full job even for a cold local model and a very long note.
       if (offset + 8 < chunks.length)
@@ -51,7 +51,7 @@ export async function processEmbeddingJob(signal?: AbortSignal) {
       throw new ProviderError(
         'The model dimensions changed. Test and save the AI configuration to rebuild the index.',
       );
-    if (signal?.aborted) return;
+    if (signal?.aborted) return false;
     await db.transaction(async (tx) => {
       const [current] = await tx
         .select()
@@ -104,6 +104,7 @@ export async function processEmbeddingJob(signal?: AbortSignal) {
       .set({ lease: null, leasedUntil: null })
       .where(and(eq(embeddingJobs.noteId, job.note_id), eq(embeddingJobs.lease, lease)));
   }
+  return true;
 }
 
 export async function pauseEmbeddingWorker() {
@@ -126,7 +127,9 @@ export function startEmbeddingWorker() {
         await enqueueMissing(db);
         lastReconcile = Date.now();
       }
-      if (!signal.aborted) await processEmbeddingJob(signal);
+      for (let batch = 0; batch < 8 && !signal.aborted; batch++) {
+        if (!(await processEmbeddingJob(signal))) break;
+      }
     })()
       .catch(() => console.error('Embedding worker could not access its queue.'))
       .finally(() => {

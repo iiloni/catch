@@ -7,8 +7,9 @@ import { embed, ProviderError } from './provider';
 
 export async function capabilities(userId: string) {
   const config = await readConfiguration();
-  const [pending] = await db.execute(sql`SELECT 1 FROM embedding_jobs j WHERE j.user_id = ${userId}
-    OR EXISTS (SELECT 1 FROM shared_notes s WHERE s.user_id = ${userId} AND s.note_id = j.note_id AND s.is_available) LIMIT 1`);
+  const [pending] =
+    await db.execute(sql`SELECT 1 FROM embedding_jobs j WHERE j.failed_at IS NULL AND (j.user_id = ${userId}
+    OR EXISTS (SELECT 1 FROM shared_notes s WHERE s.user_id = ${userId} AND s.note_id = j.note_id AND s.is_available)) LIMIT 1`);
   return { enabled: !!config?.enabled && !!config.dimensions, indexing: !!pending };
 }
 

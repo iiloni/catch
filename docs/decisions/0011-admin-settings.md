@@ -48,3 +48,12 @@ from existing sessions; accounts without session history keep a null date, shown
   guarded independently, including requests from sessions opened before a demotion.
 - Roles use the existing `user.role` column; login tracking adds a nullable timestamp through
   a migration. Neither field needs a synced collection.
+
+## AI configuration
+
+AI configuration is a server-wide admin page and REST API under the same guards. It manages
+embedding providers, model discovery/testing and background queue progress, retry and rebuild
+controls (ADR 0002). Polling updates status independently of unsaved form fields and their
+revision, including after reconnection. Saves and rebuilds reject stale revisions. The model
+configuration is nested under `embedding` so a future chat section can coexist; chat is not
+implemented here. No provider credentials or AI settings are synced to devices.

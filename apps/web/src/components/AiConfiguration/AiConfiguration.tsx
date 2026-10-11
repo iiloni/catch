@@ -5,10 +5,18 @@ import {
   type EmbeddingConfiguration,
   embeddingConfigurationSchema,
 } from '@catch/shared';
-import { Cpu, RefreshCw } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { ChevronDown, Cpu, RefreshCw } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { SearchSelectDialog } from '@/components/SearchSelect/SearchSelect';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { AiRequestError, ai } from '@/lib/ai';
@@ -23,19 +31,19 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
   const [key, setKey] = useState('');
   const [removeKey, setRemoveKey] = useState(false);
   const [models, setModels] = useState<string[]>([]);
+  const [choosingModel, setChoosingModel] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const initialized = useRef(false);
   const { offline, incompatibility, signedOut } = useSyncStatus();
   const unavailable = offline || !!incompatibility || signedOut;
   const modelList = useId();
-  const selectClass =
-    'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   useEffect(() => {
     if (unavailable) return;
     const controller = new AbortController();
-    let initialized = false;
     let loading = false;
     const refresh = async () => {
       if (loading || document.hidden) return;
@@ -44,16 +52,17 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
         const result = await ai.overview(controller.signal);
         if (controller.signal.aborted) return;
         setSaved(result);
-        if (!initialized) {
+        setConnectionError(null);
+        if (!initialized.current) {
           setEmbedding(result.embedding);
           setEnabled(result.enabled);
           setRevision(result.revision);
-          initialized = true;
+          initialized.current = true;
         }
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error instanceof AiRequestError && [401, 403].includes(error.status)) onAccessDenied();
-        else setError('Could not load AI configuration. Check the server connection.');
+        else setConnectionError('Could not load AI configuration. Check the server connection.');
       } finally {
         loading = false;
       }
@@ -109,7 +118,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
             ? await ai.save({ ...providerRequest(), enabled, revision })
             : operation === 'retry'
               ? await ai.retry()
-              : await ai.rebuild();
+              : await ai.rebuild(revision);
         setSaved(result);
         if (operation === 'save') {
           setKey('');
@@ -117,7 +126,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           setEmbedding(result.embedding);
           setRevision(result.revision);
         }
-        if (operation === 'rebuild') setRevision(result.revision);
+        if (operation === 'rebuild' && saved?.revision === revision) setRevision(result.revision);
         setMessage(
           operation === 'save'
             ? 'AI configuration saved.'
@@ -134,6 +143,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
     }
   }
 
+  const visibleError = error ?? connectionError;
   const progress = saved?.progress;
   const sameDestination =
     saved?.embedding.baseUrl === embedding.baseUrl &&
@@ -173,35 +183,28 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           description="Local providers must be reachable from the Catch server. In Docker, host.docker.internal reaches the host; localhost reaches Catch's own container. LAN addresses and service hostnames also work."
         >
           <div className="flex flex-col gap-4 p-4">
-            <label className="flex flex-col gap-2 text-sm">
-              Provider
-              <select
-                className={selectClass}
-                value={embedding.provider}
-                onChange={(event) => {
-                  const preset = AI_PROVIDERS.find(
-                    (provider) => provider.id === event.target.value,
-                  )!;
-                  setEmbedding({
-                    provider: preset.id,
-                    baseUrl: preset.url,
-                    model: preset.model,
-                    profile: preset.profile,
-                  });
-                  setKey('');
-                  setRemoveKey(false);
-                  setModels([]);
-                  setMessage(null);
-                  setError(null);
-                }}
-              >
-                {AI_PROVIDERS.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name} · {provider.kind}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Choice
+              label="Provider"
+              value={embedding.provider}
+              options={AI_PROVIDERS.map((provider) => ({
+                value: provider.id,
+                label: `${provider.name} · ${provider.kind}`,
+              }))}
+              onChange={(value) => {
+                const preset = AI_PROVIDERS.find((provider) => provider.id === value)!;
+                setEmbedding({
+                  provider: preset.id,
+                  baseUrl: preset.url,
+                  model: preset.model,
+                  profile: preset.profile,
+                });
+                setKey('');
+                setRemoveKey(false);
+                setModels([]);
+                setMessage(null);
+                setError(null);
+              }}
+            />
             <label htmlFor={`${modelList}-endpoint`} className="flex flex-col gap-2 text-sm">
               Server endpoint
               <Input
@@ -256,33 +259,45 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
               Embedding model
               <Input
                 id={`${modelList}-model`}
-                list={modelList}
                 value={embedding.model}
                 onChange={(event) => change('model', event.target.value)}
                 placeholder="Select or enter a model name"
                 autoComplete="off"
               />
-              <datalist id={modelList}>
-                {models.map((model) => (
-                  <option value={model} key={model} />
-                ))}
-              </datalist>
             </label>
-            <label className="flex flex-col gap-2 text-sm">
-              Input format
-              <select
-                className={selectClass}
-                value={embedding.profile}
-                onChange={(event) =>
-                  change('profile', event.target.value as EmbeddingConfiguration['profile'])
-                }
-              >
-                <option value="plain">Plain text</option>
-                <option value="nomic">Nomic search prefixes</option>
-                <option value="e5">E5 query / passage prefixes</option>
-                <option value="bge">BGE query instruction</option>
-              </select>
-            </label>
+            {models.length > 0 && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-start"
+                  onClick={() => setChoosingModel(true)}
+                >
+                  Choose discovered model
+                </Button>
+                <SearchSelectDialog
+                  open={choosingModel}
+                  onOpenChange={setChoosingModel}
+                  title="Embedding models"
+                  searchLabel="Search models"
+                  emptyText="No matching models"
+                  options={models.map((model) => ({ value: model, label: model }))}
+                  value={embedding.model}
+                  onChange={(value) => change('model', value)}
+                />
+              </>
+            )}
+            <Choice
+              label="Input format"
+              value={embedding.profile}
+              options={[
+                { value: 'plain', label: 'Plain text' },
+                { value: 'nomic', label: 'Nomic search prefixes' },
+                { value: 'e5', label: 'E5 query / passage prefixes' },
+                { value: 'bge', label: 'BGE query instruction' },
+              ]}
+              onChange={(value) => change('profile', value)}
+            />
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => void perform('models')}>
                 Discover models
@@ -321,9 +336,9 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           {message}
         </p>
       )}
-      {error && (
+      {visibleError && (
         <p role="alert" className="px-4 text-destructive text-sm">
-          {error}
+          {visibleError}
         </p>
       )}
       <SettingsSection
@@ -346,7 +361,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
                 aria-label="Embedding progress"
                 max={Math.max(1, progress.total)}
                 value={progress.ready}
-                className="h-2 w-full accent-primary"
+                className="h-2 w-full appearance-none overflow-hidden rounded-full bg-foreground/10 [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-foreground/10 [&::-webkit-progress-value]:bg-primary"
               />
               <p className="text-muted-foreground text-sm">
                 {progress.pending} queued · {progress.running} running · {progress.failed} failed
@@ -378,6 +393,58 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           )}
         </div>
       </SettingsSection>
+    </div>
+  );
+}
+
+function Choice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <span>{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            aria-label={label}
+            className="h-10 w-full justify-between font-normal"
+          >
+            {options.find((option) => option.value === value)?.label}
+            <ChevronDown aria-hidden className="size-4 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
+        >
+          <DropdownMenuRadioGroup
+            value={value}
+            onValueChange={(chosen) => {
+              const option = options.find((option) => option.value === chosen);
+              if (option) {
+                haptics.toggle();
+                onChange(option.value);
+              }
+            }}
+          >
+            {options.map((option) => (
+              <DropdownMenuRadioItem key={option.value} value={option.value} className="min-h-11">
+                {option.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

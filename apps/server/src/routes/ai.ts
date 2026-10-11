@@ -1,6 +1,7 @@
 import {
   aiModelDiscoveryRequestSchema,
   aiProviderRequestSchema,
+  aiRebuildRequestSchema,
   saveAiConfigurationSchema,
 } from '@catch/shared';
 import { zValidator } from '@hono/zod-validator';
@@ -12,11 +13,16 @@ import {
   resolveProvider,
   restartIndex,
   saveConfiguration,
+  testProvider,
 } from '../ai/configuration';
-import { embed, listModels, ProviderError } from '../ai/provider';
+import { listModels, ProviderError } from '../ai/provider';
 import type { AppEnv } from '../context';
 
 export const aiRoutes = new Hono<AppEnv>()
+  .use(async (c, next) => {
+    c.header('Cache-Control', 'no-store');
+    await next();
+  })
   .onError((error, c) => {
     if (error instanceof AiAccessDenied) return c.json({ error: 'Admin access required' }, 403);
     if (error instanceof ConfigurationConflict)
@@ -39,11 +45,13 @@ export const aiRoutes = new Hono<AppEnv>()
   .post('/test', zValidator('json', aiProviderRequestSchema), async (c) => {
     const provider = await resolveProvider(c.req.valid('json'));
     const start = performance.now();
-    const [vector] = await embed(provider, ['Catch embedding connection test']);
+    const dimensions = await testProvider(provider);
     return c.json({
-      dimensions: vector!.length,
+      dimensions,
       milliseconds: Math.round(performance.now() - start),
     });
   })
   .post('/retry', async (c) => c.json(await restartIndex(c.get('user')!.id, false)))
-  .post('/rebuild', async (c) => c.json(await restartIndex(c.get('user')!.id, true)));
+  .post('/rebuild', zValidator('json', aiRebuildRequestSchema), async (c) =>
+    c.json(await restartIndex(c.get('user')!.id, true, c.req.valid('json').revision)),
+  );

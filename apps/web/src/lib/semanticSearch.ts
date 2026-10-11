@@ -15,6 +15,14 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   const allowed = connected && !vault && available === true;
 
   useEffect(() => {
+    if (vault) {
+      // A query typed in the vault must not be sent when the user returns to ordinary search.
+      setEnabled(false);
+      setResponse(null);
+    }
+  }, [vault]);
+
+  useEffect(() => {
     if (!connected || vault) return;
     const controller = new AbortController();
     let checking = false;
@@ -45,10 +53,14 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
     if (!enabled || !allowed || !input.query.trim() || input.query.trim().length > 1000) return;
     const controller = new AbortController();
     setResponse({ key, loading: true });
-    const timer = window.setTimeout(async () => {
+    let timer: number;
+    const run = async () => {
       try {
         const result = await ai.search(JSON.parse(key) as HybridSearch, controller.signal);
-        if (!controller.signal.aborted) setResponse({ key, result });
+        if (!controller.signal.aborted) {
+          setResponse({ key, result });
+          if (result.indexing) timer = window.setTimeout(() => void run(), 10_000);
+        }
       } catch (error) {
         if (!controller.signal.aborted)
           setResponse({
@@ -57,7 +69,8 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
               error instanceof AiRequestError ? error.message : 'Could not reach semantic search.',
           });
       }
-    }, 500);
+    };
+    timer = window.setTimeout(() => void run(), 500);
     return () => {
       clearTimeout(timer);
       controller.abort();

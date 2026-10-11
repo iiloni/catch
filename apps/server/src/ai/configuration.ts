@@ -99,9 +99,7 @@ export async function lockConfiguration(tx: Tx, actor: string) {
 
 export async function saveConfiguration(input: SaveAiConfiguration, actor: string) {
   const provider = input.enabled ? await resolveProvider(input) : null;
-  const dimensions = provider
-    ? (await embed(provider, ['Catch embedding connection test']))[0]!.length
-    : null;
+  const dimensions = provider ? await testProvider(provider) : null;
   await db.transaction(async (tx) => {
     await lockConfiguration(tx, actor);
     const [previous] = await tx
@@ -147,10 +145,16 @@ export async function saveConfiguration(input: SaveAiConfiguration, actor: strin
   return overview();
 }
 
-export async function restartIndex(actor: string, rebuild: boolean) {
+export async function restartIndex(actor: string, rebuild: boolean, revision?: string | null) {
   await db.transaction(async (tx) => {
     await lockConfiguration(tx, actor);
     if (rebuild) {
+      const [current] = await tx
+        .select()
+        .from(aiConfiguration)
+        .where(eq(aiConfiguration.id, 'default'))
+        .for('update');
+      if ((current?.revision ?? null) !== revision) throw new ConfigurationConflict();
       await tx
         .update(aiConfiguration)
         .set({ generation: randomUUID(), revision: randomUUID() })
@@ -160,9 +164,18 @@ export async function restartIndex(actor: string, rebuild: boolean) {
     } else {
       await tx
         .update(embeddingJobs)
-        .set({ attempts: 0, failedAt: null, error: null, availableAt: new Date() });
+        .set({ attempts: 0, failedAt: null, error: null, availableAt: new Date() })
+        .where(sql`${embeddingJobs.failedAt} IS NOT NULL`);
     }
     await enqueueMissing(tx);
   });
   return overview();
+}
+
+export async function testProvider(provider: Provider) {
+  const [document] = await embed(provider, ['Catch embedding connection test']);
+  const [query] = await embed(provider, ['Catch embedding connection test'], true);
+  if (document!.length !== query!.length)
+    throw new ProviderError('The provider returned different query and document dimensions.');
+  return document!.length;
 }

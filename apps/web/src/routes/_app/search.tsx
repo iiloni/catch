@@ -18,8 +18,10 @@ import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { Switch } from '@/components/ui/switch';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
+import { getSignedInUser } from '@/lib/auth';
 import {
   boardColumnsCollection,
+  getPendingNoteIds,
   notesCollection,
   tagsCollection,
   useNoteTagAssignments,
@@ -135,6 +137,8 @@ function SearchPage() {
         searchNotes(eligibleNotes, deferredQuery, color, browsing),
         semantic.result,
         deferredQuery,
+        getSignedInUser()?.id ?? '',
+        getPendingNoteIds(),
       ).slice(0, MAX_RESULTS),
     [eligibleNotes, deferredQuery, color, browsing, semantic.result],
   );
@@ -210,7 +214,7 @@ function SearchPage() {
         trailing={<VaultToggle />}
       />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
-        {!vault && semantic.available !== false && (
+        {!vault && (semantic.available !== false || semantic.enabled) && (
           <div className="mb-4 flex items-center justify-between gap-3 px-1">
             <label htmlFor="semantic-search" className="font-medium text-sm">
               Semantic search
@@ -218,7 +222,7 @@ function SearchPage() {
             <Switch
               id="semantic-search"
               checked={semantic.enabled}
-              disabled={!semantic.allowed}
+              disabled={!semantic.allowed && !semantic.enabled}
               onCheckedChange={(checked) => {
                 haptics.toggle();
                 semantic.setEnabled(checked);

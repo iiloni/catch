@@ -94,6 +94,7 @@ export const aiModelDiscoveryRequestSchema = aiProviderRequestSchema.extend({
   embedding: embeddingConfigurationSchema.extend({ model: z.string().trim().max(200) }),
 });
 export type SaveAiConfiguration = z.infer<typeof saveAiConfigurationSchema>;
+export const aiRebuildRequestSchema = z.object({ revision: z.uuid().nullable() });
 export const aiTestResultSchema = z.object({
   dimensions: z.number().int().positive(),
   milliseconds: z.number().nonnegative(),

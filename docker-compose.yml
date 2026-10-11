@@ -28,6 +28,7 @@ services:
       PUSH_CONTACT: ${PUSH_CONTACT:-}
       ATTACHMENTS_DIR: /data/attachments
       BACKUPS_DIR: /data/backups
+      BACKUP_TEMPLATE_DATABASE: ${BACKUP_TEMPLATE_DATABASE:-template1}
       UPDATE_BACKUPS: ${UPDATE_BACKUPS:-true}
       UPDATE_BACKUPS_KEPT: ${UPDATE_BACKUPS_KEPT:-10}
     volumes:
