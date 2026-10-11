@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils';
 /** Unchanged blocks left standing on each side of a change; longer runs fold away. */
 const CONTEXT = 2;
 const DETAILS = {
-  formatting: 'Formatting changed',
   checked: 'Checked',
   unchecked: 'Unchecked',
 } as const;
@@ -92,49 +91,31 @@ function ReviewBlock({ item, block }: { item: HistoryReviewItem; block: Record<s
   );
 }
 
-/** The current note with what it gained and lost since `before`, read as one document. */
-export function HistoryChanges({ before, after }: { before: HistoryState; after: HistoryState }) {
-  const [review, setReview] = useState<HistoryReview | null>(null);
-  const [failed, setFailed] = useState(false);
+/**
+ * What the note gained and lost since `before`. Null until it is known, and `failed` when
+ * it cannot be: either way the reader goes on showing the version itself.
+ */
+export function useHistoryReview(before: HistoryState | null, after: HistoryState) {
+  const [result, setResult] = useState<{
+    before: HistoryState;
+    review: HistoryReview | null;
+  } | null>(null);
   useEffect(() => {
+    if (!before) return;
     const controller = new AbortController();
     void compareHistoryInWorker(before, after, controller.signal)
-      .then(setReview)
+      .then((review) => setResult({ before, review }))
       .catch(() => {
-        if (!controller.signal.aborted) setFailed(true);
+        if (!controller.signal.aborted) setResult({ before, review: null });
       });
     return () => controller.abort();
   }, [before, after]);
-  if (failed)
-    return (
-      <p role="alert" className="px-5 text-sm">
-        Changes cannot be shown for this version. You can still read it in full.
-      </p>
-    );
-  if (!review)
-    return (
-      <p role="status" className="px-5 text-muted-foreground text-sm">
-        Finding what changed…
-      </p>
-    );
-  if (!review.changes)
-    return (
-      <p className="px-5 text-muted-foreground text-sm">
-        The note is the same now as it was in this version.
-      </p>
-    );
-  return (
-    <>
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 pb-4 text-muted-foreground text-sm">
-        <span>
-          {review.changes} {review.changes === 1 ? 'change' : 'changes'} since this version
-        </span>
-        <span className="flex items-center gap-2 text-foreground text-xs">
-          <ins className="review-inserted px-1.5">Added</ins>
-          <del className="review-deleted px-1.5">Removed</del>
-        </span>
-      </p>
-      <ReviewItems items={review.items} fold />
-    </>
-  );
+  // An answer for another version is no answer for this one.
+  const current = result?.before === before ? result : null;
+  return { review: current?.review ?? null, failed: current !== null && !current.review };
+}
+
+/** The current note and what it lost, read as one document with the changes marked. */
+export function HistoryChanges({ review }: { review: HistoryReview }) {
+  return <ReviewItems items={review.items} fold />;
 }

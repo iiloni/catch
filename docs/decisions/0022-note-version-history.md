@@ -148,6 +148,13 @@ hooks, mutation callbacks or editor controls. Unsupported content has a disclose
 with the preserved document data. Long documents render in explicit 40-block increments;
 restore and copy always use the entire reconstructed document.
 
+A version is read with what changed since marked in it. A Show changes switch at the foot
+of the reader turns the marks off; it starts on and the device remembers the choice
+(`catch-history-changes`). The count of changes and the key to the marks sit beside the
+switch, not above the text, and the marked document is drawn with the version's own type
+and spacing, so the words both share do not move when the switch is thrown. Until the
+comparison is ready, and when a version has no changes, the version itself is shown.
+
 Changes compare the selected version to a frozen current-on-device state from viewer
 entry. A later live update produces a notice rather than changing that baseline. Comparison
 runs in a separately cancelable worker and is read as one document, the way a word
@@ -163,10 +170,10 @@ sharing at least half of their words. A longest increasing subsequence distingui
 reordering from index shifts caused by additions, and nested blocks are compared the same
 way inside their parent. Words are split with `Intl.Segmenter` and aligned by longest
 common subsequence; a block whose content is not text (a table, a file) or is too long to
-align is shown as removed and added. A change that leaves the words alone is named
-(Formatting changed, Checked, Unchecked, Moved), so formatting, check state and unfamiliar
-fields cannot disappear. A prop only one side names is not a change: imported notes leave
-out what the editor writes in full. Storage deltas are never presented as a user-facing
+align is shown as removed and added. A checklist item ticked or cleared is named
+(Checked, Unchecked), as is a block that moved. Formatting alone is not a change: the same
+words in bold, or as a heading, read as unchanged, and so does a prop only one side names,
+which imported notes leave out. Storage deltas are never presented as a user-facing
 diff.
 
 Save as new note is a distinct action available for cached versions offline. It creates a

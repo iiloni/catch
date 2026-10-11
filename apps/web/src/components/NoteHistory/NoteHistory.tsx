@@ -12,8 +12,6 @@ import {
   ChevronLeft,
   ChevronUp,
   Copy,
-  FileText,
-  Highlighter,
   History,
   RefreshCw,
   RotateCcw,
@@ -29,11 +27,12 @@ import {
 import { type Ref, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import { AnimatedHeight } from '@/components/AnimatedHeight/AnimatedHeight';
 import { IconButton } from '@/components/IconButton/IconButton';
-import { SegmentedTabs } from '@/components/SegmentedTabs/SegmentedTabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollAreaViewport, ScrollBar } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { ApiError } from '@/lib/api';
 import { useBackHandler } from '@/lib/backButton';
 import { formatDateTime, useHour12 } from '@/lib/clock';
@@ -51,10 +50,11 @@ import {
   restoreHistoryVersion,
 } from '@/lib/noteHistory';
 import { duplicateNotes } from '@/lib/notes';
+import { usePersistentState } from '@/lib/storage';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 import { openVaultHistoryNote } from '@/lib/vault';
-import { HistoryChanges } from './HistoryChanges';
+import { HistoryChanges, useHistoryReview } from './HistoryChanges';
 import { HistoryPreview } from './HistoryPreview';
 
 type Props = {
@@ -70,6 +70,8 @@ type Props = {
   onClose: () => void;
   onRestored: (result: HistoryRestoreResult) => void;
 };
+/** Whether a version is read with what changed since marked in it; this device's choice. */
+const SHOW_CHANGES_KEY = 'catch-history-changes';
 const time = formatDateTime;
 const label = (version: HistoryVersion) =>
   ({
@@ -115,7 +117,7 @@ export function NoteHistory({
   const root = useRef<HTMLElement>(null);
   const dockSlot = historyDockSlot.use();
   const dock = useRef<HTMLDivElement>(null);
-  const tabsId = useId();
+  const controlId = useId();
   const [pickerOpen, setPickerOpen] = useState(false);
   // Beside the reader the versions are always listed, and the dock has no list to open.
   const panelOpen = pickerOpen && !wide;
@@ -125,7 +127,7 @@ export function NoteHistory({
   const [entryNote] = useState(note);
   const baseline = useMemo(() => canonicalHistory(entryNote.content), [entryNote.content]);
   const currentContent = useMemo(() => canonicalHistory(note.content), [note.content]);
-  const [changesOpen, setChangesOpen] = useState(false);
+  const [showChanges, setShowChanges] = usePersistentState(SHOW_CHANGES_KEY, z.boolean(), true);
   const [clearContext, setClearContext] = useState<HistoryRestoreContext | null>(null);
   const [list, setList] = useState<HistoryList | null>(null);
   const [versions, setVersions] = useState<HistoryVersion[]>([]);
@@ -157,7 +159,6 @@ export function NoteHistory({
       request.current++;
       setSelected(null);
       setState(null);
-      setChangesOpen(false);
       setError(null);
     } else onClose();
   }, [busy, panelOpen, context, clearContext, selected, onClose]);
@@ -275,7 +276,6 @@ export function NoteHistory({
   async function select(version: HistoryVersion | null) {
     const generation = ++request.current;
     setContext(null);
-    setChangesOpen(false);
     setSelected(version);
     setState(null);
     setError(null);
@@ -426,9 +426,14 @@ export function NoteHistory({
     })),
   ];
   const transition = reducedMotion ? { duration: 0 } : springs.snappy;
-  const previewKey = showingCurrent
-    ? 'review-current'
-    : `${selected?.id ?? 'current'}-${changesOpen}`;
+  const { review, failed: reviewFailed } = useHistoryReview(
+    selected && showChanges ? state : null,
+    compared,
+  );
+  // The changes take the version's place only once there are some to show, and without the
+  // crossfade a new version gets: the text both share stays where it is.
+  const changes = showChanges && !context ? review : null;
+  const previewKey = showingCurrent ? 'review-current' : (selected?.id ?? 'current');
   // In the dock a confirmation takes the list's place; beside the reader it has the page.
   const confirming = context ? 'restore' : clearContext && wide ? 'clear' : null;
   const canClear = versions.length > 0;
@@ -684,34 +689,6 @@ export function NoteHistory({
                 </HistoryConfirmation>
               )}
             </AnimatePresence>
-            {selected && state && !confirming && (
-              <div className="shrink-0 px-4 pt-3">
-                <SegmentedTabs<'version' | 'changes'>
-                  label="Preview mode"
-                  value={changesOpen ? 'changes' : 'version'}
-                  onValueChange={(mode) => {
-                    haptics.selection();
-                    setChangesOpen(mode === 'changes');
-                  }}
-                  options={[
-                    {
-                      value: 'version',
-                      id: `${tabsId}-tab-version`,
-                      controls: `${tabsId}-view`,
-                      label: 'This version',
-                      icon: <FileText className="relative size-4" aria-hidden />,
-                    },
-                    {
-                      value: 'changes',
-                      id: `${tabsId}-tab-changes`,
-                      controls: `${tabsId}-view`,
-                      label: 'What changed',
-                      icon: <Highlighter className="relative size-4" aria-hidden />,
-                    },
-                  ]}
-                />
-              </div>
-            )}
             {currentContent !== baseline && (
               <p className="shrink-0 px-5 pt-3 text-muted-foreground text-xs">
                 The current note changed. Comparison uses the content from when you opened history.
@@ -720,7 +697,6 @@ export function NoteHistory({
             <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
               <ScrollAreaViewport ref={scrollRef}>
                 <section
-                  id={`${tabsId}-view`}
                   className="min-h-full py-5"
                   aria-label={
                     showingCurrent
@@ -745,8 +721,8 @@ export function NoteHistory({
                         </p>
                       ) : (
                         preview &&
-                        (changesOpen && state && !context ? (
-                          <HistoryChanges before={state} after={compared} />
+                        (changes?.changes ? (
+                          <HistoryChanges review={changes} />
                         ) : (
                           <HistoryPreview content={preview} />
                         ))
@@ -777,6 +753,48 @@ export function NoteHistory({
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
+            {selected && state && !confirming && (
+              <div className="flex min-h-14 shrink-0 items-center gap-3 border-foreground/10 border-t px-5 py-2">
+                <p
+                  aria-live="polite"
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs"
+                >
+                  {!showChanges ? (
+                    'Changes since this version are hidden.'
+                  ) : reviewFailed ? (
+                    'Changes cannot be shown for this version.'
+                  ) : !review ? (
+                    'Finding what changed…'
+                  ) : !review.changes ? (
+                    'The note reads the same now as in this version.'
+                  ) : (
+                    <>
+                      <span>
+                        {review.changes} {review.changes === 1 ? 'change' : 'changes'} since
+                      </span>
+                      <span className="flex items-center gap-2 text-foreground">
+                        <ins className="review-inserted px-1.5">Added</ins>
+                        <del className="review-deleted px-1.5">Removed</del>
+                      </span>
+                    </>
+                  )}
+                </p>
+                <label
+                  htmlFor={`${controlId}-changes`}
+                  className="flex min-h-11 shrink-0 items-center gap-3 font-medium text-sm"
+                >
+                  Show changes
+                  <Switch
+                    id={`${controlId}-changes`}
+                    checked={showChanges}
+                    onCheckedChange={(checked) => {
+                      haptics.toggle();
+                      setShowChanges(checked);
+                    }}
+                  />
+                </label>
+              </div>
+            )}
           </div>
         </div>
       </div>

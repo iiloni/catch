@@ -103,8 +103,18 @@ describe('history review', () => {
       children: [],
     };
     expect(reviewHistory(state([imported]), state([edited])).changes).toBe(0);
-    const bold = { ...edited, content: [text('Title', { bold: true })] };
-    expect(reviewHistory(state([imported]), state([bold])).items[0]?.detail).toBe('formatting');
+    const image = { id: 'i', type: 'image', props: { url: 'https://example.com/a.png' } };
+    const written = { ...image, props: { ...image.props, caption: '', previewWidth: 512 } };
+    expect(reviewHistory(state([image]), state([written])).changes).toBe(0);
+  });
+  it('reads a link sent somewhere else as changed', () => {
+    const link = (href: string) => ({ type: 'link', href, content: [text('the docs')] });
+    const review = reviewHistory(
+      state([paragraph('a', text('See '), link('https://example.com/old'))]),
+      state([paragraph('a', text('See '), link('https://example.com/new'))]),
+    );
+    expect(review.changes).toBe(1);
+    expect(review.items[0]?.status).toBe('changed');
   });
   it('leaves a removed block where it was and reports nested changes', () => {
     const review = reviewHistory(
@@ -139,9 +149,11 @@ describe('history review', () => {
     expect(review.changes).toBe(1);
     expect(review.items[0]).toMatchObject({ status: 'changed', detail: 'checked' });
 
+    // Formatting alone is not a change to read: the words are the same.
     const bold = structuredClone(blocks);
     bold[0]!.content = [text('same', { bold: true })];
-    expect(reviewHistory(state(blocks), state(bold)).items[0]?.detail).toBe('formatting');
+    bold[0]!.type = 'paragraph';
+    expect(reviewHistory(state(blocks), state(bold)).changes).toBe(0);
 
     const table = structuredClone(blocks);
     table[1]!.content = { rows: [{ cells: ['other'] }] };

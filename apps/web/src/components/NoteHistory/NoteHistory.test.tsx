@@ -62,7 +62,13 @@ vi.mock('./HistoryPreview', () => ({
     <p>{String(content[0]?.content)}</p>
   ),
 }));
-vi.mock('./HistoryChanges', () => ({ HistoryChanges: () => <p>Comparison</p> }));
+vi.mock('./HistoryChanges', () => ({
+  HistoryChanges: () => <p>Comparison</p>,
+  useHistoryReview: (before: HistoryState | null) => ({
+    review: before && { items: [], changes: 2 },
+    failed: false,
+  }),
+}));
 
 import { historyList } from '@/lib/noteHistory';
 
@@ -91,13 +97,15 @@ beforeEach(() => {
   historyDockSlot.set(slot);
 });
 afterEach(() => {
+  localStorage.clear();
   historyDockSlot.get()?.remove();
   historyDockSlot.set(null);
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
 const onClose = vi.fn();
-async function open({ wide = false } = {}) {
+async function open({ wide = false, changes = false } = {}) {
+  if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
     transaction: {} as ReturnType<typeof duplicateNotes>['transaction'],
@@ -115,7 +123,7 @@ async function open({ wide = false } = {}) {
     fireEvent.click(screen.getByRole('button', { name: 'Choose a version' }));
     fireEvent.click(await screen.findByRole('option', { name: /Earlier content/ }));
   }
-  await screen.findByText('Earlier words');
+  await screen.findByText(changes ? 'Comparison' : 'Earlier words');
 }
 describe('version review', () => {
   it('keeps the current note intact and requires fresh context and explicit confirmation before restore', async () => {
@@ -164,7 +172,18 @@ describe('version review', () => {
     expect(screen.queryByRole('button', { name: 'Choose a version' })).toBeNull();
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
     expect(within(versions).getByRole('button', { name: 'Clear history' })).toBeEnabled();
-    expect(screen.getByRole('tab', { name: 'What changed' })).toBeVisible();
+  });
+  it('shows changes unless switched off, and remembers the choice on this device', async () => {
+    await open({ changes: true });
+    const changes = screen.getByRole('switch', { name: 'Show changes' });
+    expect(changes).toBeChecked();
+    await waitFor(() => expect(screen.getByText('Comparison')).toBeVisible());
+    expect(screen.queryByRole('tab')).toBeNull();
+    fireEvent.click(changes);
+    expect(changes).not.toBeChecked();
+    expect(screen.getByText('Earlier words')).toBeVisible();
+    expect(screen.queryByText('Comparison')).toBeNull();
+    expect(localStorage.getItem('catch-history-changes')).toBe('false');
   });
   it('allows a cached copy offline and leaves original restore disabled', async () => {
     vi.stubGlobal('navigator', { onLine: false });

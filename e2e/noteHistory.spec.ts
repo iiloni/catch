@@ -19,6 +19,10 @@ import { bearerToken, card, openNote, seedNotes, settledBox, signUp } from './he
 /** The dock's row while versions are reviewed: their list on a phone, and the actions. */
 const historyDock = (page: Page) => page.locator('[data-history-dock]');
 
+/** Reads versions without the changes since marked in them, as the switch off leaves it. */
+const hideChanges = (page: Page) =>
+  page.addInitScript(() => localStorage.setItem('catch-history-changes', 'false'));
+
 async function chooseVersion(page: Page, reason: string) {
   const history = page.getByRole('region', { name: 'Version history' });
   await expect(history).toBeVisible();
@@ -267,6 +271,7 @@ test('retained deltas reconstruct exactly, expired captures cannot return, and c
 });
 
 test('closing offline preserves history across an immediate reload', async ({ page }) => {
+  await hideChanges(page);
   await signUp(page);
   await seedNotes(page, ['Close history original']);
   const dialog = await openNote(page, 'Close history original');
@@ -294,6 +299,7 @@ test('closing offline preserves history across an immediate reload', async ({ pa
 test('history preview leaves the editor alone, restores online, and saves a cached version as a new note offline', async ({
   page,
 }) => {
+  await hideChanges(page);
   await signUp(page);
   const previewUrl = 'https://example.com/history-preview';
   await seedNotes(page, [{ title: 'Original title', body: previewUrl }]);
@@ -359,6 +365,7 @@ test('history preview leaves the editor alone, restores online, and saves a cach
 test('history keeps the working editor and scroll position, and closes its picker before the reader', async ({
   page,
 }) => {
+  await hideChanges(page);
   await page.setViewportSize({ width: 320, height: 568 });
   await signUp(page);
   await seedNotes(page, ['History navigation']);
@@ -480,10 +487,49 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   await expect(list).toBeHidden();
   await chooseVersion(page, 'Earlier content');
   const preview = history.getByRole('region', { name: 'Version preview' });
-  await expect(preview).toContainText('Dock history original');
-  await history.getByRole('tab', { name: 'What changed' }).click();
-  await expect(preview.locator('del', { hasText: 'original' })).toBeVisible();
+  // Changes are marked in the version unless switched off, which this device remembers.
+  const removed = preview.locator('del', { hasText: 'original' });
+  await expect(removed).toBeVisible();
   await expect(preview.locator('ins', { hasText: 'changed' })).toBeVisible();
+  await expect(history.getByRole('tab')).toHaveCount(0);
+  const changes = history.getByRole('switch', { name: 'Show changes' });
+  await expect(changes).toBeChecked();
+  expect((await settledBox(changes)).y).toBeGreaterThan((await settledBox(preview)).y + 200);
+  // The words both share stay where they are when the marks go.
+  // Measured as drawn text: the two views wrap it in different elements.
+  const words = () =>
+    preview.evaluate((element) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const at = node.textContent?.indexOf('Dock history') ?? -1;
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + 'Dock history'.length);
+        const { x, y, width, height } = range.getBoundingClientRect();
+        return { x, y, width, height };
+      }
+      return null;
+    });
+  await settledBox(removed);
+  const marked = await words();
+  await changes.click();
+  await expect(removed).toHaveCount(0);
+  await expect(preview).toContainText('Dock history original');
+  await settledBox(preview.getByText('Dock history original'));
+  const plain = await words();
+  expect(marked).not.toBeNull();
+  expect(Math.abs(plain!.x - marked!.x)).toBeLessThan(1);
+  expect(Math.abs(plain!.y - marked!.y)).toBeLessThan(1);
+  expect(Math.abs(plain!.height - marked!.height)).toBeLessThan(1);
+  await history.getByRole('button', { name: 'Back to note' }).click();
+  await entry.click();
+  await chooseVersion(page, 'Earlier content');
+  await expect(changes).not.toBeChecked();
+  await expect(preview).toContainText('Dock history original');
+  await expect(removed).toHaveCount(0);
+  await changes.click();
+  await expect(removed).toBeVisible();
   const box = await settledBox(preview);
   const x = box.x + box.width / 2;
   const cdp = await page.context().newCDPSession(page);
@@ -522,6 +568,7 @@ test('beside the reader, versions keep the note’s toolbar and card where they 
   isMobile,
 }) => {
   test.skip(isMobile, 'a phone has no room for the list; its dock holds it');
+  await hideChanges(page);
   await signUp(page);
   await seedNotes(page, ['Aligned history original']);
   const dialog = await openNote(page, 'Aligned history original');
@@ -567,6 +614,7 @@ test('beside the reader, versions keep the note’s toolbar and card where they 
 test('vault history restores encrypted content and keeps cached history sealed across lock and reload', async ({
   page,
 }) => {
+  await hideChanges(page);
   test.setTimeout(90_000);
   await signUp(page);
   await page.getByRole('button', { name: 'Open the vault' }).click();

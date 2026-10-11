@@ -12,8 +12,8 @@ export type HistoryReviewItem = {
   status: 'same' | 'added' | 'removed' | 'changed';
   /** The block also sits somewhere else among its siblings. */
   moved: boolean;
-  /** How a changed block differs when no word of it was added or removed. */
-  detail?: 'formatting' | 'checked' | 'unchecked';
+  /** A checklist item ticked or cleared since, which its words do not show. */
+  detail?: 'checked' | 'unchecked';
   /** Without its children. A changed block's words carry the review styles above. */
   block: Block;
   children: HistoryReviewItem[];
@@ -65,21 +65,20 @@ function tokens(content: unknown): Token[] | null {
   return result;
 }
 
+/** Formatting aside, the same word; where a link leads is part of what it says. */
+const sameWord = (was: Token, now: Token) => was.text === now.text && was.href === now.href;
+
 /** The words of both sides in reading order: removed words, then the ones that replaced them. */
 function diffTokens(before: Token[], after: Token[]): Marked[] | null {
   let start = 0;
-  while (
-    start < before.length &&
-    start < after.length &&
-    before[start]!.text === after[start]!.text
-  )
+  while (start < before.length && start < after.length && sameWord(before[start]!, after[start]!))
     start++;
   let endBefore = before.length,
     endAfter = after.length;
   while (
     endBefore > start &&
     endAfter > start &&
-    before[endBefore - 1]!.text === after[endAfter - 1]!.text
+    sameWord(before[endBefore - 1]!, after[endAfter - 1]!)
   ) {
     endBefore--;
     endAfter--;
@@ -92,10 +91,9 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
   const table = new Uint32Array((rows + 1) * width);
   for (let row = rows - 1; row >= 0; row--)
     for (let column = columns - 1; column >= 0; column--)
-      table[row * width + column] =
-        before[start + row]!.text === after[start + column]!.text
-          ? table[(row + 1) * width + column + 1]! + 1
-          : Math.max(table[(row + 1) * width + column]!, table[row * width + column + 1]!);
+      table[row * width + column] = sameWord(before[start + row]!, after[start + column]!)
+        ? table[(row + 1) * width + column + 1]! + 1
+        : Math.max(table[(row + 1) * width + column]!, table[row * width + column + 1]!);
 
   type Step = { same: Token } | { removed: Token[]; added: Token[] };
   const steps: Step[] = [];
@@ -110,11 +108,7 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
   let row = 0,
     column = 0;
   while (row < rows || column < columns) {
-    if (
-      row < rows &&
-      column < columns &&
-      before[start + row]!.text === after[start + column]!.text
-    ) {
+    if (row < rows && column < columns && sameWord(before[start + row]!, after[start + column]!)) {
       steps.push({ same: after[start + column]! });
       row++;
       column++;
@@ -352,7 +346,9 @@ function reviewBlocks(before: Block[], after: Block[], path: string): HistoryRev
       const earlier = tokens(was.content),
         later = tokens(is.content);
       const marked = earlier && later ? diffTokens(earlier, later) : null;
-      if (!marked) {
+      if (!marked && looksSame({ ...was, id: null }, { ...is, id: null }))
+        item = { key: id, status: 'same', moved, block: is, children };
+      else if (!marked) {
         // A table, a file or a rewrite too long to line up: show both, the old one first.
         items.push({ ...whole(was, 'removed', `${id}:before`), moved: false });
         item = { key: id, status: 'added', moved, block: is, children };
@@ -360,23 +356,15 @@ function reviewBlocks(before: Block[], after: Block[], path: string): HistoryRev
         const rewritten = marked.some((token) => token.mark);
         const checked = isObject(is.props) ? is.props.checked : undefined;
         const wasChecked = isObject(was.props) ? was.props.checked : undefined;
-        if (!rewritten && looksSame({ ...was, id: null }, { ...is, id: null }))
-          item = { key: id, status: 'same', moved, block: is, children };
+        const ticked = typeof checked === 'boolean' && checked !== Boolean(wasChecked);
+        // The same words in other formatting are the same block to a reader of changes.
+        if (!rewritten && !ticked) item = { key: id, status: 'same', moved, block: is, children };
         else
           item = {
             key: id,
             status: 'changed',
             moved,
-            ...(rewritten
-              ? {}
-              : {
-                  detail:
-                    checked !== wasChecked && typeof checked === 'boolean'
-                      ? checked
-                        ? ('checked' as const)
-                        : ('unchecked' as const)
-                      : ('formatting' as const),
-                }),
+            ...(ticked ? { detail: checked ? ('checked' as const) : ('unchecked' as const) } : {}),
             block: { ...is, content: inline(marked) },
             children,
           };
