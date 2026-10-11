@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryState } from './history';
-import { REVIEW_DELETED, REVIEW_INSERTED, reviewHistory } from './historyChanges';
+import { REVIEW_DELETED, REVIEW_FORMATTED, REVIEW_INSERTED, reviewHistory } from './historyChanges';
 
 const state = (content: HistoryState['content']): HistoryState => ({ content, files: [] });
 const text = (value: string, styles = {}) => ({ type: 'text', text: value, styles });
@@ -13,7 +13,9 @@ const reading = (block: Record<string, unknown>) =>
         ? `[-${run.text}-]`
         : run.styles[REVIEW_INSERTED]
           ? `{+${run.text}+}`
-          : run.text,
+          : run.styles[REVIEW_FORMATTED]
+            ? `{~${run.text}~}`
+            : run.text,
     )
     .join('');
 
@@ -107,6 +109,18 @@ describe('history review', () => {
     const written = { ...image, props: { ...image.props, caption: '', previewWidth: 512 } };
     expect(reviewHistory(state([image]), state([written])).changes).toBe(0);
   });
+  it('marks words set differently, and not a style that is only switched off', () => {
+    const plain = paragraph('a', text('And whatnot', { bold: false, textColor: 'default' }));
+    const bold = paragraph('a', text('And '), text('whatnot', { bold: true }));
+    const review = reviewHistory(state([plain]), state([bold]));
+    expect(reading(review.items[0]!.block)).toBe('And {~whatnot~}');
+    expect(review.items[0]!.block.content).toMatchObject([{}, { styles: { bold: true } }]);
+    expect(review.changes).toBe(1);
+    expect(reviewHistory(state([bold]), state([plain])).changes).toBe(1);
+    expect(
+      reviewHistory(state([plain]), state([paragraph('a', text('And whatnot'))])).changes,
+    ).toBe(0);
+  });
   it('reads a link sent somewhere else as changed', () => {
     const link = (href: string) => ({ type: 'link', href, content: [text('the docs')] });
     const review = reviewHistory(
@@ -149,11 +163,12 @@ describe('history review', () => {
     expect(review.changes).toBe(1);
     expect(review.items[0]).toMatchObject({ status: 'changed', detail: 'checked' });
 
-    // Formatting alone is not a change to read: the words are the same.
-    const bold = structuredClone(blocks);
-    bold[0]!.content = [text('same', { bold: true })];
-    bold[0]!.type = 'paragraph';
-    expect(reviewHistory(state(blocks), state(bold)).changes).toBe(0);
+    const heading = structuredClone(blocks);
+    heading[0]!.type = 'heading';
+    expect(reviewHistory(state(blocks), state(heading)).items[0]).toMatchObject({
+      status: 'changed',
+      detail: 'formatted',
+    });
 
     const table = structuredClone(blocks);
     table[1]!.content = { rows: [{ cells: ['other'] }] };

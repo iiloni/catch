@@ -140,7 +140,10 @@ holds Save as new note and Restore original. Narrower, the dock names the versio
 read and grows upward into the list, as it grows for a note's palette; the list has no
 search, since a note keeps at most 128 versions named by their times. Clear history sits at
 the top of that list and its confirmation takes the list's place. Clearing leaves the
-reader, which has nothing left to show. The restore confirmation expands within the reader
+reader, which has nothing left to show. Opening history saves the note as it is, so the
+newest version is usually the note itself: when its content key is the note's, the list
+names it once, as the current note with the time it was saved, not as a version that reads
+the same. The restore confirmation expands within the reader
 so the content being reviewed remains visible.
 
 Version preview uses a separate read-only BlockNote instance without live-note
@@ -171,9 +174,11 @@ reordering from index shifts caused by additions, and nested blocks are compared
 way inside their parent. Words are split with `Intl.Segmenter` and aligned by longest
 common subsequence; a block whose content is not text (a table, a file) or is too long to
 align is shown as removed and added. A checklist item ticked or cleared is named
-(Checked, Unchecked), as is a block that moved. Formatting alone is not a change: the same
-words in bold, or as a heading, read as unchanged, and so does a prop only one side names,
-which imported notes leave out. Storage deltas are never presented as a user-facing
+(Checked, Unchecked), as is a block that moved. Formatting is a change too: words that
+stayed and are set differently (bold, a color) get a third mark, a tint over a dotted
+line, and a block whose kind or props changed (a paragraph made a heading) is named
+Formatting changed. A style that is only switched off or left at its default is no
+difference, nor is a prop only one side names, which imported notes leave out. Storage deltas are never presented as a user-facing
 diff.
 
 Save as new note is a distinct action available for cached versions offline. It creates a

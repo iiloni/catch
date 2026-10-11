@@ -6,14 +6,16 @@ type Block = Record<string, unknown>;
 /** Inline styles that mark words the comparison added or removed; no stored note has them. */
 export const REVIEW_INSERTED = 'reviewInserted';
 export const REVIEW_DELETED = 'reviewDeleted';
+/** Words that stayed and are set differently: bold since, or a color they did not have. */
+export const REVIEW_FORMATTED = 'reviewFormatted';
 
 export type HistoryReviewItem = {
   key: string;
   status: 'same' | 'added' | 'removed' | 'changed';
   /** The block also sits somewhere else among its siblings. */
   moved: boolean;
-  /** A checklist item ticked or cleared since, which its words do not show. */
-  detail?: 'checked' | 'unchecked';
+  /** What its words do not show: a checklist item ticked or cleared, a paragraph made a heading. */
+  detail?: 'checked' | 'unchecked' | 'formatted';
   /** Without its children. A changed block's words carry the review styles above. */
   block: Block;
   children: HistoryReviewItem[];
@@ -34,7 +36,19 @@ const own = (block: Block) => {
 };
 
 type Token = { text: string; styles: Block; stylesKey: string; href: string | null };
-type Marked = Token & { mark: typeof REVIEW_INSERTED | typeof REVIEW_DELETED | null };
+type Marked = Token & {
+  mark: typeof REVIEW_INSERTED | typeof REVIEW_DELETED | typeof REVIEW_FORMATTED | null;
+};
+
+const blank = (value: unknown): boolean =>
+  !value || (typeof value === 'object' && Object.values(value).every(blank));
+/** A style switched off, or left at its default, is the same as one never set. */
+const stylesKeyOf = (styles: Block) =>
+  canonicalHistory(
+    Object.fromEntries(
+      Object.entries(styles).filter(([, value]) => !blank(value) && value !== 'default'),
+    ),
+  );
 
 function words(text: string): string[] {
   if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
@@ -52,7 +66,7 @@ function tokens(content: unknown): Token[] | null {
   const add = (run: unknown, href: string | null) => {
     if (!isObject(run) || run.type !== 'text' || typeof run.text !== 'string') return false;
     const styles = isObject(run.styles) ? run.styles : {};
-    const stylesKey = canonicalHistory(styles);
+    const stylesKey = stylesKeyOf(styles);
     for (const text of words(run.text)) result.push({ text, styles, stylesKey, href });
     return true;
   };
@@ -95,7 +109,11 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
         ? table[(row + 1) * width + column + 1]! + 1
         : Math.max(table[(row + 1) * width + column]!, table[row * width + column + 1]!);
 
-  type Step = { same: Token } | { removed: Token[]; added: Token[] };
+  type Step = { same: Token; formatted: boolean } | { removed: Token[]; added: Token[] };
+  const kept = (was: Token, now: Token): Step => ({
+    same: now,
+    formatted: was.stylesKey !== now.stylesKey,
+  });
   const steps: Step[] = [];
   const change = () => {
     const last = steps.at(-1);
@@ -104,12 +122,12 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
     steps.push(next);
     return next;
   };
-  for (let index = 0; index < start; index++) steps.push({ same: after[index]! });
+  for (let index = 0; index < start; index++) steps.push(kept(before[index]!, after[index]!));
   let row = 0,
     column = 0;
   while (row < rows || column < columns) {
     if (row < rows && column < columns && sameWord(before[start + row]!, after[start + column]!)) {
-      steps.push({ same: after[start + column]! });
+      steps.push(kept(before[start + row]!, after[start + column]!));
       row++;
       column++;
     } else if (
@@ -119,7 +137,8 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
       change().added.push(after[start + column++]!);
     else change().removed.push(before[start + row++]!);
   }
-  for (let index = endAfter; index < after.length; index++) steps.push({ same: after[index]! });
+  for (let index = endAfter; index < after.length; index++)
+    steps.push(kept(before[endBefore + index - endAfter]!, after[index]!));
 
   // A space left standing between two rewritten words reads as confetti; rewrite it with them.
   const joined: Step[] = [];
@@ -142,7 +161,7 @@ function diffTokens(before: Token[], after: Token[]): Marked[] | null {
   }
   return joined.flatMap((step): Marked[] =>
     'same' in step
-      ? [{ ...step.same, mark: null }]
+      ? [{ ...step.same, mark: step.formatted ? REVIEW_FORMATTED : null }]
       : [
           ...step.removed.map((token): Marked => ({ ...token, mark: REVIEW_DELETED })),
           ...step.added.map((token): Marked => ({ ...token, mark: REVIEW_INSERTED })),
@@ -241,8 +260,6 @@ function alike(before: Outline[], after: Outline[]): [number, number][] {
   return pairs;
 }
 
-const blank = (value: unknown): boolean =>
-  !value || (typeof value === 'object' && Object.values(value).every(blank));
 /**
  * Whether two blocks look the same. An imported note leaves out what the editor writes in
  * full, so a prop only one side names is no difference, nor is a style it has switched off.
@@ -357,14 +374,26 @@ function reviewBlocks(before: Block[], after: Block[], path: string): HistoryRev
         const checked = isObject(is.props) ? is.props.checked : undefined;
         const wasChecked = isObject(was.props) ? was.props.checked : undefined;
         const ticked = typeof checked === 'boolean' && checked !== Boolean(wasChecked);
-        // The same words in other formatting are the same block to a reader of changes.
-        if (!rewritten && !ticked) item = { key: id, status: 'same', moved, block: is, children };
+        // A paragraph made a heading, or text set to one side: no word shows it.
+        const shape = (block: Block) => ({
+          type: block.type,
+          props: { ...(isObject(block.props) ? block.props : {}), checked: null },
+        });
+        const formatted = !looksSame(shape(was), shape(is));
+        const detail = ticked
+          ? checked
+            ? ('checked' as const)
+            : ('unchecked' as const)
+          : formatted
+            ? ('formatted' as const)
+            : null;
+        if (!rewritten && !detail) item = { key: id, status: 'same', moved, block: is, children };
         else
           item = {
             key: id,
             status: 'changed',
             moved,
-            ...(ticked ? { detail: checked ? ('checked' as const) : ('unchecked' as const) } : {}),
+            ...(detail ? { detail } : {}),
             block: { ...is, content: inline(marked) },
             children,
           };

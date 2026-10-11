@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { historyDockSlot } from '@/lib/dockState';
 import {
   clearNoteHistory,
+  currentHistoryKey,
   prepareHistoryRestore,
   readHistoryVersion,
   restoreHistoryVersion,
@@ -48,6 +49,7 @@ vi.mock('@/lib/historyStorage', () => ({
 }));
 vi.mock('@/lib/noteHistory', () => ({
   historyList: vi.fn(),
+  currentHistoryKey: vi.fn(() => null),
   readHistoryVersion: vi.fn(),
   resolveHistoryRestore: async () => null,
   prepareHistoryRestore: vi.fn(),
@@ -83,6 +85,7 @@ const summary = {
   updatedAt: new Date(0),
 };
 beforeEach(() => {
+  vi.mocked(currentHistoryKey).mockReturnValue(null);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -126,6 +129,20 @@ async function open({ wide = false, changes = false, read = true } = {}) {
   await screen.findByText(changes ? 'Comparison' : 'Earlier words');
 }
 describe('version review', () => {
+  it('lists the newest version once, as the current note, when it is the note', async () => {
+    vi.mocked(currentHistoryKey).mockReturnValue(version.contentKey);
+    vi.mocked(historyList).mockResolvedValue({ summary, versions: [version], nextCursor: null });
+    render(
+      <TooltipProvider>
+        <NoteHistory note={note} wide onClose={onClose} onRestored={vi.fn()} />
+      </TooltipProvider>,
+    );
+    const versions = screen.getByRole('navigation', { name: 'Saved versions' });
+    expect(await within(versions).findByText(/^Saved /)).toBeVisible();
+    expect(
+      within(versions).getAllByRole('button', { name: /Current note|Earlier content/ }),
+    ).toHaveLength(1);
+  });
   it('keeps the current note intact and requires fresh context and explicit confirmation before restore', async () => {
     vi.mocked(prepareHistoryRestore).mockResolvedValue({ summary, note, vaultNote: null });
     await open();

@@ -9,6 +9,7 @@ const CONTEXT = 2;
 const DETAILS = {
   checked: 'Checked',
   unchecked: 'Unchecked',
+  formatted: 'Formatting changed',
 } as const;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>

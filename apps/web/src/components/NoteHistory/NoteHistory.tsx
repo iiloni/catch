@@ -43,6 +43,7 @@ import { historyRecordsForNote, subscribeHistoryStorage } from '@/lib/historySto
 import { springs } from '@/lib/motion';
 import {
   clearNoteHistory,
+  currentHistoryKey,
   historyList,
   prepareHistoryRestore,
   readHistoryVersion,
@@ -424,14 +425,29 @@ export function NoteHistory({
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
   const detail = (version: HistoryVersion) =>
     `${label(version)} · ${local.has(version.id) ? 'On this device' : available.has(version.id) ? 'Cached' : 'Download to review'}`;
+  // Opening history saves the note as it is, so the newest version is usually the note
+  // itself. It is listed once, as the current note, with the time it was saved.
+  const newest = versions[0];
+  const saved = useMemo(
+    () =>
+      newest && currentHistoryKey(entryNote, newest.epoch) === newest.contentKey ? newest : null,
+    [entryNote, newest],
+  );
   const entries = [
-    { id: 'current', version: null, title: 'Current note', detail: 'When history opened' },
-    ...versions.map((version) => ({
-      id: version.id,
-      version,
-      title: when(version),
-      detail: detail(version),
-    })),
+    {
+      id: 'current',
+      version: null,
+      title: 'Current note',
+      detail: saved ? `Saved ${when(saved)}` : 'When history opened',
+    },
+    ...versions
+      .filter((version) => version !== saved)
+      .map((version) => ({
+        id: version.id,
+        version,
+        title: when(version),
+        detail: detail(version),
+      })),
   ];
   const transition = reducedMotion ? { duration: 0 } : springs.snappy;
   const { review, failed: reviewFailed } = useHistoryReview(
@@ -789,6 +805,7 @@ export function NoteHistory({
                       <span className="flex items-center gap-2 text-foreground">
                         <ins className="review-inserted px-1.5">Added</ins>
                         <del className="review-deleted px-1.5">Removed</del>
+                        <mark className="review-formatted px-1.5">Formatted</mark>
                       </span>
                     </>
                   )}

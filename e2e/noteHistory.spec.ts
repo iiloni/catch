@@ -296,6 +296,36 @@ test('closing offline preserves history across an immediate reload', async ({ pa
   await expect(historyDock(page).getByRole('button', { name: 'Restore original' })).toBeDisabled();
 });
 
+test('the newest version is listed as the current note, and new formatting is marked', async ({
+  page,
+}) => {
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Formatting history', body: 'Words made bold' }]);
+  const dialog = await openNote(page, 'Formatting history');
+  const editor = dialog.getByRole('textbox').and(page.locator('[contenteditable]'));
+  await editor.getByText('Words made bold').click();
+  await expect(editor).toBeFocused();
+  await editor.getByText('Words made bold').selectText();
+  await page.keyboard.press('Control+b');
+  await expect(dialog.locator('strong').filter({ hasText: 'Words made bold' })).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await dialog.getByRole('button', { name: 'Version history', exact: true }).click();
+  const history = page.getByRole('region', { name: 'Version history' });
+  await expect(history).toBeVisible();
+  // Opening history saved the bold note: that version is the current note, not a second row.
+  const beside = history.getByRole('navigation', { name: 'Saved versions' });
+  const wide = await beside.isVisible();
+  if (!wide) await historyDock(page).getByRole('button', { name: 'Choose a version' }).click();
+  const list = wide ? beside : historyDock(page).getByRole('listbox', { name: 'Choose a version' });
+  await expect(list.getByText('Earlier content').last()).toBeVisible();
+  await expect(list.getByText(/^Saved [A-Z]/)).toHaveCount(1);
+  await expect(list.getByText('Saved version ·')).toHaveCount(0);
+  await list.getByText('Earlier content').last().click();
+  await expect(
+    history.locator('mark.review-formatted').filter({ hasText: 'Words made bold' }),
+  ).toBeVisible();
+});
+
 test('history preview leaves the editor alone, restores online, and saves a cached version as a new note offline', async ({
   page,
 }) => {

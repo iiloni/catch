@@ -715,11 +715,22 @@
 /*
  * Comparing two versions of a note (ADR 0022). What the note gained is tinted and underlined,
  * what it lost is tinted and struck through: the lines tell them apart on a note whose own
- * color is the tint's.
+ * color is the tint's. Words set differently get a dotted line under them, drawn as a border
+ * so that an underline or a strike of their own still shows.
  */
 :root {
   --review-added: light-dark(oklch(0.52 0.14 150), oklch(0.8 0.15 150));
   --review-removed: light-dark(oklch(0.54 0.19 27), oklch(0.76 0.14 22));
+  --review-formatted: light-dark(oklch(0.5 0.14 255), oklch(0.8 0.11 250));
+}
+.review-formatted {
+  border-radius: 0.25rem 0.25rem 0 0;
+  border-bottom: 0.09em dotted var(--review-formatted);
+  padding-block: 0.125rem;
+  background-color: color-mix(in oklab, var(--review-formatted) 18%, transparent);
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 .review-inserted,
 .review-deleted {

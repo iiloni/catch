@@ -116,6 +116,22 @@ function identity(session: Session, state: HistoryState) {
     ? vaultHistoryContentIdentity(session.note.id, session.epoch, state)
     : hash(textBytes(state));
 }
+/**
+ * What a version of this note is known by, were it saved as it is now: the newest version
+ * is the note itself when it has this key. Null when that cannot be told (a locked vault).
+ */
+export function currentHistoryKey(note: Note, epoch: string): string | null {
+  try {
+    return isVaultNote(note.id)
+      ? vaultHistoryContentIdentity(note.id, epoch, {
+          content: note.content,
+          files: [...getSealedFiles(note.id)],
+        })
+      : hash(textBytes({ content: note.content, files: [] }));
+  } catch {
+    return null;
+  }
+}
 function payload(session: Session, representation: 'snapshot' | 'delta', bytes: Uint8Array) {
   return session.kind === 'vault'
     ? vaultHistorySeal(session.note.id, session.epoch, representation, bytes)
