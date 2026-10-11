@@ -107,18 +107,25 @@ public class WidgetLayoutTest {
                         .apply(context, new FrameLayout(context));
         measure(list, Math.round(220 * density), Math.round(180 * density));
         View card = (View) list.findViewById(R.id.widget_body).getParent();
-        View area = (View) card.getParent();
-        assertTrue(card.getHeight() + area.getPaddingTop() <= area.getHeight());
+        View area = (View) card.getParent().getParent();
+        assertTrue(
+                card.getHeight() + area.getPaddingTop() + area.getPaddingBottom()
+                        <= area.getHeight());
         assertTrue(list.findViewById(R.id.widget_body).getHeight() > 0);
-        View previewFooter = (View) list.findViewById(R.id.widget_compose).getParent();
-        assertTrue(previewFooter.getTop() > area.getBottom());
-        RemoteViews liveList = new RemoteViews(context.getPackageName(), R.layout.widget_list);
+        RemoteViews liveList =
+                new RemoteViews(context.getPackageName(), R.layout.widget_list_minimal);
         liveList.setViewVisibility(R.id.widget_empty, View.GONE);
         View live = liveList.apply(context, new FrameLayout(context));
         measure(live, Math.round(220 * density), Math.round(180 * density));
-        View footer = (View) live.findViewById(R.id.widget_compose).getParent();
-        assertTrue(footer.getTop() > live.findViewById(R.id.widget_list).getBottom());
-        assertTrue(live.findViewById(R.id.widget_compose).getHeight() >= Math.round(48 * density));
+        View notes = live.findViewById(R.id.widget_list);
+        View fab = live.findViewById(R.id.widget_compose);
+        assertTrue(notes.getHeight() >= live.getHeight() * 0.75);
+        assertTrue(fab.getTop() < notes.getBottom());
+        assertTrue(fab.getHeight() >= Math.round(48 * density));
+        assertTrue(notes.getPaddingBottom() > fab.getHeight());
+        assertNull(live.findViewById(R.id.widget_heading));
+        assertNull(live.findViewById(R.id.widget_footer));
+        assertNull(live.findViewById(R.id.widget_settings));
     }
 
     private static void measure(View view, int width, int height) {

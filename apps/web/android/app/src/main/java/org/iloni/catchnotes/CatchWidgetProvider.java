@@ -123,16 +123,18 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                                         ? R.layout.widget_single_custom
                                         : R.layout.widget_single)
                                 : (customTheme
-                                        ? R.layout.widget_list_custom
-                                        : R.layout.widget_list);
+                                        ? R.layout.widget_list_minimal_custom
+                                        : R.layout.widget_list_minimal);
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
         // Reset a previous note surface even when the selected note is no longer available.
         views.setImageViewResource(R.id.widget_surface, R.drawable.widget_surface);
         if (customTheme) {
             views.setInt(R.id.widget_surface, "setColorFilter", dark ? 0xff302e29 : 0xfffff9f0);
-            views.setInt(R.id.widget_settings, "setColorFilter", ink(dark));
+            if (!"list".equals(kind))
+                views.setInt(R.id.widget_settings, "setColorFilter", ink(dark));
         }
-        views.setOnClickPendingIntent(R.id.widget_settings, configureIntent(context, id));
+        if (!"list".equals(kind))
+            views.setOnClickPendingIntent(R.id.widget_settings, configureIntent(context, id));
         boolean signedIn = account.length() > 0;
         if ("capture".equals(kind)) {
             views.setTextViewText(R.id.widget_compose, signedIn ? "New note" : "Set up Catch");
@@ -165,26 +167,30 @@ public class CatchWidgetProvider extends AppWidgetProvider {
             views.setViewVisibility(
                     R.id.widget_search, width > 0 && width < 250 ? View.GONE : View.VISIBLE);
         } else {
-            if (customTheme) {
+            if (customTheme && "single".equals(kind)) {
                 views.setTextColor(R.id.widget_heading, ink(dark));
                 views.setTextColor(R.id.widget_footer, muted(dark));
             }
-            String updated =
-                    account.optLong("updated") == 0
-                            ? "Open Catch to load notes"
-                            : "Updated "
-                                    + android.text.format.DateFormat.getDateFormat(context)
-                                            .format(new java.util.Date(account.optLong("updated")))
-                                    + " "
-                                    + android.text.format.DateFormat.getTimeFormat(context)
-                                            .format(new java.util.Date(account.optLong("updated")));
-            views.setTextViewText(
-                    R.id.widget_footer,
-                    signedIn
-                            ? account.optString("label") + " · " + updated
-                            : "Choose an account in widget settings");
             List<JSONObject> notes = WidgetStore.notes(snapshot, config);
             if ("single".equals(kind)) {
+                String updated =
+                        account.optLong("updated") == 0
+                                ? "Open Catch to load notes"
+                                : "Updated "
+                                        + android.text.format.DateFormat.getDateFormat(context)
+                                                .format(
+                                                        new java.util.Date(
+                                                                account.optLong("updated")))
+                                        + " "
+                                        + android.text.format.DateFormat.getTimeFormat(context)
+                                                .format(
+                                                        new java.util.Date(
+                                                                account.optLong("updated")));
+                views.setTextViewText(
+                        R.id.widget_footer,
+                        signedIn
+                                ? account.optString("label") + " · " + updated
+                                : "Choose an account in widget settings");
                 JSONObject note = notes.isEmpty() ? null : notes.get(0);
                 int height =
                         AppWidgetManager.getInstance(context)
@@ -249,15 +255,21 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                                                         "tag".equals(filter) ? "tags" : "columns",
                                                         config.optString("target"));
                 boolean missing = heading.isEmpty();
-                views.setTextViewText(R.id.widget_heading, missing ? "Choose a list" : heading);
+                views.setContentDescription(
+                        R.id.widget_list,
+                        (missing ? "Note list" : heading)
+                                + (signedIn ? " · " + account.optString("label") : ""));
                 views.setTextViewText(
                         R.id.widget_empty,
                         !signedIn
                                 ? "Set up this widget to see notes."
                                 : missing
                                         ? "This list is no longer available."
-                                        : "No notes here yet.");
+                                        : account.optLong("updated") == 0
+                                                ? "Open Catch to load notes."
+                                                : "No notes here yet.");
                 if (customTheme) views.setTextColor(R.id.widget_empty, muted(dark));
+                views.setOnClickPendingIntent(R.id.widget_empty, configureIntent(context, id));
                 views.setOnClickPendingIntent(
                         R.id.widget_compose,
                         signedIn && !missing

@@ -4,8 +4,11 @@ Catch provides Quick capture, One note, and Note list widgets. Open Catch and si
 in before adding one from the launcher's widget picker. Each widget has its own
 account and appearance. A list can show pinned notes, Gallery, all notes, a tag including descendants,
 or a Deck column. Rounded note cards retain their colors and checklist previews.
-Use the custom setup dialog to choose content and appearance; its settings button
-opens the same dialog later.
+The list dedicates its space to cards with a floating New note button, without
+header or footer bars. Use the custom setup dialog to choose content and appearance.
+To change a placed list, touch and hold it and choose the launcher's Edit/Reconfigure
+option. On older launchers without this action, remove and add it again. Quick capture
+and One note keep their settings buttons.
 
 Previews refresh while that account is open in Catch, including offline edits.
 The last preview remains available with Catch closed. Vault notes and shared
@@ -34,8 +37,10 @@ and recreation behavior.
 
 The instrumented test renders all three widgets through a real AppWidgetHost in
 light and dark, then verifies visible content clears and recovers as the account
-snapshot is removed and restored. It also opens the custom setup dialog, chooses
-All notes and saves the configuration. This test requires API 29 or newer;
+snapshot is removed and restored. It verifies the last list card scrolls above the
+floating New note button and that launcher reconfiguration remains registered.
+It also opens the custom setup dialog, chooses All notes and saves the configuration.
+This test requires API 29 or newer;
 Robolectric covers the minimum API separately. **Run it only on a disposable emulator**: it
 replaces the target app’s widget snapshot with fixture notes. Set `ANDROID_SERIAL` to that emulator
 so a connected personal phone is not selected:

@@ -83,6 +83,26 @@ public class WidgetsInstrumentedTest {
                             }
                         });
                 saveScreenshot(instrumentation, host, "widgets-" + theme + ".png");
+                instrumentation.runOnMainSync(
+                        () -> {
+                            android.widget.ListView list =
+                                    findList(host.getWindow().getDecorView());
+                            assertNotNull(list);
+                            assertEquals(3, list.getCount());
+                            list.setSelection(list.getCount() - 1);
+                        });
+                instrumentation.waitForIdleSync();
+                instrumentation.runOnMainSync(
+                        () -> {
+                            android.widget.ListView list =
+                                    findList(host.getWindow().getDecorView());
+                            assertEquals(list.getCount() - 1, list.getLastVisiblePosition());
+                            android.view.View last = list.getChildAt(list.getChildCount() - 1);
+                            android.view.View fab =
+                                    ((android.view.View) list.getParent())
+                                            .findViewById(R.id.widget_compose);
+                            assertTrue(last.getBottom() + list.getTop() <= fab.getTop());
+                        });
                 android.content.Context targetContext = instrumentation.getTargetContext();
                 WidgetStore.clear(targetContext, "widget-test");
                 CatchWidgetProvider.updateAll(targetContext);
@@ -188,6 +208,18 @@ public class WidgetsInstrumentedTest {
                                 name))) {
             screenshot.compress(Bitmap.CompressFormat.PNG, 100, stream);
         }
+    }
+
+    private static android.widget.ListView findList(android.view.View view) {
+        if (view instanceof android.widget.ListView) return (android.widget.ListView) view;
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                android.widget.ListView found = findList(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private static android.widget.TextView findText(android.view.View view, String prefix) {

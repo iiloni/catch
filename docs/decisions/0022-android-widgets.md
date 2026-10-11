@@ -31,8 +31,12 @@ The widget providers and list service render that file while the WebView is abse
 
 **Refresh follows the account in use.** Local optimistic edits and streamed changes
 publish a coalesced snapshot. An account not open in Catch retains its last snapshot;
-there is no background HTTP fetch. Setup explains this and content widgets show
-when the snapshot was updated. Deleted, trashed and archived notes disappear when
+there is no background HTTP fetch. Setup explains this and One note shows when
+the snapshot was updated. Note list uses the available space for cards and a
+floating New note button, with no header or footer bars. Scroll padding lets the
+last card move above the button. List configuration stays in the launcher's
+Edit/Reconfigure action; older launchers can remove and add it again.
+Deleted, trashed and archived notes disappear when
 observed. A missing selected note, tag or column directs the user to configuration.
 
 **The account belongs to the widget.** A widget keeps its account ID; switching

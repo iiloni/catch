@@ -66,7 +66,15 @@ final class WidgetTestHost {
                                 .put("target", "0198f3a0-0000-7000-8000-000000000001")
                                 .put("theme", theme);
                 WidgetStore.configure(target, id, config);
-                AppWidgetHostView view = host.createView(target, id, manager.getAppWidgetInfo(id));
+                android.appwidget.AppWidgetProviderInfo info = manager.getAppWidgetInfo(id);
+                if (i == 2
+                        && (info.configure == null
+                                || (info.widgetFeatures
+                                                & android.appwidget.AppWidgetProviderInfo
+                                                        .WIDGET_FEATURE_RECONFIGURABLE)
+                                        == 0))
+                    throw new IllegalStateException("List widget must support launcher setup");
+                AppWidgetHostView view = host.createView(target, id, info);
                 int height = i == 0 ? 56 : i == 1 ? 300 : 340;
                 Bundle options = new Bundle();
                 options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320);
@@ -104,7 +112,10 @@ final class WidgetTestHost {
                                 + "☑ Coffee"
                                 + " beans',color:'yellow',pinned:true,column:null,tags:[]},{id:'0198f3a0-0000-7000-8000-000000000002',title:'Cabin"
                                 + " weekend',body:'Check-in after 3 · bring the"
-                                + " key',color:'default',pinned:true,column:null,tags:[]}],tags:[],columns:[]}"));
+                                + " key',color:'default',pinned:true,column:null,tags:[]},{id:'0198f3a0-0000-7000-8000-000000000003',title:'Weekend"
+                                + " errands',body:'☐ Return library books\\n"
+                                + "☐ Pick up"
+                                + " groceries',color:'default',pinned:true,column:null,tags:[]}],tags:[],columns:[]}"));
         } catch (org.json.JSONException error) {
             throw new IllegalArgumentException(error);
         }
