@@ -23,8 +23,11 @@ const DEFAULT_PROPS: Json = {
 /** Without what is switched off, empty, or the default every block starts with. */
 const said = (values: unknown, defaults: Json = {}): Json =>
   Object.fromEntries(
-    Object.entries(isObject(values) ? values : {}).filter(
-      ([name, value]) => !blank(value) && value !== 'default' && value !== defaults[name],
+    Object.entries(isObject(values) ? values : {}).filter(([name, value]) =>
+      // A default that is not blank is unsaid by leaving it out, so blank says something.
+      name in defaults && !blank(defaults[name])
+        ? value !== undefined && value !== defaults[name]
+        : !blank(value) && value !== 'default',
     ),
   );
 

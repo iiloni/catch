@@ -29,6 +29,7 @@ describe('how a version reads', () => {
       [{ type: 'checkListItem', props: { checked: true }, content: [text('Buy milk')] }],
       [{ type: 'paragraph', children: [{ type: 'paragraph', content: [text('Buy milk')] }] }],
       [...base, { type: 'paragraph', content: [text('More')] }],
+      [{ type: 'paragraph', props: { showPreview: false }, content: [text('Buy milk')] }],
     ];
     const readings = new Set([base, ...others].map(historyReading));
     expect(readings.size).toBe(others.length + 1);
