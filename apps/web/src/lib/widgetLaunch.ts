@@ -49,6 +49,7 @@ export function watchWidgetLaunch(
   let retry = false;
   let stopped = false;
   let captureAttempt = '';
+  let closingNote = false;
   const consumed = new Set<string>();
   const tryOpen = async () => {
     const launch = pending;
@@ -82,8 +83,14 @@ export function watchWidgetLaunch(
       await Promise.all([...beforeWidgetOpen].map((flush) => flush()));
       if (stopped || pending?.id !== launch.id) return;
       const changingAccount = launch.account !== getSignedInUser()?.id;
-      if (editorNote.get() && (changingAccount || launch.action !== 'note')) {
-        closeNote();
+      if (!editorNote.get()) closingNote = false;
+      if (editorNote.get() && (closingNote || changingAccount || launch.action !== 'note')) {
+        // Back is asynchronous. A second close could replace its entry, then let the
+        // delayed traversal pull the widget destination back to the browsing page.
+        if (!closingNote) {
+          closingNote = true;
+          closeNote();
+        }
         return;
       }
       if (changingAccount) {

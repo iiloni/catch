@@ -74,6 +74,7 @@ install. The screenshots below were captured this way on Android API 37. They sh
 
 `./scripts/dev.sh e2e e2e/widgets.spec.ts --workers=1` exercises cold routing,
 editor replacement with pending keystrokes, automatic composer saving and capture
-from an open editor. These tests use the real editor and outbox with the native
+from an open editor, and Search handoff with duplicate delivery and a delayed
+Back traversal. These tests use the real editor and outbox with the native
 launch bridge mocked, and save painted startup/editor frames. Run the same cases
 with `E2E_FIREFOX=1` and `--project=firefox` for desktop Firefox coverage.

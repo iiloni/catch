@@ -30,9 +30,15 @@ async function widgetBridge(page: Page) {
   );
 }
 
-async function stageTap(page: Page, action: 'note' | 'compose', noteId?: string, deliver = true) {
+async function stageTap(
+  page: Page,
+  action: 'note' | 'compose' | 'search',
+  noteId?: string,
+  deliver = true,
+  deliveries = 1,
+) {
   await page.evaluate(
-    async ({ action, noteId, deliver }) => {
+    async ({ action, noteId, deliver, deliveries }) => {
       const { getSignedInUser } = await import('/src/lib/auth.ts');
       const { getServerUrl } = await import('/src/lib/serverUrl.ts');
       sessionStorage.setItem(
@@ -45,9 +51,11 @@ async function stageTap(page: Page, action: 'note' | 'compose', noteId?: string,
           noteId,
         }),
       );
-      if (deliver) window.dispatchEvent(new Event('widget-test-tap'));
+      if (deliver) {
+        for (let i = 0; i < deliveries; i++) window.dispatchEvent(new Event('widget-test-tap'));
+      }
     },
-    { action, noteId, deliver },
+    { action, noteId, deliver, deliveries },
   );
 }
 
@@ -227,3 +235,52 @@ test('a widget saves the composer and capture can replace an open note', async (
   await page.reload();
   await expect(card(page, 'Draft saved by widget')).toBeVisible();
 });
+
+for (const source of ['card', 'widget'] as const) {
+  test(`widget search saves and leaves a note opened from a ${source}`, async ({ page }, info) => {
+    await widgetBridge(page);
+    await signUp(page);
+    await seedNotes(page, ['Search handoff note']);
+    const id = await noteId(page, 'Search handoff note');
+    if (source === 'card') {
+      await card(page, 'Search handoff note').click();
+    } else {
+      await stageTap(page, 'note', id, false);
+      await page.reload();
+    }
+    const editor = page.getByRole('dialog', { name: 'Edit note' });
+    await expect(editor.getByRole('textbox')).toBeVisible();
+    await editor.getByRole('textbox').click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.type(' saved before search');
+    if (source === 'card') {
+      await page.evaluate(() => {
+        // Native WebViews can deliver the Back traversal after another bridge reply.
+        const back = history.back.bind(history);
+        history.back = () => setTimeout(back, 200);
+      });
+    }
+    // Android reads the retained tap from both the launch event and app resume.
+    await stageTap(page, 'search', undefined, true, 2);
+    await expect(page).toHaveURL(/\/search$/);
+    await expect(editor).toBeHidden();
+    const search = page.getByRole('textbox', { name: 'Search notes', exact: true });
+    await expect(search).toBeFocused();
+    await search.fill('saved before search');
+    await expect(
+      page.getByText('Search handoff note saved before search', { exact: true }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/search$/);
+    await info.attach('widget-search-handoff', {
+      body: await page.screenshot({ path: info.outputPath('widget-search.png') }),
+      contentType: 'image/png',
+    });
+    await stored(page);
+    await page.reload();
+    await expect(search).toBeVisible();
+    await search.fill('saved before search');
+    await expect(
+      page.getByText('Search handoff note saved before search', { exact: true }),
+    ).toBeVisible();
+  });
+}

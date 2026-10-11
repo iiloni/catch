@@ -226,6 +226,25 @@ describe('direct widget opening', () => {
     expect(mocks.toast).not.toHaveBeenCalled();
     stop();
   });
+  it('closes the editor only once when Search is redelivered during its exit', async () => {
+    editorNote.set({ id: 'note-1' } as Note);
+    const close = vi.fn();
+    const navigate = vi.fn(async () => {});
+    const stop = watchWidgetLaunch(navigate, close);
+    const search = { ...launch, action: 'search' as const };
+    deliver(search);
+    deliver(search);
+    await vi.waitFor(() => expect(close).toHaveBeenCalled());
+    editorNote.set({ id: 'note-1' } as Note);
+    deliver(search);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(close).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+    editorNote.set(null);
+    await vi.waitFor(() => expect(mocks.ack).toHaveBeenCalledWith('tap-1'));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(search);
+    stop();
+  });
   it('saves a valid link capture once and waits until it is closed', async () => {
     const save = vi.fn();
     linkCaptureOpen.set(true);
