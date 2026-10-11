@@ -93,30 +93,31 @@ function ReviewBlock({ item, block }: { item: HistoryReviewItem; block: Record<s
 }
 
 /**
- * What the note gained and lost since `before`. Null until it is known, and `failed` when
+ * What `after` gained and lost since `before`. Null until it is known, and `failed` when
  * it cannot be: either way the reader goes on showing the version itself.
  */
-export function useHistoryReview(before: HistoryState | null, after: HistoryState) {
+export function useHistoryReview(before: HistoryState | null, after: HistoryState | null) {
   const [result, setResult] = useState<{
     before: HistoryState;
+    after: HistoryState;
     review: HistoryReview | null;
   } | null>(null);
   useEffect(() => {
-    if (!before) return;
+    if (!before || !after) return;
     const controller = new AbortController();
     void compareHistoryInWorker(before, after, controller.signal)
-      .then((review) => setResult({ before, review }))
+      .then((review) => setResult({ before, after, review }))
       .catch(() => {
-        if (!controller.signal.aborted) setResult({ before, review: null });
+        if (!controller.signal.aborted) setResult({ before, after, review: null });
       });
     return () => controller.abort();
   }, [before, after]);
-  // An answer for another version is no answer for this one.
-  const current = result?.before === before ? result : null;
+  // An answer for another pair of versions is no answer for this one.
+  const current = result?.before === before && result.after === after ? result : null;
   return { review: current?.review ?? null, failed: current !== null && !current.review };
 }
 
-/** The current note and what it lost, read as one document with the changes marked. */
+/** A version and what it lost, read as one document with the changes marked. */
 export function HistoryChanges({ review }: { review: HistoryReview }) {
   return <ReviewItems items={review.items} fold />;
 }

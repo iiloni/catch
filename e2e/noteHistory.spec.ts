@@ -19,7 +19,7 @@ import { bearerToken, card, openNote, seedNotes, settledBox, signUp } from './he
 /** The dock's row while versions are reviewed: their list on a phone, and the actions. */
 const historyDock = (page: Page) => page.locator('[data-history-dock]');
 
-/** Reads versions without the changes since marked in them, as the switch off leaves it. */
+/** Reads versions without their changes marked in them, as the switch off leaves it. */
 const hideChanges = (page: Page) =>
   page.addInitScript(() => localStorage.setItem('catch-history-changes', 'false'));
 
@@ -317,11 +317,13 @@ test('the newest version is listed as the current note, and new formatting is ma
   const wide = await beside.isVisible();
   if (!wide) await historyDock(page).getByRole('button', { name: 'Choose a version' }).click();
   const list = wide ? beside : historyDock(page).getByRole('listbox', { name: 'Choose a version' });
-  await expect(list.getByText('Earlier content').last()).toBeVisible();
+  // What the edit replaced is kept by the server and by this device: one snapshot, listed once.
+  await expect(list.getByText('Earlier content')).toHaveCount(1);
   await expect(list.getByText(/^Saved [A-Z]/)).toHaveCount(1);
   await expect(list.getByText('Saved version ·')).toHaveCount(0);
-  await list.getByText('Earlier content').last().click();
-  // The plain words are struck out and the bold ones added.
+  if (!wide) await page.mouse.click(10, 300);
+  // The current note is read against the version before it: the plain words are struck out
+  // and the bold ones added.
   await expect(history.locator('del').filter({ hasText: 'Words made bold' })).toBeVisible();
   await expect(history.locator('ins').filter({ hasText: 'Words made bold' })).toHaveClass(/font-/);
 });
@@ -365,7 +367,8 @@ test('history preview leaves the editor alone, restores online, and saves a cach
     .click();
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
-  await chooseVersion(page, 'Before restore');
+  // The note that was restored over is the version saved when history first opened.
+  await chooseVersion(page, 'Saved version');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     'Changed title',
   );
@@ -515,9 +518,9 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   // A pull down on the version being read leaves the reader and keeps the note open.
   await page.mouse.click(10, 300);
   await expect(list).toBeHidden();
-  await chooseVersion(page, 'Earlier content');
-  const preview = history.getByRole('region', { name: 'Version preview' });
-  // Changes are marked in the version unless switched off, which this device remembers.
+  const preview = history.getByRole('region', { name: 'Current content' });
+  // What changed from the version before is marked unless switched off, which this device
+  // remembers.
   const removed = preview.locator('del', { hasText: 'original' });
   await expect(removed).toBeVisible();
   await expect(preview.locator('ins', { hasText: 'changed' })).toBeVisible();
@@ -545,8 +548,8 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   const marked = await words();
   await changes.click();
   await expect(removed).toHaveCount(0);
-  await expect(preview).toContainText('Dock history original');
-  await settledBox(preview.getByText('Dock history original'));
+  await expect(preview).toContainText('Dock history changed');
+  await settledBox(preview.getByText('Dock history changed'));
   const plain = await words();
   expect(marked).not.toBeNull();
   expect(Math.abs(plain!.x - marked!.x)).toBeLessThan(1);
@@ -554,13 +557,18 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   expect(Math.abs(plain!.height - marked!.height)).toBeLessThan(1);
   await history.getByRole('button', { name: 'Back to note' }).click();
   await entry.click();
-  await chooseVersion(page, 'Earlier content');
   await expect(changes).not.toBeChecked();
-  await expect(preview).toContainText('Dock history original');
+  await expect(preview).toContainText('Dock history changed');
   await expect(removed).toHaveCount(0);
   await changes.click();
   await expect(removed).toBeVisible();
-  const box = await settledBox(preview);
+  // The earliest version has none before it to be read against.
+  await chooseVersion(page, 'Earlier content');
+  const version = history.getByRole('region', { name: 'Version preview' });
+  await expect(version).toContainText('Dock history original');
+  await expect(history).toContainText('This is the earliest saved version.');
+  await expect(version.locator('ins, del')).toHaveCount(0);
+  const box = await settledBox(version);
   const x = box.x + box.width / 2;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', {

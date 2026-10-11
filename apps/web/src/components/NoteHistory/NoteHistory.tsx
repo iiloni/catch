@@ -71,7 +71,7 @@ type Props = {
   onClose: () => void;
   onRestored: (result: HistoryRestoreResult) => void;
 };
-/** Whether a version is read with what changed since marked in it; this device's choice. */
+/** Whether a version is read with what it changed marked in it; this device's choice. */
 const SHOW_CHANGES_KEY = 'catch-history-changes';
 const time = formatDateTime;
 const label = (version: HistoryVersion) =>
@@ -94,6 +94,19 @@ const failure = (error: unknown) => {
   return error instanceof Error && !error.message.startsWith('{')
     ? error.message
     : 'Could not reach the server. Your selected version is still here.';
+};
+
+/**
+ * Versions that follow each other and hold the same content, listed as one: saving a note
+ * that has not changed, or the server and this device both keeping what an edit replaced.
+ */
+type Snapshot = {
+  id: string;
+  /** The ones to read, a restorable one first; any of them is the snapshot. */
+  versions: HistoryVersion[];
+  /** When the note first read this way. */
+  first: HistoryVersion;
+  newest: HistoryVersion;
 };
 
 /** A version keeps its files' places, not their bytes, which may since have been deleted. */
@@ -144,6 +157,9 @@ export function NoteHistory({
   const [local, setLocal] = useState(new Set<string>());
   const [selected, setSelected] = useState<HistoryVersion | null>(null);
   const [state, setState] = useState<HistoryState | null>(null);
+  // The snapshot before the one being read, to mark what changed; null when it cannot be read.
+  const [earlier, setEarlier] = useState<{ id: string; state: HistoryState | null } | null>(null);
+  const opened = useRef(new Map<string, HistoryState>());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -282,17 +298,29 @@ export function NoteHistory({
     return () => document.removeEventListener('pointerdown', fold, true);
   }, [panelOpen, busy]);
 
-  async function select(version: HistoryVersion | null) {
+  async function select(snapshot: Snapshot | null) {
     const generation = ++request.current;
     setContext(null);
-    setSelected(version);
+    setSelected(snapshot?.versions[0] ?? null);
     setState(null);
     setError(null);
-    if (!version) return;
+    if (!snapshot) return;
     setBusy(true);
     try {
-      const content = await readHistoryVersion(note.id, version.id);
-      if (generation === request.current && mounted.current) setState(content);
+      let problem: unknown;
+      for (const version of snapshot.versions) {
+        try {
+          const content = await readHistoryVersion(note.id, version.id);
+          if (generation === request.current && mounted.current) {
+            setSelected(version);
+            setState(content);
+          }
+          return;
+        } catch (failed) {
+          problem ??= failed;
+        }
+      }
+      throw problem;
     } catch (problem) {
       if (generation === request.current && mounted.current)
         setError(
@@ -425,34 +453,98 @@ export function NoteHistory({
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
   const detail = (version: HistoryVersion) =>
     `${label(version)} · ${local.has(version.id) ? 'On this device' : available.has(version.id) ? 'Cached' : 'Download to review'}`;
-  // Opening history saves the note as it is, so the newest version is usually the note
+  const snapshots = useMemo(() => {
+    const runs: HistoryVersion[][] = [];
+    for (const version of versions) {
+      const run = runs.at(-1);
+      if (run?.[0]?.contentKey === version.contentKey) run.push(version);
+      else runs.push([version]);
+    }
+    return runs.map((run): Snapshot => {
+      const oldestFirst = [...run].reverse();
+      return {
+        id: oldestFirst[0]!.id,
+        // A version only this device has cannot be restored until it syncs.
+        versions: [
+          ...oldestFirst.filter((version) => !local.has(version.id)),
+          ...oldestFirst.filter((version) => local.has(version.id)),
+        ],
+        first: oldestFirst[0]!,
+        newest: run[0]!,
+      };
+    });
+  }, [versions, local]);
+  // Opening history saves the note as it is, so the newest snapshot is usually the note
   // itself. It is listed once, as the current note, with the time it was saved.
-  const newest = versions[0];
-  const saved = useMemo(
-    () =>
-      newest && currentHistoryKey(entryNote, newest.epoch) === newest.contentKey ? newest : null,
-    [entryNote, newest],
-  );
+  const saved = useMemo(() => {
+    const newest = snapshots[0]?.newest;
+    return newest && currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
+      ? snapshots[0]!
+      : null;
+  }, [entryNote, snapshots]);
+  const reading = selected
+    ? (snapshots.find((snapshot) => snapshot.versions.some((row) => row.id === selected.id)) ??
+      null)
+    : null;
   const entries = [
     {
       id: 'current',
-      version: null,
+      snapshot: null,
       title: 'Current note',
-      detail: saved ? `Saved ${when(saved)}` : 'When history opened',
+      detail: saved ? `Saved ${when(saved.first)}` : 'When history opened',
     },
-    ...versions
-      .filter((version) => version !== saved)
-      .map((version) => ({
-        id: version.id,
-        version,
-        title: when(version),
-        detail: detail(version),
+    ...snapshots
+      .filter((snapshot) => snapshot !== saved)
+      .map((snapshot) => ({
+        id: snapshot.id,
+        snapshot,
+        title: when(snapshot.first),
+        detail: detail(snapshot === reading && selected ? selected : snapshot.versions[0]!),
       })),
   ];
+  const chosenId = selected ? (reading?.id ?? selected.id) : 'current';
+  const chosenEntry = entries.find((entry) => entry.id === chosenId);
+  // A version is read against the one before it; the current note against the newest that
+  // is not the note itself.
+  const before = selected
+    ? reading
+      ? snapshots[snapshots.indexOf(reading) + 1]
+      : undefined
+    : snapshots[saved ? 1 : 0];
+  useEffect(() => {
+    if (!before || !showChanges) return;
+    let stale = false;
+    const done = (state: HistoryState | null) => {
+      if (stale || !mounted.current) return;
+      setEarlier((was) =>
+        was?.id === before.id && was.state === state ? was : { id: before.id, state },
+      );
+    };
+    void (async () => {
+      for (const version of before.versions) {
+        // The list is rebuilt as records sync; the same content must stay one object, or
+        // the comparison would start over each time.
+        const known = opened.current.get(version.id);
+        if (known) return done(known);
+        // Not on this device: it is tried once there is a connection to download it over.
+        if (!connected && !available.has(version.id)) continue;
+        try {
+          const content = await readHistoryVersion(note.id, version.id);
+          opened.current.set(version.id, content);
+          return done(content);
+        } catch {}
+      }
+      done(null);
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [before, showChanges, note.id, connected, available]);
+  const earlierState = before && earlier?.id === before.id ? earlier.state : undefined;
   const transition = reducedMotion ? { duration: 0 } : springs.snappy;
   const { review, failed: reviewFailed } = useHistoryReview(
-    selected && showChanges ? state : null,
-    compared,
+    showChanges ? (earlierState ?? null) : null,
+    selected ? state : compared,
   );
   // The changes take the version's place only once there are some to show, and without the
   // crossfade a new version gets: the text both share stays where it is.
@@ -556,7 +648,7 @@ export function NoteHistory({
             Version history
           </h2>
           <p className="truncate text-muted-foreground text-xs">
-            Read only · {versions.length} saved {versions.length === 1 ? 'version' : 'versions'}
+            Read only · {snapshots.length} saved {snapshots.length === 1 ? 'version' : 'versions'}
           </p>
         </div>
         <div className="glass flex shrink-0 rounded-[var(--dock-radius)] p-1">
@@ -600,7 +692,7 @@ export function NoteHistory({
                 <ScrollAreaViewport>
                   <div className="space-y-1 pr-2">
                     {entries.map((entry) => {
-                      const chosen = (selected?.id ?? 'current') === entry.id;
+                      const chosen = chosenId === entry.id;
                       return (
                         <button
                           key={entry.id}
@@ -609,7 +701,7 @@ export function NoteHistory({
                           disabled={busy}
                           onClick={() => {
                             haptics.selection();
-                            void select(entry.version);
+                            void select(entry.snapshot);
                           }}
                           className={cn(
                             'relative min-h-14 w-full rounded-xl px-3 py-2 text-left text-sm outline-none transition-colors hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
@@ -728,7 +820,7 @@ export function NoteHistory({
             </AnimatePresence>
             {currentContent !== baseline && (
               <p className="shrink-0 px-5 pt-3 text-muted-foreground text-xs">
-                The current note changed. Comparison uses the content from when you opened history.
+                The note changed since you opened history. Current note shows it as it was then.
               </p>
             )}
             <ScrollArea className="min-h-0 flex-1 [--scrollbar-inset:1rem]">
@@ -783,24 +875,33 @@ export function NoteHistory({
               </ScrollAreaViewport>
               <ScrollBar />
             </ScrollArea>
-            {selected && state && !confirming && (
+            {(selected ? state : snapshots.length > 0) && !confirming && (
               <div className="flex min-h-14 shrink-0 items-center gap-3 border-foreground/10 border-t px-5 py-2">
                 <p
                   aria-live="polite"
                   className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs"
                 >
                   {!showChanges ? (
-                    'Changes since this version are hidden.'
+                    'Changes are hidden.'
+                  ) : !before ? (
+                    'This is the earliest saved version.'
+                  ) : earlierState === null ? (
+                    connected ? (
+                      'The version before this one could not be opened, so its changes cannot be shown.'
+                    ) : (
+                      'The version before this one is not cached. Connect to see what changed.'
+                    )
                   ) : reviewFailed ? (
                     'Changes cannot be shown for this version.'
                   ) : !review ? (
                     'Finding what changed…'
                   ) : !review.changes ? (
-                    'The note reads the same now as in this version.'
+                    'Reads the same as the version before.'
                   ) : (
                     <>
                       <span>
-                        {review.changes} {review.changes === 1 ? 'change' : 'changes'} since
+                        {review.changes} {review.changes === 1 ? 'change' : 'changes'} in this
+                        version
                       </span>
                       <span className="flex items-center gap-2 text-foreground">
                         <ins className="review-inserted px-1.5">Added</ins>
@@ -861,7 +962,7 @@ export function NoteHistory({
                           className="flex max-h-[min(50dvh,24rem)] touch-pan-y flex-col gap-1 overflow-y-auto overscroll-contain [scrollbar-width:none]"
                         >
                           {entries.map((entry) => {
-                            const chosen = (selected?.id ?? 'current') === entry.id;
+                            const chosen = chosenId === entry.id;
                             return (
                               <button
                                 key={entry.id}
@@ -872,7 +973,7 @@ export function NoteHistory({
                                 onClick={() => {
                                   haptics.selection();
                                   setPickerOpen(false);
-                                  void select(entry.version);
+                                  void select(entry.snapshot);
                                 }}
                                 className={cn(
                                   dockButton,
@@ -926,7 +1027,7 @@ export function NoteHistory({
                   <History className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-[0.9375rem]">
-                      {selected ? when(selected) : 'Current note'}
+                      {chosenEntry?.title ?? (selected ? when(selected) : 'Current note')}
                     </span>
                     <span className="block truncate text-muted-foreground text-xs">
                       {selected ? detail(selected) : 'Choose a saved version to review'}

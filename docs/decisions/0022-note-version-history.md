@@ -140,10 +140,13 @@ holds Save as new note and Restore original. Narrower, the dock names the versio
 read and grows upward into the list, as it grows for a note's palette; the list has no
 search, since a note keeps at most 128 versions named by their times. Clear history sits at
 the top of that list and its confirmation takes the list's place. Clearing leaves the
-reader, which has nothing left to show. Opening history saves the note as it is, so the
-newest version is usually the note itself: when its content key is the note's, the list
-names it once, as the current note with the time it was saved, not as a version that reads
-the same. The restore confirmation expands within the reader
+reader, which has nothing left to show. Versions that follow each other with the same
+content key are listed as one snapshot, at the time of the earliest: saving a note that has
+not changed, or the server and the device both keeping what an edit replaced, adds no row.
+A snapshot is read and restored through any of its versions, a synced one first. Opening
+history saves the note as it is, so the newest snapshot is usually the note itself: when
+its content key is the note's, the list names it once, as the current note with the time
+it was saved, not as a version that reads the same. The restore confirmation expands within the reader
 so the content being reviewed remains visible.
 
 Version preview uses a separate read-only BlockNote instance without live-note
@@ -151,17 +154,24 @@ hooks, mutation callbacks or editor controls. Unsupported content has a disclose
 with the preserved document data. Long documents render in explicit 40-block increments;
 restore and copy always use the entire reconstructed document.
 
-A version is read with what changed since marked in it. A Show changes switch at the foot
+A version is read with what it changed marked in it. A Show changes switch at the foot
 of the reader turns the marks off; it starts on and the device remembers the choice
 (`catch-history-changes`). The count of changes and the key to the marks sit beside the
 switch, not above the text, and the marked document is drawn with the version's own type
 and spacing, so the words both share do not move when the switch is thrown. Until the
 comparison is ready, and when a version has no changes, the version itself is shown.
 
-Changes compare the selected version to a frozen current-on-device state from viewer
-entry. A later live update produces a notice rather than changing that baseline. Comparison
+Changes compare a snapshot to the one before it in the list, so each row answers what that
+save changed and the page is that version's own text; comparing to the current note
+instead showed words under an old timestamp that the version never held. The current note
+is compared to the newest snapshot that is not the note itself, using its on-device state
+frozen at viewer entry; a later live update produces a notice rather than changing it. The
+earliest snapshot has nothing before it and is shown plain, as is one whose predecessor
+cannot be read (expired, or not cached while offline), with a line saying so; nothing
+further back stands in. What restoring would undo is not previewed: a restore is itself
+kept as a version. Comparison
 runs in a separately cancelable worker and is read as one document, the way a word
-processor shows tracked changes: the current note in its order, with the blocks it lost
+processor shows tracked changes: the later version in its order, with the blocks it lost
 left where they were. Words a block gained are tinted and underlined (`<ins>`), words it
 lost are tinted and struck through (`<del>`), so the two differ by more than a color that a
 note's own color could hide. Whole added and removed blocks carry the same marks along

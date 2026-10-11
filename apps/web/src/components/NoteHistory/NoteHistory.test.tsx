@@ -42,6 +42,16 @@ const version: HistoryVersion = {
   contentKey: 'a'.repeat(64),
   payloadKey: 'b'.repeat(64),
 };
+/** What the note held before `version`. */
+const older: HistoryVersion = {
+  ...version,
+  id: '0199a0a0-0000-7000-8000-000000000003',
+  sequence: 0,
+  capturedAt: new Date(-86_400_000),
+  receivedAt: new Date(-86_400_000),
+  reason: 'recovered',
+  contentKey: 'c'.repeat(64),
+};
 const state: HistoryState = { content: [{ content: 'Earlier words' }], files: [] };
 vi.mock('@/lib/historyStorage', () => ({
   historyRecordsForNote: async () => [],
@@ -107,14 +117,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const onClose = vi.fn();
-async function open({ wide = false, changes = false, read = true } = {}) {
+async function open({ wide = false, changes = false, read = true, versions = [version] } = {}) {
   if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
     transaction: {} as ReturnType<typeof duplicateNotes>['transaction'],
     attachmentsTransaction: undefined,
   });
-  vi.mocked(historyList).mockResolvedValue({ summary, versions: [version], nextCursor: null });
+  vi.mocked(historyList).mockResolvedValue({ summary, versions, nextCursor: null });
   if (read) vi.mocked(readHistoryVersion).mockResolvedValue(state);
   render(
     <TooltipProvider>
@@ -126,6 +136,10 @@ async function open({ wide = false, changes = false, read = true } = {}) {
     fireEvent.click(screen.getByRole('button', { name: 'Choose a version' }));
     fireEvent.click(await screen.findByRole('option', { name: /Earlier content/ }));
   }
+  // The current note may already be showing its own comparison.
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save as new note' })).toBeEnabled(),
+  );
   await screen.findByText(changes ? 'Comparison' : 'Earlier words');
 }
 describe('version review', () => {
@@ -142,6 +156,22 @@ describe('version review', () => {
     expect(
       within(versions).getAllByRole('button', { name: /Current note|Earlier content/ }),
     ).toHaveLength(1);
+  });
+  it('lists versions that follow each other with the same content once, at the earliest time', async () => {
+    const again = { ...version, id: older.id, sequence: 0, receivedAt: new Date(-86_400_000) };
+    await open({ wide: true, versions: [version, again] });
+    const versions = screen.getByRole('navigation', { name: 'Saved versions' });
+    expect(within(versions).getAllByRole('button', { name: /Earlier content/ })).toHaveLength(1);
+    expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
+    expect(screen.getByText(/1 saved version$/)).toBeVisible();
+  });
+  it('marks what a version changed from the one before it, and nothing in the earliest', async () => {
+    await open({ wide: true, changes: true, versions: [version, older] });
+    expect(readHistoryVersion).toHaveBeenCalledWith(note.id, older.id);
+    expect(screen.getByText(/2 changes in this\s+version/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Recovered version/ }));
+    expect(await screen.findByText('This is the earliest saved version.')).toBeVisible();
+    await waitFor(() => expect(screen.queryByText('Comparison')).toBeNull());
   });
   it('keeps the current note intact and requires fresh context and explicit confirmation before restore', async () => {
     vi.mocked(prepareHistoryRestore).mockResolvedValue({ summary, note, vaultNote: null });
@@ -191,15 +221,16 @@ describe('version review', () => {
     expect(within(versions).getByRole('button', { name: 'Clear history' })).toBeEnabled();
   });
   it('shows changes unless switched off, and remembers the choice on this device', async () => {
-    await open({ changes: true });
+    await open({ changes: true, versions: [version, older] });
     const changes = screen.getByRole('switch', { name: 'Show changes' });
     expect(changes).toBeChecked();
     await waitFor(() => expect(screen.getByText('Comparison')).toBeVisible());
     expect(screen.queryByRole('tab')).toBeNull();
     fireEvent.click(changes);
     expect(changes).not.toBeChecked();
-    expect(screen.getByText('Earlier words')).toBeVisible();
-    expect(screen.queryByText('Comparison')).toBeNull();
+    // The version fades in after the current note's comparison has left.
+    await waitFor(() => expect(screen.getByText('Earlier words')).toBeVisible());
+    await waitFor(() => expect(screen.queryByText('Comparison')).toBeNull());
     expect(localStorage.getItem('catch-history-changes')).toBe('false');
   });
   it('says nothing about files for a version without any', async () => {
