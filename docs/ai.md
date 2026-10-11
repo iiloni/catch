@@ -88,7 +88,8 @@ Notes are split into 2,000 Unicode-character chunks with 200-character overlap a
 in batches of up to eight. Notes above 120,000 characters fail indexing explicitly; their
 keyword search continues to work. Model token limits can reject shorter chunks too; Catch
 does not silently truncate them. Empty and trashed notes are excluded. Text edits invalidate
-old chunks immediately; untrashing queues a new job. Jobs retry five times with backoff and
+old chunks immediately; untrashing queues a new job. Disabling or changing configuration stops subsequent batches; a request already sent may
+finish at the provider. Jobs retry five times with backoff and
 then appear as failed. Interrupted leases expire, and restore clears leases from the old
 process. Provider/profile changes must be saved or rebuilt explicitly when a provider
 replaces a model under the same name without changing dimensions.
@@ -97,7 +98,10 @@ Retrieval currently uses exact cosine scans with up to 120 candidates per rankin
 fused server hits. Very large installations need performance evaluation before adopting
 this mode. Similarity supplies a ranking, not a relevance guarantee: there is no minimum
 similarity cutoff. Local pending keyword matches may increase the displayed count up to
-the Search page's existing 60-note limit. Queries above 1,000 characters use local search.
+the Search page's existing 60-note limit. Queries above 1,000 characters use local search. Busy/unavailable responses and network
+failures keep keyword results visible and retry the same query with 10–60 second backoff
+while semantic mode stays enabled and connected. Turning it off or entering the vault cancels
+those retries.
 
 ## Validation coverage
 

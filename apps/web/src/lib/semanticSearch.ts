@@ -54,20 +54,31 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
     const controller = new AbortController();
     setResponse({ key, loading: true });
     let timer: number;
+    let retryDelay = 10_000;
     const run = async () => {
       try {
         const result = await ai.search(JSON.parse(key) as HybridSearch, controller.signal);
         if (!controller.signal.aborted) {
+          retryDelay = 10_000;
           setResponse({ key, result });
           if (result.indexing) timer = window.setTimeout(() => void run(), 10_000);
         }
       } catch (error) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setResponse({
             key,
             error:
               error instanceof AiRequestError ? error.message : 'Could not reach semantic search.',
           });
+          if (
+            error instanceof TypeError ||
+            (error instanceof AiRequestError &&
+              (error.status === 408 || error.status === 429 || error.status >= 500))
+          ) {
+            timer = window.setTimeout(() => void run(), retryDelay);
+            retryDelay = Math.min(60_000, retryDelay * 2);
+          }
+        }
       }
     };
     timer = window.setTimeout(() => void run(), 500);

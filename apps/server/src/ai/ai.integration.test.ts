@@ -15,7 +15,7 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeEmbeddingProvider } from '../../../../e2e/fixtures/embeddingProvider';
 import { createBackup } from '../backups/operations';
-import { runRestore } from '../backups/service';
+import { backupOverview, runRestore } from '../backups/service';
 import type { BackupConfig } from '../backups/store';
 import type { AppEnv } from '../context';
 import type { Db } from '../db/client';
@@ -234,6 +234,25 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     await run();
     expect((await embeddings()).find((e) => e.noteId === NOTE)?.embedding).toEqual([0, 0, 1]);
   });
+  it.each(['disable', 'rebuild'] as const)(
+    'stops remaining batches after a mid-job %s',
+    async (operation) => {
+      await save();
+      await connection`UPDATE notes SET search_text = ${'cycling '.repeat(3000)} WHERE id = ${NOTE}`;
+      const held = await holdResponse();
+      try {
+        const sent = fake.calls.length;
+        if (operation === 'disable') await save({ enabled: false });
+        else await restartIndex('owner', true, (await overview()).revision);
+        await held.finish();
+        expect(fake.calls).toHaveLength(sent);
+        expect(await embeddings()).toEqual([]);
+        expect((await jobs()).every((job) => job.lease === null)).toBe(true);
+      } finally {
+        await held.finish();
+      }
+    },
+  );
   it('discards a response after a generation rebuild or disable', async () => {
     await save();
     const held = await holdResponse();
@@ -424,6 +443,7 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     try {
       expect((await jobs()).some((job) => job.lease !== null)).toBe(true);
       await runRestore(backup, null);
+      expect((await backupOverview()).lastRestore).toMatchObject({ name: backup, error: null });
       expect((await jobs()).every((job) => job.lease === null)).toBe(true);
     } finally {
       fake.state.beforeReply = null;

@@ -115,3 +115,55 @@ it('refreshes an indexing response, then stops when indexing completes or mode t
   });
   expect(ai.search).toHaveBeenCalledTimes(3);
 });
+
+it.each([429, 503, 'network'] as const)(
+  'recovers from transient %s without editing the query and cancels retries',
+  async (failure) => {
+    const error =
+      failure === 'network'
+        ? new TypeError('fetch failed')
+        : new AiRequestError(failure, 'unavailable');
+    vi.mocked(ai.search)
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue({ hits: [], indexing: false });
+    const hook = renderHook(() => useSemanticSearch(input, false));
+    await waitFor(() => expect(hook.result.current.allowed).toBe(true));
+    vi.useFakeTimers();
+    act(() => hook.result.current.setEnabled(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(hook.result.current.message).toContain('Showing keyword results');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_999);
+    });
+    expect(ai.search).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(ai.search).toHaveBeenCalledTimes(2);
+    expect(hook.result.current.message).toBeNull();
+    act(() => hook.result.current.setEnabled(false));
+    vi.mocked(ai.search).mockRejectedValue(error);
+    act(() => hook.result.current.setEnabled(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    act(() => hook.result.current.setEnabled(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(ai.search).toHaveBeenCalledTimes(3);
+  },
+);
+it.each([404, 403])('does not retry a permanent %s response', async (status) => {
+  vi.mocked(ai.search).mockRejectedValue(new AiRequestError(status, 'missing'));
+  const hook = renderHook(() => useSemanticSearch(input, false));
+  await waitFor(() => expect(hook.result.current.allowed).toBe(true));
+  vi.useFakeTimers();
+  act(() => hook.result.current.setEnabled(true));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_500);
+  });
+  expect(ai.search).toHaveBeenCalledTimes(1);
+});

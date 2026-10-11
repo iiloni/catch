@@ -90,6 +90,12 @@ test('semantic search starts off, finds related notes and preserves keyword fall
     page.getByRole('status').filter({ hasText: 'Showing keyword results' }),
   ).toBeVisible();
   await page.unroute('**/api/search');
+  // Recovery retries the unchanged query while keeping the keyword fallback visible.
+  await expect(page.getByRole('status').filter({ hasText: 'Showing keyword results' })).toHaveCount(
+    0,
+    { timeout: 15_000 },
+  );
+  await expect(semantic).toBeChecked();
   await page.route('**/api/notes/**', (route) => route.abort());
   await page.evaluate(async () => {
     const { noteStore } = await import('/src/lib/noteStore.ts');

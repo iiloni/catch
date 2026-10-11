@@ -66,7 +66,8 @@ export const embeddingConfigurationSchema = z.object({
         !url.username &&
         !url.password &&
         !url.search &&
-        !url.hash
+        !url.hash &&
+        !/[?#]/.test(value)
       );
     }, 'Use an HTTP(S) endpoint without credentials, a query, or a fragment')
     .transform((value) => value.replace(/\/+$/, '')),

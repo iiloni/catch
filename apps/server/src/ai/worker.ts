@@ -39,6 +39,9 @@ export async function processEmbeddingJob(signal?: AbortSignal) {
     const provider = { ...config.embedding, apiKey: openCredential(config.apiKey) };
     for (let offset = 0; offset < chunks.length; offset += 8) {
       if (signal?.aborted) return false;
+      // An admin may disable indexing or change destinations while the previous batch runs.
+      const current = await readConfiguration();
+      if (!current?.enabled || current.revision !== config.revision) return false;
       vectors.push(...(await embed(provider, chunks.slice(offset, offset + 8), false, signal)));
       // Bound the full job even for a cold local model and a very long note.
       if (offset + 8 < chunks.length)
