@@ -572,10 +572,12 @@ export function NoteHistory({
     current: string | null;
   } | null>(null);
   const [waited, setWaited] = useState(false);
+  const listed = exact.length > 0;
   useEffect(() => {
+    if (!listed) return;
     const timer = window.setTimeout(() => setWaited(true), FOLD_WAIT_MS);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [listed]);
   useEffect(() => {
     if (!exactKey) return;
     const exact = exactNow.current;
