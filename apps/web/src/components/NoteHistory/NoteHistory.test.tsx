@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { historyDockSlot } from '@/lib/dockState';
+import { compareHistoryInWorker } from '@/lib/historyWorker';
 import {
   clearNoteHistory,
   currentHistoryKey,
@@ -66,6 +67,7 @@ vi.mock('@/lib/noteHistory', () => ({
   restoreHistoryVersion: vi.fn(),
   clearNoteHistory: vi.fn(),
 }));
+vi.mock('@/lib/historyWorker', () => ({ compareHistoryInWorker: vi.fn() }));
 vi.mock('@/lib/notes', () => ({ duplicateNotes: vi.fn() }));
 vi.mock('@/lib/collections', () => ({ waitForWriteStored: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/vault', () => ({ openVaultHistoryNote: vi.fn() }));
@@ -96,6 +98,7 @@ const summary = {
 };
 beforeEach(() => {
   vi.mocked(currentHistoryKey).mockReturnValue(null);
+  vi.mocked(compareHistoryInWorker).mockResolvedValue({ items: [], changes: 1 });
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -117,7 +120,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const onClose = vi.fn();
-async function open({ wide = false, changes = false, read = true, versions = [version] } = {}) {
+async function open({
+  wide = false,
+  changes = false,
+  read = true,
+  versions = [version],
+  pick = /Earlier content/,
+} = {}) {
   if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
@@ -125,16 +134,20 @@ async function open({ wide = false, changes = false, read = true, versions = [ve
     attachmentsTransaction: undefined,
   });
   vi.mocked(historyList).mockResolvedValue({ summary, versions, nextCursor: null });
-  if (read) vi.mocked(readHistoryVersion).mockResolvedValue(state);
+  // Each version reads differently, or they would be folded into one.
+  if (read)
+    vi.mocked(readHistoryVersion).mockImplementation(async (_note, id) =>
+      id === version.id ? state : { content: [{ content: `Words of ${id}` }], files: [] },
+    );
   render(
     <TooltipProvider>
       <NoteHistory note={note} wide={wide} onClose={onClose} onRestored={vi.fn()} />
     </TooltipProvider>,
   );
-  if (wide) fireEvent.click(await screen.findByRole('button', { name: /Earlier content/ }));
+  if (wide) fireEvent.click(await screen.findByRole('button', { name: pick }));
   else {
     fireEvent.click(screen.getByRole('button', { name: 'Choose a version' }));
-    fireEvent.click(await screen.findByRole('option', { name: /Earlier content/ }));
+    fireEvent.click(await screen.findByRole('option', { name: pick }));
   }
   // The current note may already be showing its own comparison.
   await waitFor(() =>
@@ -159,11 +172,33 @@ describe('version review', () => {
   });
   it('lists versions that follow each other with the same content once, at the earliest time', async () => {
     const again = { ...version, id: older.id, sequence: 0, receivedAt: new Date(-86_400_000) };
-    await open({ wide: true, versions: [version, again] });
+    vi.mocked(readHistoryVersion).mockResolvedValue(state);
+    await open({ wide: true, read: false, versions: [version, again] });
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
     expect(within(versions).getAllByRole('button', { name: /Earlier content/ })).toHaveLength(1);
     expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
     expect(screen.getByText(/1 saved version$/)).toBeVisible();
+  });
+  it('folds versions that read the same though their data differs', async () => {
+    const reads = (id: string) => ({ content: [{ id, content: 'Earlier words' }], files: [] });
+    vi.mocked(readHistoryVersion).mockImplementation(async (_note, id) => reads(id));
+    vi.mocked(compareHistoryInWorker).mockImplementation(async (before, after) => ({
+      items: [],
+      changes: before.content[0]?.content === after.content[0]?.content ? 0 : 1,
+    }));
+    // Its own id: what is learned of a pair of versions is kept for as long as the page is.
+    const rewritten = { ...older, id: '0199a0a0-0000-7000-8000-000000000004' };
+    await open({
+      wide: true,
+      read: false,
+      versions: [version, rewritten],
+      pick: /Recovered version/,
+    });
+    const versions = screen.getByRole('navigation', { name: 'Saved versions' });
+    expect(
+      within(versions).getAllByRole('button', { name: /Earlier content|Recovered version/ }),
+    ).toHaveLength(1);
+    expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
   });
   it('marks what a version changed from the one before it, and nothing in the earliest', async () => {
     await open({ wide: true, changes: true, versions: [version, older] });
@@ -238,7 +273,7 @@ describe('version review', () => {
     expect(screen.queryByText(/File contents may no longer be available/)).toBeNull();
   });
   it('warns that a version with files may have lost them', async () => {
-    vi.mocked(readHistoryVersion).mockResolvedValueOnce({
+    vi.mocked(readHistoryVersion).mockResolvedValue({
       content: [{ content: 'Earlier words' }, { type: 'image', props: { url: '/files/1' } }],
       files: [],
     });

@@ -146,14 +146,22 @@ search, since a note keeps at most 128 versions named by their times. Holding th
 selector, or sliding off it, opens the list under the finger and letting go on a version
 reads it, as the dock picks a Settings page (ADR 0003). Clear history sits at
 the top of that list and its confirmation takes the list's place. Clearing leaves the
-reader, which has nothing left to show. Versions that follow each other with the same
-content key are listed as one snapshot, at the time of the earliest: saving a note that has
+reader, which has nothing left to show. Versions that follow each other and read
+the same are listed as one snapshot, at the time of the earliest: saving a note that has
 not changed, or the server and the device both keeping what an edit replaced, adds no row.
+Equal content keys fold versions unopened. Keys differ where nothing a reader sees does (a
+block's id, a default the editor wrote out, a vault note kept as ciphertext), so the reader
+also opens each version, downloading what the device lacks, and compares it with the next
+by the comparison below; the answers are kept in memory only. The list waits for this, up
+to four seconds, so rows do not vanish once shown. A version that cannot be opened (not
+cached, offline) stays a row of its own. A key that names how a version reads would fold
+them unopened, but needs a stored column and a protocol change.
 A snapshot is read and restored through any of its versions, a synced one first. Opening
 history saves the note as it is, so the newest snapshot is usually the note itself: when
 its content key is the note's, the list names it once, as the current note with the time
-it was saved, not as a version that reads the same. The restore confirmation expands within the reader
-so the content being reviewed remains visible.
+it was saved, not as a version that reads the same. The restore confirmation is the dock's, on every
+width: the dock grows upward for it as for the list, so the content being reviewed stays in
+view above it, and clearing is confirmed there too.
 
 Version preview uses a separate read-only BlockNote instance without live-note
 hooks, mutation callbacks or editor controls. Unsupported content has a disclosed fallback

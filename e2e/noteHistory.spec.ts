@@ -382,7 +382,7 @@ test('history preview leaves the editor alone, restores online, and saves a cach
     'Original title',
   );
   await historyDock(page).getByRole('button', { name: 'Restore original' }).click();
-  await history.getByRole('button', { name: 'Confirm restore' }).click();
+  await historyDock(page).getByRole('button', { name: 'Confirm restore' }).click();
   await expect(history).toBeHidden();
   await expect(dialog.getByRole('textbox')).toContainText('Original title');
   await page
@@ -461,9 +461,10 @@ test('history keeps the working editor and scroll position, and closes its picke
     'History navigation',
   );
   await historyDock(page).getByRole('button', { name: 'Restore original' }).click();
-  await expect(history.getByRole('region', { name: 'Confirm restore' })).toBeVisible();
+  await expect(historyDock(page).getByRole('region', { name: 'Confirm restore' })).toBeVisible();
+  await page.waitForTimeout(700);
   await page.keyboard.press('Escape');
-  await expect(history.getByRole('region', { name: 'Confirm restore' })).toBeHidden();
+  await expect(historyDock(page).getByRole('region', { name: 'Confirm restore' })).toBeHidden();
   await expect(history.getByRole('region', { name: 'Version preview' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(history.getByRole('region', { name: 'Version preview' })).toBeHidden();
@@ -685,7 +686,8 @@ test('beside the reader, versions keep the note’s toolbar and card where they 
   );
   await expect(historyDock(page).getByRole('button', { name: 'Choose a version' })).toHaveCount(0);
   await clear.click();
-  await history
+  // The dock grows for the confirmation here too.
+  await historyDock(page)
     .getByRole('region', { name: 'Confirm clear history' })
     .getByRole('button', { name: 'Clear history' })
     .click();
@@ -730,7 +732,7 @@ test('vault history restores encrypted content and keeps cached history sealed a
   await chooseVersion(page, 'Earlier content');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(secret);
   await historyDock(page).getByRole('button', { name: 'Restore original' }).click();
-  await history.getByRole('button', { name: 'Confirm restore' }).click();
+  await historyDock(page).getByRole('button', { name: 'Confirm restore' }).click();
   await expect(history).toBeHidden();
   await expect(dialog.getByRole('textbox')).toHaveText(secret);
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
@@ -769,7 +771,8 @@ test('vault history restores encrypted content and keeps cached history sealed a
     .click();
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
-  await chooseVersion(page, 'Before restore');
+  // The sealed note the restore replaced reads as the version saved when history opened.
+  await chooseVersion(page, 'Saved version');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     `${secret} edited`,
   );

@@ -17,13 +17,7 @@ import {
   RotateCcw,
   WifiOff,
 } from 'lucide-react';
-import {
-  AnimatePresence,
-  type HTMLMotionProps,
-  motion,
-  useIsPresent,
-  useReducedMotion,
-} from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import {
   type PointerEvent as ReactPointerEvent,
   type Ref,
@@ -49,6 +43,7 @@ import { waitForWriteStored } from '@/lib/collections';
 import { historyDockSlot } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { historyRecordsForNote, subscribeHistoryStorage } from '@/lib/historyStorage';
+import { compareHistoryInWorker } from '@/lib/historyWorker';
 import { HOLD_MS, LONG_PRESS_TOLERANCE, swallowNextClick } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import {
@@ -107,8 +102,9 @@ const failure = (error: unknown) => {
 };
 
 /**
- * Versions that follow each other and hold the same content, listed as one: saving a note
- * that has not changed, or the server and this device both keeping what an edit replaced.
+ * Versions that follow each other and read the same, listed as one: saving a note that has
+ * not changed, the server and this device both keeping what an edit replaced, or a save that
+ * only changed what does not show (a block's id, a default the editor wrote out).
  */
 type Snapshot = {
   id: string;
@@ -153,6 +149,14 @@ type Hold = {
   entry: string | null;
 };
 
+/**
+ * Whether one version reads the same as the next, by their ids. Versions never change, so
+ * an answer holds for as long as the page does; it is kept in memory only, as a vault's is.
+ */
+const readsSame = new Map<string, boolean>();
+/** The list waits this long for versions to be compared before showing them unfolded. */
+const FOLD_WAIT_MS = 4000;
+
 /** A version keeps its files' places, not their bytes, which may since have been deleted. */
 const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
   blocks.some(
@@ -160,12 +164,6 @@ const hasFiles = (blocks: readonly Record<string, unknown>[]): boolean =>
       ['image', 'video', 'audio', 'file'].includes(String(block.type)) ||
       (Array.isArray(block.children) && hasFiles(block.children)),
   );
-
-// A dismissed confirmation must stop accepting clicks while its surface folds away.
-function HistoryConfirmation(props: HTMLMotionProps<'section'>) {
-  const present = useIsPresent();
-  return <motion.section {...props} inert={!present} aria-hidden={!present || undefined} />;
-}
 
 /** A separate reader: choosing a version never changes the working editor. */
 export function NoteHistory({
@@ -501,7 +499,7 @@ export function NoteHistory({
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
   const detail = (version: HistoryVersion) =>
     `${label(version)} · ${local.has(version.id) ? 'On this device' : available.has(version.id) ? 'Cached' : 'Download to review'}`;
-  const snapshots = useMemo(() => {
+  const exact = useMemo(() => {
     const runs: HistoryVersion[][] = [];
     for (const version of versions) {
       const run = runs.at(-1);
@@ -522,14 +520,102 @@ export function NoteHistory({
       };
     });
   }, [versions, local]);
+  const readSnapshot = useCallback(
+    async (snapshot: Snapshot) => {
+      for (const version of snapshot.versions) {
+        // The list is rebuilt as records sync; the same content must stay one object, or
+        // a comparison would start over each time.
+        const known = opened.current.get(version.id);
+        if (known) return known;
+        // Not on this device: it is tried once there is a connection to download it over.
+        if (!connected && !available.has(version.id)) continue;
+        try {
+          const content = await readHistoryVersion(note.id, version.id);
+          opened.current.set(version.id, content);
+          return content;
+        } catch {}
+      }
+      return null;
+    },
+    [note.id, connected, available],
+  );
+  // Equal content keys fold versions without opening them. Versions that differ only in
+  // what does not show have different keys, so each is opened and compared with the next;
+  // one that cannot be opened (not cached, offline) stays a row of its own.
+  const [folds, setFolds] = useState<{
+    of: Snapshot[];
+    same: Set<string>;
+    current: boolean;
+  } | null>(null);
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWaited(true), FOLD_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (!exact.length) return;
+    const controller = new AbortController();
+    const alike = async (before: HistoryState, after: HistoryState) =>
+      canonicalHistory(before.content) === canonicalHistory(after.content) ||
+      (await compareHistoryInWorker(before, after, controller.signal)).changes === 0;
+    void (async () => {
+      const same = new Set<string>();
+      let current = false;
+      let newer = await readSnapshot(exact[0]!);
+      try {
+        if (newer) current = await alike(newer, compared);
+        for (let index = 1; index < exact.length; index++) {
+          if (controller.signal.aborted) return;
+          const older = await readSnapshot(exact[index]!);
+          const pair = `${exact[index]!.newest.id}:${exact[index - 1]!.first.id}`;
+          let answer = readsSame.get(pair);
+          if (answer === undefined && older && newer) {
+            answer = await alike(older, newer);
+            readsSame.set(pair, answer);
+          }
+          if (answer) same.add(exact[index]!.id);
+          newer = older;
+        }
+      } catch {
+        // A comparison that fails leaves the rest as they are listed.
+      }
+      if (!controller.signal.aborted && mounted.current) setFolds({ of: exact, same, current });
+    })();
+    return () => controller.abort();
+  }, [exact, readSnapshot, compared]);
+  const snapshots = useMemo(() => {
+    // Nothing is listed until it has been folded, so rows do not vanish under a finger.
+    if (!folds && !waited) return [];
+    // Answers for an earlier list still hold: they are about versions, which do not change.
+    const result: Snapshot[] = [];
+    for (const snapshot of exact) {
+      const newer = result.at(-1);
+      if (!newer || !folds?.same.has(snapshot.id)) {
+        result.push(snapshot);
+        continue;
+      }
+      const all = [...snapshot.versions, ...newer.versions];
+      result[result.length - 1] = {
+        id: snapshot.id,
+        versions: [
+          ...all.filter((version) => !local.has(version.id)),
+          ...all.filter((version) => local.has(version.id)),
+        ],
+        first: snapshot.first,
+        newest: newer.newest,
+      };
+    }
+    return result;
+  }, [exact, folds, waited, local]);
   // Opening history saves the note as it is, so the newest snapshot is usually the note
   // itself. It is listed once, as the current note, with the time it was saved.
   const saved = useMemo(() => {
     const newest = snapshots[0]?.newest;
-    return newest && currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
+    if (!newest) return null;
+    return folds?.current || currentHistoryKey(entryNote, newest.epoch) === newest.contentKey
       ? snapshots[0]!
       : null;
-  }, [entryNote, snapshots]);
+  }, [entryNote, snapshots, folds]);
   const reading = selected
     ? (snapshots.find((snapshot) => snapshot.versions.some((row) => row.id === selected.id)) ??
       null)
@@ -568,26 +654,11 @@ export function NoteHistory({
         was?.id === before.id && was.state === state ? was : { id: before.id, state },
       );
     };
-    void (async () => {
-      for (const version of before.versions) {
-        // The list is rebuilt as records sync; the same content must stay one object, or
-        // the comparison would start over each time.
-        const known = opened.current.get(version.id);
-        if (known) return done(known);
-        // Not on this device: it is tried once there is a connection to download it over.
-        if (!connected && !available.has(version.id)) continue;
-        try {
-          const content = await readHistoryVersion(note.id, version.id);
-          opened.current.set(version.id, content);
-          return done(content);
-        } catch {}
-      }
-      done(null);
-    })();
+    void readSnapshot(before).then(done);
     return () => {
       stale = true;
     };
-  }, [before, showChanges, note.id, connected, available]);
+  }, [before, showChanges, readSnapshot]);
   const earlierState = before && earlier?.id === before.id ? earlier.state : undefined;
   // Holding the dock's selector (or sliding off it) opens the list under the finger, and
   // letting go on a version reads it, as the dock picks a Settings page.
@@ -655,8 +726,10 @@ export function NoteHistory({
   // crossfade a new version gets: the text both share stays where it is.
   const changes = showChanges && !context ? review : null;
   const previewKey = showingCurrent ? 'review-current' : (selected?.id ?? 'current');
-  // In the dock a confirmation takes the list's place; beside the reader it has the page.
+  // A confirmation is the dock's, which grows upward for it as it does for the list: the
+  // version being replaced stays in view above it.
   const confirming = context ? 'restore' : clearContext && wide ? 'clear' : null;
+  const dockPanel = context ? 'restore' : clearContext ? 'clear' : panelOpen ? 'versions' : null;
   const canClear = versions.length > 0;
   const clearDisabled = !connected || busy || uncertain || !!context;
   const restoreDisabled =
@@ -854,75 +927,6 @@ export function NoteHistory({
                 )}
               </div>
             )}
-            <AnimatePresence initial={false}>
-              {confirming && (
-                <HistoryConfirmation
-                  key={confirming}
-                  aria-label={
-                    confirming === 'restore' ? 'Confirm restore' : 'Confirm clear history'
-                  }
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={transition}
-                  className="max-h-[60%] shrink-0 overflow-y-auto overscroll-contain"
-                >
-                  <div className="glass mx-4 mt-3 rounded-2xl p-4 text-sm">
-                    {confirming === 'clear' ? (
-                      <>
-                        {clearCopy}
-                        <div className="mt-4 flex flex-wrap gap-2">{clearActions}</div>
-                      </>
-                    ) : (
-                      <>
-                        <h3 className="font-display font-semibold text-lg">
-                          Replace this note’s content?
-                        </h3>
-                        <p className="mt-2 text-muted-foreground">
-                          Current content will be kept in history. Placement, tags and reminders
-                          stay as they are. Deleted files cannot be recovered.
-                        </p>
-                        {!reviewed && (
-                          <p className="mt-3 font-medium">
-                            This note has newer edits. Review them before replacing its content.
-                          </p>
-                        )}
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button
-                            variant="ghost"
-                            className="min-h-11 rounded-xl"
-                            onClick={() => {
-                              setReviewed(true);
-                              setReviewCurrent(!reviewCurrent);
-                            }}
-                          >
-                            {reviewCurrent ? 'Review selected version' : 'Review current note'}
-                          </Button>
-                          <Button
-                            className="min-h-11 rounded-xl"
-                            disabled={busy || !reviewed}
-                            onClick={() => {
-                              haptics.warning();
-                              void restore();
-                            }}
-                          >
-                            Confirm restore
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            className="min-h-11 rounded-xl"
-                            disabled={busy}
-                            onClick={() => setContext(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </HistoryConfirmation>
-              )}
-            </AnimatePresence>
             {currentContent !== baseline && (
               <p className="shrink-0 px-5 pt-3 text-muted-foreground text-xs">
                 The note changed since you opened history. Current note shows it as it was then.
@@ -1038,9 +1042,9 @@ export function NoteHistory({
         createPortal(
           <div ref={dock} className="flex flex-col">
             <AnimatePresence initial={false}>
-              {panelOpen && isPresent && (
+              {dockPanel && isPresent && (
                 <motion.div
-                  key="versions"
+                  key="panel"
                   className="flex flex-col justify-end overflow-hidden [&>*]:shrink-0"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -1048,7 +1052,54 @@ export function NoteHistory({
                   transition={reducedMotion ? { duration: 0 } : springs.smooth}
                 >
                   <AnimatedHeight>
-                    {clearContext ? (
+                    {dockPanel === 'restore' ? (
+                      <section aria-label="Confirm restore" className="p-4 text-sm">
+                        <h3 className="font-display font-semibold text-lg">
+                          Replace this note’s content?
+                        </h3>
+                        <p className="mt-2 text-muted-foreground">
+                          Current content will be kept in history. Placement, tags and reminders
+                          stay as they are. Deleted files cannot be recovered.
+                        </p>
+                        {!reviewed && (
+                          <p className="mt-3 font-medium">
+                            This note has newer edits. Review them before replacing its content.
+                          </p>
+                        )}
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            className="-ml-3 min-h-11 rounded-xl"
+                            onClick={() => {
+                              setReviewed(true);
+                              setReviewCurrent(!reviewCurrent);
+                            }}
+                          >
+                            {reviewCurrent ? 'Review selected version' : 'Review current note'}
+                          </Button>
+                          <div className="ml-auto flex gap-2">
+                            <Button
+                              variant="ghost"
+                              className="min-h-11 rounded-xl"
+                              disabled={busy}
+                              onClick={() => setContext(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              className="min-h-11 rounded-xl"
+                              disabled={busy || !reviewed}
+                              onClick={() => {
+                                haptics.warning();
+                                void restore();
+                              }}
+                            >
+                              Confirm restore
+                            </Button>
+                          </div>
+                        </div>
+                      </section>
+                    ) : dockPanel === 'clear' ? (
                       <section aria-label="Confirm clear history" className="p-4 text-sm">
                         {clearCopy}
                         <div className="mt-4 flex flex-wrap justify-end gap-2">{clearActions}</div>
