@@ -55,6 +55,29 @@ it('does not check capabilities or send queries in the vault, including after ex
   await new Promise((resolve) => setTimeout(resolve, 550));
   expect(ai.search).not.toHaveBeenCalled();
 });
+it('searches at once when switched on, and waits out typing', async () => {
+  const hook = renderHook(({ query }) => useSemanticSearch({ ...input, query }, false), {
+    initialProps: { query: 'bike' },
+  });
+  await waitFor(() => expect(hook.result.current.allowed).toBe(true));
+  vi.useFakeTimers();
+  act(() => hook.result.current.setEnabled(true));
+  expect(hook.result.current.loading).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(ai.search).toHaveBeenCalledTimes(1);
+  expect(hook.result.current.loading).toBe(false);
+  hook.rerender({ query: 'bikes' });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  expect(ai.search).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50);
+  });
+  expect(ai.search).toHaveBeenCalledTimes(2);
+});
 it('debounces, cancels stale requests and ignores late results', async () => {
   const hook = renderHook(({ query }) => useSemanticSearch({ ...input, query }, false), {
     initialProps: { query: 'bike' },
@@ -131,7 +154,7 @@ it.each([429, 503, 'network'] as const)(
     vi.useFakeTimers();
     act(() => hook.result.current.setEnabled(true));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(0);
     });
     expect(hook.result.current.message).toContain('Showing keyword results');
     await act(async () => {

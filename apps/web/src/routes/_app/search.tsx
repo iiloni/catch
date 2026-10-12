@@ -356,6 +356,9 @@ function SearchPage() {
                     </AnimatePresence>
                   </ul>
                 </section>
+              ) : semantic.loading ? (
+                // Keyword matches show at once; with none, AI search may still find some.
+                <EmptyState icon={Sparkles} title="Finding related notes" busy />
               ) : (
                 <EmptyState icon={SearchX} title="No matching notes">
                   {showArchived

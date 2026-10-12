@@ -1,7 +1,10 @@
 import type { HybridSearch, HybridSearchResult } from '@catch/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AiRequestError, ai } from './ai';
 import { useSyncStatus } from './syncStatus';
+
+// Long enough to skip a request per keystroke, short enough that a pause feels immediate.
+const TYPING_DELAY = 150;
 
 type Response = { key: string; result?: HybridSearchResult; error?: string; loading?: boolean };
 
@@ -13,6 +16,7 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   const connected = !offline && !incompatibility && !signedOut;
   const key = JSON.stringify(input);
   const allowed = connected && !vault && available === true;
+  const typed = useRef(input.query);
 
   useEffect(() => {
     if (vault) {
@@ -50,6 +54,8 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   }, [connected, vault]);
 
   useEffect(() => {
+    const typing = typed.current !== input.query;
+    typed.current = input.query;
     if (!enabled || !allowed || !input.query.trim() || input.query.trim().length > 1000) {
       // A recent-search replay must not briefly reuse a response from before AI was switched off.
       setResponse(null);
@@ -84,7 +90,8 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
         }
       }
     };
-    timer = window.setTimeout(() => void run(), 500);
+    // Only typing is worth waiting out: a switch, filter or recent search is one deliberate act.
+    timer = window.setTimeout(() => void run(), typing ? TYPING_DELAY : 0);
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -109,10 +116,16 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
         ? 'Use a shorter query for AI search. Showing keyword results.'
         : current?.error
           ? `${current.error} Showing keyword results.`
-          : current?.loading
-            ? 'Finding related notes…'
-            : current?.result?.indexing
-              ? 'Some notes are still being indexed. Keyword matches are included.'
-              : null;
-  return { enabled, setEnabled, available, allowed, message, result: current?.result };
+          : current?.result?.indexing
+            ? 'Some notes are still being indexed. Keyword matches are included.'
+            : null;
+  return {
+    enabled,
+    setEnabled,
+    available,
+    allowed,
+    message,
+    loading: !!current?.loading,
+    result: current?.result,
+  };
 }
