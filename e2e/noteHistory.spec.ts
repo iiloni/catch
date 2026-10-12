@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test';
 import {
   type HistoryCapture,
   type HistoryState,
@@ -24,18 +24,24 @@ const historyDock = (page: Page) => page.locator('[data-history-dock]');
 const hideChanges = (page: Page) =>
   page.addInitScript(() => localStorage.setItem('catch-history-changes', 'false'));
 
-async function chooseVersion(page: Page, reason: string) {
+/** Reads the earliest version, or the latest one labelled with how it came to be saved. */
+async function chooseVersion(page: Page, which: 'earliest' | 'Before restore') {
+  // The current note is listed first, and alone until the versions have loaded.
+  const row = async (rows: Locator) => {
+    await expect.poll(() => rows.count()).toBeGreaterThan(1);
+    return (which === 'earliest' ? rows : rows.filter({ hasText: which })).last();
+  };
   const history = page.getByRole('region', { name: 'Version history' });
   await expect(history).toBeVisible();
   const versions = history.getByRole('navigation', { name: 'Saved versions' });
   // Beside the reader when there is room; otherwise the dock grows into the list.
   if (await versions.isVisible()) {
-    await versions.getByRole('button').filter({ hasText: reason }).last().click();
+    await (await row(versions.locator('button[aria-pressed]'))).click();
     return;
   }
   await historyDock(page).getByRole('button', { name: 'Choose a version' }).click();
   const list = historyDock(page).getByRole('listbox', { name: 'Choose a version' });
-  await list.getByRole('option').filter({ hasText: reason }).last().click();
+  await (await row(list.getByRole('option'))).click();
   await expect(list).toBeHidden();
 }
 
@@ -343,7 +349,7 @@ test('closing offline preserves history across an immediate reload', async ({ pa
     .getByRole('button', { name: 'Version history', exact: true })
     .click();
   const history = page.getByRole('region', { name: 'Version history' });
-  await chooseVersion(page, 'Earlier content');
+  await chooseVersion(page, 'earliest');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     'Close history original',
   );
@@ -372,9 +378,10 @@ test('the newest version is listed as the current note, and new formatting is ma
   if (!wide) await historyDock(page).getByRole('button', { name: 'Choose a version' }).click();
   const list = wide ? beside : historyDock(page).getByRole('listbox', { name: 'Choose a version' });
   // What the edit replaced is kept by the server and by this device: one snapshot, listed once.
-  await expect(list.getByText('Earlier content')).toHaveCount(1);
+  await expect(wide ? list.locator('button[aria-pressed]') : list.getByRole('option')).toHaveCount(
+    2,
+  );
   await expect(list.getByText(/^Saved [A-Z]/)).toHaveCount(1);
-  await expect(list.getByText('Saved version ·')).toHaveCount(0);
   if (!wide) await page.mouse.click(10, 300);
   // The current note is read against the version before it: the plain words are struck out
   // and the bold ones added.
@@ -407,7 +414,7 @@ test('history preview leaves the editor alone, restores online, and saves a cach
   const history = page.getByRole('region', { name: 'Version history' });
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
-  await chooseVersion(page, 'Earlier content');
+  await chooseVersion(page, 'earliest');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     'Original title',
   );
@@ -422,7 +429,7 @@ test('history preview leaves the editor alone, restores online, and saves a cach
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
   // The note that was restored over is the version saved when history first opened.
-  await chooseVersion(page, 'Saved version');
+  await chooseVersion(page, 'Before restore');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     'Changed title',
   );
@@ -486,7 +493,7 @@ test('history keeps the working editor and scroll position, and closes its picke
   await page.keyboard.press('Escape');
   await expect(picker).toBeHidden();
   await expect(history).toBeVisible();
-  await chooseVersion(page, 'Earlier content');
+  await chooseVersion(page, 'earliest');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     'History navigation',
   );
@@ -624,7 +631,7 @@ test('a phone reads versions from the dock, leaves by a pull and after clearing'
   const touch = await page.context().newCDPSession(page);
   await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
   await expect(list).toBeVisible();
-  const row = await settledBox(list.getByRole('option').filter({ hasText: 'Earlier content' }));
+  const row = await settledBox(list.getByRole('option').last());
   const end = row.y + row.height / 2;
   for (let step = 1; step <= 6; step++)
     await touch.send('Input.dispatchTouchEvent', {
@@ -759,7 +766,7 @@ test('vault history restores encrypted content and keeps cached history sealed a
   const history = page.getByRole('region', { name: 'Version history' });
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
-  await chooseVersion(page, 'Earlier content');
+  await chooseVersion(page, 'earliest');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(secret);
   await historyDock(page).getByRole('button', { name: 'Restore original' }).click();
   await historyDock(page).getByRole('button', { name: 'Confirm restore' }).click();
@@ -802,7 +809,7 @@ test('vault history restores encrypted content and keeps cached history sealed a
   await expect(history).toBeVisible();
   await expect(history.getByRole('status')).toHaveCount(0);
   // The sealed note the restore replaced reads as the version saved when history opened.
-  await chooseVersion(page, 'Saved version');
+  await chooseVersion(page, 'Before restore');
   await expect(history.getByRole('region', { name: 'Version preview' })).toContainText(
     `${secret} edited`,
   );

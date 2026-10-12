@@ -87,10 +87,11 @@ const SHOW_CHANGES_KEY = 'catch-history-changes';
 /** How long the last view waits for the next one's changes before the version shows plain. */
 const SETTLE_MS = 1500;
 const time = formatDateTime;
+/** How a version came to be saved, where that says more than its content does. */
 const label = (version: HistoryVersion) =>
   ({
-    baseline: 'Earlier content',
-    edit: 'Saved version',
+    baseline: null,
+    edit: null,
     'before-restore': 'Before restore',
     restored: 'Restored version',
     recovered: 'Recovered version',
@@ -510,8 +511,18 @@ export function NoteHistory({
   const compared = useMemo(() => ({ content: entryNote.content, files: [] }), [entryNote]);
   const when = (version: HistoryVersion) =>
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
-  const detail = (version: HistoryVersion) =>
-    `${label(version)} · ${local.has(version.id) ? 'On this device' : available.has(version.id) ? 'Cached' : 'Download to review'}`;
+  // Where a version is kept is said only when it limits what can be done with it.
+  const detail = (snapshot: Snapshot) =>
+    [
+      snapshot.versions.map(label).find(Boolean),
+      snapshot.versions.every((version) => local.has(version.id))
+        ? 'Not synced yet'
+        : !connected && !snapshot.versions.some((version) => available.has(version.id))
+          ? 'Not available offline'
+          : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   const snapshots = useMemo(() => {
     const runs: HistoryVersion[][] = [];
     for (const version of versions) {
@@ -586,7 +597,7 @@ export function NoteHistory({
         id: snapshot.id,
         snapshot,
         title: when(snapshot.first),
-        detail: detail(snapshot === reading && selected ? selected : snapshot.versions[0]!),
+        detail: detail(snapshot),
       })),
   ];
   const chosenId = selected ? (reading?.id ?? selected.id) : 'current';
@@ -861,9 +872,11 @@ export function NoteHistory({
                           )}
                         >
                           <span className="block font-medium">{entry.title}</span>
-                          <span className="block text-muted-foreground text-xs">
-                            {entry.detail}
-                          </span>
+                          {entry.detail && (
+                            <span className="block text-muted-foreground text-xs">
+                              {entry.detail}
+                            </span>
+                          )}
                           {chosen && (
                             <motion.span
                               layoutId="history-selection"
@@ -1117,9 +1130,11 @@ export function NoteHistory({
                               >
                                 <span className="min-w-0 flex-1">
                                   <span className="block truncate font-medium">{entry.title}</span>
-                                  <span className="block truncate text-muted-foreground text-xs">
-                                    {entry.detail}
-                                  </span>
+                                  {entry.detail && (
+                                    <span className="block truncate text-muted-foreground text-xs">
+                                      {entry.detail}
+                                    </span>
+                                  )}
                                 </span>
                                 {chosen && <Check className="size-5 shrink-0" aria-hidden />}
                               </button>
@@ -1166,9 +1181,11 @@ export function NoteHistory({
                     <span className="block truncate font-medium text-[0.9375rem]">
                       {chosenEntry?.title ?? (selected ? when(selected) : 'Current note')}
                     </span>
-                    <span className="block truncate text-muted-foreground text-xs">
-                      {selected ? detail(selected) : 'Choose a saved version to review'}
-                    </span>
+                    {(!selected || chosenEntry?.detail) && (
+                      <span className="block truncate text-muted-foreground text-xs">
+                        {selected ? chosenEntry?.detail : 'Choose a saved version to review'}
+                      </span>
+                    )}
                   </span>
                   <ChevronUp
                     className={cn(

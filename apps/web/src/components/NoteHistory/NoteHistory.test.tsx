@@ -122,13 +122,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const onClose = vi.fn();
-async function open({
-  wide = false,
-  changes = false,
-  read = true,
-  versions = [version],
-  pick = /Earlier content/,
-} = {}) {
+/** The saved versions listed beside the reader, without the current note above them. */
+const listed = () =>
+  within(screen.getByRole('navigation', { name: 'Saved versions' }))
+    .getAllByRole('button')
+    .filter((row) => row.hasAttribute('aria-pressed'))
+    .slice(1);
+async function open({ wide = false, changes = false, read = true, versions = [version] } = {}) {
   if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
@@ -146,10 +146,14 @@ async function open({
       <NoteHistory note={note} wide={wide} onClose={onClose} onRestored={vi.fn()} />
     </TooltipProvider>,
   );
-  if (wide) fireEvent.click(await screen.findByRole('button', { name: pick }));
-  else {
+  // The newest version, under the current note.
+  if (wide) {
+    await waitFor(() => expect(listed()).not.toHaveLength(0));
+    fireEvent.click(listed()[0]!);
+  } else {
     fireEvent.click(screen.getByRole('button', { name: 'Choose a version' }));
-    fireEvent.click(await screen.findByRole('option', { name: pick }));
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
+    fireEvent.click(screen.getAllByRole('option')[1]!);
   }
   // The current note may already be showing its own comparison.
   await waitFor(() =>
@@ -168,16 +172,14 @@ describe('version review', () => {
     );
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
     expect(await within(versions).findByText(/^Saved /)).toBeVisible();
-    expect(
-      within(versions).getAllByRole('button', { name: /Current note|Earlier content/ }),
-    ).toHaveLength(1);
+    expect(listed()).toHaveLength(0);
   });
   it('lists versions that follow each other with the same content once, at the earliest time', async () => {
     const again = { ...version, id: older.id, sequence: 0, receivedAt: new Date(-86_400_000) };
     vi.mocked(readHistoryVersion).mockResolvedValue(state);
     await open({ wide: true, read: false, versions: [version, again] });
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
-    expect(within(versions).getAllByRole('button', { name: /Earlier content/ })).toHaveLength(1);
+    expect(listed()).toHaveLength(1);
     expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
     expect(screen.getByText(/1 saved version$/)).toBeVisible();
   });
@@ -188,12 +190,10 @@ describe('version review', () => {
       wide: true,
       read: false,
       versions: [version, rewritten],
-      pick: /Recovered version/,
     });
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
-    expect(
-      within(versions).getAllByRole('button', { name: /Earlier content|Recovered version/ }),
-    ).toHaveLength(1);
+    expect(listed()).toHaveLength(1);
+    expect(within(versions).getByText('Recovered version')).toBeVisible();
     expect(within(versions).getByRole('button', { name: /1969/ })).toBeVisible();
     expect(readHistoryVersion).toHaveBeenCalledTimes(1);
   });
@@ -212,7 +212,7 @@ describe('version review', () => {
     );
     const versions = screen.getByRole('navigation', { name: 'Saved versions' });
     expect(await within(versions).findByText(/^Saved /)).toBeVisible();
-    expect(within(versions).queryByRole('button', { name: /Earlier content/ })).toBeNull();
+    expect(listed()).toHaveLength(0);
   });
   it('marks what a version changed from the one before it, and nothing in the earliest', async () => {
     await open({ wide: true, changes: true, versions: [version, older] });
