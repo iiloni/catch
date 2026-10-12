@@ -5,7 +5,7 @@ Status: accepted (2026-10-11)
 ## Decision
 
 Local keyword search is the permanent default, online and offline. The Search page's
-optional **Semantic search** switch starts off and combines local keyword matches with
+optional **AI search** switch in the filter panel starts off and combines local keyword matches with
 server hybrid ranking. It requires connectivity to Catch's server even with a local
 embedding provider. Switching it off changes this view, not background indexing.
 
@@ -44,7 +44,11 @@ and enabling saves embed both a document and a query and check their dimensions.
 
 A durable per-note Postgres queue is processed inside the API. A note trigger invalidates
 stale chunks and coalesces text/trash changes; periodic reconciliation handles backfill and
-enablement races. Jobs have leases and bounded retries. Publication rechecks the configuration,
+enablement races. Jobs have leases and bounded retries. The worker claims a bounded group of ordinary-note jobs
+and sends up to 50 chunk inputs or 64 KiB of formatted UTF-8 text per request. Long notes keep
+atomic per-note publication. Rejected input batches split; HTTP 413 lowers the active request
+ceiling. Outages, auth and rate limits back off without per-input fan-out. Each publication
+checks its own user, content and lease, so one stale note does not invalidate healthy peers. Publication rechecks the configuration,
 content and lease after the HTTP call, so edits, disabling, rebuilding and model changes cannot
 install obsolete results. Endpoint/model/profile/dimension changes start a new generation;
 API-key rotation alone preserves it. An optional profile version keeps older E5 vectors on
@@ -82,10 +86,14 @@ them without changing the selection or match mode. The tab views share a bottom 
 while sliding and resizing, and horizontal overflow is clipped.
 Reduced motion switches views immediately. Untagged is separate from No color. Archived
 notes are included unless the panel's "Show archived notes" switch is off; the switch sits
-below both tabs, is remembered on the device, and is a view preference rather than a filter:
+below the segmented Colors/Tags control, after a horizontal divider, is remembered on the device, and is a view preference rather than a filter:
 it does not count toward the dock's filter badge and Clear filters leaves it alone. Tag
 counts follow it. Trashed notes are excluded, and result badges show the assigned tags.
-Recent text searches remain available. See ADR 0016 for tag semantics.
+AI search sits below the archive switch and also remains independent of Clear filters.
+Recent searches retain their selected AI/text mode and show a sparkle on AI entries; selecting
+an entry restores that mode. Ordinary history is stored per account and removed on sign-out.
+Vault history is confined to memory until exit/lock. Legacy strings become text-only on a
+single-account device; unowned multi-account history is left untouched. See ADR 0016 for tag semantics.
 
 ## Why not a separate vector store
 

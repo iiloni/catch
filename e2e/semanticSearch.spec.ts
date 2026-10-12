@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { aiConfigurationSchema } from '../packages/shared/src/ai';
 import { fakeEmbeddingProvider } from './fixtures/embeddingProvider';
-import { bearerToken, seedNotes, signUp } from './helpers';
+import { bearerToken, seedNotes, settledBox, signUp, waitForPageTransition } from './helpers';
 
 // Uses a real provider through Docker's host gateway; search and indexing hit the real API.
 let fake: Awaited<ReturnType<typeof fakeEmbeddingProvider>>;
@@ -52,14 +52,18 @@ test('semantic search starts off, finds related notes and preserves keyword fall
   await signUp(page);
   await seedNotes(page, ['Bicycle ride', 'Milk shopping']);
   await page.getByRole('link', { name: 'Search', exact: true }).click();
-  const semantic = page.getByRole('switch', { name: 'Semantic search', exact: true });
-  await expect(semantic).toBeEnabled();
-  await expect(semantic).not.toBeChecked();
+  await waitForPageTransition(page);
   const field = page.getByRole('textbox', { name: 'Search notes' });
   await field.fill('cycling');
   await expect(page.getByText('No matching notes', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const semantic = page.getByRole('switch', { name: 'AI search', exact: true });
+  await expect(semantic).toBeEnabled();
+  await expect(semantic).not.toBeChecked();
   await semantic.focus();
   await semantic.press('Space');
+  await expect(semantic).toBeChecked();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   // The worker runs independently of a user's toggle; wait for the durable background index.
   await expect
     .poll(
@@ -95,7 +99,9 @@ test('semantic search starts off, finds related notes and preserves keyword fall
     0,
     { timeout: 15_000 },
   );
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await expect(semantic).toBeChecked();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await page.route('**/api/notes/**', (route) => route.abort());
   await page.evaluate(async () => {
     const { noteStore } = await import('/src/lib/noteStore.ts');
@@ -126,13 +132,17 @@ test('semantic search starts off, finds related notes and preserves keyword fall
 test('an older server hides semantic mode, and vault queries issue no search requests', async ({
   page,
 }) => {
+  test.setTimeout(120_000);
   await page.route('**/api/search/capabilities', (route) =>
     route.fulfill({ status: 404, body: 'missing' }),
   );
   await signUp(page);
   await seedNotes(page, ['Local keyword note']);
   await page.getByRole('link', { name: 'Search', exact: true }).click();
-  await expect(page.getByRole('switch', { name: 'Semantic search', exact: true })).toHaveCount(0);
+  await waitForPageTransition(page);
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await expect(page.getByRole('switch', { name: 'AI search', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Filter notes' }).click();
   await page.getByRole('textbox', { name: 'Search notes' }).fill('keyword');
   await expect(page.getByRole('article').filter({ hasText: 'Local keyword note' })).toBeVisible();
   await page.unroute('**/api/search/capabilities');
@@ -142,17 +152,119 @@ test('an older server hides semantic mode, and vault queries issue no search req
   });
   await page.evaluate(async () => {
     const { createVault, vaultMode } = await import('/src/lib/vault.ts');
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
     await createVault('a vault password', false);
     vaultMode.set(true);
+    await createNote({
+      userId: getSignedInUser()!.id,
+      vault: true,
+      content: [{ type: 'paragraph', content: 'private vault query' }],
+    }).transaction.isPersisted.promise;
   });
   await expect(page.getByRole('heading', { name: 'Search the vault' })).toBeVisible();
   const before = searchRequests;
   await page.getByRole('textbox', { name: 'Search notes' }).fill('private vault query');
-  await expect(page.getByRole('switch', { name: 'Semantic search', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await expect(page.getByRole('switch', { name: 'AI search', exact: true })).toHaveCount(0);
   // Negative privacy assertion: wait beyond the semantic request debounce.
   await page.waitForTimeout(700);
   expect(searchRequests).toBe(before);
   expect(fake.calls.flatMap((call) => call.input).join(' ')).not.toContain('private vault query');
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  await page
+    .getByRole('article')
+    .filter({ hasText: 'private vault query' })
+    .getByRole('button', { name: 'Open note', exact: true })
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Search notes' }).clear();
+  await expect(
+    page
+      .getByRole('region', { name: 'Recent' })
+      .getByRole('button', { name: 'private vault query', exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => Object.values(localStorage).join(' '))).not.toContain(
+    'private vault query',
+  );
+  await page.evaluate(async () => (await import('/src/lib/vault.ts')).vaultMode.set(false));
+  await expect(page.getByRole('heading', { name: 'Search', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'private vault query', exact: true })).toHaveCount(
+    0,
+  );
+});
+
+test('recent searches retain AI mode and restore text-only searches without provider requests', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await signUp(page);
+  await seedNotes(page, ['Bicycle ride', 'Milk shopping']);
+  await page.evaluate(() =>
+    localStorage.setItem('catch-recent-searches', JSON.stringify(['shopping'])),
+  );
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await waitForPageTransition(page);
+  const recent = page.getByRole('region', { name: 'Recent' });
+  await expect(recent.getByRole('button', { name: 'shopping', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const filters = page.getByRole('region', { name: 'Search filters' });
+  const tabs = await settledBox(filters.getByRole('tablist', { name: 'Filter type' }));
+  const divider = await settledBox(filters.getByRole('separator'));
+  const archive = await settledBox(filters.getByRole('switch', { name: 'Show archived notes' }));
+  const ai = filters.getByRole('switch', { name: 'AI search', exact: true });
+  const aiBox = await settledBox(ai);
+  expect(divider.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
+  expect(archive.y).toBeGreaterThan(divider.y);
+  expect(aiBox.y).toBeGreaterThan(archive.y + archive.height);
+  await ai.focus();
+  await ai.press('Space');
+  await expect(ai).toBeChecked();
+  await settledBox(ai.locator('[data-slot="switch-thumb"]'));
+  await page.screenshot({ path: test.info().outputPath('search-filters.png') });
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const field = page.getByRole('textbox', { name: 'Search notes' });
+  await field.fill('cycling');
+  const bicycle = page.getByRole('article').filter({ hasText: 'Bicycle ride' });
+  await expect(bicycle).toBeVisible({ timeout: 30_000 });
+  await bicycle.getByRole('button', { name: 'Open note', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await field.clear();
+  const aiRecent = recent.getByRole('button', { name: 'cycling AI search', exact: true });
+  await expect(aiRecent.locator('[data-recent-ai]')).toBeVisible();
+  await expect(page.locator('[data-search-view="results"]')).toHaveCount(0);
+  await settledBox(aiRecent);
+  await page.screenshot({ path: test.info().outputPath('search-recents.png') });
+  let requests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/api/search')) requests++;
+  });
+  await recent.getByRole('button', { name: 'shopping', exact: true }).click();
+  await expect(field).toHaveValue('shopping');
+  const milk = page.getByRole('article').filter({ hasText: 'Milk shopping' });
+  await expect(milk).toBeVisible();
+  // Wait beyond the request debounce to check that replaying a text entry switches AI off.
+  await page.waitForTimeout(700);
+  expect(requests).toBe(0);
+  await milk.getByRole('button', { name: 'Open note', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await field.clear();
+  await expect(
+    recent.getByRole('button', { name: 'shopping', exact: true }).locator('[data-recent-ai]'),
+  ).toHaveCount(0);
+  await aiRecent.click();
+  await expect(field).toHaveValue('cycling');
+  await expect(bicycle).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => requests).toBeGreaterThan(0);
+  await field.clear();
+  await page.reload();
+  await expect(
+    recent.getByRole('button', { name: 'cycling AI search', exact: true }),
+  ).toBeVisible();
+  await expect(recent.getByRole('button', { name: 'shopping', exact: true })).toBeVisible();
 });
 
 test('admin discovers and tests embedding models, saves, and refuses a concurrent configuration edit', async ({

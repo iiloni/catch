@@ -1,7 +1,7 @@
 import { type BoardColumn, type Note, type NoteColor, tagColor } from '@catch/shared';
 import { isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
-import { Clock, SearchX } from 'lucide-react';
+import { Clock, SearchX, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
@@ -16,9 +16,8 @@ import {
 } from '@/components/SearchFilters/SearchFilters';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
-import { Switch } from '@/components/ui/switch';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
-import { getSignedInUser } from '@/lib/auth';
+import { getAccounts, getSignedInUser } from '@/lib/auth';
 import {
   boardColumnsCollection,
   getPendingNoteIds,
@@ -35,6 +34,13 @@ import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
+import {
+  legacyRecentSearches,
+  type RecentSearch,
+  recentSearchesSchema,
+  recentSearchKey,
+  rememberSearch,
+} from '@/lib/recentSearches';
 import {
   mergeHybridResults,
   type SearchResult,
@@ -53,7 +59,6 @@ export const Route = createFileRoute('/_app/search')({
 });
 
 const MAX_RESULTS = 60;
-const recentSchema = z.array(z.string()).max(8);
 
 function SearchPage() {
   const query = searchQuery.use();
@@ -61,7 +66,13 @@ function SearchPage() {
   const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<TagSearchFilter>({ ids: [], match: 'any', untagged: false });
   const [color, setColor] = useState<NoteColor | null>(null);
-  const [recent, setRecent] = usePersistentState('catch-recent-searches', recentSchema, []);
+  const userId = getSignedInUser()?.id ?? '';
+  const [ordinaryRecent, setOrdinaryRecent] = usePersistentState(
+    recentSearchKey(userId),
+    recentSearchesSchema,
+    [],
+  );
+  const [vaultRecent, setVaultRecent] = useState<RecentSearch[]>([]);
   const { open } = useOpenNote();
   const gutterShift = usePageGutterShift(READING_MAX);
   const [showArchived, setShowArchived] = usePersistentState(
@@ -74,6 +85,18 @@ function SearchPage() {
   });
   // Search runs on the device, so inside the vault it reads the vault's opened notes.
   const vault = useVaultView();
+  const recent = vault ? vaultRecent : ordinaryRecent;
+  const setRecent = vault ? setVaultRecent : setOrdinaryRecent;
+  useEffect(() => {
+    if (vault) return;
+    // Private searches stay in memory for this unlocked visit, then disappear on exit/lock.
+    setVaultRecent([]);
+    const legacy = legacyRecentSearches(userId, getAccounts().length === 1);
+    if (legacy) {
+      setOrdinaryRecent(legacy);
+      localStorage.removeItem('catch-recent-searches');
+    }
+  }, [vault, userId, setOrdinaryRecent]);
   // Notes other people shared are found with the user's own (ADR 0021).
   const shared = useSharedNotes().notes;
   const stored = useMemo(
@@ -176,7 +199,7 @@ function SearchPage() {
 
   function openResult(result: SearchResult, card: HTMLElement) {
     const trimmed = query.trim();
-    if (trimmed) setRecent([trimmed, ...recent.filter((item) => item !== trimmed)].slice(0, 8));
+    if (trimmed) setRecent(rememberSearch(recent, trimmed, semantic.enabled && !vault));
     closeFilters();
     open(result.note.id, card);
   }
@@ -204,6 +227,15 @@ function SearchPage() {
               onFilterChange={setFilter}
               onColorChange={setColor}
               onShowArchivedChange={setShowArchived}
+              aiSearch={
+                !vault && (semantic.available !== false || semantic.enabled)
+                  ? {
+                      enabled: semantic.enabled,
+                      disabled: !semantic.allowed && !semantic.enabled,
+                      onChange: semantic.setEnabled,
+                    }
+                  : undefined
+              }
             />
           </SearchFilterPanel>
         )}
@@ -214,22 +246,6 @@ function SearchPage() {
         trailing={<VaultToggle />}
       />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
-        {!vault && (semantic.available !== false || semantic.enabled) && (
-          <div className="mb-4 flex items-center justify-between gap-3 px-1">
-            <label htmlFor="semantic-search" className="font-medium text-sm">
-              Semantic search
-            </label>
-            <Switch
-              id="semantic-search"
-              checked={semantic.enabled}
-              disabled={!semantic.allowed && !semantic.enabled}
-              onCheckedChange={(checked) => {
-                haptics.toggle();
-                semantic.setEnabled(checked);
-              }}
-            />
-          </div>
-        )}
         {semantic.message && (
           <p role="status" className="mb-3 px-1 text-muted-foreground text-sm">
             {semantic.message}
@@ -276,14 +292,27 @@ function SearchPage() {
                     </div>
                     <ul className="flex flex-col">
                       {recent.map((item) => (
-                        <li key={item}>
+                        <li key={`${item.ai}:${item.query}`}>
                           <button
                             type="button"
-                            onClick={() => searchQuery.set(item)}
+                            onClick={() => {
+                              semantic.setEnabled(item.ai && !vault);
+                              searchQuery.set(item.query);
+                            }}
                             className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
                           >
                             <Clock className="size-4 text-muted-foreground" aria-hidden />
-                            <span className="truncate">{item}</span>
+                            <span className="min-w-0 flex-1 truncate">{item.query}</span>
+                            {item.ai && (
+                              <>
+                                <Sparkles
+                                  data-recent-ai
+                                  className="ml-auto size-4 shrink-0 text-muted-foreground"
+                                  aria-hidden
+                                />
+                                <span className="sr-only">AI search</span>
+                              </>
+                            )}
                           </button>
                         </li>
                       ))}

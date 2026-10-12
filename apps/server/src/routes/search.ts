@@ -33,7 +33,7 @@ export const searchRoutes = new Hono<AppEnv>()
           error:
             error instanceof ProviderError
               ? error.message
-              : 'Semantic search is unavailable. Keyword search still works.',
+              : 'AI search is unavailable. Keyword search still works.',
         },
         503,
       );

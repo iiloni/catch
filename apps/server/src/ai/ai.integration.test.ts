@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,7 +33,12 @@ import {
 } from './configuration';
 import { openCredential, sealCredential } from './credentials';
 import { hybridSearch, rankNotes } from './search';
-import { pauseEmbeddingWorker, processEmbeddingJob, startEmbeddingWorker } from './worker';
+import {
+  pauseEmbeddingWorker,
+  processEmbeddingBatch,
+  processEmbeddingJob,
+  startEmbeddingWorker,
+} from './worker';
 
 const fixture = vi.hoisted(() => ({
   db: null as Db | null,
@@ -115,8 +120,11 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
   });
   beforeEach(async () => {
     fake.state.fail = false;
+    fake.state.failureStatus = 400;
     fake.state.dimensions = 3;
     fake.state.beforeReply = null;
+    fake.state.maxInputs = Number.POSITIVE_INFINITY;
+    fake.state.rejectText = null;
     fake.calls.length = 0;
     await database.delete(schema.notes);
     await database.delete(schema.vaults);
@@ -162,7 +170,7 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
       (hit) => hit.id,
     );
   };
-  async function holdResponse() {
+  async function holdResponse(process = processEmbeddingJob) {
     let enter!: () => void;
     let release!: () => void;
     const entered = new Promise<void>((resolve) => {
@@ -175,7 +183,7 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
       enter();
       await released;
     };
-    const pending = processEmbeddingJob();
+    const pending = process();
     await entered;
     return {
       finish: async () => {
@@ -203,6 +211,147 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     expect(await rank()).toEqual([NOTE]);
     expect(await rank('reader')).toEqual([OTHER]);
     expect(await rank('reader', { showArchived: false })).toEqual([]);
+  });
+  it('embeds fifty short notes from multiple users in one request', async () => {
+    await database.insert(schema.notes).values(
+      Array.from({ length: 48 }, (_, i) => ({
+        id: randomUUID(),
+        userId: i % 2 ? 'owner' : 'reader',
+        searchText: `cycling ${i}`,
+        position: 'a0',
+        isArchived: i % 2 === 0,
+      })),
+    );
+    await save();
+    fake.calls.length = 0;
+    expect(await processEmbeddingBatch()).toBe(true);
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]!.input).toHaveLength(50);
+    expect((await overview()).progress).toMatchObject({ total: 50, ready: 50, pending: 0 });
+    const indexed = await embeddings();
+    expect(indexed.filter((row) => row.userId === 'owner')).toHaveLength(25);
+    expect(indexed.filter((row) => row.userId === 'reader')).toHaveLength(25);
+    expect(await processEmbeddingBatch()).toBe(false);
+  });
+  it('splits rejected batches and remembers the smaller limit without duplicating inputs', async () => {
+    await database.insert(schema.notes).values(
+      Array.from({ length: 6 }, (_, i) => ({
+        id: randomUUID(),
+        userId: 'owner',
+        searchText: `cycling ${i}`,
+        position: 'a0',
+      })),
+    );
+    await save();
+    fake.calls.length = 0;
+    fake.state.maxInputs = 2;
+    await processEmbeddingBatch();
+    const accepted = fake.calls
+      .filter((call) => call.input.length <= 2)
+      .flatMap((call) => call.input);
+    expect(accepted).toHaveLength(8);
+    expect(new Set(accepted).size).toBe(8);
+    expect((await overview()).progress.ready).toBe(8);
+    await database.insert(schema.notes).values(
+      Array.from({ length: 4 }, (_, i) => ({
+        id: randomUUID(),
+        userId: 'owner',
+        searchText: `new note ${i}`,
+        position: 'a0',
+      })),
+    );
+    fake.calls.length = 0;
+    await connection`UPDATE embedding_jobs SET available_at = now()`;
+    await processEmbeddingBatch();
+    expect(fake.calls).toHaveLength(2);
+    expect(fake.calls.every((call) => call.input.length <= 2)).toBe(true);
+    expect((await overview()).progress.ready).toBe(12);
+  });
+  it('isolates a rejected note while indexing healthy notes in the same batch', async () => {
+    await connection`UPDATE notes SET search_text = 'invalid-text' WHERE id = ${NOTE}`;
+    await save();
+    fake.state.rejectText = 'invalid-text';
+    await processEmbeddingBatch();
+    expect((await embeddings()).map((row) => row.noteId)).toEqual([OTHER]);
+    expect((await jobs()).map((job) => job.noteId)).toEqual([NOTE]);
+    expect((await jobs())[0]!.error).toContain('HTTP 400');
+    fake.state.rejectText = null;
+    await connection`UPDATE embedding_jobs SET available_at = now()`;
+    await processEmbeddingBatch();
+    expect((await overview()).progress.ready).toBe(2);
+  });
+  it.each([429, 500])(
+    'backs off a destination-wide HTTP %s without per-input fan-out',
+    async (status) => {
+      await save();
+      fake.calls.length = 0;
+      fake.state.fail = true;
+      fake.state.failureStatus = status;
+      await processEmbeddingBatch();
+      expect(fake.calls).toHaveLength(1);
+      expect(await embeddings()).toHaveLength(0);
+      expect(
+        (await jobs()).every((job) => job.lease === null && job.availableAt > new Date()),
+      ).toBe(true);
+      fake.state.fail = false;
+      fake.calls.length = 0;
+      await connection`UPDATE embedding_jobs SET available_at = now()`;
+      await processEmbeddingBatch();
+      expect(fake.calls).toHaveLength(status === 500 ? 2 : 1);
+      expect((await overview()).progress.ready).toBe(2);
+    },
+  );
+  it('bounds UTF-8 input bytes while preserving every long-note chunk', async () => {
+    await connection`UPDATE notes SET search_text = ${'🚲'.repeat(24000)} WHERE id = ${NOTE}`;
+    await save();
+    fake.calls.length = 0;
+    await processEmbeddingBatch();
+    expect(fake.calls.length).toBeGreaterThan(1);
+    expect(
+      fake.calls.every(
+        (call) =>
+          call.input.length <= 50 &&
+          call.input.reduce((sum, text) => sum + Buffer.byteLength(text), 0) <= 64 * 1024,
+      ),
+    ).toBe(true);
+    expect((await embeddings()).filter((row) => row.noteId === NOTE)).toHaveLength(14);
+    expect((await overview()).progress.ready).toBe(2);
+  });
+  it('claims a batch once and discards only a changed note from its response', async () => {
+    await save();
+    const held = await holdResponse(() => processEmbeddingBatch());
+    try {
+      expect(await processEmbeddingBatch()).toBe(false);
+      await connection`UPDATE notes SET search_text = 'changed while embedding' WHERE id = ${NOTE}`;
+    } finally {
+      await held.finish();
+    }
+    expect((await embeddings()).map((row) => row.noteId)).toEqual([OTHER]);
+    await connection`UPDATE embedding_jobs SET available_at = now()`;
+    await processEmbeddingBatch();
+    expect((await overview()).progress.ready).toBe(2);
+  });
+  it('does not attach a stale provider failure to jobs after a credential rotation', async () => {
+    await save({ apiKey: 'old-key' });
+    const held = await holdResponse(() => processEmbeddingBatch());
+    try {
+      // The old request is already held; let the new credential's connection test complete.
+      fake.state.beforeReply = null;
+      await save({ apiKey: 'new-key' });
+      fake.state.fail = true;
+      fake.state.failureStatus = 401;
+    } finally {
+      await held.finish();
+    }
+    expect(
+      (await jobs()).every(
+        (job) => job.error === null && job.failedAt === null && job.lease === null,
+      ),
+    ).toBe(true);
+    fake.state.fail = false;
+    await processEmbeddingBatch();
+    expect((await overview()).progress.ready).toBe(2);
+    expect(fake.calls.at(-1)?.authorization).toBe('Bearer new-key');
   });
   it('invalidates on edit, trash, untrash and delete', async () => {
     await save();
@@ -238,7 +387,9 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     'stops remaining batches after a mid-job %s',
     async (operation) => {
       await save();
-      await connection`UPDATE notes SET search_text = ${'cycling '.repeat(3000)} WHERE id = ${NOTE}`;
+      await connection`UPDATE notes SET search_text = ${'cycling '.repeat(12000)} WHERE id = ${NOTE}`;
+      await connection`UPDATE embedding_jobs SET available_at = now() WHERE note_id = ${NOTE}`;
+      await connection`UPDATE embedding_jobs SET available_at = now() + interval '1 day' WHERE note_id = ${OTHER}`;
       const held = await holdResponse();
       try {
         const sent = fake.calls.length;
@@ -500,10 +651,16 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     startEmbeddingWorker();
     await entered;
     try {
-      expect((await jobs()).some((job) => job.lease !== null)).toBe(true);
+      const oldLeases = new Set(
+        (await jobs()).map((job) => job.lease).filter((lease) => lease !== null),
+      );
+      expect(oldLeases.size).toBeGreaterThan(0);
       await runRestore(backup, null);
       expect((await backupOverview()).lastRestore).toMatchObject({ name: backup, error: null });
-      expect((await jobs()).every((job) => job.lease === null)).toBe(true);
+      // A resumed worker may already have new leases; none can belong to the drained worker.
+      expect((await jobs()).every((job) => job.lease === null || !oldLeases.has(job.lease))).toBe(
+        true,
+      );
     } finally {
       fake.state.beforeReply = null;
       release();

@@ -1,7 +1,14 @@
 import { type EmbeddingConfiguration, modelKindFromName } from '@catch/shared';
 import { z } from 'zod';
 
-export class ProviderError extends Error {}
+export class ProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
 export type Provider = EmbeddingConfiguration & { apiKey: string | null };
 const vectorSchema = z.array(z.number().finite()).min(1).max(16000);
 const openAiResponse = z.object({
@@ -59,6 +66,7 @@ async function request(
           : response.status === 429
             ? 'The provider rate limit was reached. Try again later.'
             : `The provider returned HTTP ${response.status}. Check the endpoint and model.`,
+        response.status,
       );
     }
     // Bound even chunked responses, and never expose provider bodies that might echo notes or keys.

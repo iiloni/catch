@@ -14,8 +14,11 @@ export async function fakeEmbeddingProvider(host = '127.0.0.1') {
   const calls: EmbeddingCall[] = [];
   const state = {
     fail: false,
+    failureStatus: 400,
     dimensions: 3,
     beforeReply: null as (() => Promise<void>) | null,
+    maxInputs: Number.POSITIVE_INFINITY,
+    rejectText: null as string | null,
   };
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url?.endsWith('/models')) {
@@ -32,8 +35,18 @@ export async function fakeEmbeddingProvider(host = '127.0.0.1') {
     }
     calls.push({ path: req.url ?? '', ...parsed.data, authorization: req.headers.authorization });
     await state.beforeReply?.();
+    if (parsed.data.input.length > state.maxInputs) {
+      res.writeHead(413).end();
+      return;
+    }
+    if (state.rejectText && parsed.data.input.some((text) => text.includes(state.rejectText!))) {
+      res.writeHead(400).end();
+      return;
+    }
     if (state.fail || parsed.data.model === 'chat-only') {
-      res.writeHead(400).end('private text and secret must never escape');
+      res
+        .writeHead(parsed.data.model === 'chat-only' ? 400 : state.failureStatus)
+        .end('private text and secret must never escape');
       return;
     }
     const embeddings = parsed.data.input.map((text) => {

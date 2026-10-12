@@ -50,7 +50,11 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   }, [connected, vault]);
 
   useEffect(() => {
-    if (!enabled || !allowed || !input.query.trim() || input.query.trim().length > 1000) return;
+    if (!enabled || !allowed || !input.query.trim() || input.query.trim().length > 1000) {
+      // A recent-search replay must not briefly reuse a response from before AI was switched off.
+      setResponse(null);
+      return;
+    }
     const controller = new AbortController();
     setResponse({ key, loading: true });
     let timer: number;
@@ -67,8 +71,7 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
         if (!controller.signal.aborted) {
           setResponse({
             key,
-            error:
-              error instanceof AiRequestError ? error.message : 'Could not reach semantic search.',
+            error: error instanceof AiRequestError ? error.message : 'Could not reach AI search.',
           });
           if (
             error instanceof TypeError ||
@@ -91,19 +94,19 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   const current =
     enabled && allowed && response?.key === key && input.query.trim() ? response : null;
   const reason = vault
-    ? 'Semantic search is unavailable inside the vault.'
+    ? 'AI search is unavailable inside the vault.'
     : !connected
-      ? 'Semantic search needs a server connection.'
+      ? 'AI search needs a server connection.'
       : available === false
-        ? 'An admin has not enabled semantic search.'
+        ? 'An admin has not enabled AI search.'
         : available === null
-          ? 'Checking semantic search availability…'
+          ? 'Checking AI search availability…'
           : null;
   const message =
     enabled && reason
       ? `${reason} Showing keyword results.`
       : enabled && input.query.trim().length > 1000
-        ? 'Use a shorter query for semantic search. Showing keyword results.'
+        ? 'Use a shorter query for AI search. Showing keyword results.'
         : current?.error
           ? `${current.error} Showing keyword results.`
           : current?.loading

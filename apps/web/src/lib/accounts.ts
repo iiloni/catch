@@ -184,6 +184,7 @@ export async function signOutAccount(account: Account) {
     `catch-snooze:${id}`,
     `catch-snooze:${id}:unsent`,
     `catch-time-zone:${id}`,
+    `catch-recent-searches:${id}`,
   ]) {
     localStorage.removeItem(key);
   }
@@ -206,6 +207,7 @@ export async function signOutCurrentAccount() {
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();
+  if (user) localStorage.removeItem(`catch-recent-searches:${user.id}`);
   forgetImport();
   clearAuthToken();
   const next = getAccounts()[0];

@@ -23,6 +23,34 @@ const child: Tag = {
 const tags = [root, child];
 
 describe('search filters', () => {
+  it('puts archive and AI preferences below the segmented control, with a divider, independently of tags', () => {
+    const onAiChange = vi.fn();
+    render(
+      <SearchFilters
+        tags={[]}
+        filter={{ ids: [], match: 'any', untagged: false }}
+        color={null}
+        counts={new Map()}
+        untaggedCount={0}
+        showArchived
+        onFilterChange={vi.fn()}
+        onColorChange={vi.fn()}
+        onShowArchivedChange={vi.fn()}
+        aiSearch={{ enabled: false, disabled: false, onChange: onAiChange }}
+      />,
+    );
+    const tabs = screen.getByRole('tablist', { name: 'Filter type' });
+    const divider = screen.getByRole('separator');
+    const archived = screen.getByRole('switch', { name: 'Show archived notes' });
+    const ai = screen.getByRole('switch', { name: 'AI search' });
+    expect(tabs.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      divider.compareDocumentPosition(archived) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(archived.compareDocumentPosition(ai) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(ai);
+    expect(onAiChange).toHaveBeenCalledWith(true);
+  });
   beforeEach(() => {
     localStorage.clear();
     vi.stubGlobal(

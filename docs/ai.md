@@ -22,7 +22,7 @@ queued, running and failed notes. **Retry failed tasks** resets failed jobs. **R
 invalidates all current vectors and queues a fresh generation. A different endpoint, provider,
 model, automatically selected input format or dimension count also rebuilds automatically; key rotation alone does
 not. Disabling pauses indexing and makes semantic search unavailable. Changes while disabled
-are caught up when enabled again. The Search page's switch does not pause indexing.
+are caught up when enabled again. The Search page's **AI search** switch in the filter panel does not pause indexing.
 
 Concurrent admin edits are refused instead of overwriting another session. Progress polling
 does not replace unsaved settings. If a save or rebuild reports a configuration conflict,
@@ -98,7 +98,13 @@ unconfirmed shared copy into a successful hybrid response. Offline/unavailable f
 uses the existing local collection, including its existing shared-copy sync delay.
 
 Notes are split into 2,000 Unicode-character chunks with 200-character overlap and embedded
-in batches of up to eight. Notes above 120,000 characters fail indexing explicitly; their
+across notes in requests of up to 50 inputs and 64 KiB of formatted UTF-8 text.
+Wide vectors further reduce the count to stay below the response bound.
+Short notes share a request; long notes keep separate chunks and atomic per-note publication.
+HTTP 413 responses lower the request ceiling for the current configuration; rejected input
+batches (400/413) split so one incompatible note does not hold back healthy notes. Auth,
+rate-limit and outage errors back off without splitting into many requests. HTTP 500/504
+also lower the count for the next retry to accommodate local server resource pressure. Notes above 120,000 characters fail indexing explicitly; their
 keyword search continues to work. Model token limits can reject shorter chunks too; Catch
 does not silently truncate them. Empty and trashed notes are excluded. Text edits invalidate
 old chunks immediately; untrashing queues a new job. Disabling or changing configuration stops subsequent batches; a request already sent may
@@ -129,3 +135,15 @@ pending edits and vault queries, plus admin form polling and revision conflicts.
 This does not establish embedding quality, hosted-provider quota/billing behavior, real
 local GPU throughput, large-installation latency, Android native keyboard behavior or native
 APK connectivity. Live provider credentials and models are required to verify those paths.
+
+## Search controls and history
+
+The filter panel ends with Colors/Tags tabs, a divider, Show archived notes, then AI search.
+Both switches are view preferences and do not count toward tag/color filters or Clear filters.
+AI search starts off and is absent in the vault or on an older/disabled server.
+Recent entries retain the selected AI/text mode; AI entries have a sparkle on the right.
+Selecting an entry restores its mode before running its query. The same text can have
+separate AI and text entries. Ordinary history is stored per account and removed on sign-out.
+Vault history lives only in memory for the unlocked visit. Old unscoped history is migrated
+as text-only only on a device with one signed-in account; ambiguous multi-account history
+is left untouched, rather than assigned to another account.

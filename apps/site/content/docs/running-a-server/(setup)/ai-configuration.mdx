@@ -15,7 +15,7 @@ Optional semantic search combines keyword matches with notes related in meaning.
 4. Use **Discover models** to choose an embedding model, or enter its name. Use **Test embedding** to check that it can generate document and query vectors.
 5. Enable **Background embeddings** and save.
 
-Enabling indexing sends ordinary note text from **every user**, including archived notes, to the chosen provider. Semantic queries are sent when someone turns on semantic search and searches online. With a hosted provider, this text leaves your server. Tell users which provider you have configured and review its policies before enabling indexing. Vault notes and vault queries stay on the device.
+Enabling indexing sends ordinary note text from **every user**, including archived notes, to the chosen provider. Semantic queries are sent when someone turns on **AI search** in the Search filter panel and searches online. With a hosted provider, this text leaves your server. Tell users which provider you have configured and review its policies before enabling indexing. Vault notes and vault queries stay on the device.
 
 Saving an enabled configuration also tests embeddings. A successful model listing alone does not verify that the model can embed text. Progress polling preserves unsaved form changes; concurrent saves are rejected so another admin's configuration is not overwritten.
 
@@ -52,11 +52,17 @@ Use the model's canonical name when its family needs prefixes. A custom alias ca
 
 The status panel shows indexed, queued, running and failed notes. Notes are indexed after their saves reach the server. Empty and trashed notes are excluded; untrashing queues them again. Use **Retry failed tasks** after correcting a provider problem. Use **Rebuild index** to replace every vector, including after changing a model behind the same name.
 
-A changed provider, endpoint, model, automatic input format or dimension count rebuilds the index. Changing only the API key preserves it. Disabling background embeddings pauses indexing and makes semantic search unavailable. Enabling it again catches up changes. Turning off semantic mode on the Search page changes that view and leaves indexing running.
+A changed provider, endpoint, model, automatic input format or dimension count rebuilds the index. Changing only the API key preserves it. Disabling background embeddings pauses indexing and makes semantic search unavailable. Enabling it again catches up changes. Turning off **AI search** in the Search filter panel changes that view and leaves indexing running.
 
-Notes are split into overlapping chunks of 2,000 Unicode characters. Notes longer than 120,000 characters fail indexing explicitly, and a provider's token limit can reject shorter chunks. Keyword search still works. Failed jobs retry with backoff before appearing as failed. A request already sent may finish after indexing is disabled, but obsolete vectors are not published.
+Notes are split into overlapping chunks of 2,000 Unicode characters. Requests combine up to 50 inputs across notes, bounded to 64 KiB of formatted text; smaller requests are used when the provider rejects a batch. A rejected note can retry independently of healthy notes. Notes longer than 120,000 characters fail indexing explicitly, and a provider's token limit can reject shorter chunks. Keyword search still works. Failed jobs retry with backoff before appearing as failed. A request already sent may finish after indexing is disabled, but obsolete vectors are not published.
 
 Search falls back to local keyword results when offline or when the provider/server is unavailable. The server applies account, sharing, tag, color and archive restrictions before ranking. Current retrieval scans eligible vectors exactly; performance on very large installations and quality with a particular model need evaluation on your own data.
+
+## Search preferences
+
+Open **Filter notes** on Search. **Show archived notes** sits below the Colors/Tags tabs and a divider; **AI search** is the bottom switch. AI search starts off. These preferences are independent of tag/color filters and are not reset by **Clear filters**.
+
+Recent searches remember whether AI search was selected. AI entries have a sparkle on the right, and selecting an entry restores its mode. Ordinary history belongs to the signed-in account. Vault recent searches remain in memory only while that vault view is open.
 
 ## Credentials and backups
 

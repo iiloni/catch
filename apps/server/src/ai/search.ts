@@ -20,7 +20,7 @@ export async function hybridSearch(
 ): Promise<HybridSearchResult> {
   const config = await readConfiguration();
   if (!config?.enabled || !config.dimensions)
-    throw new ProviderError('Semantic search is not enabled on this server.');
+    throw new ProviderError('AI search is not enabled on this server.');
   const [vector] = await embed(
     { ...config.embedding, apiKey: openCredential(config.apiKey) },
     [input.query],

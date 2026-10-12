@@ -1,5 +1,5 @@
 import { NOTE_COLORS, type NoteColor, type Tag } from '@catch/shared';
-import { Archive, Palette, Slash, Tags, X } from 'lucide-react';
+import { Archive, Palette, Slash, Sparkles, Tags, X } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -184,7 +184,7 @@ function FilterTabView({
       exit="leave"
       transition={reducedMotion ? { duration: 0 } : springs.smooth}
       className={cn(
-        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-9.5rem))] overflow-x-hidden overflow-y-auto overscroll-contain',
+        'max-h-[max(0px,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-9.5rem-var(--search-filter-extra,0px)))] overflow-x-hidden overflow-y-auto overscroll-contain',
         !isPresent && 'absolute inset-x-0 bottom-0',
       )}
     >
@@ -204,6 +204,7 @@ export function SearchFilters({
   onFilterChange,
   onColorChange,
   onShowArchivedChange,
+  aiSearch,
 }: {
   tags: readonly Tag[];
   awaitingTags?: boolean;
@@ -215,10 +216,12 @@ export function SearchFilters({
   onFilterChange: (filter: TagSearchFilter) => void;
   onColorChange: (color: NoteColor | null) => void;
   onShowArchivedChange: (showArchived: boolean) => void;
+  aiSearch?: { enabled: boolean; disabled: boolean; onChange: (enabled: boolean) => void };
 }) {
   const [tab, setTab] = usePersistentState('catch-search-filter-tab', filterTabSchema, 'colors');
   const [direction, setDirection] = useState(1);
   const archivedId = useId();
+  const aiId = useId();
   const selected = new Set(filter.ids);
   function selectTab(next: FilterTab) {
     if (next === tab) return;
@@ -235,7 +238,12 @@ export function SearchFilters({
     });
   }
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div
+      className={cn(
+        'flex min-h-0 flex-col gap-2',
+        aiSearch ? '[--search-filter-extra:3.5rem]' : '[--search-filter-extra:0.5rem]',
+      )}
+    >
       <FilterTabContents tab={tab}>
         <AnimatePresence initial={false} custom={direction}>
           <FilterTabView key={tab} tab={tab} direction={direction}>
@@ -266,7 +274,7 @@ export function SearchFilters({
                         )}
                       </AnimatePresence>
                     )}
-                    className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-19.25rem),16rem)]"
+                    className="max-h-[clamp(6rem,calc(100dvh-var(--dock-bottom)-var(--dock-height)-var(--safe-top)-19.25rem-var(--search-filter-extra,0px)),16rem)]"
                     renderTag={(tag, path) => (
                       <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-xl px-2 hover:bg-foreground/5">
                         <span
@@ -382,21 +390,6 @@ export function SearchFilters({
           </FilterTabView>
         </AnimatePresence>
       </FilterTabContents>
-      <label
-        htmlFor={archivedId}
-        className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5"
-      >
-        <Archive className="size-4 text-muted-foreground" aria-hidden />
-        <span className="flex-1">Show archived notes</span>
-        <Switch
-          id={archivedId}
-          checked={showArchived}
-          onCheckedChange={(checked) => {
-            haptics.toggle();
-            onShowArchivedChange(checked);
-          }}
-        />
-      </label>
       <SegmentedTabs<FilterTab>
         label="Filter type"
         value={tab}
@@ -418,6 +411,40 @@ export function SearchFilters({
           },
         ]}
       />
+      <hr className="shrink-0 border-foreground/10" />
+      <label
+        htmlFor={archivedId}
+        className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5"
+      >
+        <Archive className="size-4 text-muted-foreground" aria-hidden />
+        <span className="flex-1">Show archived notes</span>
+        <Switch
+          id={archivedId}
+          checked={showArchived}
+          onCheckedChange={(checked) => {
+            haptics.toggle();
+            onShowArchivedChange(checked);
+          }}
+        />
+      </label>
+      {aiSearch && (
+        <label
+          htmlFor={aiId}
+          className="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-2 text-sm hover:bg-foreground/5"
+        >
+          <Sparkles className="size-4 text-muted-foreground" aria-hidden />
+          <span className="flex-1">AI search</span>
+          <Switch
+            id={aiId}
+            checked={aiSearch.enabled}
+            disabled={aiSearch.disabled}
+            onCheckedChange={(checked) => {
+              haptics.toggle();
+              aiSearch.onChange(checked);
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }
