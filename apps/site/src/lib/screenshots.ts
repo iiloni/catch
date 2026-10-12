@@ -11,10 +11,16 @@ import androidSetupDark from '@/screenshots/docs-android-setup-dark.webp';
 import androidSetupLight from '@/screenshots/docs-android-setup-light.webp';
 import androidShareDark from '@/screenshots/docs-android-share-dark.webp';
 import androidShareLight from '@/screenshots/docs-android-share-light.webp';
+import androidWidgetsDark from '@/screenshots/docs-android-widgets-dark.webp';
+import androidWidgetsLight from '@/screenshots/docs-android-widgets-light.webp';
 import attachmentsDark from '@/screenshots/docs-attachments-dark.webp';
 import attachmentsLight from '@/screenshots/docs-attachments-light.webp';
 import desktopBackupsDark from '@/screenshots/docs-backups-dark.webp';
 import desktopBackupsLight from '@/screenshots/docs-backups-light.webp';
+import historyDark from '@/screenshots/docs-history-dark.webp';
+import historyLight from '@/screenshots/docs-history-light.webp';
+import historyVersionsDark from '@/screenshots/docs-history-versions-dark.webp';
+import historyVersionsLight from '@/screenshots/docs-history-versions-light.webp';
 import importDark from '@/screenshots/docs-import-dark.webp';
 import importLight from '@/screenshots/docs-import-light.webp';
 import linkCaptureDark from '@/screenshots/docs-link-capture-dark.webp';
@@ -117,6 +123,21 @@ export const shots = {
 
 /** Guide assets share the capture pipeline, without changing the marketing gallery. */
 export const docShots = {
+  history: {
+    light: historyLight,
+    dark: historyDark,
+    alt: 'A saved note version on a phone with additions and removals marked and recovery actions in the dock',
+  },
+  historyVersions: {
+    light: historyVersionsLight,
+    dark: historyVersionsDark,
+    alt: 'The expanded version-history dock on a phone with Current note, saved times and Clear history',
+  },
+  androidWidgets: {
+    light: androidWidgetsLight,
+    dark: androidWidgetsDark,
+    alt: 'Native Android widgets with example notes: Quick capture, One note and a scrollable Note list',
+  },
   androidSetup: {
     light: androidSetupLight,
     dark: androidSetupDark,

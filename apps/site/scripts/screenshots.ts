@@ -3,6 +3,8 @@
  * development stack: `./scripts/dev.sh screenshots`. Each run signs up a fresh account
  * and fills it with the notes below, so the pictures only change when the app does.
  * `./scripts/dev.sh screenshots site <site-url>` captures the site's link preview instead.
+ * `./scripts/dev.sh screenshots android-widgets` encodes the real native captures in
+ * `docs/screenshots`; see `docs/android-widgets.md` for their device capture workflow.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -482,6 +484,9 @@ async function capture(context: BrowserContext, layout: Layout, theme: string) {
 
 /** Docs captures use the same real app and seeded notes as the marketing pictures. */
 async function captureDocs(context: BrowserContext, theme: string, only?: string) {
+  if (!only || only.startsWith('docs-history')) {
+    await captureHistory(context, theme, only);
+  }
   const scenes: { name: string; route?: string; prepare?: (page: Page) => Promise<void> }[] = [
     {
       name: 'docs-quick-note',
@@ -587,6 +592,67 @@ async function captureDocs(context: BrowserContext, theme: string, only?: string
       await page.close();
     }
   }
+}
+
+async function captureHistory(context: BrowserContext, theme: string, only?: string) {
+  const page = await openApp(context);
+  await page.setViewportSize({ width: 430, height: 840 });
+  const noteId = await page.evaluate(async () => {
+    const notesFile = 'notes';
+    const authFile = 'auth';
+    const { createNote } = await import(/* @vite-ignore */ `/src/lib/${notesFile}.ts`);
+    const { getSignedInUser } = await import(/* @vite-ignore */ `/src/lib/${authFile}.ts`);
+    const { id, transaction } = createNote({
+      userId: getSignedInUser().id,
+      color: 'yellow',
+      content: [
+        { type: 'heading', props: { level: 3 }, content: 'Weekend plan' },
+        { type: 'paragraph', content: 'Meet at the market at 10.' },
+        { type: 'paragraph', content: 'Bring a picnic for the park.' },
+        { type: 'checkListItem', props: { checked: false }, content: 'Pack a blanket' },
+      ],
+    });
+    await transaction.isPersisted.promise;
+    return id as string;
+  });
+  const demo = page.locator(`[data-note-card="${noteId}"]`);
+  await demo.getByRole('button', { name: 'Open note', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const editor = dialog.getByRole('textbox');
+  await editor.waitFor();
+  // Real editor changes and closes make the snapshots, not fabricated history rows.
+  await dialog.getByText('Meet at the market at 10.', { exact: true }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('11.');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await demo.getByRole('button', { name: 'Open note', exact: true }).click();
+  await editor.waitFor();
+  await dialog.getByText('Bring a picnic for the park.', { exact: true }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Ask Sam to join us.');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await demo.getByRole('button', { name: 'Open note', exact: true }).click();
+  await editor.waitFor();
+  await dialog.getByRole('button', { name: 'Version history', exact: true }).click();
+  const history = page.getByRole('region', { name: 'Version history' });
+  const dock = page.locator('[data-history-dock]');
+  const picker = dock.getByRole('listbox', { name: 'Choose a version' });
+  await dock.getByRole('button', { name: 'Choose a version' }).click();
+  await picker.getByRole('option').nth(2).waitFor();
+  await picker.getByRole('option').nth(1).click();
+  await history.getByText('Added', { exact: true }).waitFor();
+  if (!only || only === 'docs-history') await save(page, 'docs-history', theme);
+  await dock.getByRole('button', { name: 'Choose a version' }).click();
+  await picker.waitFor();
+  if (!only || only === 'docs-history' || only === 'docs-history-versions') {
+    await save(page, 'docs-history-versions', theme);
+  }
+  await page.close();
 }
 
 async function captureAdmin(context: BrowserContext, theme: string, only?: string) {
@@ -1022,6 +1088,16 @@ const clips: {
 // `docs [scene-name]` captures only guide assets, leaving marketing assets untouched.
 mkdirSync(output, { recursive: true });
 mkdirSync(recordings, { recursive: true });
+if (process.argv[2] === 'android-widgets') {
+  // Lossless source screenshots are real RemoteViews painted by the native widget test host.
+  for (const theme of themes) {
+    const source = path.join(root, `docs/screenshots/android-widgets-${theme}.png`);
+    const file = path.join(output, `docs-android-widgets-${theme}.webp`);
+    await sharp(source).webp({ quality: 86 }).toFile(file);
+    console.log(path.relative(root, file));
+  }
+  process.exit(0);
+}
 if (process.argv[2] === 'android-docs') {
   await captureAndroid();
   process.exit(0);

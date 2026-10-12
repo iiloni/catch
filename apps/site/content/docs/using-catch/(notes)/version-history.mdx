@@ -1,0 +1,47 @@
+---
+title: Version history
+description: Review earlier note content, see what changed and recover a saved version.
+---
+
+Catch keeps saved versions of your notes, including edits made offline. Version history is separate from the editor's Undo and Redo: you can leave a note and later return to an earlier version.
+
+## Open and compare versions
+
+1. Open a note you own and scroll to its footer, beside the edited time.
+2. Select **Version history**. The reader is read-only; selecting a version does not change your note.
+3. On a phone, select **Choose a version** in the dock to open the list. On a wider reader, the list sits beside the content. Choose a saved time to read that version.
+
+**Current note** shows the content as it was when you opened history. **Show changes** marks what each saved version changed from the version before it: additions are underlined, removals are struck through, and checklist, formatting and movement changes are labelled. Turn the switch off to read the version without marks. The earliest version has nothing before it to compare.
+
+<DocsVisuals>
+<DocsScreenshot name="history" caption="A saved version with its changes marked. Save as new note and Restore original are in the dock." />
+<DocsScreenshot name="historyVersions" caption="On a phone, the dock expands into the saved-version list. Choose a time to read it." />
+</DocsVisuals>
+
+Select **Back to note** to return to your editor. If another edit arrives while history is open, Catch shows a notice; it does not replace the content you are reviewing.
+
+## Recover content
+
+**Save as new note** makes a separate note from the selected version. It goes to Gallery, without pins, tags, a reminder or a sharing link. A vault version makes a new vault note. Versions already cached on this device can be saved as new notes offline.
+
+**Restore original** replaces the original note's content with the selected version. It requires a connection and a synced version so Catch can check for newer edits. Read the confirmation and review the current note if Catch asks, then select **Confirm restore**. If the note changed again, check the latest content before retrying.
+
+Restoring keeps the displaced content in history. It leaves the note's color, placement, pins, archive state, tags, reminders and sharing link as they are. A shared note's readers see its restored content, but cannot see its history. Restore a note from [Trash](/docs/using-catch/organizing#move-notes-to-trash) before restoring its content.
+
+<Callout title="History does not retain deleted files">
+  Available files can be copied with a recovered note, but version history cannot recover deleted attachment bytes. A saved version may refer to files that are no longer available.
+</Callout>
+
+## When versions are kept
+
+Catch saves a version after a pause of about 30 seconds, after five minutes of continuous editing, and when you close the editor or background the app. Locking the vault also saves its pending version. This is a record of saved content, not every keystroke. Consecutive versions that read the same appear as one entry.
+
+Each note keeps up to 128 versions within a 16 MiB history storage limit. Large notes may keep fewer, and older versions are pruned as new ones arrive; there is no guaranteed number of days. History is not a replacement for [server backups](/docs/running-a-server/backups).
+
+Versions load on demand and are cached separately on each device. Connect and open the versions you need before going offline; syncing a note does not download its entire history. [Vault](/docs/using-catch/vault) history is encrypted too and can only be read while the vault is unlocked. History belongs to the owner: notes shared with you do not expose it.
+
+## Clear history
+
+Choose **Clear history** below the version list on a wide reader, or at the top of the dock's list on a phone, then confirm. This needs a connection and removes saved versions while keeping the current note. Unsynced local versions remain available to recover as copies.
+
+Permanently deleting a note deletes its server history too. Signing out removes that account's cached history from the device; sync pending changes first.
