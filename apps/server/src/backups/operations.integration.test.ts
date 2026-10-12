@@ -132,10 +132,13 @@ describe.skipIf(!available)('backing up and restoring a database', () => {
     expect(outcome.missingAttachments).toBe(0);
     // Sessions are not in the backup, so the ones from before the restore are gone too.
     expect(await sql`SELECT id FROM session`).toHaveLength(0);
-    // The role that loaded the dump goes with its scratch database.
-    expect(
-      await admin`SELECT rolname FROM pg_roles WHERE rolname LIKE 'catch_restore_%'`,
-    ).toHaveLength(0);
+    // Other integration files can be restoring their isolated databases at this moment.
+    // Once those short-lived roles settle, none of the restores may leave a role behind.
+    await expect
+      .poll(() => admin`SELECT rolname FROM pg_roles WHERE rolname LIKE 'catch_restore_%'`, {
+        timeout: 10_000,
+      })
+      .toHaveLength(0);
 
     // The state the restore replaced can itself be restored.
     expect(outcome.safetyBackup).toMatch(/-pre-restore\.zip$/);

@@ -90,3 +90,5 @@ CATCH_COMPOSE_DIR=/srv/catch /usr/local/bin/backup.sh list
 The scripts do not source `.env` as a shell script. Putting `CATCH_COMPOSE_DIR` only in `.env` does not direct their initial directory search. Other Docker/Compose controls are documented in [Docker's environment-variable reference](https://docs.docker.com/compose/how-tos/environment-variables/envvars/).
 
 Daily backup time, time zone, attachment inclusion and retention are stored in the database and edited under **Settings > Admin > Backups**, not in environment variables. There are no operator settings for semantic search or AI summaries in the current app.
+
+The [unreleased AI configuration guide](/docs/running-a-server/ai-configuration) covers optional semantic search currently under development.

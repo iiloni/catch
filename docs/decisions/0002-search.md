@@ -35,8 +35,11 @@ server confirms them. On a disabled, missing, unavailable or incompatible server
 keyword search remains available. Offline shared copies retain the existing sync semantics.
 
 Native Ollama and OpenAI-compatible HTTP endpoints supply embeddings. Admin configuration
-stores provider, endpoint, model and input profile under an embedding field; chat configuration
-and generation are outside this decision. Model discovery does not verify embeddings: tests
+stores provider, endpoint, model and an automatically selected input profile under an embedding field; chat configuration
+and generation are outside this decision. Discovery uses provider capability/type metadata
+when available, otherwise model-name hints, to exclude known chat and non-text models. Unknown
+aliases remain testable. A bounded Ollama `/api/show` inspection never loads or generates a model.
+Discovery does not verify embeddings: tests
 and enabling saves embed both a document and a query and check their dimensions.
 
 A durable per-note Postgres queue is processed inside the API. A note trigger invalidates
@@ -44,12 +47,16 @@ stale chunks and coalesces text/trash changes; periodic reconciliation handles b
 enablement races. Jobs have leases and bounded retries. Publication rechecks the configuration,
 content and lease after the HTTP call, so edits, disabling, rebuilding and model changes cannot
 install obsolete results. Endpoint/model/profile/dimension changes start a new generation;
-API-key rotation alone preserves it. Configuration writes and rebuilds use optimistic revisions
-and recheck the actor's live admin role transactionally. Disabling pauses indexing and search;
+API-key rotation alone preserves it. An optional profile version keeps older E5 vectors on
+their original format until saving the automatic instruction format starts a new generation.
+Clients that lack the version field can ignore it; it does not change ordinary data contracts.
+Configuration writes and rebuilds use optimistic revisions and recheck the actor's live admin
+role transactionally. Disabling pauses indexing and search;
 re-enabling catches up changes. Embeddings and jobs never sync to devices or include vault rows.
 
 The addition preserves existing REST/write/shape contracts and collection versions (ADR 0013).
-Old clients ignore these routes and settings; new clients handle missing search routes with
+The optional discovery `kinds` field has a model-name fallback and preserves the `models` array.
+Old clients ignore these routes, settings and additional response fields; new clients handle missing search routes with
 local keyword fallback. No protocol or local collection schema-version bump is needed.
 
 See [AI configuration](../ai.md) for networking, formats, limits and validation coverage;

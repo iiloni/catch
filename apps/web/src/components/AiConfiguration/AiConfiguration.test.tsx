@@ -10,7 +10,7 @@ import { AiConfiguration } from './AiConfiguration';
 
 vi.mock('@/lib/ai', () => ({
   AiRequestError: class extends Error {},
-  ai: { overview: vi.fn(), save: vi.fn(), rebuild: vi.fn() },
+  ai: { overview: vi.fn(), save: vi.fn(), rebuild: vi.fn(), models: vi.fn() },
 }));
 vi.mock('@/lib/haptics', () => ({ haptics: { toggle: vi.fn() } }));
 const saved: Configuration = {
@@ -51,7 +51,7 @@ it('polls progress without replacing unsaved fields or the form revision, includ
   vi.mocked(ai.overview).mockResolvedValue(newer);
   act(() => updateSyncStatus({ offline: true }));
   act(() => updateSyncStatus({ offline: false }));
-  await waitFor(() => expect(screen.getByText('5 of 10 notes indexed')).toBeVisible());
+  await waitFor(() => expect(screen.getByText(/5 of 10 notes indexed/)).toBeVisible());
   expect(
     screen.queryByText('Could not load AI configuration. Check the server connection.'),
   ).not.toBeInTheDocument();
@@ -70,3 +70,45 @@ it('polls progress without replacing unsaved fields or the form revision, includ
   );
   await screen.findByRole('alert');
 });
+it('chooses a format when a model is entered, without showing a format picker', async () => {
+  vi.mocked(ai.save).mockResolvedValue(saved);
+  render(<AiConfiguration onAccessDenied={() => {}} />);
+  const model = await screen.findByRole('textbox', { name: 'Embedding model' });
+  await waitFor(() => expect(model).toHaveValue(saved.embedding.model));
+  expect(screen.queryByRole('button', { name: 'Input format' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'AI setup guide' })).toHaveAttribute(
+    'href',
+    'https://catchnotes.site/docs/running-a-server/ai-configuration',
+  );
+  fireEvent.change(model, { target: { value: 'intfloat/e5-small-v2' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+  await waitFor(() =>
+    expect(ai.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embedding: expect.objectContaining({ model: 'intfloat/e5-small-v2', profile: 'e5' }),
+      }),
+    ),
+  );
+});
+it.each([false, true])(
+  'filters discovered chat models, with metadata present: %s',
+  async (metadata) => {
+    vi.mocked(ai.models).mockResolvedValue({
+      models: ['fake-embedding', 'chat-only', 'private-alias', 'qwen-custom'],
+      ...(metadata ? { kinds: { 'qwen-custom': 'embedding' as const } } : {}),
+    });
+    render(<AiConfiguration onAccessDenied={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Embedding model' })).toHaveValue(
+        saved.embedding.model,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Discover models' }));
+    await screen.findByText(`Found ${metadata ? 3 : 2} models.`);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose discovered model' }));
+    expect(await screen.findByRole('option', { name: 'fake-embedding' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'private-alias' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'chat-only' })).not.toBeInTheDocument();
+    expect(!!screen.queryByRole('option', { name: 'qwen-custom' })).toBe(metadata);
+  },
+);

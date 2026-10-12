@@ -1,4 +1,4 @@
-import type { EmbeddingConfiguration } from '@catch/shared';
+import { type EmbeddingConfiguration, modelKindFromName } from '@catch/shared';
 import { z } from 'zod';
 
 export class ProviderError extends Error {}
@@ -9,11 +9,20 @@ const openAiResponse = z.object({
 });
 const ollamaResponse = z.object({ embeddings: z.array(vectorSchema) });
 
-export function formatInput(text: string, profile: Provider['profile'], query: boolean) {
+export function formatInput(
+  text: string,
+  profile: Provider['profile'],
+  query: boolean,
+  version = 1,
+) {
   switch (profile) {
     case 'nomic':
       return `${query ? 'search_query: ' : 'search_document: '}${text}`;
     case 'e5':
+      if (version === 2)
+        return query
+          ? `Instruct: Given a search query, retrieve relevant notes that answer the query.\nQuery: ${text}`
+          : text;
       return `${query ? 'query: ' : 'passage: '}${text}`;
     case 'bge':
       return query ? `Represent this sentence for searching relevant passages: ${text}` : text;
@@ -85,7 +94,9 @@ export async function embed(
   query = false,
   signal?: AbortSignal,
 ): Promise<number[][]> {
-  const input = texts.map((text) => formatInput(text, provider.profile, query));
+  const input = texts.map((text) =>
+    formatInput(text, provider.profile, query, provider.profileVersion),
+  );
   const native = provider.provider === 'ollama';
   const response = await request(
     provider,
@@ -129,18 +140,75 @@ export async function listModels(provider: Provider) {
   const response = await request(provider, native ? '/api/tags' : '/models');
   const parsed = native
     ? z
-        .object({ models: z.array(z.object({ name: z.string().max(200) })).max(10000) })
+        .object({
+          models: z.array(modelMetadataSchema.extend({ name: z.string().max(200) })).max(10000),
+        })
         .safeParse(response)
     : z
-        .object({ data: z.array(z.object({ id: z.string().max(200) })).max(10000) })
+        .object({
+          data: z.array(modelMetadataSchema.extend({ id: z.string().max(200) })).max(10000),
+        })
         .safeParse(response);
   if (!parsed.success)
     throw new ProviderError('Could not list models. Enter the model name manually.');
-  return (
+  const models = (
     'models' in parsed.data
-      ? parsed.data.models.map((model) => model.name)
-      : parsed.data.data.map((model) => model.id)
-  ).sort();
+      ? parsed.data.models.map((model) => ({ ...model, id: model.name }))
+      : parsed.data.data
+  ).map((model) => ({
+    id: model.id,
+    kind: kindFromMetadata(model) ?? modelKindFromName(model.id),
+  }));
+  if (native) {
+    // /tags omits capabilities. Inspect a bounded number without loading or running a model.
+    const deadline = AbortSignal.timeout(20_000);
+    const pending = models.slice(0, 24);
+    await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        for (let model = pending.shift(); model; model = pending.shift()) {
+          try {
+            const details = await request(
+              provider,
+              '/api/show',
+              { model: model.id },
+              AbortSignal.any([deadline, AbortSignal.timeout(3000)]),
+            );
+            model.kind = kindFromMetadata(details) ?? model.kind;
+          } catch {
+            // Older servers may lack /show or capabilities; names remain a useful hint.
+          }
+        }
+      }),
+    );
+  }
+  // Unknown aliases remain selectable and must pass the real embedding test before enablement.
+  const eligible = models.filter((model) => ['embedding', 'unknown'].includes(model.kind));
+  return {
+    models: [...new Set(eligible.map((model) => model.id))].sort(),
+    kinds: Object.fromEntries(eligible.map((model) => [model.id, model.kind])),
+  };
+}
+
+const modelMetadataSchema = z.object({
+  type: z.unknown().optional(),
+  capabilities: z.unknown().optional(),
+});
+
+function kindFromMetadata(value: unknown): ReturnType<typeof modelKindFromName> | null {
+  const parsed = modelMetadataSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const capabilities = z.array(z.string()).safeParse(parsed.data.capabilities);
+  const type = z.string().safeParse(parsed.data.type);
+  const labels = [
+    ...(capabilities.success ? capabilities.data : []),
+    ...(type.success ? [type.data] : []),
+  ].map((label) => label.toLowerCase());
+  if (labels.some((label) => ['embedding', 'embeddings', 'text-embedding'].includes(label)))
+    return 'embedding';
+  if (labels.some((label) => ['completion', 'chat', 'llm'].includes(label))) return 'chat';
+  if (labels.some((label) => ['reranker', 'rerank', 'image', 'audio', 'tts'].includes(label)))
+    return 'other';
+  return null;
 }
 
 export function chunkText(text: string): string[] {

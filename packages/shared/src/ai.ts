@@ -73,8 +73,50 @@ export const embeddingConfigurationSchema = z.object({
     .transform((value) => value.replace(/\/+$/, '')),
   model: z.string().trim().min(1).max(200),
   profile: z.enum(['plain', 'nomic', 'e5', 'bge']).default('plain'),
+  // Keep existing vectors on their original format until a save starts a new generation.
+  profileVersion: z.literal(2).optional(),
 });
 export type EmbeddingConfiguration = z.infer<typeof embeddingConfigurationSchema>;
+
+/** Model ids commonly carry an organization, quantization suffix and Ollama tag. */
+export function embeddingProfileForModel(model: string): EmbeddingConfiguration['profile'] {
+  const name = model.toLowerCase();
+  if (/nomic[-_](?:embed[-_])?text/.test(name)) return 'nomic';
+  if (/(?:^|[/_-])e5(?:$|[-_:])/.test(name)) return 'e5';
+  // M3 and newer BGE families do not use the English v1 retrieval instruction.
+  if (/bge[-_](?:small|base|large)(?:[-_]en)?(?:$|[-_:])/.test(name) && !/[-_]zh/.test(name))
+    return 'bge';
+  return 'plain';
+}
+
+export function embeddingInputForModel(
+  model: string,
+): Pick<EmbeddingConfiguration, 'profile' | 'profileVersion'> {
+  const profile = embeddingProfileForModel(model);
+  return {
+    profile,
+    profileVersion: profile === 'e5' && /instruct|mistral/i.test(model) ? 2 : undefined,
+  };
+}
+
+export function modelKindFromName(model: string): 'embedding' | 'chat' | 'unknown' | 'other' {
+  const name = model.toLowerCase();
+  if (/rerank|whisper|tts|text-to-speech|image-generation|embed[-_]vision/.test(name))
+    return 'other';
+  if (
+    /embed|bge|(?:^|[/_-])e5(?:$|[-_:])|minilm|text2vec|sentence-transformers|all-mpnet|instructor|voyage|arctic|mxbai|stella|colbert|paraphrase|jina|snowflake|(?:^|[/_-])gte(?:$|[-_:])/.test(
+      name,
+    )
+  )
+    return 'embedding';
+  if (
+    /(?:^|[/_-])(?:gpt|claude|gemini|llama|qwen|mistral|mixtral|deepseek|phi|gemma|chat|coder|starcoder|hermes|wizard|zephyr|olmo|falcon|nemotron|smol|command|vicuna|o[134])(?:$|[\d._:-])|[-_]instruct(?:$|[-_:])/.test(
+      name,
+    )
+  )
+    return 'chat';
+  return 'unknown';
+}
 export const DEFAULT_EMBEDDING_CONFIGURATION: EmbeddingConfiguration = {
   provider: 'ollama',
   baseUrl: AI_PROVIDERS[0].url,
@@ -100,7 +142,11 @@ export const aiTestResultSchema = z.object({
   dimensions: z.number().int().positive(),
   milliseconds: z.number().nonnegative(),
 });
-export const aiModelsSchema = z.object({ models: z.array(z.string()) });
+export const aiModelsSchema = z.object({
+  models: z.array(z.string()),
+  // Older servers return just model ids; clients can fall back to name hints.
+  kinds: z.record(z.string(), z.enum(['embedding', 'chat', 'unknown', 'other'])).optional(),
+});
 export const aiProgressSchema = z.object({
   total: z.number().int().nonnegative(),
   ready: z.number().int().nonnegative(),

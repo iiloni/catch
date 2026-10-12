@@ -4,20 +4,23 @@ This feature adds optional semantic search to ordinary keyword search. Keyword s
 on the device and remains the default. Semantic search needs the Catch server, including
 when the embedding model runs locally. There is no chat model or chat generation yet.
 
+The operator-facing [setup guide](https://catchnotes.site/docs/running-a-server/ai-configuration)
+contains the networking, disclosure and recovery details kept out of the settings page.
+
 ## Set up embeddings
 
 As an admin, open **Settings > Admin > AI configuration**. Choose a provider, enter its
-server endpoint, optional API key and embedding model, then choose the model's input format.
+server endpoint, optional API key and embedding model. Catch chooses input formatting automatically.
 Hosted OpenAI and Google presets require a key; local/custom endpoints may use one too.
-Discovery lists the provider's models and permits manual entry. A listed model may be a
-chat model: **Test embedding** makes actual document and query embedding requests and verifies
+Discovery uses provider capabilities/types and model-name hints to exclude recognized chat
+and non-text models. Unknown aliases remain available, and manual entry is supported: **Test embedding** makes actual document and query embedding requests and verifies
 matching dimensions. Saving with Background embeddings enabled repeats this test.
 
 Enable **Background embeddings** and save. Catch indexes every user's ordinary notes,
 including archives, without a separate per-user setting. The status panel shows indexed,
 queued, running and failed notes. **Retry failed tasks** resets failed jobs. **Rebuild index**
 invalidates all current vectors and queues a fresh generation. A different endpoint, provider,
-model, input format or dimension count also rebuilds automatically; key rotation alone does
+model, automatically selected input format or dimension count also rebuilds automatically; key rotation alone does
 not. Disabling pauses indexing and makes semantic search unavailable. Changes while disabled
 are caught up when enabled again. The Search page's switch does not pause indexing.
 
@@ -34,7 +37,7 @@ unreachable through that gateway: configure its listener and firewall to permit 
 container, or use a reachable LAN address/Compose service hostname. Avoid exposing an
 unauthenticated model server to the public internet.
 
-Ollama uses native `/api/tags` and `/api/embed`; its endpoint should be the server root,
+Ollama uses native `/api/tags`, `/api/show` and `/api/embed`; its endpoint should be the server root,
 for example `http://host.docker.internal:11434`. Compatible services use `/models` and
 `/embeddings` relative to their base, typically ending in `/v1`. LM Studio, vLLM,
 OpenAI, Google Gemini's compatibility endpoint and custom services are presets, not bundled
@@ -43,14 +46,24 @@ API documentation. Compatible services must return floating-point vectors with i
 rows. There is no redirect following, native Gemini task-type adapter, custom dimension
 selection or arbitrary provider parameter editor.
 
-Input formats are explicit and apply consistently to documents and queries:
+Input formats are selected from the model name, not exposed as an admin setting:
 
 - Plain text: neither receives a prefix.
 - Nomic: `search_document: ` / `search_query: `.
-- E5: `passage: ` / `query: `.
-- BGE: documents stay plain; queries receive its retrieval instruction.
+- Standard E5: `passage: ` / `query: `. E5 instruct/Mistral variants use a query instruction and plain documents.
+- English BGE small/base/large: documents stay plain; queries receive its retrieval instruction. BGE-M3 and other families use plain text.
 
-Use the format required by the selected model. Discovery does not identify this for you.
+Use a canonical model name so Catch can identify its family; opaque aliases use plain text.
+Provider metadata takes precedence over name hints for model-kind detection. Ollama inspection
+is bounded to 24 models, four concurrent calls and a 20-second deadline with three-second calls.
+Unavailable metadata falls back to names, without embedding or chat generation during discovery.
+The discovery response preserves `models` and adds optional `kinds`; new clients accept older
+responses and classify names locally. Old clients ignore `kinds`. Unknown aliases must still
+pass document/query embedding tests before enabling indexing. Detection does not establish search quality.
+The optional stored `profileVersion` selects E5's instruction format. An older configuration
+without it retains its original prefixes until an admin save selects the new format and
+rebuilds the generation. Older clients ignore this optional field; other model formats and
+key-only rotations keep their existing generations.
 The server normalizes nonzero finite vectors, checks dimensions, bounds responses to 16 MiB
 and limits each HTTP request to 60 seconds. Provider bodies and credentials are never shown
 in errors. See [Ollama's embed API](https://docs.ollama.com/api/embed) and

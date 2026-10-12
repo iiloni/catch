@@ -40,7 +40,7 @@ export const aiRoutes = new Hono<AppEnv>()
   )
   .post('/models', zValidator('json', aiModelDiscoveryRequestSchema), async (c) => {
     const provider = await resolveProvider(c.req.valid('json'));
-    return c.json({ models: await listModels(provider) });
+    return c.json(await listModels(provider));
   })
   .post('/test', zValidator('json', aiProviderRequestSchema), async (c) => {
     const provider = await resolveProvider(c.req.valid('json'));

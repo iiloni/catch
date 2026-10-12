@@ -4,6 +4,8 @@ import {
   DEFAULT_EMBEDDING_CONFIGURATION,
   type EmbeddingConfiguration,
   embeddingConfigurationSchema,
+  embeddingInputForModel,
+  modelKindFromName,
 } from '@catch/shared';
 import { ChevronDown, Cpu, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -79,7 +81,11 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
     field: K,
     value: EmbeddingConfiguration[K],
   ) {
-    setEmbedding((old) => ({ ...old, [field]: value }));
+    setEmbedding((old) => ({
+      ...old,
+      [field]: value,
+      ...(field === 'model' && typeof value === 'string' ? embeddingInputForModel(value) : {}),
+    }));
     setMessage(null);
     setError(null);
     if (field === 'baseUrl') setModels([]);
@@ -87,7 +93,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
 
   function providerRequest() {
     return {
-      embedding,
+      embedding: { ...embedding, ...embeddingInputForModel(embedding.model) },
       ...(key.trim() ? { apiKey: key.trim() } : removeKey ? { apiKey: null } : {}),
     };
   }
@@ -99,11 +105,14 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
     try {
       if (operation === 'models') {
         const result = await ai.models(providerRequest());
-        setModels(result.models);
+        const discovered = result.models.filter(
+          (model) => !['chat', 'other'].includes(result.kinds?.[model] ?? modelKindFromName(model)),
+        );
+        setModels(discovered);
         setMessage(
-          result.models.length
-            ? `Found ${result.models.length} models. Select an embedding model or enter its name.`
-            : 'No models were listed. Enter the model name manually.',
+          discovered.length
+            ? `Found ${discovered.length} ${discovered.length === 1 ? 'model' : 'models'}.`
+            : 'No embedding models found. Enter a model name to test it.',
         );
       } else if (operation === 'test') {
         if (!embeddingConfigurationSchema.safeParse(embedding).success)
@@ -161,12 +170,12 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
       <fieldset disabled={locked} className="flex min-w-0 flex-col gap-6 disabled:opacity-60">
         <SettingsSection
           title="Semantic search"
-          description="Enabling indexes every user's ordinary and archived notes in the background. Note text is sent to this provider; search queries are sent when semantic search is used. Vault notes stay on the device."
+          description="Sends ordinary notes and semantic queries to this provider. Vault notes stay private."
         >
           <SettingsRow
             icon={Cpu}
             label="Background embeddings"
-            description="Make semantic search available to everyone"
+            description="Index all users’ notes"
           >
             <Switch
               aria-label="Background embeddings"
@@ -178,10 +187,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
             />
           </SettingsRow>
         </SettingsSection>
-        <SettingsSection
-          title="Embedding provider"
-          description="Local providers must be reachable from the Catch server. In Docker, host.docker.internal reaches the host; localhost reaches Catch's own container. LAN addresses and service hostnames also work."
-        >
+        <SettingsSection title="Embedding provider">
           <div className="flex flex-col gap-4 p-4">
             <Choice
               label="Provider"
@@ -196,7 +202,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
                   provider: preset.id,
                   baseUrl: preset.url,
                   model: preset.model,
-                  profile: preset.profile,
+                  ...embeddingInputForModel(preset.model),
                 });
                 setKey('');
                 setRemoveKey(false);
@@ -248,13 +254,6 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
                 {removeKey ? 'Keep saved key' : 'Remove saved key'}
               </Button>
             )}
-          </div>
-        </SettingsSection>
-        <SettingsSection
-          title="Embedding model"
-          description="Model discovery may include chat models. Testing verifies that your selection generates embeddings. Changing the endpoint, model, or input format rebuilds the index."
-        >
-          <div className="flex flex-col gap-4 p-4">
             <label htmlFor={`${modelList}-model`} className="flex flex-col gap-2 text-sm">
               Embedding model
               <Input
@@ -287,17 +286,6 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
                 />
               </>
             )}
-            <Choice
-              label="Input format"
-              value={embedding.profile}
-              options={[
-                { value: 'plain', label: 'Plain text' },
-                { value: 'nomic', label: 'Nomic search prefixes' },
-                { value: 'e5', label: 'E5 query / passage prefixes' },
-                { value: 'bge', label: 'BGE query instruction' },
-              ]}
-              onChange={(value) => change('profile', value)}
-            />
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => void perform('models')}>
                 Discover models
@@ -327,7 +315,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           {busy === 'models'
             ? 'Discovering models…'
             : busy === 'test' || busy === 'save'
-              ? 'Checking configuration… Local models may need time to load.'
+              ? 'Checking configuration…'
               : 'Updating background tasks…'}
         </p>
       )}
@@ -341,14 +329,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           {visibleError}
         </p>
       )}
-      <SettingsSection
-        title="Background embedding tasks"
-        description={
-          saved?.enabled
-            ? 'Notes are indexed after saves reach the server. Keyword search remains available while indexing.'
-            : 'Background indexing is paused. Enable embeddings above to begin.'
-        }
-      >
+      <SettingsSection title="Indexing">
         <div className="flex flex-col gap-3 p-4">
           {!progress ? (
             <p className="text-muted-foreground text-sm">Loading configuration…</p>
@@ -356,6 +337,7 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
             <>
               <p className="font-medium">
                 {progress.ready} of {progress.total} notes indexed
+                {!saved.enabled && ' · Paused'}
               </p>
               <progress
                 aria-label="Embedding progress"
@@ -365,7 +347,6 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
               />
               <p className="text-muted-foreground text-sm">
                 {progress.pending} queued · {progress.running} running · {progress.failed} failed
-                {saved.dimensions ? ` · ${saved.dimensions} dimensions` : ''}
               </p>
               {progress.lastError && (
                 <p className="text-destructive text-sm">{progress.lastError}</p>
@@ -393,6 +374,14 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
           )}
         </div>
       </SettingsSection>
+      <a
+        href="https://catchnotes.site/docs/running-a-server/ai-configuration"
+        target="_blank"
+        rel="noreferrer"
+        className="self-start px-4 text-sm text-muted-foreground underline underline-offset-4"
+      >
+        AI setup guide
+      </a>
     </div>
   );
 }

@@ -169,10 +169,17 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
   const model = page.getByRole('textbox', { name: 'Embedding model', exact: true });
   await expect(model).toHaveValue('fake-embedding');
   await page.getByRole('button', { name: 'Discover models' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Found 2 models' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Input format', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'AI setup guide' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Found 1 model' })).toBeVisible();
   await page.getByRole('button', { name: 'Choose discovered model' }).click();
+  await expect(page.getByRole('option', { name: 'fake-embedding', exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'Search models' }).fill('chat');
-  await page.getByRole('option', { name: 'chat-only', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'chat-only', exact: true })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Search models' }).fill('');
+  await page.getByRole('option', { name: 'fake-embedding', exact: true }).click();
+  // A name entered manually still has to generate actual embeddings.
+  await model.fill('chat-only');
   await page.getByRole('button', { name: 'Test embedding' }).click();
   await expect(page.getByRole('alert')).toContainText('HTTP 400');
   await model.fill('fake-embedding');
@@ -180,6 +187,7 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
   await expect(
     page.getByRole('status').filter({ hasText: 'Embedding verified: 3 dimensions' }),
   ).toBeVisible();
+  await model.fill('nomic-embed-text');
   await page.getByRole('button', { name: 'Save configuration' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'AI configuration saved' }),
@@ -189,6 +197,10 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
   const saved = aiConfigurationSchema.parse(
     await (await page.request.get('/api/admin/ai', { headers })).json(),
   );
+  expect(saved.embedding.profile).toBe('nomic');
+  expect(
+    fake.calls.some((call) => call.input.includes('search_query: Catch embedding connection test')),
+  ).toBe(true);
   const edit = await page.request.put('/api/admin/ai', {
     headers,
     data: { enabled: false, embedding: saved.embedding, revision: saved.revision },

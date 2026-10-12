@@ -42,8 +42,68 @@ describe('embedding adapters', () => {
     expect(formatInput('a', 'bge', true)).toContain('Represent');
   });
   it('discovery is not an embedding test', async () => {
-    expect(await listModels(provider)).toContain('chat-only');
+    const calls = fake.calls.length;
+    expect((await listModels(provider)).models).toEqual(['fake-embedding']);
+    expect(fake.calls).toHaveLength(calls);
     await expect(embed({ ...provider, model: 'chat-only' }, ['a'])).rejects.toThrow('HTTP 400');
+  });
+  it('uses compatible metadata before name hints and retains unknown aliases', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          data: [
+            { id: 'gpt-embedding-alias', type: 'llm' },
+            { id: 'qwen-custom', type: 'embeddings' },
+            { id: 'private-alias' },
+            { id: 'BAAI/bge-m3' },
+            { id: 'llama3.2:latest' },
+            { id: 'bge-reranker-v2' },
+          ],
+        }),
+      ),
+    );
+    expect(await listModels(provider)).toEqual({
+      models: ['BAAI/bge-m3', 'private-alias', 'qwen-custom'],
+      kinds: { 'BAAI/bge-m3': 'embedding', 'private-alias': 'unknown', 'qwen-custom': 'embedding' },
+    });
+  });
+  it('detects native model aliases with capabilities and falls back if show is unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        if (url.endsWith('/api/tags'))
+          return Response.json({
+            models: [
+              { name: 'custom-vectors' },
+              { name: 'private-assistant' },
+              { name: 'nomic-embed-text' },
+            ],
+          });
+        const { model } = JSON.parse(String(init.body));
+        if (model === 'nomic-embed-text') return new Response(null, { status: 404 });
+        return Response.json({
+          capabilities: model === 'custom-vectors' ? ['embedding'] : ['completion', 'tools'],
+        });
+      }),
+    );
+    expect((await listModels({ ...provider, provider: 'ollama' })).models).toEqual([
+      'custom-vectors',
+      'nomic-embed-text',
+    ]);
+  });
+  it('never falls back to known chat models when no embedding models are listed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ data: [{ id: 'gpt-4o' }, { id: 'chat-only' }] })),
+    );
+    expect((await listModels(provider)).models).toEqual([]);
+  });
+  it('formats E5 instruction models without passage prefixes', () => {
+    expect(formatInput('private note', 'e5', false, 2)).toBe('private note');
+    expect(formatInput('question', 'e5', true, 2)).toBe(
+      'Instruct: Given a search query, retrieve relevant notes that answer the query.\nQuery: question',
+    );
   });
   it('sanitizes upstream failures and honors cancellation', async () => {
     fake.state.fail = true;

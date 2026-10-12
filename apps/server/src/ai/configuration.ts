@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   type AiConfiguration,
   DEFAULT_EMBEDDING_CONFIGURATION,
+  embeddingInputForModel,
   type SaveAiConfiguration,
 } from '@catch/shared';
 import { eq, sql } from 'drizzle-orm';
@@ -33,7 +34,7 @@ export async function resolveProvider(
       : input.apiKey;
   if (['openai', 'google'].includes(input.embedding.provider) && !apiKey)
     throw new ProviderError('Enter an API key for this provider.');
-  return { ...input.embedding, apiKey };
+  return { ...input.embedding, ...embeddingInputForModel(input.embedding.model), apiKey };
 }
 
 export async function enqueueMissing(tx: Tx | Db) {
@@ -98,6 +99,11 @@ export async function lockConfiguration(tx: Tx, actor: string) {
 }
 
 export async function saveConfiguration(input: SaveAiConfiguration, actor: string) {
+  // The server chooses retrieval formatting, including for older clients with a format picker.
+  input = {
+    ...input,
+    embedding: { ...input.embedding, ...embeddingInputForModel(input.embedding.model) },
+  };
   const provider = input.enabled ? await resolveProvider(input) : null;
   const dimensions = provider ? await testProvider(provider) : null;
   await db.transaction(async (tx) => {
@@ -110,7 +116,7 @@ export async function saveConfiguration(input: SaveAiConfiguration, actor: strin
     if ((previous?.revision ?? null) !== input.revision) throw new ConfigurationConflict();
     const changed =
       !previous ||
-      (['provider', 'baseUrl', 'model', 'profile'] as const).some(
+      (['provider', 'baseUrl', 'model', 'profile', 'profileVersion'] as const).some(
         (key) => previous.embedding[key] !== input.embedding[key],
       ) ||
       (dimensions !== null && dimensions !== previous.dimensions);

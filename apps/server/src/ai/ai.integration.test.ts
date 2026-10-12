@@ -304,7 +304,7 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     await run();
     expect((await overview()).dimensions).toBe(4);
   });
-  it('keeps the generation on key rotation, replaces it on profile changes, and refuses stale revisions', async () => {
+  it('infers formats, preserves generations on key rotation, and refuses stale revisions', async () => {
     const first = await save({ apiKey: 'key-one' });
     await run();
     await run();
@@ -317,8 +317,31 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     await expect(restartIndex('owner', true, first.revision)).rejects.toBeInstanceOf(
       ConfigurationConflict,
     );
-    await save({ embedding: { ...current!.embedding, profile: 'e5' } });
+    await save({ embedding: { ...current!.embedding, profile: 'e5' }, apiKey: 'key-two' });
+    expect((await overview()).embedding.profile).toBe('plain');
+    expect(await embeddings()).toHaveLength(2);
+    await save({
+      embedding: { ...current!.embedding, model: 'nomic-embed-text', profile: 'plain' },
+    });
+    expect((await overview()).embedding.profile).toBe('nomic');
     expect(await embeddings()).toEqual([]);
+    expect(fake.calls.at(-1)?.input[0]).toBe('search_query: Catch embedding connection test');
+    await run();
+    await run();
+    expect(
+      fake.calls
+        .slice(-2)
+        .flatMap((call) => call.input)
+        .every((text) => text.startsWith('search_document: ')),
+    ).toBe(true);
+    const config = await overview();
+    expect(
+      (
+        await resolveProvider({
+          embedding: { ...config.embedding, model: 'BAAI/bge-m3', profile: 'nomic' },
+        })
+      ).profile,
+    ).toBe('plain');
   });
   it('reconciles notes inserted while enablement was off', async () => {
     await save({ enabled: false });
@@ -327,6 +350,42 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     await database.delete(schema.embeddingJobs);
     await enqueueMissing(database);
     expect(await jobs()).toHaveLength(2);
+  });
+  it('preserves a legacy E5 index until saving its new automatic instruction format', async () => {
+    const initial = await save({
+      embedding: {
+        ...DEFAULT_EMBEDDING_CONFIGURATION,
+        provider: 'compatible',
+        baseUrl: fake.url,
+        model: 'e5-mistral-7b-instruct',
+        profile: 'e5',
+      },
+    });
+    const { profileVersion: _version, ...legacy } = initial.embedding;
+    await database.update(schema.aiConfiguration).set({ embedding: legacy });
+    await run();
+    await run();
+    expect(fake.calls.at(-1)?.input[0]).toMatch(/^passage: /);
+    const [before] = await database.select().from(schema.aiConfiguration);
+    expect(await embeddings()).toHaveLength(2);
+    const updated = await save({ embedding: legacy });
+    expect(updated.embedding.profileVersion).toBe(2);
+    expect(await embeddings()).toHaveLength(0);
+    const [after] = await database.select().from(schema.aiConfiguration);
+    expect(after!.generation).not.toBe(before!.generation);
+    await run();
+    await run();
+    expect(
+      fake.calls
+        .slice(-2)
+        .flatMap((call) => call.input)
+        .every((text) => !text.startsWith('passage: ')),
+    ).toBe(true);
+    await save({ embedding: updated.embedding, apiKey: 'rotated-key' });
+    expect((await database.select().from(schema.aiConfiguration))[0]!.generation).toBe(
+      after!.generation,
+    );
+    expect(await embeddings()).toHaveLength(2);
   });
   it('rechecks the actor role and never reuses credentials for another destination', async () => {
     await save({ apiKey: 'secret-key' });

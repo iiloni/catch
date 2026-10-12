@@ -56,4 +56,6 @@ embedding providers, model discovery/testing and background queue progress, retr
 controls (ADR 0002). Polling updates status independently of unsaved form fields and their
 revision, including after reconnection. Saves and rebuilds reject stale revisions. The model
 configuration is nested under `embedding` so a future chat section can coexist; chat is not
-implemented here. No provider credentials or AI settings are synced to devices.
+implemented here. Input formatting is chosen by Catch and has no admin control. The page
+keeps the text-disclosure notice and actionable status; networking, model formats, indexing
+behavior and credential recovery live in the operator docs, linked from the page. No provider credentials or AI settings are synced to devices.
