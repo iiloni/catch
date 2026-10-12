@@ -7,7 +7,7 @@ or a Deck column. Rounded note cards retain their colors and checklist previews.
 The list dedicates its space to cards with a floating New note button, without
 header or footer bars, and its + button has the same rounded-square shape as Catch's
 other controls. One note scrolls through the full note text. Both note widgets can
-show one image: the first image attachment, or a visible link preview thumbnail
+show one image above the note title: the first image attachment, or a visible link preview thumbnail
 when no attached image is available. Hidden or disabled link previews stay hidden.
 Images are cached with the widget so they remain visible offline.
 Use the custom setup dialog to choose content and appearance.

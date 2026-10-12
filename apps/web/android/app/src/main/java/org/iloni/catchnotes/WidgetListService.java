@@ -62,8 +62,8 @@ public class WidgetListService extends RemoteViewsService {
                             new RemoteViews(
                                     getPackageName(),
                                     customTheme
-                                            ? R.layout.widget_single_row_custom
-                                            : R.layout.widget_single_row);
+                                            ? R.layout.widget_single_row_image_first_custom
+                                            : R.layout.widget_single_row_image_first);
                     row.setTextViewText(R.id.widget_title, note.optString("title"));
                     row.setViewVisibility(
                             R.id.widget_title, position == 0 ? View.VISIBLE : View.GONE);
@@ -90,8 +90,8 @@ public class WidgetListService extends RemoteViewsService {
                         new RemoteViews(
                                 getPackageName(),
                                 customTheme
-                                        ? R.layout.widget_row_images_custom
-                                        : R.layout.widget_row_images);
+                                        ? R.layout.widget_row_image_first_custom
+                                        : R.layout.widget_row_image_first);
                 row.setTextViewText(R.id.widget_title, note.optString("title"));
                 row.setTextViewText(R.id.widget_body, note.optString("body"));
                 WidgetImages.apply(row, note);

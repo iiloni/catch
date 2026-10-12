@@ -14,4 +14,9 @@
     <item type="layout" name="widget_single_scroll">@layout/widget_single</item>
     <item type="layout" name="widget_single_scroll_custom">@layout/widget_single</item>
     <item type="layout" name="widget_single_row_custom">@layout/widget_single_row</item>
+    <!-- Reinflate placed widget rows when moving images above titles. -->
+    <item type="layout" name="widget_row_image_first">@layout/widget_row</item>
+    <item type="layout" name="widget_row_image_first_custom">@layout/widget_row</item>
+    <item type="layout" name="widget_single_row_image_first">@layout/widget_single_row</item>
+    <item type="layout" name="widget_single_row_image_first_custom">@layout/widget_single_row</item>
 </resources>
