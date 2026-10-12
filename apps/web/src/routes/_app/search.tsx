@@ -328,13 +328,25 @@ function SearchPage() {
                   </p>
                 )
               ) : results.length > 0 ? (
-                <section aria-label="Results">
-                  <p className="px-1 pb-2 text-muted-foreground text-xs">
+                <section aria-label="Results" aria-busy={semantic.loading}>
+                  <p className="flex items-center gap-2 px-1 pb-2 text-muted-foreground text-xs">
                     {results.length === MAX_RESULTS
                       ? `First ${MAX_RESULTS} notes`
                       : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
+                    {semantic.loading && (
+                      <span role="status" className="flex items-center gap-1">
+                        <Sparkles className="size-3 motion-safe:animate-pulse" aria-hidden />
+                        Searching…
+                      </span>
+                    )}
                   </p>
-                  <ul className="flex flex-col gap-2">
+                  {/* These answer the last query until the AI search for this one returns. */}
+                  <ul
+                    className={cn(
+                      'flex flex-col gap-2 transition-opacity duration-200',
+                      semantic.loading && 'opacity-50',
+                    )}
+                  >
                     <AnimatePresence initial={false} mode="popLayout">
                       {results.map((result) => (
                         <motion.li

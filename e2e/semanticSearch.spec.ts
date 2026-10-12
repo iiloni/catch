@@ -81,6 +81,22 @@ test('semantic search starts off, finds related notes and preserves keyword fall
     timeout: 15_000,
   });
   await expect(page.getByText('Related meaning', { exact: true }).first()).toBeVisible();
+  // While the next query is answered, the last answer stays, marked as being replaced.
+  let release: (() => void) | undefined;
+  fake.state.beforeReply = () =>
+    new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  await field.fill('cycling outdoors');
+  const results = page.getByRole('region', { name: 'Results' });
+  await expect(results.getByRole('status').filter({ hasText: 'Searching…' })).toBeVisible();
+  await expect(results).toHaveAttribute('aria-busy', 'true');
+  await expect(results.getByRole('article').filter({ hasText: 'Bicycle ride' })).toBeVisible();
+  await expect.poll(() => typeof release).toBe('function');
+  fake.state.beforeReply = null;
+  release?.();
+  await expect(results.getByRole('status')).toHaveCount(0);
+  await expect(results).toHaveAttribute('aria-busy', 'false');
   await page.route('**/api/search', (route) =>
     route.fulfill({
       status: 503,
