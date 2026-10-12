@@ -178,7 +178,8 @@ function SearchPage() {
     ? 'loading'
     : !searching
       ? 'browse'
-      : results.length > 0
+      : // An AI search under way stays in the results view, so its notes arrive without a view change.
+        results.length > 0 || semantic.loading
         ? 'results'
         : 'empty';
   const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
@@ -358,7 +359,7 @@ function SearchPage() {
                 </section>
               ) : semantic.loading ? (
                 // Keyword matches show at once; with none, AI search may still find some.
-                <EmptyState icon={Sparkles} title="Finding related notes" busy />
+                semantic.slow && <EmptyState icon={Sparkles} title="Finding related notes" busy />
               ) : (
                 <EmptyState icon={SearchX} title="No matching notes">
                   {showArchived

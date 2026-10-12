@@ -78,6 +78,51 @@ it('searches at once when switched on, and waits out typing', async () => {
   });
   expect(ai.search).toHaveBeenCalledTimes(2);
 });
+it('keeps the last answer while the next loads, and reports only a slow search', async () => {
+  const first = {
+    hits: [{ id: 'a', updatedAt: new Date(0).toISOString(), semantic: true }],
+    indexing: false,
+  };
+  vi.mocked(ai.search).mockResolvedValueOnce(first);
+  const hook = renderHook(({ query }) => useSemanticSearch({ ...input, query }, false), {
+    initialProps: { query: 'bike' },
+  });
+  await waitFor(() => expect(hook.result.current.allowed).toBe(true));
+  vi.useFakeTimers();
+  act(() => hook.result.current.setEnabled(true));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(hook.result.current.result).toEqual(first);
+  expect(hook.result.current.loading).toBe(false);
+  let complete!: (value: { hits: []; indexing: boolean }) => void;
+  vi.mocked(ai.search).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  hook.rerender({ query: 'bikes' });
+  expect(hook.result.current.loading).toBe(true);
+  expect(hook.result.current.result).toEqual(first);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(449);
+  });
+  expect(hook.result.current.slow).toBe(false);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(hook.result.current.slow).toBe(true);
+  await act(async () => {
+    complete({ hits: [], indexing: false });
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(hook.result.current.slow).toBe(false);
+  expect(hook.result.current.result?.hits).toEqual([]);
+  // Switching AI off drops the answer, so switching it back on cannot show the old one.
+  act(() => hook.result.current.setEnabled(false));
+  expect(hook.result.current.result).toBeUndefined();
+});
 it('debounces, cancels stale requests and ignores late results', async () => {
   const hook = renderHook(({ query }) => useSemanticSearch({ ...input, query }, false), {
     initialProps: { query: 'bike' },

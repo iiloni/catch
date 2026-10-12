@@ -17,8 +17,16 @@ export async function hybridSearch(
   userId: string,
   input: HybridSearch,
   signal?: AbortSignal,
+  timings: Record<string, number> = {},
 ): Promise<HybridSearchResult> {
+  let mark = performance.now();
+  const lap = (name: string) => {
+    const now = performance.now();
+    timings[name] = now - mark;
+    mark = now;
+  };
   const config = await readConfiguration();
+  lap('config');
   if (!config?.enabled || !config.dimensions)
     throw new ProviderError('AI search is not enabled on this server.');
   const [vector] = await embed(
@@ -27,6 +35,7 @@ export async function hybridSearch(
     true,
     signal,
   );
+  lap('embed');
   if (vector?.length !== config.dimensions)
     throw new ProviderError(
       'The embedding model changed. Ask an admin to test and save its configuration.',
@@ -34,8 +43,12 @@ export async function hybridSearch(
   const current = await readConfiguration();
   if (!current?.enabled || current.generation !== config.generation)
     throw new ProviderError('AI configuration changed. Try searching again.');
+  lap('recheck');
   const hits = await rankNotes(userId, input, vector, config.generation);
-  return { hits, indexing: (await capabilities(userId)).indexing };
+  lap('rank');
+  const { indexing } = await capabilities(userId);
+  lap('indexing');
+  return { hits, indexing };
 }
 
 /** Both candidate lists start with the same authorized, filtered notes, before either limit. */

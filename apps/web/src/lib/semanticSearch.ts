@@ -5,13 +5,23 @@ import { useSyncStatus } from './syncStatus';
 
 // Long enough to skip a request per keystroke, short enough that a pause feels immediate.
 const TYPING_DELAY = 150;
+// A fast answer replaces what is on screen directly; only a slow one is worth a placeholder.
+const SLOW_AFTER = 300;
 
-type Response = { key: string; result?: HybridSearchResult; error?: string; loading?: boolean };
+type Response = {
+  key: string;
+  result?: HybridSearchResult;
+  error?: string;
+  loading?: boolean;
+  /** The last answer, kept on screen while the next one is fetched. */
+  stale?: HybridSearchResult;
+};
 
 export function useSemanticSearch(input: HybridSearch, vault: boolean) {
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [response, setResponse] = useState<Response | null>(null);
+  const [slow, setSlow] = useState(false);
   const { offline, incompatibility, signedOut } = useSyncStatus();
   const connected = !offline && !incompatibility && !signedOut;
   const key = JSON.stringify(input);
@@ -62,7 +72,10 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
       return;
     }
     const controller = new AbortController();
-    setResponse({ key, loading: true });
+    setResponse((last) => ({ key, loading: true, stale: last?.result ?? last?.stale }));
+    setSlow(false);
+    const delay = typing ? TYPING_DELAY : 0;
+    const waiting = window.setTimeout(() => setSlow(true), delay + SLOW_AFTER);
     let timer: number;
     let retryDelay = 10_000;
     const run = async () => {
@@ -70,11 +83,13 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
         const result = await ai.search(JSON.parse(key) as HybridSearch, controller.signal);
         if (!controller.signal.aborted) {
           retryDelay = 10_000;
+          clearTimeout(waiting);
           setResponse({ key, result });
           if (result.indexing) timer = window.setTimeout(() => void run(), 10_000);
         }
       } catch (error) {
         if (!controller.signal.aborted) {
+          clearTimeout(waiting);
           setResponse({
             key,
             error: error instanceof AiRequestError ? error.message : 'Could not reach AI search.',
@@ -91,15 +106,19 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
       }
     };
     // Only typing is worth waiting out: a switch, filter or recent search is one deliberate act.
-    timer = window.setTimeout(() => void run(), typing ? TYPING_DELAY : 0);
+    timer = window.setTimeout(() => void run(), delay);
     return () => {
       clearTimeout(timer);
+      clearTimeout(waiting);
       controller.abort();
     };
   }, [enabled, allowed, key, input.query]);
 
-  const current =
-    enabled && allowed && response?.key === key && input.query.trim() ? response : null;
+  const searching = enabled && allowed && !!input.query.trim() && input.query.trim().length <= 1000;
+  const current = searching && response?.key === key ? response : null;
+  // The effect has not caught up with a new query for one render; that is loading too.
+  const loading = searching && (!current || !!current.loading);
+  const result = current?.result ?? (loading ? (response?.result ?? response?.stale) : undefined);
   const reason = vault
     ? 'AI search is unavailable inside the vault.'
     : !connected
@@ -125,7 +144,10 @@ export function useSemanticSearch(input: HybridSearch, vault: boolean) {
     available,
     allowed,
     message,
-    loading: !!current?.loading,
-    result: current?.result,
+    /** Nothing has answered this query yet; `result` may still hold the previous answer. */
+    loading,
+    /** Loading has gone on long enough to say so. */
+    slow: loading && slow,
+    result,
   };
 }
