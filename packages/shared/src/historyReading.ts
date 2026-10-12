@@ -23,7 +23,6 @@ const DEFAULT_PROPS: Json = {
   caption: '',
   name: '',
   url: '',
-  language: '',
 };
 
 /** Without what is switched off, empty or the default. */
