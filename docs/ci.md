@@ -201,6 +201,54 @@ Xvfb on Linux) and capture that display with FFmpeg's `x11grab`, keeping recordi
 the checkout. Continue to run the test through `./scripts/dev.sh e2e`; capture only the
 isolated test display. Ordinary screenshots remain useful outside a view transition.
 
+### Firefox baseline
+
+A failure listed here was there before your change. Anything else is new: confirm it alone
+with `--workers=1 --retries=0` before deciding whose it is. Update the list in the change
+that fixes or adds an entry.
+
+- Tested 2026-10-10 on `main` at `e86405f` plus the test fixes that came with this baseline,
+  with Playwright 1.63.0's Firefox 155.0 (build 1543), headless, on Linux.
+- Whole suite, one worker, no retries: 217 tests, 174 passed, 3 failed, 40 skipped
+  (22 minutes). One of the three was a real difference, UTC listed twice in the time zone
+  picker, fixed since in #98 and confirmed passing. That leaves **175 passing and 2 failing**
+  in that run. Every entry below is flaky, so a run shows from none to three failures. The skips are the 39 that the Chromium `desktop` project also skips, and the
+  one below.
+- It covers desktop Firefox in Playwright's build only. It says nothing for Firefox on
+  Android or the native APK, and Zen or a released Firefox can differ from it.
+
+Timing changes what fails. Firefox reports `page.goto` or `page.reload` as failed
+(`NS_BINDING_ABORTED`, `NS_ERROR_FAILURE`) when it interrupts a page that is still loading
+its modules, though the new page then loads as it should; Chromium does not. Such a test
+fails on an idle machine and can pass on a busy one, so a broad run with many workers hides
+some entries and adds timeouts of its own. Wait for something the first page shows before
+navigating again.
+
+| Spec | Category | What happens |
+| --- | --- | --- |
+| `accounts.spec.ts:184` | Flaky: page crash | Firefox's content process dies (signal 11) on a full page load begun while the app is still starting. About one run in three. Reloading repeatedly in Zen did not reproduce it, so it may belong to Playwright's build. |
+| `linkCapturePlacement.spec.ts:149` | Flaky: page crash | The same crash on its `page.goto('/capture#…')`. About one run in three. |
+| `homePage.spec.ts:4` | Flaky: test artifact | A `page.goto('/')` interrupts the Search page's loading, as described above. About one run in four. |
+
+Skipped in the `firefox` project because it cannot run there:
+
+- `attachments.spec.ts:375` (live capture): Playwright's Firefox has no camera or microphone
+  permission, and the fake capture devices are Chromium launch flags.
+
+With twelve workers these three also failed once and passed on their retry, and they pass
+alone: `editorLayout.spec.ts:81`, `session.spec.ts:4` and `settings.spec.ts:134`.
+
+The `pixel.png` fixture once had a wrong IDAT checksum, which Chromium draws anyway and
+Firefox refuses; a picture a test attaches must be a valid file. A mouse gesture must end
+inside the viewport, because Playwright's Firefox sends no `pointerup` for one lifted
+outside it.
+
+Tests report an on-screen keyboard by setting `keyboardHeight`. Firefox has no
+VirtualKeyboard API, so the app measures the visual viewport and resets that height at the
+next focus change; `signUp` in `e2e/helpers.ts` gives Firefox a keyboard that never moves so
+the reported height stands. A Firefox test that reports a keyboard without `signUp` needs
+the same.
+
 ## Documentation-only changes
 
 A change needs no E2E when every file it touches is one the app, its image and its tests
@@ -264,10 +312,16 @@ or through `merge on pass` before merging.
 
 [`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
 Workers with static assets when `main` changes the site or its inputs, when a release tag
-is pushed or published (the changelog gains a version), and on request. It always builds `main` from a
-full clone, because the changelog is derived from tags and history, and fails if that
-changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds the
-site for them.
+is pushed or published, after a successful **Release** run in this repository, and on
+request. The completed-run trigger covers successful dispatched Release runs with a
+published GitHub Release, including automated tagging and publication: GitHub
+suppresses both tag-push and release-published workflow triggers when the changes use
+`GITHUB_TOKEN`. Failed, cancelled or unpublished Release runs do not deploy the site;
+tag-push Release completions skip the fallback because the push already deployed it. It always builds
+`main` from a full clone, because the changelog is derived from tags and history, and fails
+if that changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds
+the site for them. To refresh the changelog after a missed deployment, run
+`gh workflow run site.yml --ref main`; there is no need to rebuild release artifacts.
 
 The job is skipped until the repository is connected to Cloudflare, once:
 

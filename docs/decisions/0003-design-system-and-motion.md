@@ -103,7 +103,16 @@ transform, which would unpin the fixed header and dock; those stay put, and only
 title rides the page off its top. A scroller's children in view take the bounce as an added
 transform, so the scroller keeps its place and its clip.
 It reserves room for the right toolbar (including sync status), using icon-only branding
-when a narrow page pane cannot fit the minimum lockup width. Selection hides the branding
+when a narrow page pane cannot fit the minimum lockup width. The icon alone keeps the size
+and place it has in the lockup, and the two crossfade; the lockup is never squeezed into a
+smaller mark. The title pill gives way the same way: each page passes `TabPageHeader` an
+icon, and where the pill's words do not fit between the corners (a page beside a note on a
+small tablet) the pill is a circle holding that icon, still the heading and still the way
+back to the top. Where not even that fits, the corner is left empty rather than running the
+pill under the controls. Both are judged by measured fit, not breakpoints, since the room
+depends on the page's controls, its back button and its title; a pill that gave up its words
+waits for 8 px to spare before taking them back, so dragging the split across the exact
+width does not flicker. Selection hides the branding
 so the count and selection actions have the corners to themselves.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash

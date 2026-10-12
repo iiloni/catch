@@ -103,3 +103,10 @@ Document the compatibility decision in the change even when no counter bump is n
   should still preserve replay safety and use the normal migration/backup process.
 - Authentication/bootstrap and download bytes remain stable recovery contracts; changes to
   them need their own backward-compatible rollout instead of relying on this gate.
+
+Protocol 6 adds note version history (ADR 0022), including its required control shape and
+conditional restore routes. The server supports 2–6: existing note/vault-note shapes and
+legacy request bodies remain valid. Updated clients add stable replay envelopes to existing
+queued mutations without clearing or rewriting their content. New clients must upgrade
+the server and apply its migration first; against protocol 5 they keep local editing and
+pause sync until the server is upgraded.

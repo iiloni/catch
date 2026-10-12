@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { promotePreviewTag } from './release.ts';
 
 function stepLines(file: string, name: string) {
   const lines = readFileSync(
@@ -63,6 +64,127 @@ function stepValues(
   }
   return values;
 }
+
+test('Site follows completed Release runs and builds main with every release tag', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  assert.match(
+    workflow,
+    /\n {2}workflow_run:\n {4}workflows: \[Release\]\n {4}types: \[completed\]\n/,
+  );
+  assert.match(workflow, /\n {2}workflow_dispatch:\n/);
+  assert.match(workflow, /\n {2}push:\n {4}branches: \[main\]\n/);
+  assert.match(workflow, /\n {4}tags: \['v\*'\]\n/);
+  assert.match(workflow, /\n {2}release:\n {4}types: \[published\]\n/);
+  assert.match(
+    workflow,
+    /needs: eligibility\n {4}if: needs\.eligibility\.outputs\.published == 'true'\n/,
+  );
+  assert.match(workflow, /ref: main\n\s+fetch-depth: 0\n\s+fetch-tags: true\n/);
+  assert.match(workflow, /SITE_CHANGELOG: required/);
+  const release = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(release, /^name: Release\n/);
+});
+
+test('Site accepts only successful same-repository dispatched Release runs when enabled', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
+  const condition = /\n {4}if: >-\n((?: {6}.+\n)+)/.exec(workflow)?.[1];
+  assert.ok(condition, 'Missing deployment condition');
+  const repository = 'iiloni/catch';
+  for (const enabled of ['true', 'false', '']) {
+    for (const event of ['push', 'release', 'workflow_dispatch', 'workflow_run']) {
+      for (const conclusion of ['success', 'failure', 'cancelled', 'skipped', 'timed_out']) {
+        for (const [source, trigger] of [
+          [repository, 'workflow_dispatch'],
+          [repository, 'push'],
+          ['someone/catch', 'workflow_dispatch'],
+        ]) {
+          const actual: unknown = runInNewContext(condition, {
+            vars: { CLOUDFLARE_SITE_ENABLED: enabled },
+            github: {
+              repository,
+              event_name: event,
+              event:
+                event === 'workflow_run'
+                  ? {
+                      workflow_run: {
+                        event: trigger,
+                        conclusion,
+                        head_repository: { full_name: source },
+                      },
+                    }
+                  : {},
+            },
+          });
+          const expected =
+            enabled === 'true' &&
+            (event !== 'workflow_run' ||
+              (trigger === 'workflow_dispatch' &&
+                conclusion === 'success' &&
+                source === repository));
+          assert.equal(
+            actual,
+            expected,
+            `${enabled}, ${event}, ${trigger}, ${conclusion}, ${source}`,
+          );
+        }
+      }
+    }
+  }
+});
+
+test('Site completion fallback requires a published GitHub Release and preserves API failures', async () => {
+  for (const event of ['workflow_run', 'push', 'release', 'workflow_dispatch']) {
+    for (const state of ['published', 'draft', 'missing', 'unavailable']) {
+      const outputs: Record<string, string> = {};
+      const calls: Record<string, unknown>[] = [];
+      const result = runInNewContext(
+        `(async () => { ${stepBody('site.yml', 'Verify release publication', 'script')} })()`,
+        {
+          context: { ...context, eventName: event },
+          process: {
+            env: stepValues('site.yml', 'Verify release publication', 'env', {
+              'github.event.workflow_run.head_branch': 'v0.6.3-preview',
+            }),
+          },
+          core: {
+            setOutput: (key: string, value: string) => {
+              outputs[key] = value;
+            },
+          },
+          github: {
+            rest: {
+              repos: {
+                getReleaseByTag: async (input: Record<string, unknown>) => {
+                  calls.push(structuredClone(input));
+                  if (state === 'missing' || state === 'unavailable') {
+                    throw Object.assign(new Error(state), {
+                      status: state === 'missing' ? 404 : 503,
+                    });
+                  }
+                  return { data: { draft: state === 'draft' } };
+                },
+              },
+            },
+          },
+        },
+      ) as Promise<void>;
+      if (event === 'workflow_run' && state === 'unavailable') {
+        await assert.rejects(result, /unavailable/);
+        assert.deepEqual(outputs, {});
+      } else {
+        await result;
+        assert.equal(outputs.published, String(event !== 'workflow_run' || state === 'published'));
+      }
+      assert.deepEqual(
+        calls,
+        event === 'workflow_run' ? [{ ...context.repo, tag: 'v0.6.3-preview' }] : [],
+      );
+    }
+  }
+});
 
 // GitHub drops a job output that contains a secret's value, and the documented key alias
 // is "catch", so these names must be built in the jobs that use them.
@@ -273,6 +395,190 @@ test('Release is dispatched on the published tag rather than the selected branch
     },
   );
   assert.deepEqual(dispatched, { ...context.repo, workflow_id: 'release.yml', ref: 'v1.2.3' });
+});
+
+function promote(
+  preview: string,
+  options: {
+    annotationDepth?: number;
+    targetType?: string;
+    missing?: boolean;
+    collision?: boolean;
+    dispatchFailure?: boolean;
+  } = {},
+) {
+  const calls: { method: string; input: Record<string, unknown> }[] = [];
+  const outputs: Record<string, string> = {};
+  const commit = 'c'.repeat(40);
+  let annotationDepth = options.annotationDepth ?? 0;
+  const target = () => ({
+    type: annotationDepth > 0 ? 'tag' : (options.targetType ?? 'commit'),
+    sha: annotationDepth > 0 ? String(annotationDepth).padStart(40, '0') : commit,
+  });
+  const record = (method: string, input: Record<string, unknown>) => {
+    calls.push({ method, input: structuredClone(input) });
+  };
+  const summary = {
+    addRaw: (_text: string) => summary,
+    write: async () => {},
+  };
+  const github = {
+    rest: {
+      git: {
+        getRef: async (input: Record<string, unknown>) => {
+          record('getRef', input);
+          if (options.missing) throw new Error('Reference not found');
+          return { data: { object: target() } };
+        },
+        getTag: async (input: Record<string, unknown>) => {
+          assert.equal(input.tag_sha, target().sha);
+          record('getTag', input);
+          annotationDepth--;
+          return { data: { object: target() } };
+        },
+        createTag: async (input: Record<string, unknown>) => {
+          record('createTag', input);
+          return { data: { sha: 'b'.repeat(40) } };
+        },
+        createRef: async (input: Record<string, unknown>) => {
+          record('createRef', input);
+          if (options.collision) throw new Error('Reference already exists');
+        },
+      },
+      actions: {
+        createWorkflowDispatch: async (input: Record<string, unknown>) => {
+          record('createWorkflowDispatch', input);
+          if (options.dispatchFailure) throw new Error('Dispatch failed');
+        },
+      },
+    },
+  };
+  const run = (name: string, env: Record<string, string>) =>
+    runInNewContext(`(async () => { ${stepBody('promote-release.yml', name, 'script')} })()`, {
+      context,
+      github,
+      core: {
+        summary,
+        setOutput: (key: string, value: string) => {
+          outputs[key] = value;
+        },
+      },
+      process: { env },
+    }) as Promise<void>;
+  const result = (async () => {
+    await run(
+      'Promote preview tag',
+      stepValues('promote-release.yml', 'Promote preview tag', 'env', {
+        'inputs.preview_tag': preview,
+      }),
+    );
+    await run(
+      'Start stable release builds',
+      stepValues('promote-release.yml', 'Start stable release builds', 'env', {
+        'steps.promotion.outputs.tag': outputs.tag,
+      }),
+    );
+  })();
+  return { calls, outputs, commit, result };
+}
+
+test('promotion preserves an earlier preview commit for lightweight and annotated tags', async () => {
+  for (const annotationDepth of [0, 1, 2]) {
+    const preview = 'v0.4.1-preview';
+    const { result, calls, outputs, commit } = promote(preview, { annotationDepth });
+    await result;
+    const stable = promotePreviewTag(preview);
+    assert.notEqual(commit, context.sha, 'Preview predates the workflow dispatch commit');
+    assert.deepEqual(calls[0], {
+      method: 'getRef',
+      input: { ...context.repo, ref: `tags/${preview}` },
+    });
+    assert.equal(calls.filter(({ method }) => method === 'getTag').length, annotationDepth);
+    assert.deepEqual(calls.slice(-3), [
+      {
+        method: 'createTag',
+        input: {
+          ...context.repo,
+          tag: stable,
+          message: 'Catch 0.4.1',
+          object: commit,
+          type: 'commit',
+          tagger: {
+            name: 'github-actions[bot]',
+            email: '41898282+github-actions[bot]@users.noreply.github.com',
+          },
+        },
+      },
+      {
+        method: 'createRef',
+        input: { ...context.repo, ref: `refs/tags/${stable}`, sha: 'b'.repeat(40) },
+      },
+      {
+        method: 'createWorkflowDispatch',
+        input: { ...context.repo, workflow_id: 'release.yml', ref: stable },
+      },
+    ]);
+    assert.deepEqual(outputs, { tag: stable });
+  }
+});
+
+test('promotion rejects invalid preview inputs before accessing GitHub', async () => {
+  for (const preview of [
+    '',
+    'main',
+    'v1.2.3',
+    'v01.2.3-preview',
+    'v1.2.3-preview.1',
+    'v1.2.3-preview+build',
+    ' v1.2.3-preview',
+    'v1.2.3-preview\n',
+    'v1.2.3-preview;$(touch executed)',
+    `v${'1'.repeat(129)}.0.0-preview`,
+  ]) {
+    const { result, calls } = promote(preview);
+    await assert.rejects(result, /Enter a preview tag/);
+    assert.deepEqual(calls, []);
+  }
+});
+
+test('missing previews and tags pointing to non-commits cannot create a stable tag', async () => {
+  for (const options of [{ missing: true }, { targetType: 'tree' }, { targetType: 'blob' }]) {
+    const { result, calls, outputs } = promote('v1.2.3-preview', options);
+    await assert.rejects(result, /Reference not found|must point to a commit/);
+    assert.deepEqual(
+      calls.map(({ method }) => method),
+      ['getRef'],
+    );
+    assert.deepEqual(outputs, {});
+  }
+});
+
+test('a stable tag collision stops promotion without dispatching or overwriting', async () => {
+  const { result, calls, outputs } = promote('v1.2.3-preview', { collision: true });
+  await assert.rejects(result, /Reference already exists/);
+  assert.deepEqual(
+    calls.map(({ method }) => method),
+    ['getRef', 'createTag', 'createRef'],
+  );
+  assert.deepEqual(outputs, {});
+});
+
+test('a failed release dispatch leaves the created stable tag available for recovery', async () => {
+  const { result, calls, outputs } = promote('v1.2.3-preview', { dispatchFailure: true });
+  await assert.rejects(result, /Dispatch failed/);
+  assert.equal(calls.at(-1)?.method, 'createWorkflowDispatch');
+  assert.deepEqual(outputs, { tag: 'v1.2.3' });
+});
+
+test('promotion requires the release switch before creating tags', () => {
+  const script = stepBody('promote-release.yml', 'Require releases to be enabled', 'run');
+  for (const ENABLED of ['false', '', 'true']) {
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      env: { PATH: process.env.PATH, ENABLED },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, ENABLED === 'true' ? 0 : 1, result.stderr);
+  }
 });
 
 test('published notes list the changes ahead of the artifact details', (t) => {

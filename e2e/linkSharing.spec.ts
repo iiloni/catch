@@ -203,6 +203,8 @@ test('a PWA link share survives login and can be cancelled without saving', asyn
   await context.clearCookies();
   await page.goto(`/share?id=${id}`);
   await expect(page).toHaveURL(/\/login\?redirect=.*share/);
+  // Firefox reports a reload that interrupts the sign-in page's own loading as failed.
+  await expect(page.getByLabel('Email')).toBeVisible();
   await page.reload();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');

@@ -11,10 +11,10 @@ describe('API protocol compatibility', () => {
     expect(protocolRangeSchema.parse(SUPPORTED_API_PROTOCOLS)).toEqual(SUPPORTED_API_PROTOCOLS);
     expect(protocolCompatibility(API_PROTOCOL_VERSION, SUPPORTED_API_PROTOCOLS)).toBeNull();
   });
-  it('requires preview-choice support from the server while retaining older clients', () => {
-    expect(API_PROTOCOL_VERSION).toBe(5);
-    expect(protocolCompatibility(API_PROTOCOL_VERSION, { min: 2, max: 4 })).toBe('server-too-old');
-    for (const version of [2, 3, 4, 5]) {
+  it('requires history support from the server while retaining older clients', () => {
+    expect(API_PROTOCOL_VERSION).toBe(6);
+    expect(protocolCompatibility(API_PROTOCOL_VERSION, { min: 2, max: 5 })).toBe('server-too-old');
+    for (const version of [2, 3, 4, 5, 6]) {
       expect(protocolCompatibility(version, SUPPORTED_API_PROTOCOLS)).toBeNull();
     }
   });

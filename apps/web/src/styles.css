@@ -713,6 +713,69 @@
 }
 
 /*
+ * Comparing two versions of a note (ADR 0022). What the note gained is tinted and underlined,
+ * what it lost is tinted and struck through: the lines tell them apart on a note whose own
+ * color is the tint's.
+ */
+:root {
+  --review-added: light-dark(oklch(0.52 0.14 150), oklch(0.8 0.15 150));
+  --review-removed: light-dark(oklch(0.54 0.19 27), oklch(0.76 0.14 22));
+}
+.review-inserted,
+.review-deleted {
+  border-radius: 0.25rem;
+  padding-block: 0.125rem;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-decoration-thickness: 0.09em;
+}
+.review-inserted {
+  background-color: color-mix(in oklab, var(--review-added) 22%, transparent);
+  text-decoration-line: underline;
+  text-decoration-color: var(--review-added);
+  text-underline-offset: 0.2em;
+}
+.review-deleted {
+  background-color: color-mix(in oklab, var(--review-removed) 16%, transparent);
+  color: color-mix(in oklab, currentColor 62%, transparent);
+  text-decoration-line: line-through;
+  text-decoration-color: var(--review-removed);
+}
+/* A whole block: the same marks, drawn along its edge as well. */
+.review-block {
+  position: relative;
+  display: block;
+  text-decoration: none;
+}
+.review-block::before {
+  content: "";
+  position: absolute;
+  inset-block: 0.25rem;
+  inset-inline-start: 1rem;
+  width: 0.1875rem;
+  border-radius: 999px;
+  background-color: var(--review-mark, color-mix(in oklab, currentColor 28%, transparent));
+}
+.review-block[data-review="added"] {
+  --review-mark: var(--review-added);
+  background-color: color-mix(in oklab, var(--review-added) 12%, transparent);
+}
+.review-block[data-review="removed"] {
+  --review-mark: var(--review-removed);
+  background-color: color-mix(in oklab, var(--review-removed) 9%, transparent);
+}
+.review-block[data-review="removed"] .note-preview-block {
+  color: color-mix(in oklab, currentColor 62%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: var(--review-removed);
+}
+@media (pointer: coarse) {
+  .review-block::before {
+    inset-inline-start: calc(var(--safe-left) + 1.125rem);
+  }
+}
+
+/*
  * Page transitions (View Transitions API; see pageTransition in lib/dockState.ts). Pages
  * slide a short way in the direction of travel while cross-fading. Snapshots move instead
  * of the page itself, so fixed headers and the dock are unaffected.

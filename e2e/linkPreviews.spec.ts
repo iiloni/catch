@@ -112,7 +112,7 @@ test('the dock tray fades away and its overlay gathers media above links', async
     const { addAttachment } = await import('/src/lib/attachments.ts');
     const bytes = Uint8Array.from(
       atob(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1kAAAAASUVORK5CYII=',
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
       ),
       (char) => char.charCodeAt(0),
     );
@@ -222,11 +222,16 @@ test('the buttons floating above the dock clear the link tray', async ({ page, i
   await expect(overlay).toBeVisible();
   await expect(toBottom).toHaveCount(0);
   await expect(undoRedo).toHaveCount(0);
-  await overlay.getByRole('button', { name: 'Close' }).click();
+  // Close before the panel settles, while the floating controls can still be leaving.
+  await overlay.getByRole('button', { name: 'Close' }).press('Enter');
   await expect(overlay).toBeHidden();
   await expect(tray).toBeVisible();
   const [left, right] = [await settledBox(undoRedo), await settledBox(toBottom)];
   expect(left.x + left.width).toBeLessThan(right.x);
+  await expect(undoRedo.getByRole('button', { name: 'Undo', exact: true })).toBeInViewport({
+    ratio: 1,
+  });
+  await expect(toBottom).toBeInViewport({ ratio: 1 });
 
   // At the end the links are in view, so the tray leaves and undo and redo come back down.
   await page.getByRole('button', { name: 'Scroll to bottom', exact: true }).click();

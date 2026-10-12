@@ -14,6 +14,13 @@ import { deleteFiles } from '../attachments/files';
 import type { AppEnv } from '../context';
 import { db } from '../db/client';
 import { attachments, notes, noteTags, reminders } from '../db/schema';
+import {
+  beforeContentWrite,
+  deleteHistory,
+  ensureHistory,
+  HistoryFailure,
+  preserveOrdinary,
+} from '../history/store';
 import { requireUser } from '../lib/requireUser';
 import { refreshSharedNote } from '../lib/sharing';
 import { lockTagTree } from '../lib/tagTreeLock';
@@ -60,7 +67,11 @@ async function insertNotes(tx: Tx, userId: string, bodies: readonly CreateNote[]
     userId,
     bodies.filter((body) => !body.position).length,
   );
-  const rows = bodies.map((body) => ({
+  // One row per id, the first: Postgres skips a repeat inside the batch as it does a replay,
+  // and history and links must be told of the note that was stored.
+  const ids = new Set<string>();
+  const unique = bodies.filter((body) => !ids.has(body.id) && ids.add(body.id));
+  const rows = unique.map((body) => ({
     ...body,
     position: body.position ?? (positions.shift() as string),
     createdAt: notLater(body.createdAt, now),
@@ -83,6 +94,10 @@ async function insertNotes(tx: Tx, userId: string, bodies: readonly CreateNote[]
     if (mine.length < new Set(replayed).size) throw new NoteIdTaken();
   }
   if (added.size === 0) return null;
+  for (const row of rows.filter((row) => added.has(row.id))) {
+    const control = await ensureHistory(tx, userId, row.id, 'note');
+    if (row.content.length) await preserveOrdinary(tx, control, row.content, 'baseline');
+  }
   const links = await trackNoteLinks(
     tx,
     userId,
@@ -108,6 +123,11 @@ async function createNotes(c: Context<AppEnv>, bodies: readonly CreateNote[]) {
 const idParam = zValidator('param', z.object({ id: z.uuid() }));
 
 export const notesRoutes = new Hono<AppEnv>()
+  .onError((error, c) => {
+    if (error instanceof HistoryFailure)
+      return c.json({ code: error.code, error: error.message }, 409);
+    throw error;
+  })
   .use(requireUser)
   .post('/', zValidator('json', createNoteSchema), (c) => createNotes(c, [c.req.valid('json')]))
   // Imports and copies of several notes arrive together.
@@ -117,7 +137,7 @@ export const notesRoutes = new Hono<AppEnv>()
   .patch('/:id', idParam, zValidator('json', updateNoteSchema), async (c) => {
     const user = c.get('user')!;
     const { id } = c.req.valid('param');
-    const body = c.req.valid('json');
+    const { history, ...body } = c.req.valid('json');
     // Rearranging notes or hiding a link's preview is not editing them, so it leaves
     // "Last edited" alone.
     const notAnEdit = Object.keys(body).every(
@@ -125,6 +145,17 @@ export const notesRoutes = new Hono<AppEnv>()
     );
     const result = await db.transaction(async (tx) => {
       if (body.color !== undefined) await lockTagTree(tx, user.id);
+      if (body.content !== undefined) {
+        const [current] = await tx
+          .select()
+          .from(notes)
+          .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
+          .for('update');
+        if (!current) return null;
+        const control = await ensureHistory(tx, user.id, id, 'note');
+        if (!(await beforeContentWrite(tx, control, current, history, body)))
+          return { txid: null, links: [], readers: [] };
+      }
       const updated = await tx
         .update(notes)
         .set({
@@ -165,6 +196,7 @@ export const notesRoutes = new Hono<AppEnv>()
         .where(and(eq(notes.id, id), eq(notes.userId, user.id)))
         .returning({ id: notes.id });
       if (deleted.length === 0) return null;
+      await deleteHistory(tx, user.id, id);
       // Reminders and attachments have no foreign key to follow the note out (see the schema).
       await tx
         .delete(reminders)

@@ -15,8 +15,8 @@ type Props = {
 
 /** Every zone the device knows, with the chosen one among them. */
 function timeZones(current: string) {
-  // The list the device gives leaves UTC out.
-  const zones = ['UTC', ...(Intl.supportedValuesOf?.('timeZone') ?? [])];
+  // Some browsers omit UTC; keep it first whether the device lists it or not.
+  const zones = [...new Set(['UTC', ...(Intl.supportedValuesOf?.('timeZone') ?? [])])];
   return zones.includes(current) ? zones : [current, ...zones];
 }
 

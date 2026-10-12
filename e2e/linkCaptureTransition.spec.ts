@@ -219,9 +219,12 @@ test('cancelling during the handoff restores the popup and leaves no stale origi
 test('the dock morphs from close to save, and pasting a link fetches without leaving the popup', async ({
   page,
   context,
+  browserName,
 }) => {
   await signUp(page);
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Playwright's Firefox knows no clipboard permissions, and reads the clipboard without them.
+  if (browserName !== 'firefox')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   let fetches = 0;
   await page.route('**/api/link-previews/intake', (route) => {
     fetches++;

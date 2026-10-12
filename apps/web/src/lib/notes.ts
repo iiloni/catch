@@ -1,7 +1,9 @@
 import {
+  attachmentId,
   blocksHaveContent,
   DEFAULT_BOARD_STATUS,
   extractLinks,
+  type HistoryState,
   MAX_NOTES_PER_REQUEST,
   mapAttachmentBlocks,
   type Note,
@@ -18,11 +20,13 @@ import { uuidv7 } from 'uuidv7';
 import { copyAttachmentFiles, copySealedBlob } from './attachmentFiles';
 import {
   attachmentsCollection,
+  noteHistoryCollection,
   notesCollection,
   sharedNotesCollection,
   tagsCollection,
   write,
 } from './collections';
+import { hasHistorySession } from './noteHistory';
 import { noteStore, noteTagStore } from './noteStore';
 import { assignPrimaryTag, setPrimaryTag } from './tags';
 import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
@@ -449,7 +453,7 @@ export function trashNotes(ids: readonly string[]) {
  * content, color, pin and place (gallery, deck, archive or trash), but is a new note with
  * its own dates.
  */
-export function duplicateNotes(notes: readonly Note[]) {
+export function duplicateNotes(notes: readonly Note[], recovered?: HistoryState) {
   const now = new Date();
   // A page shows one kind of note, so the copies are of that kind too.
   const vault = notes.some((note) => isVaultNote(note.id));
@@ -457,11 +461,22 @@ export function duplicateNotes(notes: readonly Note[]) {
   const copies = notes.map((note, index) => ({
     ...note,
     id: uuidv7(),
-    content: structuredClone(note.content),
+    content: structuredClone(recovered?.content ?? note.content),
+    ...(recovered
+      ? {
+          color: 'default' as const,
+          status: null,
+          isPinned: false,
+          isArchived: false,
+          hiddenLinks: [],
+          galleryPreviewUrl: null,
+          deletedAt: null,
+        }
+      : {}),
     position: positions[index] ?? firstPosition(vault),
     createdAt: now,
     updatedAt: now,
-    deletedAt: note.deletedAt ? now : null,
+    deletedAt: !recovered && note.deletedAt ? now : null,
   }));
   // A vault note's files are sealed inside it: each copy holds the same bytes, sealed as
   // they were, under ids of its own.
@@ -488,7 +503,7 @@ export function duplicateNotes(notes: readonly Note[]) {
       const rows: ReturnType<typeof row> = [];
       const kept: VaultFile[] = [];
       const ids = new Map<string, string>();
-      for (const file of getSealedFiles(original.id)) {
+      for (const file of recovered?.files ?? getSealedFiles(original.id)) {
         const bytes = row(file.id, uuidv7());
         if (!bytes[0]) continue;
         const thumbnail = file.thumbnailId ? row(file.thumbnailId, uuidv7()) : [];
@@ -500,8 +515,18 @@ export function duplicateNotes(notes: readonly Note[]) {
       sealedFiles.set(copy.id, kept);
       return rows;
     }
+    const referenced = new Set<string>();
+    const scan = (value: unknown) => {
+      if (typeof value === 'string') {
+        const id = attachmentId(value);
+        if (id) referenced.add(id);
+      } else if (Array.isArray(value)) value.forEach(scan);
+      else if (value && typeof value === 'object') Object.values(value).forEach(scan);
+    };
+    if (recovered) scan(copy.content);
     const attachments = [...attachmentsCollection.values()].filter(
-      (file) => file.noteId === original.id && !file.deletedAt,
+      (file) =>
+        file.noteId === original.id && !file.deletedAt && (!recovered || referenced.has(file.id)),
     );
     const ids = new Map(attachments.map((file) => [file.id, uuidv7()]));
     copy.content = mapAttachmentBlocks(copy.content, ids);
@@ -518,7 +543,7 @@ export function duplicateNotes(notes: readonly Note[]) {
     if (!vault) notesCollection.insert(copies);
     for (const [index, copy] of copies.entries()) {
       const original = notes[index];
-      const assignments = original ? noteTagStore.get(original.id) : undefined;
+      const assignments = !recovered && original ? noteTagStore.get(original.id) : undefined;
       const tags = assignments && {
         primaryTagId: assignments.primaryTagId,
         secondaryTagIds: [...assignments.secondaryTagIds],
@@ -529,13 +554,15 @@ export function duplicateNotes(notes: readonly Note[]) {
     }
   });
   // Queue copies after their notes exist; pending originals reach the server first.
-  if (files.length) write(() => attachmentsCollection.insert(files));
+  const attachmentsTransaction = files.length
+    ? write(() => attachmentsCollection.insert(files))
+    : undefined;
   // Cached originals and thumbnails let copies preview before the server is reachable.
   for (const file of files) {
     void (vault ? copySealedBlob : copyAttachmentFiles)(file.sourceId, file.id).catch(() => {});
   }
-  toast(plural(notes.length, 'Note copied', 'notes copied'));
-  return { ids: copies.map((copy) => copy.id), transaction };
+  if (!recovered) toast(plural(notes.length, 'Note copied', 'notes copied'));
+  return { ids: copies.map((copy) => copy.id), transaction, attachmentsTransaction };
 }
 
 /**
@@ -546,6 +573,8 @@ export function discardIfEmpty(id: string) {
   const note = noteStore.get(id);
   if (
     !note ||
+    hasHistorySession(id) ||
+    noteHistoryCollection.get(id)?.latestCaptureId ||
     note.deletedAt ||
     blocksHaveContent(note.content) ||
     [...attachmentsCollection.values()].some((file) => file.noteId === id && !file.deletedAt)

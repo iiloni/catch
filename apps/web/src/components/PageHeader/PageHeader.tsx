@@ -1,5 +1,5 @@
 import { useRouterState } from '@tanstack/react-router';
-import { ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft, type LucideIcon, X } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -63,6 +63,8 @@ function useHeaderTransition() {
 
 type TabPageHeaderProps = {
   title: string;
+  /** Stands in for the title in its pill where the pill has no room for the words. */
+  icon: LucideIcon;
   /** Controls at the top left; the collapsed title sits beside them. */
   leading?: ReactNode;
   /** Controls at the top right, which turn into a glass toolbar along with the title. */
@@ -81,12 +83,23 @@ const TITLE_REST_Y = 66;
  * its way out from under them.
  */
 const TITLE_COLLAPSE_AT = 2;
+/** The title pill's text size and side padding, and its width around an icon alone. */
+const PILL_FONT_SIZE = 17;
+const PILL_PADDING = 14;
+const PILL_ICON_WIDTH = 50;
+/** How much more room than it needs the pill waits for before taking a wider form back. */
+const FIT_SLACK = 8;
+/** How long the back button takes to give up its label once the title collapses. */
+const LEADING_SETTLE_MS = 180;
 
 /** Fit the complete title using its actual font metrics, including after fonts load. */
 function useFittedTitle(title: string) {
   const area = useRef<HTMLDivElement>(null);
   const measure = useRef<HTMLSpanElement>(null);
+  const pillMeasure = useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = useState(42);
+  const [areaWidth, setAreaWidth] = useState(0);
+  const [pillTextWidth, setPillTextWidth] = useState(0);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Remeasure changed text before paint, as well as observing later width and font changes.
   useLayoutEffect(() => {
@@ -94,6 +107,8 @@ function useFittedTitle(title: string) {
     const text = measure.current;
     if (!container || !text) return;
     const update = () => {
+      setAreaWidth(container.clientWidth);
+      setPillTextWidth(pillMeasure.current?.getBoundingClientRect().width ?? 0);
       const available = container.clientWidth - 24;
       let size = 42;
       text.style.fontSize = `${size}px`;
@@ -112,10 +127,23 @@ function useFittedTitle(title: string) {
     const observer = new ResizeObserver(update);
     observer.observe(container);
     observer.observe(text);
+    if (pillMeasure.current) observer.observe(pillMeasure.current);
     return () => observer.disconnect();
   }, [title]);
 
-  return { area, measure, fontSize };
+  return { area, measure, pillMeasure, fontSize, areaWidth, pillTextWidth };
+}
+
+/**
+ * Whether something `needed` wide fits in `available`, asking for a little to spare before
+ * it fits again: a split dragged across the exact width would flicker between the two. It
+ * keeps its answer while not `live`, when the widths it would read are not the ones to judge.
+ */
+function useFits(needed: number, available: number, live: boolean) {
+  const [fits, setFits] = useState(true);
+  const next = !live ? fits : needed + (fits ? 0 : FIT_SLACK) <= available;
+  if (next !== fits) setFits(next);
+  return next;
 }
 
 /** Whether the header's title has left for its corner, for controls that make room for it. */
@@ -128,6 +156,7 @@ const HeaderCollapsed = createContext(false);
  */
 export function TabPageHeader({
   title,
+  icon: Icon,
   leading,
   trailing,
   selection,
@@ -172,6 +201,27 @@ export function TabPageHeader({
   const cornerShift = useHeaderGutterShift(PAGE_MAX);
   const titleShift = useTransform(() => (collapsed ? cornerShift.get() : 0));
   const fittedTitle = useFittedTitle(title);
+
+  // A page beside a note can be too narrow for the title's pill between the corners: the pill
+  // then holds the page's icon, and nothing at all where even that would run under the controls.
+  const [settled, setSettled] = useState(collapsed);
+  useEffect(() => {
+    if (!collapsed) return setSettled(false);
+    const timer = setTimeout(() => setSettled(true), LEADING_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [collapsed]);
+  const pillLeft = 12 + (leadingWidth > 0 ? leadingWidth + 8 : 0);
+  // Unmeasured, there is nothing to say the title does not fit.
+  const pillRoom =
+    fittedTitle.areaWidth > 0
+      ? fittedTitle.areaWidth - pillLeft - (trailingWidth > 0 ? trailingWidth + 24 : 12)
+      : Number.POSITIVE_INFINITY;
+  // The back button is wider until the title has collapsed, and a selection replaces both corners.
+  const measurable = !selection && (leading ? collapsed && settled : true);
+  const titleFits = useFits(fittedTitle.pillTextWidth + 2 * PILL_PADDING, pillRoom, measurable);
+  const iconFits = useFits(PILL_ICON_WIDTH, pillRoom, measurable);
+  const iconPill = collapsed && !titleFits;
+  const pillShown = !selection && (!collapsed || titleFits || iconFits);
 
   const pills = collapsed || Boolean(selection);
   useEffect(() => {
@@ -230,7 +280,8 @@ export function TabPageHeader({
               animate={{ opacity: branded ? 1 : 0, scale: branded ? 1 : 0.85 }}
               transition={branded ? slide : { duration: 0.16 }}
               aria-hidden={!branded}
-              style={{ maxWidth: `calc(100% - ${trailingWidth + 8}px)` }}
+              // The lockup's own clear space is what keeps it off the controls.
+              style={{ maxWidth: `calc(100% - ${trailingWidth}px)` }}
             >
               <BrandLockup orientation="horizontal" iconSize={28} />
             </motion.div>
@@ -247,17 +298,25 @@ export function TabPageHeader({
             >
               {title}
             </span>
+            <span
+              ref={fittedTitle.pillMeasure}
+              aria-hidden
+              className="invisible absolute w-max whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
+              style={{ fontSize: PILL_FONT_SIZE }}
+            >
+              {title}
+            </span>
             <motion.div
               className="absolute flex h-full max-w-[calc(100%-1.5rem)] items-center rounded-[var(--dock-radius)]"
               initial={false}
               animate={{
                 left: collapsed ? '0%' : '50%',
                 x: collapsed ? '0%' : '-50%',
-                marginLeft: collapsed ? 12 + (leadingWidth > 0 ? leadingWidth + 8 : 0) : 0,
+                marginLeft: collapsed ? pillLeft : 0,
                 y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
-                fontSize: collapsed ? 17 : fittedTitle.fontSize,
-                paddingInline: collapsed ? 14 : 0,
-                opacity: selection ? 0 : 1,
+                fontSize: collapsed ? PILL_FONT_SIZE : fittedTitle.fontSize,
+                paddingInline: collapsed ? PILL_PADDING : 0,
+                opacity: pillShown ? 1 : 0,
               }}
               transition={titleSlide}
             >
@@ -268,13 +327,28 @@ export function TabPageHeader({
                 animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
                 transition={slide}
               />
-              <motion.h1 className="header-fade relative min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]">
+              <motion.h1
+                className={cn(
+                  'header-fade min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]',
+                  iconPill ? 'sr-only' : 'relative',
+                )}
+              >
                 {title}
               </motion.h1>
+              {iconPill && (
+                <motion.span
+                  className="header-fade relative"
+                  initial={{ '--header-layer-opacity': 0 }}
+                  animate={{ '--header-layer-opacity': 1 }}
+                  transition={{ duration: 0.16 }}
+                >
+                  <Icon className="size-[22px]" aria-hidden />
+                </motion.span>
+              )}
               <button
                 type="button"
                 aria-label="Scroll to top"
-                disabled={!collapsed || Boolean(selection)}
+                disabled={!collapsed || !pillShown}
                 className="pointer-events-auto absolute inset-0 rounded-[var(--dock-radius)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
                 onClick={scrollToTop}
               />

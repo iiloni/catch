@@ -44,6 +44,11 @@ describe('API compatibility gate', () => {
         ['/api/shapes/tags', 'GET'],
         ['/api/shapes/note-tags', 'GET'],
         ['/api/shapes/notes', 'GET'],
+        ['/api/shapes/note-history', 'GET'],
+        ['/api/note-history/id', 'GET'],
+        ['/api/note-history/id/captures', 'POST'],
+        ['/api/note-history/id/restore', 'POST'],
+        ['/api/note-history/id/clear', 'POST'],
         ['/api/attachments/id/content', 'PUT'],
         ['/api/admin/backups/upload', 'POST'],
       ] as const) {
@@ -87,12 +92,17 @@ describe('API compatibility gate', () => {
     expect((await app.request('/api/updates', { method: 'POST' })).status).toBe(426);
   });
 
-  it('still serves protocol 2 clients, which have no reminders or shared notes (ADRs 0018, 0021)', async () => {
-    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 5 });
-    const older = { [API_PROTOCOL_HEADER]: '2' };
-    expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(401);
-    expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);
-  });
+  it.each([2, 3, 4, 5])(
+    'still serves protocol %s clients without history envelopes (ADR 0022)',
+    async (protocol) => {
+      expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 6 });
+      const older = { [API_PROTOCOL_HEADER]: String(protocol) };
+      expect((await app.request('/api/notes', { method: 'POST', headers: older })).status).toBe(
+        401,
+      );
+      expect((await app.request('/api/shapes/notes', { headers: older })).status).toBe(401);
+    },
+  );
 
   it('gates the reminder and push routes like every other data route', async () => {
     const id = '0199a0a0-0000-7000-8000-000000000000';

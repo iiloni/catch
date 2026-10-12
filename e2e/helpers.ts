@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 // Signing in reloads the page to open that user's local database. The dev server sends the
 // app unbundled, so on a busy machine that load far outlasts the default five seconds.
-const APP_LOAD_TIMEOUT = 30_000;
+export const APP_LOAD_TIMEOUT = 30_000;
 
 const signUpResponse = z.object({
   user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
@@ -17,6 +17,23 @@ export function bearerToken(response: APIResponse) {
   const token = response.headers()['set-auth-token'];
   expect(token).toBeTruthy();
   return token as string;
+}
+
+/**
+ * Tests report an on-screen keyboard by setting `keyboardHeight`, which holds in Chromium
+ * because its VirtualKeyboard API never fires there. Firefox lacks that API, so the app
+ * measures the visual viewport instead and puts the height back to zero at the next focus
+ * change. A keyboard that never moves, in the API's place, lets the reported height stand.
+ */
+async function keepReportedKeyboard(page: Page) {
+  await page.addInitScript(() => {
+    if ('virtualKeyboard' in navigator) return;
+    const keyboard = Object.assign(new EventTarget(), {
+      overlaysContent: false,
+      boundingRect: new DOMRect(),
+    });
+    Object.defineProperty(navigator, 'virtualKeyboard', { value: keyboard });
+  });
 }
 
 /**
@@ -47,6 +64,7 @@ export async function signUp(page: Page) {
       },
     ],
   });
+  if (context.browser()?.browserType().name() === 'firefox') await keepReportedKeyboard(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible({
     timeout: APP_LOAD_TIMEOUT,
@@ -57,7 +75,7 @@ export async function signUp(page: Page) {
 /** Signs in as a user `signUp` created, as on another device. */
 export async function signIn(page: Page, email: string) {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await expect(page).toHaveURL(/\/login(?:\?|$)/, { timeout: APP_LOAD_TIMEOUT });
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in' }).click();

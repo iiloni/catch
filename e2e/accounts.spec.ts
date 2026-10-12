@@ -64,7 +64,8 @@ test('accounts signed in together keep their own notes and switch by tap or swip
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x, y - 12, { steps: 3 });
-  await page.mouse.move(x, y - 30, { steps: 3 });
+  // Stops inside the viewport: Firefox sends no pointerup for a mouse lifted above it.
+  await page.mouse.move(x, y - 28, { steps: 3 });
   await page.mouse.up();
   await expect(avatar(page, second)).toBeVisible({ timeout: 30_000 });
   await expect(card(page, 'Second account note')).toBeVisible();
