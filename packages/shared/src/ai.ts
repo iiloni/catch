@@ -60,15 +60,20 @@ export const embeddingConfigurationSchema = z.object({
     .max(2048)
     .url()
     .refine((value) => {
-      const url = new URL(value);
-      return (
-        ['http:', 'https:'].includes(url.protocol) &&
-        !url.username &&
-        !url.password &&
-        !url.search &&
-        !url.hash &&
-        !/[?#]/.test(value)
-      );
+      // Zod also runs refinements after a URL check fails, including during form edits.
+      try {
+        const url = new URL(value);
+        return (
+          ['http:', 'https:'].includes(url.protocol) &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash &&
+          !/[?#]/.test(value)
+        );
+      } catch {
+        return false;
+      }
     }, 'Use an HTTP(S) endpoint without credentials, a query, or a fragment')
     .transform((value) => value.replace(/\/+$/, '')),
   model: z.string().trim().min(1).max(200),

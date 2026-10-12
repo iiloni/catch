@@ -29,6 +29,22 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+it('keeps invalid endpoint edits in the form and re-enables actions after correcting them', async () => {
+  render(<AiConfiguration onAccessDenied={() => {}} />);
+  const endpoint = await screen.findByLabelText('Server endpoint');
+  await waitFor(() => expect(endpoint).toHaveValue(saved.embedding.baseUrl));
+  for (const value of ['', 'http://', 'http://host.docker.000/v1']) {
+    fireEvent.change(endpoint, { target: { value } });
+    expect(endpoint).toHaveValue(value);
+    expect(screen.getByRole('button', { name: 'Save configuration' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Test embedding' })).toBeDisabled();
+  }
+  fireEvent.change(endpoint, { target: { value: 'http://host.docker.internal:11434' } });
+  expect(screen.getByRole('button', { name: 'Save configuration' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Test embedding' })).toBeEnabled();
+  expect(ai.save).not.toHaveBeenCalled();
+  expect(ai.models).not.toHaveBeenCalled();
+});
 it('polls progress without replacing unsaved fields or the form revision, including reconnection', async () => {
   render(<AiConfiguration onAccessDenied={() => {}} />);
   await waitFor(() =>

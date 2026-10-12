@@ -188,11 +188,24 @@ test('an older server hides semantic mode, and vault queries issue no search req
   expect(await page.evaluate(() => Object.values(localStorage).join(' '))).not.toContain(
     'private vault query',
   );
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('private vault query');
+  await page.getByRole('button', { name: 'Close search', exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
   await page.evaluate(async () => (await import('/src/lib/vault.ts')).vaultMode.set(false));
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await waitForPageTransition(page);
   await expect(page.getByRole('heading', { name: 'Search', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('');
   await expect(page.getByRole('button', { name: 'private vault query', exact: true })).toHaveCount(
     0,
   );
+  await page.getByRole('button', { name: 'Filter notes' }).click();
+  const ai = page.getByRole('switch', { name: 'AI search', exact: true });
+  await expect(ai).toBeEnabled();
+  await ai.click();
+  await expect(ai).toBeChecked();
+  await page.waitForTimeout(700);
+  expect(fake.calls.flatMap((call) => call.input).join(' ')).not.toContain('private vault query');
 });
 
 test('recent searches retain AI mode and restore text-only searches without provider requests', async ({
@@ -280,6 +293,16 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
   await page.goto('/settings/admin/ai');
   const model = page.getByRole('textbox', { name: 'Embedding model', exact: true });
   await expect(model).toHaveValue('fake-embedding');
+  const endpoint = page.getByLabel('Server endpoint');
+  const originalEndpoint = await endpoint.inputValue();
+  for (const value of ['', 'http://', 'http://host.docker.000/v1']) {
+    await endpoint.fill(value);
+    await expect(endpoint).toHaveValue(value);
+    await expect(page.getByRole('button', { name: 'Test embedding' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save configuration' })).toBeDisabled();
+  }
+  await endpoint.fill(originalEndpoint);
+  await expect(page.getByRole('button', { name: 'Test embedding' })).toBeEnabled();
   await page.getByRole('button', { name: 'Discover models' }).click();
   await expect(page.getByRole('button', { name: 'Input format', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'AI setup guide' })).toBeVisible();

@@ -144,6 +144,7 @@ AI search starts off and is absent in the vault or on an older/disabled server.
 Recent entries retain the selected AI/text mode; AI entries have a sparkle on the right.
 Selecting an entry restores its mode before running its query. The same text can have
 separate AI and text entries. Ordinary history is stored per account and removed on sign-out.
+Switching vault views also clears the search field, including while Search is closed.
 Vault history lives only in memory for the unlocked visit. Old unscoped history is migrated
 as text-only only on a device with one signed-in account; ambiguous multi-account history
 is left untouched, rather than assigned to another account.

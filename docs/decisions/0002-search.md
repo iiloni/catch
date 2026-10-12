@@ -92,6 +92,7 @@ counts follow it. Trashed notes are excluded, and result badges show the assigne
 AI search sits below the archive switch and also remains independent of Clear filters.
 Recent searches retain their selected AI/text mode and show a sparkle on AI entries; selecting
 an entry restores that mode. Ordinary history is stored per account and removed on sign-out.
+Switching vault views also clears the search field, including while Search is closed.
 Vault history is confined to memory until exit/lock. Legacy strings become text-only on a
 single-account device; unowned multi-account history is left untouched. See ADR 0016 for tag semantics.
 

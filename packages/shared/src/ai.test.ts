@@ -8,6 +8,17 @@ import {
   modelKindFromName,
 } from './ai';
 
+it.each(['', 'http://', 'http://host.docker.000/v1', 'http://[::1', 'not a URL'])(
+  'rejects an invalid provider endpoint without throwing: %s',
+  (baseUrl) => {
+    const result = embeddingConfigurationSchema.safeParse({
+      ...DEFAULT_EMBEDDING_CONFIGURATION,
+      baseUrl,
+    });
+    expect(result.success).toBe(false);
+  },
+);
+
 it.each([
   'http://localhost:11434?',
   'http://localhost:11434#',
