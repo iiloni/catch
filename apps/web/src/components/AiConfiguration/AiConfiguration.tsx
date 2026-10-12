@@ -9,7 +9,7 @@ import {
 } from '@catch/shared';
 import { ChevronDown, Cpu, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { SearchSelectDialog } from '@/components/SearchSelect/SearchSelect';
+import { Combobox } from '@/components/Combobox/Combobox';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +33,6 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
   const [key, setKey] = useState('');
   const [removeKey, setRemoveKey] = useState(false);
   const [models, setModels] = useState<string[]>([]);
-  const [choosingModel, setChoosingModel] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -254,38 +253,18 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
                 {removeKey ? 'Keep saved key' : 'Remove saved key'}
               </Button>
             )}
-            <label htmlFor={`${modelList}-model`} className="flex flex-col gap-2 text-sm">
-              Embedding model
-              <Input
+            {/* Beside its label, not inside: the list's button would otherwise join the field's name. */}
+            <div className="flex flex-col gap-2 text-sm">
+              <label htmlFor={`${modelList}-model`}>Embedding model</label>
+              <Combobox
                 id={`${modelList}-model`}
                 value={embedding.model}
-                onChange={(event) => change('model', event.target.value)}
+                onChange={(value) => change('model', value)}
+                options={models}
+                listLabel="Discovered models"
                 placeholder="Select or enter a model name"
-                autoComplete="off"
               />
-            </label>
-            {models.length > 0 && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="self-start"
-                  onClick={() => setChoosingModel(true)}
-                >
-                  Choose discovered model
-                </Button>
-                <SearchSelectDialog
-                  open={choosingModel}
-                  onOpenChange={setChoosingModel}
-                  title="Embedding models"
-                  searchLabel="Search models"
-                  emptyText="No matching models"
-                  options={models.map((model) => ({ value: model, label: model }))}
-                  value={embedding.model}
-                  onChange={(value) => change('model', value)}
-                />
-              </>
-            )}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={() => void perform('models')}>
                 Discover models

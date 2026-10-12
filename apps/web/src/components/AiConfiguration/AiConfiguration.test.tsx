@@ -89,7 +89,7 @@ it('polls progress without replacing unsaved fields or the form revision, includ
 it('chooses a format when a model is entered, without showing a format picker', async () => {
   vi.mocked(ai.save).mockResolvedValue(saved);
   render(<AiConfiguration onAccessDenied={() => {}} />);
-  const model = await screen.findByRole('textbox', { name: 'Embedding model' });
+  const model = await screen.findByRole('combobox', { name: 'Embedding model' });
   await waitFor(() => expect(model).toHaveValue(saved.embedding.model));
   expect(screen.queryByRole('button', { name: 'Input format' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'AI setup guide' })).toHaveAttribute(
@@ -115,13 +115,12 @@ it.each([false, true])(
     });
     render(<AiConfiguration onAccessDenied={() => {}} />);
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'Embedding model' })).toHaveValue(
+      expect(screen.getByRole('combobox', { name: 'Embedding model' })).toHaveValue(
         saved.embedding.model,
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Discover models' }));
     await screen.findByText(`Found ${metadata ? 3 : 2} models.`);
-    fireEvent.click(screen.getByRole('button', { name: 'Choose discovered model' }));
     expect(await screen.findByRole('option', { name: 'fake-embedding' })).toBeVisible();
     expect(screen.getByRole('option', { name: 'private-alias' })).toBeVisible();
     expect(screen.queryByRole('option', { name: 'chat-only' })).not.toBeInTheDocument();

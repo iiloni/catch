@@ -291,7 +291,7 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
     timeout: 30_000,
   });
   await page.goto('/settings/admin/ai');
-  const model = page.getByRole('textbox', { name: 'Embedding model', exact: true });
+  const model = page.getByRole('combobox', { name: 'Embedding model', exact: true });
   await expect(model).toHaveValue('fake-embedding');
   const endpoint = page.getByLabel('Server endpoint');
   const originalEndpoint = await endpoint.inputValue();
@@ -307,12 +307,15 @@ test('admin discovers and tests embedding models, saves, and refuses a concurren
   await expect(page.getByRole('button', { name: 'Input format', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'AI setup guide' })).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Found 1 model' })).toBeVisible();
-  await page.getByRole('button', { name: 'Choose discovered model' }).click();
+  // Discovered models are suggested under the field, which still takes any name.
   await expect(page.getByRole('option', { name: 'fake-embedding', exact: true })).toBeVisible();
-  await page.getByRole('combobox', { name: 'Search models' }).fill('chat');
   await expect(page.getByRole('option', { name: 'chat-only', exact: true })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Search models' }).fill('');
+  await model.fill('nothing like it');
+  await expect(page.getByRole('option')).toHaveCount(0);
+  await model.fill('fake');
   await page.getByRole('option', { name: 'fake-embedding', exact: true }).click();
+  await expect(model).toHaveValue('fake-embedding');
+  await expect(page.getByRole('option')).toHaveCount(0);
   // A name entered manually still has to generate actual embeddings.
   await model.fill('chat-only');
   await page.getByRole('button', { name: 'Test embedding' }).click();
