@@ -128,7 +128,13 @@ const listed = () =>
     .getAllByRole('button')
     .filter((row) => row.hasAttribute('aria-pressed'))
     .slice(1);
-async function open({ wide = false, changes = false, read = true, versions = [version] } = {}) {
+async function open({
+  wide = false,
+  changes = false,
+  pendingChanges = false,
+  read = true,
+  versions = [version],
+} = {}) {
   if (!changes) localStorage.setItem('catch-history-changes', 'false');
   vi.mocked(duplicateNotes).mockReturnValue({
     ids: [],
@@ -155,11 +161,17 @@ async function open({ wide = false, changes = false, read = true, versions = [ve
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
     fireEvent.click(screen.getAllByRole('option')[1]!);
   }
-  // The current note may already be showing its own comparison.
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save as new note' })).toBeEnabled(),
   );
-  await screen.findByText(changes ? 'Comparison' : 'Earlier words');
+  // The preview can still hold the current note's comparison; wait for the selected version.
+  if (changes) {
+    await screen.findByText(
+      pendingChanges ? 'Finding what changed…' : /2 changes in this\s+version/,
+    );
+  } else {
+    await screen.findByText('Earlier words');
+  }
 }
 describe('version review', () => {
   it('lists the newest version once, as the current note, when it is the note', async () => {
@@ -227,12 +239,22 @@ describe('version review', () => {
     vi.mocked(readHistoryVersion).mockImplementation(async (_note, id) =>
       id === version.id ? state : new Promise<HistoryState>((resolve) => (finish = resolve)),
     );
-    await open({ wide: true, changes: true, read: false, versions: [version, older] });
+    // Keep the current note's comparison from satisfying the selected version's wait.
+    vi.mocked(readHistoryVersion).mockImplementationOnce(() => new Promise<HistoryState>(() => {}));
+    await open({
+      wide: true,
+      changes: true,
+      pendingChanges: true,
+      read: false,
+      versions: [version, older],
+    });
     await waitFor(() => expect(readHistoryVersion).toHaveBeenCalledWith(note.id, older.id));
     expect(screen.getByText('Finding what changed…')).toBeVisible();
+    expect(screen.queryByText('Comparison')).toBeNull();
     expect(screen.queryByText('Earlier words')).toBeNull();
     finish({ content: [{ content: 'Oldest words' }], files: [] });
     expect(await screen.findByText(/2 changes in this\s+version/)).toBeVisible();
+    await waitFor(() => expect(screen.getByText('Comparison')).toBeVisible());
     expect(screen.queryByText('Earlier words')).toBeNull();
   });
   it('keeps the current note intact and requires fresh context and explicit confirmation before restore', async () => {
