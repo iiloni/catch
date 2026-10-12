@@ -84,6 +84,8 @@ type Props = {
 };
 /** Whether a version is read with what it changed marked in it; this device's choice. */
 const SHOW_CHANGES_KEY = 'catch-history-changes';
+/** How long the last view waits for the next one's changes before the version shows plain. */
+const SETTLE_MS = 1500;
 const time = formatDateTime;
 const label = (version: HistoryVersion) =>
   ({
@@ -673,10 +675,31 @@ export function NoteHistory({
     showChanges ? (earlierState ?? null) : null,
     selected ? state : compared,
   );
-  // The changes take the version's place only once there are some to show, and without the
-  // crossfade a new version gets: the text both share stays where it is.
-  const changes = showChanges && !context ? review : null;
+  const changes = showChanges && !context && review?.changes ? review : null;
   const previewKey = showingCurrent ? 'review-current' : (selected?.id ?? 'current');
+  // A version shown plain and then swapped for its changes moves everything on the page, so
+  // what was there stays until it is known which of the two this version gets.
+  const pending =
+    !context &&
+    (loading ||
+      (selected && !state
+        ? busy
+        : showChanges && !!before && earlierState !== null && !review && !reviewFailed));
+  const [gaveUp, setGaveUp] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pending) return setGaveUp(null);
+    const timer = window.setTimeout(() => setGaveUp(previewKey), SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending, previewKey]);
+  const view = {
+    key: `${previewKey}:${changes ? 'changes' : 'plain'}`,
+    preview,
+    changes,
+    opening: busy && !preview,
+  };
+  const settled = useRef<typeof view | null>(null);
+  if (!pending || gaveUp === previewKey) settled.current = view;
+  const shown = settled.current;
   // A confirmation is the dock's, which grows upward for it as it does for the list: the
   // version being replaced stays in view above it.
   const confirming = context ? 'restore' : clearContext && wide ? 'clear' : null;
@@ -898,22 +921,22 @@ export function NoteHistory({
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
-                      key={previewKey}
+                      key={shown?.key ?? 'pending'}
                       initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: reducedMotion ? 0 : -8 }}
                       transition={reducedMotion ? { duration: 0 } : { duration: 0.15 }}
                     >
-                      {busy && !preview ? (
+                      {shown?.opening ? (
                         <p role="status" className="px-5 text-muted-foreground text-sm">
                           Opening version…
                         </p>
                       ) : (
-                        preview &&
-                        (changes?.changes ? (
-                          <HistoryChanges review={changes} />
+                        shown?.preview &&
+                        (shown.changes ? (
+                          <HistoryChanges review={shown.changes} />
                         ) : (
-                          <HistoryPreview content={preview} />
+                          <HistoryPreview content={shown.preview} />
                         ))
                       )}
                     </motion.div>

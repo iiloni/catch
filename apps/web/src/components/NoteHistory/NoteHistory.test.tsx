@@ -222,6 +222,19 @@ describe('version review', () => {
     expect(await screen.findByText('This is the earliest saved version.')).toBeVisible();
     await waitFor(() => expect(screen.queryByText('Comparison')).toBeNull());
   });
+  it('does not show a version plain while its changes are still being found', async () => {
+    let finish = (_state: HistoryState) => {};
+    vi.mocked(readHistoryVersion).mockImplementation(async (_note, id) =>
+      id === version.id ? state : new Promise<HistoryState>((resolve) => (finish = resolve)),
+    );
+    await open({ wide: true, changes: true, read: false, versions: [version, older] });
+    await waitFor(() => expect(readHistoryVersion).toHaveBeenCalledWith(note.id, older.id));
+    expect(screen.getByText('Finding what changed…')).toBeVisible();
+    expect(screen.queryByText('Earlier words')).toBeNull();
+    finish({ content: [{ content: 'Oldest words' }], files: [] });
+    expect(await screen.findByText(/2 changes in this\s+version/)).toBeVisible();
+    expect(screen.queryByText('Earlier words')).toBeNull();
+  });
   it('keeps the current note intact and requires fresh context and explicit confirmation before restore', async () => {
     vi.mocked(prepareHistoryRestore).mockResolvedValue({ summary, note, vaultNote: null });
     await open();
