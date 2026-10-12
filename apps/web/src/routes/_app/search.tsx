@@ -178,10 +178,12 @@ function SearchPage() {
     ? 'loading'
     : !searching
       ? 'browse'
-      : // An AI search under way stays in the results view, so its notes arrive without a view change.
-        results.length > 0 || semantic.loading
+      : results.length > 0
         ? 'results'
-        : 'empty';
+        : // Its own view, so notes an AI search finds enter as a text search's do.
+          semantic.loading
+          ? 'pending'
+          : 'empty';
   const filterCount = filter.ids.length + Number(filter.untagged) + Number(color !== null);
   useEffect(() => {
     searchFilterCount.set(filterCount);
@@ -380,7 +382,7 @@ function SearchView({
   view,
 }: {
   children: ReactNode;
-  view: 'browse' | 'results' | 'empty' | 'loading';
+  view: 'browse' | 'results' | 'pending' | 'empty' | 'loading';
 }) {
   const isPresent = useIsPresent();
   const reducedMotion = useReducedMotion();
