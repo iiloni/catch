@@ -11,6 +11,8 @@ import { createStore } from './store';
 export const quickNote = createStore<'closed' | 'open' | 'capture' | 'saved'>('closed');
 /** One-shot destination from a native widget; ordinary compose follows the current page. */
 export const quickNoteColumn = createStore<string | null>(null);
+/** Consumed once the widget's lazy editor has focused and requested its keyboard. */
+export const quickNoteFocusRequest = createStore(0);
 // Remains true while the composer saves and finishes its exit animation.
 export const quickNoteMounted = createStore(false);
 export const quickNoteCanSave = createStore(false);

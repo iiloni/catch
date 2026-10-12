@@ -3,7 +3,13 @@ import { toast } from 'sonner';
 import { switchAccount } from './accounts';
 import { getAccounts, getSignedInUser, pagePath } from './auth';
 import { waitForPendingWritesStored } from './collections';
-import { editorNote, quickNote, quickNoteColumn, quickNoteMounted } from './dockState';
+import {
+  editorNote,
+  quickNote,
+  quickNoteColumn,
+  quickNoteFocusRequest,
+  quickNoteMounted,
+} from './dockState';
 import { linkCaptureControls, linkCaptureOpen } from './linkCapture';
 import { nativeWidgets } from './nativeWidgets';
 import { getServerUrl } from './serverUrl';
@@ -106,6 +112,7 @@ export function watchWidgetLaunch(
       if (stopped) return;
       if (launch.action === 'compose') {
         quickNoteColumn.set(launch.column ?? null);
+        quickNoteFocusRequest.set(quickNoteFocusRequest.get() + 1);
         quickNote.set('open');
       }
       consumed.add(launch.id);

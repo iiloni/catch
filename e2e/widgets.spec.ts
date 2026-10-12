@@ -284,3 +284,30 @@ for (const source of ['card', 'widget'] as const) {
     ).toBeVisible();
   });
 }
+
+for (const action of ['compose', 'search'] as const) {
+  test(`a cold widget ${action} launch focuses its mounted input`, async ({ page }) => {
+    await widgetBridge(page);
+    await signUp(page);
+    await stageTap(page, action, undefined, false);
+    await page.reload();
+    const input =
+      action === 'compose'
+        ? page.getByRole('region', { name: 'New note', exact: true }).getByRole('textbox')
+        : page.getByRole('textbox', { name: 'Search notes', exact: true });
+    await expect(input).toBeFocused();
+    await page.keyboard.type('Cold widget keyboard');
+    if (action === 'compose') await expect(input).toHaveText('Cold widget keyboard');
+    else await expect(input).toHaveValue('Cold widget keyboard');
+    await page.keyboard.press('Escape');
+    await expect(input).toBeHidden();
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+    // A completed request must not refocus a field or reopen the keyboard later.
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement === document.body))
+      .toBe(true);
+  });
+}

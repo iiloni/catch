@@ -32,6 +32,7 @@ vi.mock('./dockState', () => ({
   quickNote: createStore('closed'),
   quickNoteMounted: createStore(false),
   quickNoteColumn: createStore<string | null>(null),
+  quickNoteFocusRequest: createStore(0),
 }));
 vi.mock('./linkCapture', () => ({
   linkCaptureOpen: createStore(false),

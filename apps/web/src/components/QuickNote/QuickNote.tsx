@@ -25,6 +25,7 @@ import {
   quickNote,
   quickNoteCanSave,
   quickNoteColumn,
+  quickNoteFocusRequest,
   quickNoteMounted,
   tabFor,
 } from '@/lib/dockState';
@@ -36,6 +37,7 @@ import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
 import { beforeVaultLock, isVaultMode, vaultStatus } from '@/lib/vault';
+import { focusWidgetInput } from '@/lib/widgetInputFocus';
 import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 
 type Destination = 'gallery' | 'deck';
@@ -114,6 +116,20 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   const { awaitingTags } = useTagReadiness();
   const [color, setColor] = useState<NoteColor>('default');
   const [controls, setControls] = useState<EditorControls | null>(null);
+  const requestedFocus = quickNoteFocusRequest.use();
+  useEffect(() => {
+    if (!isPresent || suspended) {
+      quickNoteFocusRequest.set(0);
+      return;
+    }
+    if (!requestedFocus || !controls) return;
+    return focusWidgetInput(
+      () => controls.focus(),
+      () => {
+        if (quickNoteFocusRequest.get() === requestedFocus) quickNoteFocusRequest.set(0);
+      },
+    );
+  }, [requestedFocus, controls, isPresent, suspended]);
   // The footer's tool row shows either formatting or the color swatches.
   const [attachmentPanel, setAttachmentPanel] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);

@@ -53,6 +53,10 @@ so a cold start or account-switch reload does not lose it. Taps have bounded rip
 mounts, and its editor appears directly without a Gallery/Deck frame or card morph.
 A warm note tap replaces the open editor in place; its edits are flushed first.
 An open composer saves and finishes closing automatically before a widget replaces it.
+Compose and Search retain a one-shot input request until their field mounts and the
+Android window has focus. The existing keyboard plugin then requests the IME;
+browser autofocus alone is insufficient on a fresh Activity. Closing the destination
+cancels pending focus so it cannot reopen the keyboard later.
 Account changes also wait for queued writes to reach durable device storage before
 reloading. A valid link capture saves first; an incomplete capture remains open for
 correction or cancellation. Compose leaves the vault and uses the

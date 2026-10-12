@@ -76,6 +76,7 @@ import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { isSharedNote } from '@/lib/sharing';
 import { GUTTER, HEADER_HISTORY_MIN, useNotePane } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
+import { focusWidgetInput } from '@/lib/widgetInputFocus';
 
 const TABS = [
   { path: '/deck', label: 'Deck', icon: Columns3 },
@@ -137,9 +138,6 @@ export function Dock() {
   const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
   const inputRef = useRef<HTMLInputElement>(null);
   const requestedSearchFocus = searchFocusRequest.use();
-  useEffect(() => {
-    if (requestedSearchFocus > 0) inputRef.current?.focus();
-  }, [requestedSearchFocus]);
   // The tap that opens search trails a compatibility click; by the time it arrives
   // the close button has mounted under the finger, so the button discards clicks
   // within this window of the tap. Mouse clicks retarget to the tab instead and
@@ -148,6 +146,15 @@ export function Dock() {
   const searchProgress = useMotionValue(mode === 'search' ? 1 : 0);
   const reducedMotion = useReducedMotion();
   const searchActive = mode === 'search';
+  useEffect(() => {
+    if (!requestedSearchFocus || !searchActive) return;
+    return focusWidgetInput(
+      () => inputRef.current?.focus(),
+      () => {
+        if (searchFocusRequest.get() === requestedSearchFocus) searchFocusRequest.set(0);
+      },
+    );
+  }, [requestedSearchFocus, searchActive]);
   useLayoutEffect(() => {
     if (searchProgress.get() === (searchActive ? 1 : 0)) return;
     if (reducedMotion) {
@@ -170,6 +177,7 @@ export function Dock() {
   }
 
   function closeSearch() {
+    searchFocusRequest.set(0);
     inputRef.current?.blur();
     flushSync(() => setSearchIntent({ pathname, active: false }));
     haptics.toggle();
