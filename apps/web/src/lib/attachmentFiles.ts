@@ -8,6 +8,12 @@ type StoredFile = { id: string; blob: Blob; pending: boolean; preview: boolean; 
 let database: Promise<IDBDatabase> | null = null;
 const objectUrls = new Map<string, string>();
 const listeners = new Set<() => void>();
+export function watchAttachmentFiles(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 const accessUrls = new Map<string, { url: string; expires: number }>();
 const requests = new Map<string, Promise<string>>();
 

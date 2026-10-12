@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Distinct IDs force the launcher to inflate fresh views when leaving an explicit
+         appearance. Reapplying the same layout preserves omitted color overrides. -->
+    <item type="layout" name="widget_capture_custom">@layout/widget_capture</item>
+    <item type="layout" name="widget_single_custom">@layout/widget_single</item>
+    <!-- New IDs also replace the former header/footer layout in already placed widgets. -->
+    <item type="layout" name="widget_list_minimal">@layout/widget_list</item>
+    <item type="layout" name="widget_list_minimal_custom">@layout/widget_list</item>
+    <item type="layout" name="widget_single_minimal">@layout/widget_single</item>
+    <item type="layout" name="widget_single_minimal_custom">@layout/widget_single</item>
+    <item type="layout" name="widget_row_custom">@layout/widget_row</item>
+    <!-- Replace cached text-only collection rows after upgrading the app. -->
+    <item type="layout" name="widget_row_images">@layout/widget_row</item>
+    <item type="layout" name="widget_row_images_custom">@layout/widget_row</item>
+    <item type="layout" name="widget_single_scroll">@layout/widget_single</item>
+    <item type="layout" name="widget_single_scroll_custom">@layout/widget_single</item>
+    <item type="layout" name="widget_single_row_custom">@layout/widget_single_row</item>
+    <!-- Reinflate placed widget rows when moving images above titles. -->
+    <item type="layout" name="widget_row_image_first">@layout/widget_row</item>
+    <item type="layout" name="widget_row_image_first_custom">@layout/widget_row</item>
+    <item type="layout" name="widget_single_row_image_first">@layout/widget_single_row</item>
+    <item type="layout" name="widget_single_row_image_first_custom">@layout/widget_single_row</item>
+</resources>

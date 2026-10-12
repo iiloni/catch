@@ -13,12 +13,13 @@ import {
   SWITCHED_KEY,
 } from './auth';
 import { clearLocalData } from './collections';
-import { editorNote, quickNote } from './dockState';
+import { editorNote, quickNote, quickNoteMounted } from './dockState';
 import { deleteHistoryStorage } from './historyStorage';
 import { forgetImport } from './imports';
 import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
 import { nativeReminders } from './nativeReminders';
+import { nativeWidgets } from './nativeWidgets';
 import { dropPushSubscription, leavePush, syncPush } from './push';
 import { getServerUrl } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
@@ -54,7 +55,7 @@ export function switchAccount(userId: string, noteId?: string) {
   );
 }
 
-const openStores = [editorNote, quickNote, linkCaptureOpen];
+const openStores = [editorNote, quickNote, quickNoteMounted, linkCaptureOpen];
 // Who this page was loaded for, still known after the account has been signed out.
 const pageUser = getSignedInUser();
 
@@ -147,9 +148,21 @@ export async function unsyncedChanges(account: Account) {
     : countQueuedWrites(account.user.id).catch(() => 0);
 }
 
+async function clearAccountWidgets(userId?: string) {
+  try {
+    await nativeWidgets.clear(userId);
+    return true;
+  } catch (error) {
+    console.error('Widget previews could not be cleared before sign-out', error);
+    toast.error('Could not clear widget previews. Try signing out again.');
+    return false;
+  }
+}
+
 /** Signs an account out of this device and deletes its data here. */
 export async function signOutAccount(account: Account) {
   if (account.user.id === getSignedInUser()?.id) return signOutCurrentAccount();
+  if (!(await clearAccountWidgets(account.user.id))) return;
   localStorage.setItem(removedKey(account.user.id), 'true');
   await stopRinging(account);
   await nativeReminders.clear(account.user.id).catch(() => undefined);
@@ -199,6 +212,7 @@ export async function signOutAccount(account: Account) {
 export async function signOutCurrentAccount() {
   const user = getSignedInUser();
   const account = getAccounts().find((other) => other.user.id === user?.id);
+  if (!(await clearAccountWidgets(user?.id))) return;
   if (user) localStorage.setItem(removedKey(user.id), 'true');
   // The accounts that stay signed in go on ringing.
   if (account) await stopRinging(account);

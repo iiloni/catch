@@ -4,6 +4,7 @@ import { waitForWriteStored } from './collections';
 import { finishHistorySession, freezeHistory } from './noteHistory';
 import { getNote, updateNote } from './notes';
 import { beforeVaultLock } from './vault';
+import { beforeWidgetOpen } from './widgetNavigation';
 
 export type SaveState = 'saved' | 'saving' | 'error';
 
@@ -88,7 +89,12 @@ export function useNoteAutosave(noteId: string) {
       await freezeHistory(noteId);
     };
     beforeVaultLock.add(finish);
-    return () => void beforeVaultLock.delete(finish);
+    // A widget may replace this note; its edits must reach durable storage first.
+    beforeWidgetOpen.add(flush);
+    return () => {
+      beforeVaultLock.delete(finish);
+      beforeWidgetOpen.delete(flush);
+    };
   }, [flush, noteId]);
 
   useEffect(() => {

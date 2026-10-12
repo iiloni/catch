@@ -21,7 +21,14 @@ import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
 import { useTagReadiness, useTags } from '@/lib/collections';
-import { quickNote, quickNoteCanSave, tabFor } from '@/lib/dockState';
+import {
+  quickNote,
+  quickNoteCanSave,
+  quickNoteColumn,
+  quickNoteFocusRequest,
+  quickNoteMounted,
+  tabFor,
+} from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { animateSteady, curves, springs } from '@/lib/motion';
@@ -30,6 +37,7 @@ import { findCard, hideCard, showCard } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
 import { beforeVaultLock, isVaultMode, vaultStatus } from '@/lib/vault';
+import { focusWidgetInput } from '@/lib/widgetInputFocus';
 import { useQuickNoteSwipe } from './useQuickNoteSwipe';
 
 type Destination = 'gallery' | 'deck';
@@ -94,6 +102,10 @@ function restingBox(element: HTMLElement) {
 
 function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspended: boolean }) {
   const [isPresent, safeToRemove] = usePresence();
+  useEffect(() => {
+    quickNoteMounted.set(true);
+    return () => quickNoteMounted.set(false);
+  }, []);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: openNote } = useOpenNote();
   const ref = useRef<HTMLElement>(null);
@@ -104,14 +116,32 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   const { awaitingTags } = useTagReadiness();
   const [color, setColor] = useState<NoteColor>('default');
   const [controls, setControls] = useState<EditorControls | null>(null);
+  const requestedFocus = quickNoteFocusRequest.use();
+  useEffect(() => {
+    if (!isPresent || suspended) {
+      quickNoteFocusRequest.set(0);
+      return;
+    }
+    if (!requestedFocus || !controls) return;
+    return focusWidgetInput(
+      () => controls.focus(),
+      () => {
+        if (quickNoteFocusRequest.get() === requestedFocus) quickNoteFocusRequest.set(0);
+      },
+    );
+  }, [requestedFocus, controls, isPresent, suspended]);
   // The footer's tool row shows either formatting or the color swatches.
   const [attachmentPanel, setAttachmentPanel] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const attachments = useNoteAttachments(draftId ?? '');
   const draft = useRef<string | null>(null);
   const [tools, setTools] = useState<'format' | 'color'>('format');
+  const [widgetColumn] = useState(() => quickNoteColumn.get());
+  useEffect(() => {
+    quickNoteColumn.set(null);
+  }, []);
   const [destination, setDestination] = useState<Destination>(
-    tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
+    widgetColumn || tabFor(pathname) === '/deck' ? 'deck' : 'gallery',
   );
   // Read by the exit effect, which runs after the last render.
   const latest = useRef({ content, color, destination });
@@ -180,7 +210,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     if (draft.current) {
       updateNote(draft.current, {
         content,
-        status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+        status: destination === 'deck' ? (widgetColumn ?? DEFAULT_BOARD_STATUS) : null,
       });
       setNoteColor(draft.current, color);
       return draft.current;
@@ -189,7 +219,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       userId: user.id,
       content,
       color,
-      status: destination === 'deck' ? DEFAULT_BOARD_STATUS : null,
+      status: destination === 'deck' ? (widgetColumn ?? DEFAULT_BOARD_STATUS) : null,
       vault: inVault.current,
     }).id;
   }

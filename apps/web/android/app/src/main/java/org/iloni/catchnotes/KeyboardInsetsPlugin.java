@@ -1,10 +1,13 @@
 package org.iloni.catchnotes;
 
 import android.view.View;
+import android.view.ViewTreeObserver;
+import android.webkit.WebView;
 import android.view.animation.Interpolator;
 import androidx.annotation.NonNull;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsAnimationCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.JSArray;
@@ -13,6 +16,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,6 +39,68 @@ public class KeyboardInsetsPlugin extends Plugin {
     private Insets lastBars = Insets.NONE;
     private boolean animating = false;
     private float animationStart = 0;
+    private final List<Runnable> focusCleanups = new ArrayList<>();
+
+    /** A DOM field can mount before a cold Activity owns the input window. */
+    @PluginMethod
+    public void ready(PluginCall call) {
+        getBridge()
+                .executeOnMainThread(
+                        () -> {
+                            WebView view = getBridge().getWebView();
+                            if (view.hasWindowFocus()) {
+                                view.requestFocus();
+                                call.resolve();
+                                return;
+                            }
+                            ViewTreeObserver.OnWindowFocusChangeListener[] listener =
+                                    new ViewTreeObserver.OnWindowFocusChangeListener[1];
+                            Runnable cleanup =
+                                    () -> {
+                                        ViewTreeObserver observer = view.getViewTreeObserver();
+                                        if (observer.isAlive()) observer.removeOnWindowFocusChangeListener(listener[0]);
+                                    };
+                            listener[0] =
+                                    focused -> {
+                                        if (!focused) return;
+                                        cleanup.run();
+                                        focusCleanups.remove(cleanup);
+                                        view.requestFocus();
+                                        call.resolve();
+                                    };
+                            view.getViewTreeObserver().addOnWindowFocusChangeListener(listener[0]);
+                            focusCleanups.add(cleanup);
+                        });
+    }
+
+    /** Called after the ready field receives DOM focus, without requiring a WebView tap. */
+    @PluginMethod
+    public void show(PluginCall call) {
+        getBridge()
+                .executeOnMainThread(
+                        () -> {
+                            WebView view = getBridge().getWebView();
+                            view.evaluateJavascript(
+                                    "(()=>{const e=document.activeElement;return !!e &&"
+                                        + " (e.isContentEditable || e.matches('input,textarea')) &&"
+                                        + " e.getClientRects().length>0;})()",
+                                    focused -> {
+                                        if ("true".equals(focused) && view.hasWindowFocus()) {
+                                            WindowCompat.getInsetsController(
+                                                            getActivity().getWindow(), view)
+                                                    .show(WindowInsetsCompat.Type.ime());
+                                        }
+                                        call.resolve();
+                                    });
+                        });
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        for (Runnable cleanup : focusCleanups) cleanup.run();
+        focusCleanups.clear();
+    }
+
 
     @Override
     public void load() {

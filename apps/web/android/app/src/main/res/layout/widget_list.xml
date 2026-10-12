@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="4dp">
+  <ImageView android:id="@+id/widget_surface" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/widget_surface" android:scaleType="fitXY" android:importantForAccessibility="no"/>
+  <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent" android:padding="12dp">
+    <ListView android:id="@+id/widget_list" android:layout_width="match_parent" android:layout_height="match_parent" android:paddingBottom="64dp" android:clipToPadding="false" android:divider="@android:color/transparent" android:dividerHeight="0dp" android:listSelector="@android:color/transparent"/>
+    <TextView android:id="@+id/widget_empty" android:background="@drawable/widget_note_feedback" android:textColor="@color/widget_muted" android:layout_width="match_parent" android:layout_height="match_parent" android:paddingBottom="64dp" android:gravity="center" android:textSize="14sp"/>
+    <ImageButton android:id="@+id/widget_compose" android:layout_width="48dp" android:layout_height="48dp" android:layout_gravity="bottom|end" android:padding="13dp" android:background="@drawable/widget_fab" android:src="@drawable/widget_plus" android:contentDescription="@string/widget_new_note"/>
+  </FrameLayout>
+</FrameLayout>

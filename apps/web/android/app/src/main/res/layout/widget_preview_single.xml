@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="4dp">
+  <ImageView android:id="@+id/widget_surface" android:layout_width="match_parent" android:layout_height="match_parent" android:src="@drawable/widget_surface" android:scaleType="fitXY" android:importantForAccessibility="no"/>
+  <LinearLayout android:id="@+id/widget_note" android:layout_width="match_parent" android:layout_height="match_parent" android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="8dp" android:paddingBottom="16dp" android:orientation="vertical">
+    <TextView android:text="Your note" android:id="@+id/widget_title" android:textColor="@color/widget_ink" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="8dp" android:textSize="20sp" android:textStyle="bold" android:maxLines="2" android:ellipsize="end"/>
+    <TextView android:text="A note to keep close." android:id="@+id/widget_body" android:textColor="@color/widget_ink" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:paddingTop="6dp" android:textSize="15sp" android:lineSpacingExtra="5dp" android:maxLines="6" android:ellipsize="end"/>
+  </LinearLayout>
+</FrameLayout>

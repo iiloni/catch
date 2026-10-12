@@ -9,9 +9,17 @@ import { createStore } from './store';
  * compose button after a note is created.
  */
 export const quickNote = createStore<'closed' | 'open' | 'capture' | 'saved'>('closed');
+/** One-shot destination from a native widget; ordinary compose follows the current page. */
+export const quickNoteColumn = createStore<string | null>(null);
+/** Consumed once the widget's lazy editor has focused and requested its keyboard. */
+export const quickNoteFocusRequest = createStore(0);
+// Remains true while the composer saves and finishes its exit animation.
+export const quickNoteMounted = createStore(false);
 export const quickNoteCanSave = createStore(false);
 
 /** The search text, kept when leaving the Search tab so returning restores it. */
+/** Native widget launches ask the mounted dock to focus after navigation. */
+export const searchFocusRequest = createStore(0);
 export const searchQuery = createStore('');
 export const searchFiltersOpen = createStore(false);
 export const searchFilterCount = createStore(0);

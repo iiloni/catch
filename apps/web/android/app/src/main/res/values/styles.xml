@@ -19,4 +19,10 @@
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
+    <style name="WidgetConfigurationTheme" parent="Theme.AppCompat.DayNight.Dialog">
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="colorAccent">#ffc247</item>
+    </style>
 </resources>
