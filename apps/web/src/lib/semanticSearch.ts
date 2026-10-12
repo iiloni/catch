@@ -1,0 +1,115 @@
+import type { HybridSearch, HybridSearchResult } from '@catch/shared';
+import { useEffect, useState } from 'react';
+import { AiRequestError, ai } from './ai';
+import { useSyncStatus } from './syncStatus';
+
+type Response = { key: string; result?: HybridSearchResult; error?: string; loading?: boolean };
+
+export function useSemanticSearch(input: HybridSearch, vault: boolean) {
+  const [enabled, setEnabled] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [response, setResponse] = useState<Response | null>(null);
+  const { offline, incompatibility, signedOut } = useSyncStatus();
+  const connected = !offline && !incompatibility && !signedOut;
+  const key = JSON.stringify(input);
+  const allowed = connected && !vault && available === true;
+
+  useEffect(() => {
+    if (vault) {
+      // A query typed in the vault must not be sent when the user returns to ordinary search.
+      setEnabled(false);
+      setResponse(null);
+    }
+  }, [vault]);
+
+  useEffect(() => {
+    if (!connected || vault) return;
+    const controller = new AbortController();
+    let checking = false;
+    const check = async () => {
+      if (checking || document.hidden) return;
+      checking = true;
+      try {
+        const capability = await ai.capabilities(controller.signal);
+        if (!controller.signal.aborted) setAvailable(capability.enabled);
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setAvailable(error instanceof AiRequestError && error.status === 404 ? false : null);
+      } finally {
+        checking = false;
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 30_000);
+    window.addEventListener('focus', check);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      window.removeEventListener('focus', check);
+    };
+  }, [connected, vault]);
+
+  useEffect(() => {
+    if (!enabled || !allowed || !input.query.trim() || input.query.trim().length > 1000) return;
+    const controller = new AbortController();
+    setResponse({ key, loading: true });
+    let timer: number;
+    let retryDelay = 10_000;
+    const run = async () => {
+      try {
+        const result = await ai.search(JSON.parse(key) as HybridSearch, controller.signal);
+        if (!controller.signal.aborted) {
+          retryDelay = 10_000;
+          setResponse({ key, result });
+          if (result.indexing) timer = window.setTimeout(() => void run(), 10_000);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setResponse({
+            key,
+            error:
+              error instanceof AiRequestError ? error.message : 'Could not reach semantic search.',
+          });
+          if (
+            error instanceof TypeError ||
+            (error instanceof AiRequestError &&
+              (error.status === 408 || error.status === 429 || error.status >= 500))
+          ) {
+            timer = window.setTimeout(() => void run(), retryDelay);
+            retryDelay = Math.min(60_000, retryDelay * 2);
+          }
+        }
+      }
+    };
+    timer = window.setTimeout(() => void run(), 500);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [enabled, allowed, key, input.query]);
+
+  const current =
+    enabled && allowed && response?.key === key && input.query.trim() ? response : null;
+  const reason = vault
+    ? 'Semantic search is unavailable inside the vault.'
+    : !connected
+      ? 'Semantic search needs a server connection.'
+      : available === false
+        ? 'An admin has not enabled semantic search.'
+        : available === null
+          ? 'Checking semantic search availability…'
+          : null;
+  const message =
+    enabled && reason
+      ? `${reason} Showing keyword results.`
+      : enabled && input.query.trim().length > 1000
+        ? 'Use a shorter query for semantic search. Showing keyword results.'
+        : current?.error
+          ? `${current.error} Showing keyword results.`
+          : current?.loading
+            ? 'Finding related notes…'
+            : current?.result?.indexing
+              ? 'Some notes are still being indexed. Keyword matches are included.'
+              : null;
+  return { enabled, setEnabled, available, allowed, message, result: current?.result };
+}

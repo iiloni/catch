@@ -693,6 +693,13 @@ export function write(mutate: () => void): Transaction {
   return transaction;
 }
 
+/** Notes with optimistic writes, including transactions restored from the device outbox. */
+export function getPendingNoteIds(): ReadonlySet<string> {
+  return new Set(
+    [...notesCollection.values()].filter((note) => !note.$synced).map((note) => note.id),
+  );
+}
+
 /** Captures must survive a reload or popup closing before confirming success. */
 export async function waitForWriteStored(transaction: Transaction): Promise<void> {
   await waitForQueuedWrite(transaction.id, transaction.isPersisted.promise);

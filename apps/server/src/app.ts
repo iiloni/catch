@@ -18,6 +18,7 @@ import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
 import { pushRoutes } from './routes/push';
 import { reminderRoutes } from './routes/reminders';
+import { searchRoutes } from './routes/search';
 import { shapeRoutes } from './routes/shapes';
 import { noteShareRoutes, sharedNoteRoutes, shareLinkRoutes } from './routes/sharing';
 import { noteTagRoutes, tagRoutes } from './routes/tags';
@@ -131,6 +132,7 @@ export function createApp() {
     .route('/admin/backups', backupDownloadRoutes)
     .route('/admin', adminRoutes)
     .route('/notes', notesRoutes)
+    .route('/search', searchRoutes)
     .route('/tags', tagRoutes)
     .route('/note-tags', noteTagRoutes)
     .route('/attachments', attachmentRoutes)

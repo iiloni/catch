@@ -1,4 +1,9 @@
-import { blocksToPlainText, type Note, type NoteColor } from '@catch/shared';
+import {
+  blocksToPlainText,
+  type HybridSearchResult,
+  type Note,
+  type NoteColor,
+} from '@catch/shared';
 
 export type Segment = { text: string; match: boolean };
 
@@ -7,9 +12,56 @@ export type SearchResult = {
   title: Segment[];
   /** The best matching line after the title, trimmed around the match. */
   snippet: Segment[];
+  semantic?: boolean;
 };
 
 const SNIPPET_CONTEXT = 40;
+
+/** Server ranking uses local notes, so pending edits and revoked local copies stay authoritative. */
+export function mergeHybridResults(
+  notes: readonly Note[],
+  keyword: SearchResult[],
+  response: HybridSearchResult | undefined,
+  query: string,
+  userId: string,
+  pendingIds: ReadonlySet<string> = new Set(),
+): SearchResult[] {
+  if (!response) return keyword;
+  const byId = new Map(notes.map((note) => [note.id, note]));
+  const local = new Map(keyword.map((result) => [result.note.id, result]));
+  const ranked: SearchResult[] = [];
+  const seen = new Set<string>();
+  for (const hit of response.hits) {
+    const note = byId.get(hit.id);
+    if (!note || note.updatedAt.getTime() !== Date.parse(hit.updatedAt)) continue;
+    const result = local.get(hit.id) ?? describeResult(note, terms(query));
+    ranked.push({ ...result, semantic: hit.semantic });
+    seen.add(hit.id);
+  }
+  const unranked = keyword.filter(
+    (result) => !seen.has(result.note.id) && result.note.userId === userId,
+  );
+  // Synced matches beyond the server limit must not displace its hybrid ranking.
+  return [
+    ...unranked.filter((result) => pendingIds.has(result.note.id)),
+    ...ranked,
+    ...unranked.filter((result) => !pendingIds.has(result.note.id)),
+  ];
+}
+
+function describeResult(note: Note, words: readonly string[]): SearchResult {
+  const [title = '', ...body] = blocksToPlainText(note.content).split('\n');
+  const matchingLine =
+    words.length > 0
+      ? body.find((line) => words.some((word) => line.toLowerCase().includes(word)))
+      : undefined;
+  const snippetLine = matchingLine ?? body.find(Boolean) ?? '';
+  return {
+    note,
+    title: highlight(title, words),
+    snippet: highlight(matchingLine ? snippetAround(snippetLine, words) : snippetLine, words),
+  };
+}
 
 function terms(query: string) {
   return query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -57,16 +109,9 @@ export function searchNotes(
     const text = lines.join('\n').toLowerCase();
     if (!words.every((word) => text.includes(word))) continue;
 
-    const [title = '', ...body] = lines;
-    const matchingLine =
-      words.length > 0
-        ? body.find((line) => words.some((word) => line.toLowerCase().includes(word)))
-        : undefined;
-    const snippetLine = matchingLine ?? body.find(Boolean) ?? '';
+    const [title = ''] = lines;
     results.push({
-      note,
-      title: highlight(title, words),
-      snippet: highlight(matchingLine ? snippetAround(snippetLine, words) : snippetLine, words),
+      ...describeResult(note, words),
       titleHit: words.some((word) => title.toLowerCase().includes(word)),
     });
   }

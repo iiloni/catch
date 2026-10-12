@@ -62,6 +62,26 @@ describe('API compatibility gate', () => {
     },
   );
 
+  it('gates additive search and AI routes before authentication or provider requests', async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    for (const [path, method] of [
+      ['/api/search', 'POST'],
+      ['/api/search/capabilities', 'GET'],
+      ['/api/admin/ai', 'GET'],
+      ['/api/admin/ai', 'PUT'],
+      ['/api/admin/ai/models', 'POST'],
+      ['/api/admin/ai/test', 'POST'],
+      ['/api/admin/ai/rebuild', 'POST'],
+      ['/api/admin/ai/retry', 'POST'],
+    ]) {
+      expect((await app.request(path!, { method })).status).toBe(426);
+      expect((await app.request(path!, { method, headers: supportedHeaders })).status).toBe(401);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(SUPPORTED_API_PROTOCOLS).toEqual({ min: 2, max: 5 });
+  });
+
   it('allows a compatible request through to the authentication guard', async () => {
     expect(
       (await app.request('/api/notes', { method: 'POST', headers: supportedHeaders })).status,

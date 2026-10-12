@@ -1,0 +1,65 @@
+---
+title: AI configuration (unreleased)
+description: Set up optional semantic search with a local or hosted embedding provider.
+---
+
+> **Unreleased feature:** This guide describes AI configuration under development. It is not included in the current published releases.
+
+Optional semantic search combines keyword matches with notes related in meaning. Keyword search stays on the device, works offline and remains the default. Semantic search requires a connection to your Catch server, even when the embedding provider runs locally. Chat configuration and generation are not included.
+
+## Set up a provider
+
+1. Open **Settings > Admin > AI configuration**.
+2. Choose Ollama, LM Studio, vLLM, OpenAI, Google Gemini or a custom OpenAI-compatible provider.
+3. Enter an endpoint reachable from the Catch server and an API key if the provider requires one.
+4. Use **Discover models** to choose an embedding model, or enter its name. Use **Test embedding** to check that it can generate document and query vectors.
+5. Enable **Background embeddings** and save.
+
+Enabling indexing sends ordinary note text from **every user**, including archived notes, to the chosen provider. Semantic queries are sent when someone turns on semantic search and searches online. With a hosted provider, this text leaves your server. Tell users which provider you have configured and review its policies before enabling indexing. Vault notes and vault queries stay on the device.
+
+Saving an enabled configuration also tests embeddings. A successful model listing alone does not verify that the model can embed text. Progress polling preserves unsaved form changes; concurrent saves are rejected so another admin's configuration is not overwritten.
+
+## Reach a local provider
+
+The endpoint is contacted by **Catch's server**, not by the browser or phone. In Docker, `localhost` means Catch's container. The supplied Compose configuration maps `host.docker.internal` to the host gateway, including on Linux.
+
+Typical endpoints:
+
+| Provider | Endpoint |
+| --- | --- |
+| Ollama | `http://host.docker.internal:11434` |
+| LM Studio | `http://host.docker.internal:1234/v1` |
+| vLLM | `http://host.docker.internal:8000/v1` |
+| Another Compose service | Its service hostname and listening port |
+
+A provider listening only on host loopback may not accept requests through the gateway. Configure its listener and firewall for the Catch container, or use a reachable LAN address. Keep unauthenticated model servers off the public internet. Install or load the model in the provider; Catch does not bundle model weights.
+
+Ollama uses `/api/tags`, `/api/show` and `/api/embed`. Compatible services use `/models` and `/embeddings` relative to the endpoint, typically a base ending in `/v1`. Compatible embedding responses must contain indexed floating-point vectors. Catch does not follow redirects.
+
+## Model detection and input formatting
+
+Discovery distinguishes embedding and chat models using provider type or capability metadata when available. Ollama model inspection is limited to 24 models, four concurrent requests and a short timeout. Missing metadata falls back to recognizable model names. Recognized chat, reranking and non-text models are excluded. Unknown aliases remain available, and names can always be entered manually; the actual embedding test is the final compatibility check.
+
+Catch selects retrieval formatting automatically:
+
+- Nomic text models receive separate document and query prefixes.
+- Standard E5 models receive passage and query prefixes. E5 instruction models receive a retrieval instruction for queries and plain documents.
+- English BGE small/base/large models receive a query instruction. BGE-M3 and other models use plain text.
+
+Use the model's canonical name when its family needs prefixes. A custom alias can hide the family, and a successful embedding test checks vector validity and dimensions, not search quality. The endpoint must not add the same prefixes again. Models with other task-specific requirements need a provider that handles them; Catch has no arbitrary parameter editor or native Gemini task-type adapter. See the [Nomic model card](https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe), [E5 instruction model card](https://huggingface.co/intfloat/multilingual-e5-large-instruct) and [BGE-M3 model card](https://huggingface.co/BAAI/bge-m3) for model-specific requirements.
+
+## Indexing and recovery
+
+The status panel shows indexed, queued, running and failed notes. Notes are indexed after their saves reach the server. Empty and trashed notes are excluded; untrashing queues them again. Use **Retry failed tasks** after correcting a provider problem. Use **Rebuild index** to replace every vector, including after changing a model behind the same name.
+
+A changed provider, endpoint, model, automatic input format or dimension count rebuilds the index. Changing only the API key preserves it. Disabling background embeddings pauses indexing and makes semantic search unavailable. Enabling it again catches up changes. Turning off semantic mode on the Search page changes that view and leaves indexing running.
+
+Notes are split into overlapping chunks of 2,000 Unicode characters. Notes longer than 120,000 characters fail indexing explicitly, and a provider's token limit can reject shorter chunks. Keyword search still works. Failed jobs retry with backoff before appearing as failed. A request already sent may finish after indexing is disabled, but obsolete vectors are not published.
+
+Search falls back to local keyword results when offline or when the provider/server is unavailable. The server applies account, sharing, tag, color and archive restrictions before ranking. Current retrieval scans eligible vectors exactly; performance on very large installations and quality with a particular model need evaluation on your own data.
+
+## Credentials and backups
+
+Saved API keys are encrypted with a key derived from `BETTER_AUTH_SECRET` and are never returned by the settings API. A different provider or endpoint does not reuse the saved key. Reenter credentials after changing this secret or restoring a backup under another secret.
+
+Backups contain ordinary note text, vectors and indexing jobs. Key encryption does not encrypt the whole archive. Protect backups accordingly; see [backups](/docs/running-a-server/backups) and [restore](/docs/running-a-server/restore).

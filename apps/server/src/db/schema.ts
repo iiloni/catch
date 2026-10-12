@@ -1,4 +1,9 @@
-import type { Recurrence, ReminderTimes, SharedAttachment } from '@catch/shared';
+import type {
+  EmbeddingConfiguration,
+  Recurrence,
+  ReminderTimes,
+  SharedAttachment,
+} from '@catch/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -429,4 +434,60 @@ export const vaultNotes = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [index().on(table.userId)],
+);
+
+/** Server-only AI settings. The credential is sealed with the installation's auth secret. */
+export const aiConfiguration = pgTable('ai_configuration', {
+  id: text().primaryKey(),
+  enabled: boolean().notNull().default(false),
+  embedding: jsonb().$type<EmbeddingConfiguration>().notNull(),
+  apiKey: text(),
+  dimensions: integer(),
+  generation: uuid().notNull(),
+  revision: uuid().notNull(),
+});
+
+const embeddingVector = customType<{ data: number[]; driverData: string }>({
+  dataType: () => 'vector',
+  toDriver: (value) => JSON.stringify(value),
+  fromDriver: (value) => JSON.parse(value) as number[],
+});
+
+export const noteEmbeddings = pgTable(
+  'note_embeddings',
+  {
+    noteId: uuid()
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    chunk: integer().notNull(),
+    generation: uuid().notNull(),
+    contentHash: text().notNull(),
+    embedding: embeddingVector().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.noteId, table.chunk] }), index().on(table.userId)],
+);
+
+/** One coalesced job per note; a lease lets interrupted jobs resume after a restart. */
+export const embeddingJobs = pgTable(
+  'embedding_jobs',
+  {
+    noteId: uuid()
+      .primaryKey()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    generation: uuid().notNull(),
+    contentHash: text().notNull(),
+    attempts: integer().notNull().default(0),
+    availableAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lease: uuid(),
+    leasedUntil: timestamp({ withTimezone: true }),
+    failedAt: timestamp({ withTimezone: true }),
+    error: text(),
+  },
+  (table) => [index().on(table.availableAt), index().on(table.userId)],
 );

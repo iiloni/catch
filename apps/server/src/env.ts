@@ -68,6 +68,12 @@ const envSchema = z.object({
   ATTACHMENTS_DIR: z.string().default('/data/attachments'),
   /** Where server backups are written. Mount a volume here, ideally on another disk. */
   BACKUPS_DIR: z.string().default('/data/backups'),
+  /** Trusted empty template containing vector when the database role cannot install it. */
+  BACKUP_TEMPLATE_DATABASE: z
+    .string()
+    .min(1)
+    .refine((name) => Buffer.byteLength(name, 'utf8') <= 63, 'Must be at most 63 UTF-8 bytes')
+    .default('template1'),
   /** The release this image was built from, recorded in backups. Unset in development. */
   CATCH_VERSION: z.string().optional(),
   CATCH_CHANNEL: releaseChannelSchema.default('dev'),

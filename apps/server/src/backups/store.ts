@@ -32,6 +32,7 @@ import { latestKnownMigration } from './postgres';
 /** Where a server's state lives and what its backups are checked against. */
 export type BackupConfig = {
   databaseUrl: string;
+  templateDatabase?: string;
   attachmentsDir: string;
   backupsDir: string;
   migrationsFolder: string;

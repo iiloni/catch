@@ -112,3 +112,32 @@ start.
 - One backup or restore runs at a time, tracked in the server process. Running more than one
   app process against the same backups directory is not supported.
 - See [Server backups](../backups.md) for operating instructions.
+
+## Embedding data and credentials
+
+AI configuration, ciphertext API keys, jobs and pgvector chunks are included automatically
+in database dumps. The running Postgres installation must provide the vector extension.
+Restore provisions only this known installed extension, using trusted code in the empty
+scratch database before any uploaded SQL; it removes vector's install/comment entries from
+the dump's restore list. All other uploaded SQL and pending migrations still run as the
+restricted scratch role. That role cannot replace the privileged extension's objects.
+Pre-AI backups migrate against that provisioned extension without gaining extra powers.
+A database role that cannot install vector uses an empty administrator-provisioned template
+containing vector, selected with `BACKUP_TEMPLATE_DATABASE` (default `template1`). This
+provisions scratch databases without handing uploaded SQL a privileged connection. The
+live database also needs vector provisioned before migrations. See the operating instructions
+for the template setup; a template must never come from an uploaded backup.
+
+The live copy transaction sets the transaction-local `catch.restoring` guard so the note
+trigger does not generate jobs while the dump's original jobs and chunks are being loaded.
+It clears restored job leases before committing, because they belonged to the former process.
+This applies to both in-app and CLI restore. The in-app worker is aborted and drained before
+restore and resumed afterwards; the host CLI wrapper stops the app. Ordinary writes after
+restore still enqueue, and reconciliation fills missing work from older backups.
+
+Provider keys are sealed with AES-GCM using a key derived from BETTER_AUTH_SECRET. They are
+never returned to the admin form or carried to a changed provider/endpoint. A backup includes
+the sealed key, but not the server secret: restoring to an installation with a different
+secret, or changing that secret, requires reentering the provider key. Keep the installation's
+secret separately if credential continuity is needed. This encryption does not encrypt note
+text or embeddings in a backup, and the existing backup security guidance still applies.

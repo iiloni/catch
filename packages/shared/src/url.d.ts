@@ -9,4 +9,7 @@ declare class URL {
   hostname: string;
   pathname: string;
   hash: string;
+  username: string;
+  password: string;
+  search: string;
 }

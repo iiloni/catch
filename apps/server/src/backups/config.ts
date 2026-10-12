@@ -5,6 +5,7 @@ import type { BackupConfig } from './store';
 /** This server's own state, for the routes, the scheduler and the CLI. */
 export const backupConfig: BackupConfig = {
   databaseUrl: env.DATABASE_URL,
+  templateDatabase: env.BACKUP_TEMPLATE_DATABASE,
   attachmentsDir: env.ATTACHMENTS_DIR,
   backupsDir: env.BACKUPS_DIR,
   migrationsFolder,

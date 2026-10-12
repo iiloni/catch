@@ -127,6 +127,7 @@ export async function restoreBackup(config: BackupConfig, path: string): Promise
     await restoreDatabase(config.databaseUrl, dumpFile, {
       workDir: work,
       migrationsFolder: config.migrationsFolder,
+      templateDatabase: config.templateDatabase,
     });
   } finally {
     await rm(work, { recursive: true, force: true });

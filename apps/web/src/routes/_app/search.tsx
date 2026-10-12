@@ -16,9 +16,12 @@ import {
 } from '@/components/SearchFilters/SearchFilters';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { Switch } from '@/components/ui/switch';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
+import { getSignedInUser } from '@/lib/auth';
 import {
   boardColumnsCollection,
+  getPendingNoteIds,
   notesCollection,
   tagsCollection,
   useNoteTagAssignments,
@@ -32,7 +35,13 @@ import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useIsCardHidden } from '@/lib/noteTransition';
 import { useOpenNote } from '@/lib/openNote';
-import { type SearchResult, type Segment, searchNotes } from '@/lib/searchNotes';
+import {
+  mergeHybridResults,
+  type SearchResult,
+  type Segment,
+  searchNotes,
+} from '@/lib/searchNotes';
+import { useSemanticSearch } from '@/lib/semanticSearch';
 import { READING_MAX, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { indexNoteTags, matchesTagFilter, type TagSearchFilter } from '@/lib/tagSearch';
@@ -99,20 +108,39 @@ function SearchPage() {
     return { counts, untaggedCount };
   }, [notes, indexed]);
   const browsing = filter.ids.length > 0 || filter.untagged;
+  const semantic = useSemanticSearch(
+    {
+      query: deferredQuery.trim(),
+      tags: [...filter.ids],
+      match: filter.match,
+      untagged: filter.untagged,
+      color,
+      showArchived,
+    },
+    !!vault,
+  );
+  const eligibleNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => matchesTagFilter(indexed.get(note.id), filter))
+        .map((note) => {
+          const primary = assignments.get(note.id)?.primaryTagId;
+          return primary ? { ...note, color: tagColor(tags, primary) } : note;
+        })
+        .filter((note) => !color || note.color === color),
+    [notes, indexed, filter, assignments, tags, color],
+  );
   const results = useMemo(
     () =>
-      searchNotes(
-        notes
-          .filter((note) => matchesTagFilter(indexed.get(note.id), filter))
-          .map((note) => {
-            const primary = assignments.get(note.id)?.primaryTagId;
-            return primary ? { ...note, color: tagColor(tags, primary) } : note;
-          }),
+      mergeHybridResults(
+        eligibleNotes,
+        searchNotes(eligibleNotes, deferredQuery, color, browsing),
+        semantic.result,
         deferredQuery,
-        color,
-        browsing,
+        getSignedInUser()?.id ?? '',
+        getPendingNoteIds(),
       ).slice(0, MAX_RESULTS),
-    [notes, deferredQuery, color, tags, assignments, indexed, filter, browsing],
+    [eligibleNotes, deferredQuery, color, browsing, semantic.result],
   );
   // The notes as stored: a result's note wears its primary tag's color.
   const resultNotes = useMemo(() => {
@@ -187,6 +215,27 @@ function SearchPage() {
         trailing={<VaultToggle />}
       />
       <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+        {!vault && (semantic.available !== false || semantic.enabled) && (
+          <div className="mb-4 flex items-center justify-between gap-3 px-1">
+            <label htmlFor="semantic-search" className="font-medium text-sm">
+              Semantic search
+            </label>
+            <Switch
+              id="semantic-search"
+              checked={semantic.enabled}
+              disabled={!semantic.allowed && !semantic.enabled}
+              onCheckedChange={(checked) => {
+                haptics.toggle();
+                semantic.setEnabled(checked);
+              }}
+            />
+          </div>
+        )}
+        {semantic.message && (
+          <p role="status" className="mb-3 px-1 text-muted-foreground text-sm">
+            {semantic.message}
+          </p>
+        )}
         <ActiveSearchFilters
           tags={tags}
           filter={filter}
@@ -396,6 +445,7 @@ function ResultCard({
             <Highlighted segments={result.snippet} />
           </span>
         )}
+        {result.semantic && <span className="text-muted-foreground text-xs">Related meaning</span>}
       </button>
       <NoteTags noteId={note.id} className="px-3.5 pb-3 [&>h3]:sr-only" />
       <motion.span

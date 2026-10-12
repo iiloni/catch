@@ -1,3 +1,4 @@
+export * from './ai';
 export * from './attachments';
 export * from './backups';
 export * from './board';
