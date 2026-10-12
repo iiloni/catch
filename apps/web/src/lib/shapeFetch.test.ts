@@ -136,10 +136,16 @@ describe('development shape transport', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('keeps production long polling unchanged even over HTTP', async () => {
+  it('short-polls a bundled build over HTTP too, and long-polls over HTTPS', async () => {
     vi.stubEnv('DEV', false);
-    await shapeFetch(liveUrl);
-    expect(fetcher).toHaveBeenCalledWith(liveUrl, undefined);
+    const polled = shapeFetch(liveUrl);
+    await vi.advanceTimersByTimeAsync(1000);
+    await polled;
+    expect(new URL(String(fetcher.mock.calls[0]![0])).searchParams.has('live')).toBe(false);
+    fetcher.mockClear();
+    const secure = liveUrl.replace('http:', 'https:');
+    await shapeFetch(secure);
+    expect(fetcher).toHaveBeenCalledWith(secure, undefined);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

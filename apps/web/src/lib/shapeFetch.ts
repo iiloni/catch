@@ -1,9 +1,11 @@
 import { uuidv7 } from 'uuidv7';
 import { compatibleShapeFetch } from './compatibility';
 
-/** Keep HTTP development sync from occupying every browser connection (ADR 0007). */
+/**
+ * Keeps sync over plain HTTP from occupying every browser connection (ADR 0007). HTTP is
+ * always HTTP/1.1 in a browser, in a bundled build as much as on the dev server.
+ */
 export const shapeFetch: typeof fetch = async (input, init) => {
-  if (!import.meta.env.DEV) return compatibleShapeFetch(input, init);
   const url = new URL(input instanceof Request ? input.url : input.toString(), location.href);
   if (url.protocol !== 'http:' || url.searchParams.get('live') !== 'true')
     return compatibleShapeFetch(input, init);

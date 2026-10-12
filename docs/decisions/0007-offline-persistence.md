@@ -34,16 +34,18 @@ We patch the SQLite core's schema reset to delete that collection's sync metadat
 same transaction as its cached rows. Otherwise Electric resumes after the removed rows
 instead of fetching a new snapshot. Other collections and the outbox stay intact.
 
-**HTTP development uses short polls.** With six or more collections, live long polls occupy all six
-HTTP/1.1 browser connections to the dev server. Lazy pages, HMR and writes then wait for a
-20-second sync timeout. `lib/shapeFetch.ts` makes live requests to an HTTP development
+**Sync over plain HTTP uses short polls.** With six or more collections, live long polls occupy all six
+HTTP/1.1 browser connections to the server. Lazy pages, HMR, writes and every other request then
+wait for a 20-second sync timeout. `lib/shapeFetch.ts` makes live requests to an HTTP
 server as non-live reads from the same handle and offset, waiting one second on the device
 between requests and bypassing caches for those reads. The adapter supplies the opaque
 cache cursor that Electric's live-request validator requires on successful responses;
 the server's shape handle, offset, schema, transaction metadata and body pass through.
 Initial sync and catch-up requests
 run immediately. Cancellation and protocol gating still apply; persisted data and queued
-writes keep their existing formats. HTTPS and production builds keep Electric's normal
+writes keep their existing formats. This first applied to the dev server only; a bundled build
+talking to an HTTP server (a static Catch Dev install, a server on a LAN without TLS) starved
+the same way, so the address's scheme decides, not the build. HTTPS keeps Electric's normal
 long polling; production reverse proxies must offer HTTP/2. This compatible transport fix
 does not change the API protocol or collection schema versions.
 
