@@ -376,6 +376,32 @@ test('admins can open Users from either settings navigation and edit roles', asy
   await expect(page.getByText('No users match this search.')).toBeVisible();
 });
 
+test('an admin page opens without waiting for the server', async ({ page, isMobile }) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('admin@example.com');
+  await page.getByLabel('Password').fill('adminadmin');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/general$/);
+  // A phone on a slow connection: the session answers long after the tap.
+  await page.route('**/api/auth/get-session', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await route.continue();
+  });
+  if (isMobile) await page.getByRole('button', { name: 'Settings page: General' }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings pages' })
+    .getByText('AI configuration', { exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'AI configuration' })).toBeVisible({
+    timeout: 2000,
+  });
+  await expect(page.getByRole('switch', { name: 'Background embeddings' })).toBeVisible({
+    timeout: 2000,
+  });
+});
+
 test('regular users cannot see Admin or access its pages and APIs', async ({
   page,
   request,
