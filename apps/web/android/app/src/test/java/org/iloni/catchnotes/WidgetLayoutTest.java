@@ -123,9 +123,17 @@ public class WidgetLayoutTest {
         assertTrue(fab.getTop() < notes.getBottom());
         assertTrue(fab.getHeight() >= Math.round(48 * density));
         assertTrue(notes.getPaddingBottom() > fab.getHeight());
-        assertNull(live.findViewById(R.id.widget_heading));
-        assertNull(live.findViewById(R.id.widget_footer));
         assertNull(live.findViewById(R.id.widget_settings));
+        for (int layout :
+                new int[] {R.layout.widget_single_minimal, R.layout.widget_preview_single}) {
+            View single =
+                    new RemoteViews(context.getPackageName(), layout)
+                            .apply(context, new FrameLayout(context));
+            measure(single, Math.round(140 * density), Math.round(180 * density));
+            assertTrue(
+                    single.findViewById(R.id.widget_note).getHeight() >= single.getHeight() * 0.75);
+            assertNull(single.findViewById(R.id.widget_settings));
+        }
     }
 
     private static void measure(View view, int width, int height) {
@@ -143,22 +151,22 @@ public class WidgetLayoutTest {
                 new android.appwidget.AppWidgetProviderInfo();
         info.provider =
                 new android.content.ComponentName(context, CatchWidgetProvider.Single.class);
-        info.initialLayout = R.layout.widget_single;
+        info.initialLayout = R.layout.widget_single_minimal;
         host.setAppWidget(1, info);
         RemoteViews forced =
-                new RemoteViews(context.getPackageName(), R.layout.widget_single_scroll_custom);
-        forced.setTextColor(R.id.widget_heading, 0xffff0000);
+                new RemoteViews(context.getPackageName(), R.layout.widget_single_minimal_custom);
+        forced.setTextColor(R.id.widget_empty, 0xffff0000);
         host.updateAppWidget(forced);
         assertEquals(
                 0xffff0000,
-                ((android.widget.TextView) host.findViewById(R.id.widget_heading))
+                ((android.widget.TextView) host.findViewById(R.id.widget_empty))
                         .getCurrentTextColor());
         RemoteViews system =
-                new RemoteViews(context.getPackageName(), R.layout.widget_single_scroll);
+                new RemoteViews(context.getPackageName(), R.layout.widget_single_minimal);
         host.updateAppWidget(system);
         assertEquals(
                 context.getResources().getColor(R.color.widget_ink),
-                ((android.widget.TextView) host.findViewById(R.id.widget_heading))
+                ((android.widget.TextView) host.findViewById(R.id.widget_empty))
                         .getCurrentTextColor());
     }
 }

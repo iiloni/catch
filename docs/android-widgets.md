@@ -4,16 +4,16 @@ Catch provides Quick capture, One note, and Note list widgets. Open Catch and si
 in before adding one from the launcher's widget picker. Each widget has its own
 account and appearance. A list can show pinned notes, Gallery, all notes, a tag including descendants,
 or a Deck column. Rounded note cards retain their colors and checklist previews.
-The list dedicates its space to cards with a floating New note button, without
-header or footer bars, and its + button has the same rounded-square shape as Catch's
-other controls. One note scrolls through the full note text. Both note widgets can
+Neither note widget has header or footer bars. The list dedicates its space to cards
+with a floating New note button, whose + has the same rounded-square shape as Catch's
+other controls. One note shows only the note and scrolls through its full text. Both note widgets can
 show one image above the note title: the first image attachment, or a visible link preview thumbnail
 when no attached image is available. Hidden or disabled link previews stay hidden.
 Images are cached with the widget so they remain visible offline.
 Use the custom setup dialog to choose content and appearance.
-To change a placed list, touch and hold it and choose the launcher's Edit/Reconfigure
-option. On older launchers without this action, remove and add it again. Quick capture
-and One note keep their settings buttons.
+To change a placed list or One note widget, touch and hold it and choose the launcher's
+Edit/Reconfigure option. On older launchers without this action, remove and add it again.
+Quick capture keeps its settings button.
 
 Previews refresh while that account is open in Catch, including offline edits.
 The last preview remains available with Catch closed. Vault notes and shared

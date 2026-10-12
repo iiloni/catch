@@ -7,6 +7,8 @@
     <!-- New IDs also replace the former header/footer layout in already placed widgets. -->
     <item type="layout" name="widget_list_minimal">@layout/widget_list</item>
     <item type="layout" name="widget_list_minimal_custom">@layout/widget_list</item>
+    <item type="layout" name="widget_single_minimal">@layout/widget_single</item>
+    <item type="layout" name="widget_single_minimal_custom">@layout/widget_single</item>
     <item type="layout" name="widget_row_custom">@layout/widget_row</item>
     <!-- Replace cached text-only collection rows after upgrading the app. -->
     <item type="layout" name="widget_row_images">@layout/widget_row</item>
