@@ -18,16 +18,29 @@ const DEFAULT_PROPS: Json = {
   level: 1,
   showPreview: true,
   previewWidth: 512,
+  checked: false,
+  isToggleable: false,
+  caption: '',
+  name: '',
+  url: '',
+  language: '',
 };
 
-/** Without what is switched off, empty, or the default every block starts with. */
-const said = (values: unknown, defaults: Json = {}): Json =>
+/** Without what is switched off, empty or the default. */
+const said = (values: unknown): Json =>
+  Object.fromEntries(
+    Object.entries(isObject(values) ? values : {}).filter(
+      ([, value]) => !blank(value) && value !== 'default',
+    ),
+  );
+/**
+ * Without the defaults that are known. Any other value stays, blank or not: its default is
+ * not known, so leaving it out could read two different blocks as one.
+ */
+const saidProps = (values: unknown): Json =>
   Object.fromEntries(
     Object.entries(isObject(values) ? values : {}).filter(([name, value]) =>
-      // A default that is not blank is unsaid by leaving it out, so blank says something.
-      name in defaults && !blank(defaults[name])
-        ? value !== undefined && value !== defaults[name]
-        : !blank(value) && value !== 'default',
+      name in DEFAULT_PROPS ? value !== DEFAULT_PROPS[name] : value !== undefined,
     ),
   );
 
@@ -65,7 +78,7 @@ function block(value: Json): Json {
   const nested = Array.isArray(children) ? children.filter(isObject).map(block) : [];
   return {
     ...said(rest),
-    props: said(props, DEFAULT_PROPS),
+    props: saidProps(props),
     ...(blank(content) ? {} : { content: inline(content) }),
     ...(nested.length ? { children: nested } : {}),
   };

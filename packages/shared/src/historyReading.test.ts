@@ -34,6 +34,14 @@ describe('how a version reads', () => {
     const readings = new Set([base, ...others].map(historyReading));
     expect(readings.size).toBe(others.length + 1);
   });
+  it('reads a setting it does not know as said, even switched off', () => {
+    const block = (props: Record<string, unknown>) => [{ type: 'custom', props }];
+    const readings = [{}, { flag: false }, { flag: true }, { size: 0 }].map((props) =>
+      historyReading(block(props)),
+    );
+    expect(new Set(readings).size).toBe(4);
+    expect(historyReading(block({ checked: false, caption: '', url: '' }))).toBe(readings[0]);
+  });
   it('keeps what it does not know how to read as it is', () => {
     const table = (cell: string) => [
       { type: 'table', content: { type: 'tableContent', rows: [{ cells: [[text(cell)]] }] } },
