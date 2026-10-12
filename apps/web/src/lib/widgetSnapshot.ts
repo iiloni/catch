@@ -10,21 +10,18 @@ import {
   type WidgetSnapshot,
 } from '@catch/shared';
 
-/** Small text previews retain checklist state without handing native code BlockNote JSON. */
+/** Plain text retains checklist state without handing native code BlockNote JSON. */
 export function widgetText(content: Note['content']) {
   const lines: string[] = [];
-  let length = 0;
   const visit = (blocks: Note['content']) => {
     for (const block of blocks) {
-      if (length >= 1800) break;
       const text = blocksToPlainText([{ ...block, children: [] }]);
       const props = block.props;
       const checked =
         typeof props === 'object' && props !== null && 'checked' in props && props.checked === true;
       if (text) {
         const line = block.type === 'checkListItem' ? `${checked ? '☑' : '☐'} ${text}` : text;
-        lines.push(...line.split('\n'));
-        length += line.length;
+        for (const part of line.split('\n')) lines.push(part);
       }
       if (Array.isArray(block.children)) {
         visit(
@@ -39,9 +36,34 @@ export function widgetText(content: Note['content']) {
   visit(content);
   // A checklist without a heading keeps its first item in the body.
   const heading = lines[0] && !/^[☐☑]/u.test(lines[0]) ? lines.shift() : undefined;
+  let titleEnd = 160;
+  const lastTitleUnit = heading?.charCodeAt(titleEnd - 1);
+  if (
+    heading &&
+    heading.length > titleEnd &&
+    lastTitleUnit !== undefined &&
+    lastTitleUnit >= 0xd800 &&
+    lastTitleUnit <= 0xdbff
+  )
+    titleEnd--;
+  const body = [heading?.slice(titleEnd) ?? '', ...lines].filter(Boolean).join('\n');
+  const sections: string[] = [];
+  for (let start = 0; start < body.length; ) {
+    let end = Math.min(start + 1600, body.length);
+    if (end < body.length) {
+      const chunk = body.slice(start, end);
+      const boundary = Math.max(chunk.lastIndexOf('\n'), chunk.lastIndexOf(' '));
+      if (boundary > 800) end = start + boundary + 1;
+      const last = body.charCodeAt(end - 1);
+      if (last >= 0xd800 && last <= 0xdbff) end--;
+    }
+    sections.push(body.slice(start, end));
+    start = end;
+  }
   return {
-    title: (heading || 'Untitled note').slice(0, 160),
-    body: [heading?.slice(160) ?? '', ...lines].filter(Boolean).join('\n').slice(0, 1600),
+    title: (heading || 'Untitled note').slice(0, titleEnd),
+    body: body.slice(0, 1600),
+    ...(body.length > 1600 ? { sections } : {}),
   };
 }
 

@@ -14,7 +14,8 @@ without becoming a second sync client or modifying TanStack's private storage.
 **Three native widgets.** Quick capture opens New note or Search. One note shows a
 selected note, with its color and checklist state. Note list shows pinned notes,
 Gallery, all notes, a tag (including descendants), or a Deck column, in Catch's position order with
-pinned notes first. Lists scroll vertically; single-note previews truncate to fit.
+pinned notes first. Both note widgets scroll vertically; One note includes the full
+plain text in bounded collection rows. The list's New note button uses Catch's rounded-square shape.
 The configuration activity selects an account, content and system/light/dark
 appearance for each instance through a custom Catch dialog, with accessible
 selection buttons and appearance segments. Android owns placement, resizing and reconfiguration.
@@ -23,9 +24,15 @@ Java/XML RemoteViews fit the existing shell without introducing Kotlin or Compos
 **A disposable snapshot, not a second database.** `watchWidgetSnapshot` reads only
 ordinary owned collections after local hydration, including when offline, and
 `nativeWidgets.ts` passes a versioned projection through `WidgetsPlugin`. The
-projection contains bounded text previews and checklist glyphs, effective note
-colors, and IDs for filtering and opening. It has no bearer tokens, editable note
-JSON, shared copies, attachments or vault plaintext. Native storage is an atomic
+projection contains bounded text rows and checklist glyphs, effective note
+colors, and IDs for filtering and opening. Each note can include one JPEG thumbnail
+(at most 320 pixels per side and 64 KB of base64), prioritizing its first image attachment
+over a visible link preview's cached thumbnail. No remote website is fetched by the
+launcher. Images respect disabled and hidden link previews. An opaque source key keeps
+the last thumbnail through offline text refreshes; changing or removing that source
+clears it. The optional fields preserve version-1 snapshot compatibility.
+It has no bearer tokens, authenticated URLs, editable note
+JSON, shared copies, original files or vault plaintext. Native storage is an atomic
 file under Android's no-backup directory. It can be recreated from collections.
 The widget providers and list service render that file while the WebView is absent.
 

@@ -102,9 +102,7 @@ final class WidgetTestHost {
                             "widget-test",
                             "https://widget-test.invalid",
                             new JSONArray("[{id:'widget-test',label:'Personal'}]"));
-            WidgetStore.sync(
-                    target,
-                    session,
+            JSONObject snapshot =
                     new JSONObject(
                             "{version:1,notes:[{id:'0198f3a0-0000-7000-8000-000000000001',title:'Saturday"
                                 + " market',body:'☐ Peaches & tomatoes\\n"
@@ -115,7 +113,32 @@ final class WidgetTestHost {
                                 + " key',color:'default',pinned:true,column:null,tags:[]},{id:'0198f3a0-0000-7000-8000-000000000003',title:'Weekend"
                                 + " errands',body:'☐ Return library books\\n"
                                 + "☐ Pick up"
-                                + " groceries',color:'default',pinned:true,column:null,tags:[]}],tags:[],columns:[]}"));
+                                + " groceries',color:'default',pinned:true,column:null,tags:[]}],tags:[],columns:[]}");
+            JSONObject first = snapshot.getJSONArray("notes").getJSONObject(0);
+            StringBuilder text = new StringBuilder(first.getString("body"));
+            for (int i = 1; i <= 35; i++) text.append("\n☐ Market stop " + i);
+            first.put(
+                    "sections",
+                    new JSONArray().put(text.toString()).put("Final line: remember the basket"));
+            android.graphics.Bitmap bitmap =
+                    android.graphics.Bitmap.createBitmap(
+                            240, 160, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+            canvas.drawColor(0xff76b5da);
+            android.graphics.Paint paint =
+                    new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(0xff59966b);
+            canvas.drawRect(0, 105, 240, 160, paint);
+            paint.setColor(0xffffc247);
+            canvas.drawCircle(180, 40, 22, paint);
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bytes);
+            bitmap.recycle();
+            first.put(
+                    "image",
+                    android.util.Base64.encodeToString(
+                            bytes.toByteArray(), android.util.Base64.NO_WRAP));
+            WidgetStore.sync(target, session, snapshot);
         } catch (org.json.JSONException error) {
             throw new IllegalArgumentException(error);
         }

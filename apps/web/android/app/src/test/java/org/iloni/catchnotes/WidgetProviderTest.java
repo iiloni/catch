@@ -57,23 +57,27 @@ public class WidgetProviderTest {
                 id,
                 new JSONObject("{account:'alice',kind:'single',target:'one',theme:'light'}"));
         CatchWidgetProvider.update(context, id);
+        WidgetListService service =
+                org.robolectric.Robolectric.buildService(WidgetListService.class).create().get();
+        android.widget.RemoteViewsService.RemoteViewsFactory factory =
+                service.onGetViewFactory(
+                        new android.content.Intent()
+                                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id));
+        factory.onCreate();
+        View row = factory.getViewAt(0).apply(context, null);
         assertEquals(
                 "Private shopping list",
-                ((TextView) manager.getViewFor(id).findViewById(R.id.widget_title))
-                        .getText()
-                        .toString());
+                ((TextView) row.findViewById(R.id.widget_title)).getText().toString());
         WidgetStore.clear(context, "alice");
         CatchWidgetProvider.update(context, id);
         assertEquals(
-                "Choose a note",
-                ((TextView) manager.getViewFor(id).findViewById(R.id.widget_title))
-                        .getText()
-                        .toString());
-        assertFalse(
-                ((TextView) manager.getViewFor(id).findViewById(R.id.widget_body))
-                        .getText()
-                        .toString()
-                        .contains("Bread"));
+                View.GONE, manager.getViewFor(id).findViewById(R.id.widget_note).getVisibility());
+        assertEquals(
+                View.VISIBLE,
+                manager.getViewFor(id).findViewById(R.id.widget_empty).getVisibility());
+        factory.onDataSetChanged();
+        assertEquals(0, factory.getCount());
+        assertNull(factory.getViewAt(0));
     }
 
     @Test

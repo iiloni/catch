@@ -103,7 +103,12 @@ public class WidgetsInstrumentedTest {
                 assertPressedFeedback(
                         instrumentation,
                         host,
-                        () -> findById(host.getWindow().getDecorView(), R.id.widget_note),
+                        () ->
+                                ((android.widget.ListView)
+                                                findById(
+                                                        host.getWindow().getDecorView(),
+                                                        R.id.widget_note))
+                                        .getChildAt(0),
                         "single-" + theme);
                 assertPressedFeedback(
                         instrumentation,
@@ -140,6 +145,42 @@ public class WidgetsInstrumentedTest {
                                             .findViewById(R.id.widget_compose);
                             assertTrue(last.getBottom() + list.getTop() <= fab.getTop());
                         });
+                instrumentation.runOnMainSync(
+                        () -> {
+                            android.widget.ListView single =
+                                    (android.widget.ListView)
+                                            findById(
+                                                    host.getWindow().getDecorView(),
+                                                    R.id.widget_note);
+                            assertEquals(2, single.getCount());
+                            android.widget.ImageView photo =
+                                    single.getChildAt(0).findViewById(R.id.widget_image);
+                            assertEquals(android.view.View.VISIBLE, photo.getVisibility());
+                            assertTrue(photo.getHeight() > 0);
+                        });
+                instrumentation.waitForIdleSync();
+                for (int swipe = 0; swipe < 9; swipe++) swipeSingleNote(instrumentation, host);
+                instrumentation.runOnMainSync(
+                        () -> {
+                            android.widget.TextView tail =
+                                    findText(
+                                            host.getWindow().getDecorView(),
+                                            "Final line: remember the basket");
+                            assertNotNull(tail);
+                            assertTrue(tail.getGlobalVisibleRect(new android.graphics.Rect()));
+                        });
+                saveScreenshot(instrumentation, host, "widgets-scrolled-" + theme + ".png")
+                        .recycle();
+                instrumentation.runOnMainSync(
+                        () -> {
+                            ((android.widget.ListView)
+                                            findById(
+                                                    host.getWindow().getDecorView(),
+                                                    R.id.widget_note))
+                                    .setSelection(0);
+                            findList(host.getWindow().getDecorView()).setSelection(0);
+                        });
+                instrumentation.waitForIdleSync();
                 android.content.Context targetContext = instrumentation.getTargetContext();
                 WidgetStore.clear(targetContext, "widget-test");
                 CatchWidgetProvider.updateAll(targetContext);
@@ -218,6 +259,42 @@ public class WidgetsInstrumentedTest {
                         });
             }
         }
+    }
+
+    private static void swipeSingleNote(Instrumentation instrumentation, Activity host)
+            throws Exception {
+        android.widget.ListView[] list = new android.widget.ListView[1];
+        instrumentation.runOnMainSync(
+                () ->
+                        list[0] =
+                                (android.widget.ListView)
+                                        findById(
+                                                host.getWindow().getDecorView(), R.id.widget_note));
+        long down = android.os.SystemClock.uptimeMillis();
+        for (int step = 0; step <= 12; step++) {
+            final int frame = step;
+            instrumentation.runOnMainSync(
+                    () -> {
+                        float x = list[0].getWidth() / 2f;
+                        float y = 16 + (list[0].getHeight() - 32) * (1 - frame / 12f);
+                        android.view.MotionEvent event =
+                                android.view.MotionEvent.obtain(
+                                        down,
+                                        android.os.SystemClock.uptimeMillis(),
+                                        frame == 0
+                                                ? android.view.MotionEvent.ACTION_DOWN
+                                                : frame == 12
+                                                        ? android.view.MotionEvent.ACTION_UP
+                                                        : android.view.MotionEvent.ACTION_MOVE,
+                                        x,
+                                        y,
+                                        0);
+                        list[0].dispatchTouchEvent(event);
+                        event.recycle();
+                    });
+            Thread.sleep(20);
+        }
+        Thread.sleep(100);
     }
 
     private static void assertPressedFeedback(
@@ -317,7 +394,8 @@ public class WidgetsInstrumentedTest {
     }
 
     private static android.widget.ListView findList(android.view.View view) {
-        if (view instanceof android.widget.ListView) return (android.widget.ListView) view;
+        if (view instanceof android.widget.ListView && view.getId() == R.id.widget_list)
+            return (android.widget.ListView) view;
         if (view instanceof android.view.ViewGroup) {
             android.view.ViewGroup group = (android.view.ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {

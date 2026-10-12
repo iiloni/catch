@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getAccounts, getSignedInUser } from './auth';
 import { watchWidgetSnapshot } from './collections';
 import { getServerUrl } from './serverUrl';
+import { widgetImagePublisher } from './widgetImages';
 
 const Widgets = registerPlugin<{
   begin(input: {
@@ -66,6 +67,7 @@ export function watchNativeWidgets() {
   if (!available || !user || clearedAll || clearedAccounts.has(user.id)) return () => {};
   let stopped = false;
   let stopWatching: (() => void) | undefined;
+  let stopImages: (() => void) | undefined;
   const failed = (error: unknown) => console.error('Widgets could not be updated', error);
   void Widgets.begin({
     account: user.id,
@@ -75,14 +77,21 @@ export function watchNativeWidgets() {
     .then((result) => {
       if (stopped || clearedAll || clearedAccounts.has(user.id)) return;
       const { session } = z.object({ session: z.string() }).parse(result);
-      stopWatching = watchWidgetSnapshot((snapshot) => {
+      const images = widgetImagePublisher((snapshot) => {
         if (!stopped && !clearedAll && !clearedAccounts.has(user.id))
           void Widgets.sync({ session, snapshot }).catch(failed);
       });
+      stopWatching = watchWidgetSnapshot(images.update);
+      window.addEventListener('online', images.retry);
+      stopImages = () => {
+        images.stop();
+        window.removeEventListener('online', images.retry);
+      };
     })
     .catch(failed);
   return () => {
     stopped = true;
     stopWatching?.();
+    stopImages?.();
   };
 }

@@ -12,6 +12,8 @@ function subscribe(listener: () => void) {
   };
 }
 
+export { subscribe as watchPreferences };
+
 /**
  * A UI preference persisted in localStorage and shared by every component that
  * reads the same key. Stored values that fail the schema fall back to the default.

@@ -9,4 +9,5 @@
   <string name="widget_configure">Configure widget</string>
   <string name="widget_new_note">New note</string>
   <string name="widget_search">Search notes</string>
+    <string name="widget_image_preview">Note image preview</string>
 </resources>

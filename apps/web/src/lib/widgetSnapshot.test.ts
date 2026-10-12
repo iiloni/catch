@@ -77,13 +77,34 @@ describe('widget projection', () => {
     });
   });
   it('bounds text sent across the bridge and handles attachment-only notes', () => {
-    expect(widgetText([{ content: 'A'.repeat(500) }, { content: 'B'.repeat(5000) }])).toEqual({
+    const text = widgetText([
+      { content: 'A'.repeat(500) },
+      { content: 'B'.repeat(5000) },
+      { content: 'Final paragraph' },
+    ]);
+    expect(text).toMatchObject({
       title: 'A'.repeat(160),
       body: `${'A'.repeat(340)}\n${'B'.repeat(1259)}`,
     });
+    expect(text.sections?.join('')).toBe(
+      `${'A'.repeat(340)}\n${'B'.repeat(5000)}\nFinal paragraph`,
+    );
+    expect(text.sections?.every((section) => section.length <= 1600)).toBe(true);
     expect(widgetText([{ type: 'image', props: { url: 'secret-url' } }])).toEqual({
       title: 'Untitled note',
       body: '',
     });
+  });
+  it('does not split an emoji between launcher rows', () => {
+    expect(widgetText([{ content: `${'a'.repeat(159)}📝tail` }])).toEqual({
+      title: 'a'.repeat(159),
+      body: '📝tail',
+    });
+    const text = widgetText([
+      { content: 'Title' },
+      { content: `${'a'.repeat(1599)}📝${'b'.repeat(2000)}` },
+    ]);
+    expect(text.sections?.[0]).toBe('a'.repeat(1599));
+    expect(text.sections?.[1]?.startsWith('📝')).toBe(true);
   });
 });

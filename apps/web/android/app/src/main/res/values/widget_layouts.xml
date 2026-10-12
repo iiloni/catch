@@ -8,4 +8,10 @@
     <item type="layout" name="widget_list_minimal">@layout/widget_list</item>
     <item type="layout" name="widget_list_minimal_custom">@layout/widget_list</item>
     <item type="layout" name="widget_row_custom">@layout/widget_row</item>
+    <!-- Replace cached text-only collection rows after upgrading the app. -->
+    <item type="layout" name="widget_row_images">@layout/widget_row</item>
+    <item type="layout" name="widget_row_images_custom">@layout/widget_row</item>
+    <item type="layout" name="widget_single_scroll">@layout/widget_single</item>
+    <item type="layout" name="widget_single_scroll_custom">@layout/widget_single</item>
+    <item type="layout" name="widget_single_row_custom">@layout/widget_single_row</item>
 </resources>

@@ -11,7 +11,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Disposable launcher data lives outside backup, separately from synced SQLite and the outbox. */
@@ -98,6 +100,25 @@ final class WidgetStore {
         JSONObject accounts = object(state(context), "accounts");
         JSONObject account = accounts.optJSONObject(activeAccount);
         if (account == null || snapshot.optInt("version") != 1) return false;
+        // Text arrives before image reads. Keep an offline thumbnail only while its source
+        // still belongs to this note; deleting/hiding/changing it must remove the old pixels.
+        Map<String, JSONObject> previous = new HashMap<>();
+        JSONArray oldNotes = array(object(account, "snapshot"), "notes");
+        for (int i = 0; i < oldNotes.length(); i++) {
+            JSONObject note = oldNotes.optJSONObject(i);
+            if (note != null) previous.put(note.optString("id"), note);
+        }
+        JSONArray newNotes = array(snapshot, "notes");
+        for (int i = 0; i < newNotes.length(); i++) {
+            JSONObject note = newNotes.optJSONObject(i);
+            if (note == null || note.has("image")) continue;
+            JSONObject old = previous.get(note.optString("id"));
+            String key = note.optString("imageKey");
+            if (!key.isEmpty()
+                    && old != null
+                    && key.equals(old.optString("imageKey"))
+                    && old.has("image")) put(note, "image", old.optString("image"));
+        }
         put(account, "snapshot", snapshot);
         put(account, "updated", System.currentTimeMillis());
         save(context);

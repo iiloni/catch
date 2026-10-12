@@ -146,18 +146,19 @@ public class WidgetLayoutTest {
         info.initialLayout = R.layout.widget_single;
         host.setAppWidget(1, info);
         RemoteViews forced =
-                new RemoteViews(context.getPackageName(), R.layout.widget_single_custom);
-        forced.setTextColor(R.id.widget_title, 0xffff0000);
+                new RemoteViews(context.getPackageName(), R.layout.widget_single_scroll_custom);
+        forced.setTextColor(R.id.widget_heading, 0xffff0000);
         host.updateAppWidget(forced);
         assertEquals(
                 0xffff0000,
-                ((android.widget.TextView) host.findViewById(R.id.widget_title))
+                ((android.widget.TextView) host.findViewById(R.id.widget_heading))
                         .getCurrentTextColor());
-        RemoteViews system = new RemoteViews(context.getPackageName(), R.layout.widget_single);
+        RemoteViews system =
+                new RemoteViews(context.getPackageName(), R.layout.widget_single_scroll);
         host.updateAppWidget(system);
         assertEquals(
                 context.getResources().getColor(R.color.widget_ink),
-                ((android.widget.TextView) host.findViewById(R.id.widget_title))
+                ((android.widget.TextView) host.findViewById(R.id.widget_heading))
                         .getCurrentTextColor());
     }
 }

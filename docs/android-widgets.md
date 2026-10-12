@@ -5,7 +5,12 @@ in before adding one from the launcher's widget picker. Each widget has its own
 account and appearance. A list can show pinned notes, Gallery, all notes, a tag including descendants,
 or a Deck column. Rounded note cards retain their colors and checklist previews.
 The list dedicates its space to cards with a floating New note button, without
-header or footer bars. Use the custom setup dialog to choose content and appearance.
+header or footer bars, and its + button has the same rounded-square shape as Catch's
+other controls. One note scrolls through the full note text. Both note widgets can
+show one image: the first image attachment, or a visible link preview thumbnail
+when no attached image is available. Hidden or disabled link previews stay hidden.
+Images are cached with the widget so they remain visible offline.
+Use the custom setup dialog to choose content and appearance.
 To change a placed list, touch and hold it and choose the launcher's Edit/Reconfigure
 option. On older launchers without this action, remove and add it again. Quick capture
 and One note keep their settings buttons.
@@ -38,7 +43,10 @@ Robolectric exercises the minimum API 24 and API 36: snapshot recovery after
 process death, account removal, stale sessions, launch validation, RemoteViews
 inflation, resetting an explicit appearance to the device theme and clearing
 visible content after sign-out, Gallery/all-notes filters and setup save/cancel
-and recreation behavior.
+and recreation behavior. API 28 and 36 use real bitmap decoding to check thumbnail
+size limits, invalid images and clearing recycled image rows. Tests also cover full
+single-note sections, older text-only snapshots and retaining only the current
+image source during an offline refresh.
 
 The instrumented test renders all three widgets through a real AppWidgetHost in
 light and dark, then verifies visible content clears and recovers as the account
@@ -46,7 +54,8 @@ snapshot is removed and restored. It verifies the last list card scrolls above t
 floating New note button and that launcher reconfiguration remains registered.
 It holds touches on capture buttons, the single note, list cards and the floating
 New note button, comparing painted window pixels to verify ripple feedback in both themes.
-It also opens the custom setup dialog, chooses All notes and saves the configuration.
+It verifies an image in the single-note widget and swipes through a long note to its
+last line. It also opens the custom setup dialog, chooses All notes and saves the configuration.
 This test requires API 29 or newer;
 Robolectric covers the minimum API separately. **Run it only on a disposable emulator**: it
 replaces the target app’s widget snapshot with fixture notes. Set `ANDROID_SERIAL` to that emulator
@@ -74,12 +83,17 @@ install. The screenshots below were captured this way on Android API 37. They sh
 
 [Pressed note card](screenshots/android-widget-pressed.png)
 
+[Long single note, scrolled to its last line](screenshots/android-widget-scrolled.png)
+
 `./scripts/dev.sh e2e e2e/widgets.spec.ts --workers=1` exercises cold routing,
 editor replacement with pending keystrokes, automatic composer saving and capture
 from an open editor, and Search handoff with duplicate delivery and a delayed
 Back traversal. These tests use the real editor and outbox with the native
 launch bridge mocked, and save painted startup/editor frames. Run the same cases
 with `E2E_FIREFOX=1` and `--project=firefox` for desktop Firefox coverage.
+The image case exercises real canvas JPEG encoding for attachment and link
+thumbnails, bounds their dimensions and payload, and reloads before reading an
+attachment thumbnail offline.
 
 `WidgetInputInstrumentedTest` exercises the real bundled React app, native widget
 launches and visible IME in fresh Activities. Build with `CATCH_DEV_SERVER_URL`

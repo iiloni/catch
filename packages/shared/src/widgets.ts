@@ -6,6 +6,16 @@ export const widgetNoteSchema = z.object({
   id: z.uuid(),
   title: z.string().max(160),
   body: z.string().max(1600),
+  /** Full plain text split into individually bounded launcher rows; absent in older snapshots. */
+  sections: z.array(z.string().max(1600)).optional(),
+  /** Opaque source identity lets native storage retain this thumbnail during an offline refresh. */
+  imageKey: z.string().max(80).optional(),
+  /** Small JPEG thumbnail bytes, never an authenticated URL or an original file. */
+  image: z
+    .string()
+    .max(64000)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+    .optional(),
   color: noteColorSchema,
   pinned: z.boolean(),
   column: z.string().nullable(),

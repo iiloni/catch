@@ -71,6 +71,7 @@ import {
   getAttachmentBlob,
   markAttachmentUploaded,
   refreshAttachmentUrls,
+  watchAttachmentFiles,
 } from './attachmentFiles';
 import { getAuthToken, resolveSignedInUser } from './auth';
 import { CompatibilityError } from './compatibility';
@@ -85,6 +86,7 @@ import { getServerUrl } from './serverUrl';
 import { shapeFetch } from './shapeFetch';
 import { createSharedNotesView } from './sharedNotesView';
 import { clearIncomingShares } from './shareInbox';
+import { watchPreferences } from './storage';
 import {
   addPendingWrite,
   getPendingWriteIds,
@@ -94,6 +96,7 @@ import {
   useAwaitingSync,
 } from './syncStatus';
 import { forgetVault } from './vaultKeyStore';
+import { type WidgetImageSource, widgetImageSources } from './widgetImages';
 import { widgetSnapshot } from './widgetSnapshot';
 
 // Collections read from and write to the signed-in user's store on this device, so notes
@@ -1091,7 +1094,9 @@ export function useSharedNotesReady() {
 }
 
 /** Subscribe only after local hydration, including offline; never export the vault view. */
-export function watchWidgetSnapshot(listener: (snapshot: WidgetSnapshot) => void) {
+export function watchWidgetSnapshot(
+  listener: (snapshot: WidgetSnapshot, images: Map<string, WidgetImageSource>) => void,
+) {
   let stopped = false;
   let hydrated = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1108,6 +1113,13 @@ export function watchWidgetSnapshot(listener: (snapshot: WidgetSnapshot) => void
             [...noteTagsCollection.values()],
             [...boardColumnsCollection.values()],
           ),
+          widgetImageSources(
+            user.id,
+            [...notesCollection.values()],
+            [...attachmentsCollection.values()],
+            [...linkPreviewsCollection.values()],
+            localStorage.getItem('catch-link-previews') !== 'false',
+          ),
         );
     }, 250);
   };
@@ -1116,12 +1128,17 @@ export function watchWidgetSnapshot(listener: (snapshot: WidgetSnapshot) => void
     tagsCollection,
     noteTagsCollection,
     boardColumnsCollection,
+    attachmentsCollection,
+    linkPreviewsCollection,
   ].map((collection) => collection.subscribeChanges(changed));
+  const stops = [watchAttachmentFiles(changed), watchPreferences(changed)];
   void hydrateLocalCollections([
     notesCollection,
     tagsCollection,
     noteTagsCollection,
     boardColumnsCollection,
+    attachmentsCollection,
+    linkPreviewsCollection,
   ])
     .then(() => {
       hydrated = true;
@@ -1132,5 +1149,6 @@ export function watchWidgetSnapshot(listener: (snapshot: WidgetSnapshot) => void
     stopped = true;
     clearTimeout(timer);
     for (const subscription of subscriptions) subscription.unsubscribe();
+    for (const stop of stops) stop();
   };
 }

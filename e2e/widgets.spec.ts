@@ -311,3 +311,109 @@ for (const action of ['compose', 'search'] as const) {
       .toBe(true);
   });
 }
+
+test('widget images encode bounded attachment and link thumbnails and work from offline files', async ({
+  page,
+  context,
+}) => {
+  await signUp(page);
+  const asset = 'a'.repeat(64);
+  // Use this app's endpoint, never contact a third-party site in a widget test.
+  await page.route(`**/api/link-previews/assets/${asset}`, async (route) => {
+    const bytes = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 900;
+      canvas.height = 600;
+      const paint = canvas.getContext('2d');
+      if (!paint) throw new Error('Missing canvas');
+      paint.fillStyle = '#76b5da';
+      paint.fillRect(0, 0, 900, 600);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await route.fulfill({ contentType: 'image/png', body: Buffer.from(bytes, 'base64') });
+  });
+  const attachment = '0198f3a0-0000-7000-8000-000000000099';
+  await page.evaluate(async (id) => {
+    const { storeAttachmentBlob } = await import('/src/lib/attachmentFiles.ts');
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 800;
+    const paint = canvas.getContext('2d');
+    if (!paint) throw new Error('Missing canvas');
+    paint.fillStyle = '#59966b';
+    paint.fillRect(0, 0, 1200, 800);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (image) => (image ? resolve(image) : reject(new Error('Missing image'))),
+        'image/png',
+      ),
+    );
+    await storeAttachmentBlob(id, blob, false, true);
+  }, attachment);
+  const encode = async (kind: 'attachment' | 'link', id: string) =>
+    page.evaluate(
+      async ({ kind, id }) => {
+        const { widgetImagePublisher } = await import('/src/lib/widgetImages.ts');
+        return new Promise<{
+          width: number;
+          height: number;
+          length: number;
+          key: string | undefined;
+        }>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            images.stop();
+            reject(new Error('Widget image timed out'));
+          }, 10000);
+          const images = widgetImagePublisher((snapshot) => {
+            const note = snapshot.notes[0];
+            if (!note?.image) return;
+            const picture = new Image();
+            picture.onload = () => {
+              clearTimeout(timeout);
+              images.stop();
+              resolve({
+                width: picture.naturalWidth,
+                height: picture.naturalHeight,
+                length: note.image?.length ?? 0,
+                key: note.imageKey,
+              });
+            };
+            picture.src = `data:image/jpeg;base64,${note.image}`;
+          });
+          images.update(
+            {
+              version: 1,
+              notes: [
+                {
+                  id: 'note',
+                  title: 'Image note',
+                  body: '',
+                  color: 'default',
+                  pinned: false,
+                  column: null,
+                  tags: [],
+                },
+              ],
+              tags: [],
+              columns: [],
+            },
+            new Map([['note', { kind, id }]]),
+          );
+        });
+      },
+      { kind, id },
+    );
+  const linked = await encode('link', asset);
+  expect(linked).toMatchObject({ width: 320, height: 213, key: `link:${asset}` });
+  expect(linked.length).toBeLessThanOrEqual(64000);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+  await context.setOffline(true);
+  try {
+    const cached = await encode('attachment', attachment);
+    expect(cached).toMatchObject({ width: 320, height: 213, key: `attachment:${attachment}` });
+    expect(cached.length).toBeLessThanOrEqual(64000);
+  } finally {
+    await context.setOffline(false);
+  }
+});

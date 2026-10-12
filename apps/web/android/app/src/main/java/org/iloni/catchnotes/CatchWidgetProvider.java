@@ -120,8 +120,8 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                         ? (customTheme ? R.layout.widget_capture_custom : R.layout.widget_capture)
                         : "single".equals(kind)
                                 ? (customTheme
-                                        ? R.layout.widget_single_custom
-                                        : R.layout.widget_single)
+                                        ? R.layout.widget_single_scroll_custom
+                                        : R.layout.widget_single_scroll)
                                 : (customTheme
                                         ? R.layout.widget_list_minimal_custom
                                         : R.layout.widget_list_minimal);
@@ -196,31 +196,25 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                         AppWidgetManager.getInstance(context)
                                 .getAppWidgetOptions(id)
                                 .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250);
-                float fontScale = context.getResources().getConfiguration().fontScale;
                 boolean compact = height < 220;
                 views.setViewVisibility(R.id.widget_footer, compact ? View.GONE : View.VISIBLE);
-                views.setInt(R.id.widget_title, "setMaxLines", compact ? 1 : 2);
-                int lines =
-                        Math.max(
-                                1,
-                                (int)
-                                        ((height
-                                                        - (compact ? 98 : 128)
-                                                        - (compact ? 28 : 56) * fontScale)
-                                                / (23 * fontScale)));
-                views.setInt(R.id.widget_body, "setMaxLines", lines);
                 views.setTextViewText(R.id.widget_heading, "Catch");
                 views.setTextViewText(
-                        R.id.widget_title,
-                        note == null ? "Choose a note" : note.optString("title"));
-                views.setTextViewText(
-                        R.id.widget_body,
-                        note == null
-                                ? "Open widget settings to choose an available note."
-                                : note.optString("body"));
+                        R.id.widget_empty, "Open widget settings to choose an available note.");
+                views.setOnClickPendingIntent(R.id.widget_empty, configureIntent(context, id));
+                views.setViewVisibility(R.id.widget_note, note == null ? View.GONE : View.VISIBLE);
+                views.setViewVisibility(R.id.widget_empty, note == null ? View.VISIBLE : View.GONE);
+                if (note != null) {
+                    Intent service =
+                            new Intent(context, WidgetListService.class)
+                                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                                    .setData(Uri.parse("catch-widget://single/" + id));
+                    views.setRemoteAdapter(R.id.widget_note, service);
+                    views.setPendingIntentTemplate(
+                            R.id.widget_note, openIntent(context, id, "note", null, true));
+                }
                 if (customTheme) {
-                    views.setTextColor(R.id.widget_title, ink(dark));
-                    views.setTextColor(R.id.widget_body, ink(dark));
+                    views.setTextColor(R.id.widget_empty, ink(dark));
                     if (note != null)
                         views.setInt(
                                 R.id.widget_surface,
@@ -236,11 +230,6 @@ public class CatchWidgetProvider extends AppWidgetProvider {
                                             context.getPackageName());
                     if (surface != 0) views.setImageViewResource(R.id.widget_surface, surface);
                 }
-                views.setOnClickPendingIntent(
-                        R.id.widget_note,
-                        note == null
-                                ? configureIntent(context, id)
-                                : openIntent(context, id, "note", note.optString("id"), false));
             } else {
                 String filter = config.optString("filter", "pinned");
                 String heading =
@@ -294,6 +283,8 @@ public class CatchWidgetProvider extends AppWidgetProvider {
         }
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         manager.updateAppWidget(id, views);
-        if ("list".equals(kind)) manager.notifyAppWidgetViewDataChanged(id, R.id.widget_list);
+        if ("list".equals(kind) || "single".equals(kind))
+            manager.notifyAppWidgetViewDataChanged(
+                    id, "single".equals(kind) ? R.id.widget_note : R.id.widget_list);
     }
 }

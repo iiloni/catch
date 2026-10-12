@@ -40,6 +40,42 @@ public class WidgetStoreTest {
     }
 
     @Test
+    public void offlineRefreshKeepsOnlyTheSameNotesCurrentImageSource() throws Exception {
+        JSONObject photo = WidgetStore.array(snapshot, "notes").getJSONObject(0);
+        photo.put("imageKey", "link:hash").put("image", "YWJj");
+        WidgetStore.sync(context, session, snapshot);
+        JSONObject refresh = new JSONObject(snapshot.toString());
+        JSONObject incoming = refresh.getJSONArray("notes").getJSONObject(0);
+        incoming.remove("image");
+        incoming.put("body", "Offline edit");
+        assertTrue(WidgetStore.sync(context, session, refresh));
+        assertEquals("YWJj", incoming.optString("image"));
+        refresh = new JSONObject(refresh.toString());
+        incoming = refresh.getJSONArray("notes").getJSONObject(0);
+        incoming.remove("image");
+        incoming.put("imageKey", "attachment:replacement");
+        WidgetStore.sync(context, session, refresh);
+        assertFalse(incoming.has("image"));
+        incoming.put("image", "YWJj");
+        WidgetStore.sync(context, session, refresh);
+        JSONObject removed = new JSONObject(refresh.toString());
+        removed.getJSONArray("notes").getJSONObject(0).remove("image");
+        removed.getJSONArray("notes").getJSONObject(0).remove("imageKey");
+        WidgetStore.sync(context, session, removed);
+        assertFalse(removed.getJSONArray("notes").getJSONObject(0).has("image"));
+        String bob =
+                WidgetStore.begin(
+                        context,
+                        "bob",
+                        "https://catch.example",
+                        new JSONArray("[{id:'alice'},{id:'bob'}]"));
+        JSONObject other = new JSONObject(snapshot.toString());
+        other.getJSONArray("notes").getJSONObject(0).remove("image");
+        WidgetStore.sync(context, bob, other);
+        assertFalse(other.getJSONArray("notes").getJSONObject(0).has("image"));
+    }
+
+    @Test
     public void snapshotsAndConfigurationSurviveProcessDeath() throws Exception {
         JSONObject launch = WidgetStore.launch(context, 42, "note", "one");
         java.lang.reflect.Field cache = WidgetStore.class.getDeclaredField("state");
