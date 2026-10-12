@@ -39,9 +39,11 @@ export function FloatingToolbar({
   }, [from, sideways, reducedMotion, x, y]);
 
   useEffect(() => {
+    // Presence can return before exit finishes; restart the slide in that case too.
+    if (!isPresent) return;
     const slide = animate(sideways ? x : y, 0, transition);
     return () => slide.stop();
-  }, [sideways, x, y, transition]);
+  }, [isPresent, sideways, x, y, transition]);
 
   return (
     <div

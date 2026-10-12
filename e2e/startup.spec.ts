@@ -56,15 +56,19 @@ test('cold startup stays usable during sync and arriving notes enter progressive
     await expect(page.locator('#app-launch')).toHaveCount(0);
     releaseSync();
     await page.unrouteAll({ behavior: 'wait' });
-    await expect(card(page, 'First saved note')).toBeVisible({ timeout: 15_000 });
+    // Every seeded card must have entered before observing whether a remount repeats it.
+    for (const title of ['First saved note', 'Second saved note']) {
+      await expect(card(page, title)).toBeVisible({ timeout: 15_000 });
+      await expect(
+        card(page, title).locator('xpath=ancestor::*[@data-note-cell]/div[1]'),
+      ).toHaveCSS('opacity', '1');
+    }
     await expect(page.locator('html')).toHaveAttribute('data-saw-note-entry', 'true');
-    await expect(
-      card(page, 'First saved note').locator('xpath=ancestor::*[@data-note-cell]/div[1]'),
-    ).toHaveCSS('opacity', '1');
     await expect(page.locator('[data-dock]')).toHaveCSS('opacity', '1');
 
     // A route remount must not fade the saved cards in again.
     await page.getByRole('link', { name: 'Search', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Search', exact: true })).toBeVisible();
     await waitForPageTransition(page);
     await page.evaluate(() => {
       delete document.documentElement.dataset.sawNoteEntry;
@@ -72,6 +76,7 @@ test('cold startup stays usable during sync and arriving notes enter progressive
     await page.getByRole('button', { name: 'Close search', exact: true }).click();
     await waitForPageTransition(page);
     await expect(card(page, 'First saved note')).toBeVisible();
+    await expect(card(page, 'Second saved note')).toBeVisible();
     await expect(page.locator('html')).not.toHaveAttribute('data-saw-note-entry');
   } finally {
     releaseSync();

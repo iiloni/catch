@@ -14,6 +14,7 @@ import { adminRoutes } from './routes/admin';
 import { attachmentRoutes } from './routes/attachments';
 import { backupDownloadRoutes } from './routes/backups';
 import { boardColumnRoutes } from './routes/boardColumns';
+import { historyRoutes } from './routes/history';
 import { linkPreviewRoutes } from './routes/linkPreviews';
 import { notesRoutes } from './routes/notes';
 import { pushRoutes } from './routes/push';
@@ -131,6 +132,7 @@ export function createApp() {
     .route('/admin/backups', backupDownloadRoutes)
     .route('/admin', adminRoutes)
     .route('/notes', notesRoutes)
+    .route('/note-history', historyRoutes)
     .route('/tags', tagRoutes)
     .route('/note-tags', noteTagRoutes)
     .route('/attachments', attachmentRoutes)

@@ -25,11 +25,11 @@ import { getAuthToken } from './auth';
 import { attachmentsCollection, notesCollection, useAttachments, write } from './collections';
 import { compatibleFetch } from './compatibility';
 import { editorControls, editorNote } from './dockState';
+import { noteStore } from './noteStore';
 import type { ImportBatch } from './notes';
 import { getServerUrl } from './serverUrl';
 import { makeThumbnail } from './thumbnails';
 import {
-  changeVaultNote,
   changeVaultNoteFiles,
   getSealedFiles,
   getVaultFiles,
@@ -246,7 +246,8 @@ export function removeAttachment(attachment: Attachment) {
     attachmentsCollection.update(attachment.id, (draft) => {
       draft.deletedAt = new Date();
     });
-    notesCollection.update(attachment.noteId, (draft) => {
+    // Through the store, so history keeps the note as it was with the file in it.
+    noteStore.update(attachment.noteId, (draft) => {
       draft.content = removeAttachmentBlocks(
         controls?.getContent() ?? draft.content,
         attachment.id,
@@ -273,7 +274,7 @@ function removeVaultFile(attachment: Attachment, content: Note['content'] | unde
       });
     }
     changeVaultNoteFiles(noteId, (files) => files.filter((file) => file.id !== attachment.id));
-    changeVaultNote(noteId, (draft) => {
+    noteStore.update(noteId, (draft) => {
       draft.content = removeAttachmentBlocks(content ?? draft.content, attachment.id);
       draft.updatedAt = new Date();
     });

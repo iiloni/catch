@@ -14,6 +14,7 @@ import {
 } from './auth';
 import { clearLocalData } from './collections';
 import { editorNote, quickNote } from './dockState';
+import { deleteHistoryStorage } from './historyStorage';
 import { forgetImport } from './imports';
 import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
@@ -164,6 +165,7 @@ export async function signOutAccount(account: Account) {
   const { id } = account.user;
   const removed = await Promise.allSettled([
     deleteLocalDatabase(id),
+    deleteHistoryStorage(id),
     deleteAttachmentFiles(id),
     clearIncomingShares(id),
     forgetVault(id),

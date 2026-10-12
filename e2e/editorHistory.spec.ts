@@ -93,6 +93,7 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
   await expect(redo).toBeDisabled();
 
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.reload();
   const reopened = await openNote(page, 'History toolbar');
   await expect(reopened.getByRole('textbox').locator('p').last()).toHaveText(

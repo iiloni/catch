@@ -118,3 +118,10 @@ stop waiting once the device's copy has something to show, or when offline
 - The SQLite worker is 1.7 MB (its WASM is inlined), precached by the service worker, and
   excluded from Vite's dependency pre-bundling so it stays next to its module.
 - The persistence packages are 0.2.x. Their use stays in `collections.ts` and `localStore.ts`.
+
+Note history (ADR 0022) keeps account-scoped compressed/encrypted payloads and crash-recovery
+drafts in IndexedDB, outside synced note rows. Immutable captures use separate outbox
+transactions on the small `note-history` control collection, so coalescing a live content
+save never removes a historical checkpoint. Startup reconciles staged jobs with the outbox.
+Original restores are freshness-checked online requests, not optimistic outbox mutations;
+cached versions can be copied offline. Sign-out deletes the history store for that account.

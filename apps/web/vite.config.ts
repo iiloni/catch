@@ -87,6 +87,13 @@ export default defineConfig(({ command }) => ({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   optimizeDeps: {
+    // Worker imports escape the initial scan; discovering these during capture reloads
+    // the page before the edit and its checkpoint finish reaching durable storage.
+    include: [
+      '@catch/shared > @dmsnell/diff-match-patch',
+      '@catch/shared > fflate',
+      '@catch/shared > jsondiffpatch',
+    ],
     // Its SQLite worker is a file next to it, found through `import.meta.url`; pre-bundling
     // would move the module away from it.
     exclude: ['@tanstack/browser-db-sqlite-persistence'],

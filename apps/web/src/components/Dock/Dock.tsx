@@ -35,6 +35,7 @@ import { flushSync } from 'react-dom';
 import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
+import { HistoryDockSlot } from '@/components/NoteHistory/HistoryDock';
 import { NoteLinkTray, useNoteLinkTrayShown } from '@/components/NoteLinkTray/NoteLinkTray';
 import { ScrollToBottom } from '@/components/ScrollToBottom/ScrollToBottom';
 import {
@@ -47,6 +48,7 @@ import {
   editorControls,
   editorNote,
   lastBrowsingTab,
+  noteHistoryOpen,
   quickNote,
   quickNoteCanSave,
   searchFilterCount,
@@ -114,6 +116,7 @@ export function Dock() {
   const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
   const hidden = useWideSettings() && inSettings && !quickNoteOpen;
   const entry = useEntryMotion('dock', !hidden, 120);
+  const historyOpen = noteHistoryOpen.use();
   // A tap changes the dock before the router mounts the page, alongside the keyboard.
   const [searchIntent, setSearchIntent] = useState<{ pathname: string; active: boolean } | null>(
     null,
@@ -282,8 +285,8 @@ export function Dock() {
                 />
                 {/* Isolated so the link tray can tuck behind the dock's glass. */}
                 <div className="relative isolate min-w-0 flex-1">
-                  {mode === 'note' && <NoteLinkTray />}
-                  {mode === 'note' && <FloatingNoteToolbars />}
+                  {mode === 'note' && !historyOpen && <NoteLinkTray />}
+                  {mode === 'note' && !historyOpen && <FloatingNoteToolbars />}
                   <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
                     <SearchField
                       inputRef={inputRef}
@@ -319,7 +322,8 @@ export function Dock() {
                           pickerRoot={() => dockRef.current}
                         />
                       )}
-                      {mode === 'note' && <NoteDock key="note" />}
+                      {mode === 'note' &&
+                        (historyOpen ? <HistoryDockSlot key="history" /> : <NoteDock key="note" />)}
                     </AnimatePresence>
                   </div>
                 </div>
@@ -382,6 +386,7 @@ function FloatingNoteToolbars({ inPane = false }: { inPane?: boolean }) {
  * interaction outside it in a pane.
  */
 function PaneDock({ width, compact }: { width: number; compact: boolean }) {
+  const historyOpen = noteHistoryOpen.use();
   return (
     <div
       className={cn(
@@ -391,15 +396,18 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
       style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
-        {width - GUTTER < HEADER_HISTORY_MIN && <FloatingNoteToolbars inPane />}
-        <NoteLinkTray />
+        {!historyOpen && width - GUTTER < HEADER_HISTORY_MIN && <FloatingNoteToolbars inPane />}
+        {!historyOpen && <NoteLinkTray />}
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
           initial={false}
           exit={{ opacity: 0 }}
           transition={springs.pane}
         >
-          <NoteDock />
+          {/* Leaving with the pane, either dock still fades with it. */}
+          <AnimatePresence initial={false} propagate>
+            {historyOpen ? <HistoryDockSlot key="history" /> : <NoteDock key="note" />}
+          </AnimatePresence>
         </motion.div>
       </div>
     </div>
