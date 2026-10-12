@@ -511,12 +511,13 @@ export function NoteHistory({
   const compared = useMemo(() => ({ content: entryNote.content, files: [] }), [entryNote]);
   const when = (version: HistoryVersion) =>
     time(local.has(version.id) ? version.capturedAt : version.receivedAt);
-  // Where a version is kept is said only when it limits what can be done with it.
+  // Where a version is kept is said only when it limits what can be done with it. One held
+  // here may be waiting to sync, refused by the server, or listed without the server's answer.
   const detail = (snapshot: Snapshot) =>
     [
       snapshot.versions.map(label).find(Boolean),
       snapshot.versions.every((version) => local.has(version.id))
-        ? 'Not synced yet'
+        ? 'On this device'
         : !connected && !snapshot.versions.some((version) => available.has(version.id))
           ? 'Not available offline'
           : null,
