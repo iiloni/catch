@@ -327,16 +327,24 @@ or through `merge on pass` before merging.
 
 [`site.yml`](../.github/workflows/site.yml) builds `apps/site` and uploads it to Cloudflare
 Workers with static assets when `main` changes the site or its inputs, when a release tag
-is pushed or published, after a successful **Release** run in this repository, and on
-request. The completed-run trigger covers successful dispatched Release runs with a
-published GitHub Release, including automated tagging and publication: GitHub
-suppresses both tag-push and release-published workflow triggers when the changes use
-`GITHUB_TOKEN`. Failed, cancelled or unpublished Release runs do not deploy the site;
-tag-push Release completions skip the fallback because the push already deployed it. It always builds
-`main` from a full clone, because the changelog is derived from tags and history, and fails
-if that changelog cannot be generated. Pull requests do not deploy; CI's `check` job builds
-the site for them. To refresh the changelog after a missed deployment, run
-`gh workflow run site.yml --ref main`; there is no need to rebuild release artifacts.
+is pushed or published externally, and on request. After a dispatched **Release** run
+publishes its GitHub Release, its separate `refresh-site` job explicitly dispatches Site
+on `main` when `CLOUDFLARE_SITE_ENABLED=true`. This covers automated tagging and preview
+promotion. GitHub suppresses tag-push and release-published triggers generated with
+`GITHUB_TOKEN`, and completion follow-ups for the token-dispatched Release do not start
+Site either. Explicit `workflow_dispatch` works with that token and requires only
+`actions: write` in the refresh job. Tag-push Release runs skip this dispatch because the
+external push already deployed Site. Failed, cancelled, disabled or unpublished releases
+cannot reach the refresh job, which depends on successful publication.
+
+Site always builds `main` from a full clone, because the changelog is derived from tags
+and history, and fails if that changelog cannot be generated. Pull requests do not deploy;
+CI's `check` job builds the site for them. Release reports the dispatch request, not the
+Site deployment result: inspect the separate Site run for that result. If dispatch fails,
+rerun only the failed `refresh-site` job; release artifacts are already published. If
+Site fails, or a tag points to a commit from before the explicit dispatch was added
+(including promotion of an older preview), run `gh workflow run site.yml --ref main` to
+refresh the changelog without rebuilding release artifacts.
 
 The job is skipped until the repository is connected to Cloudflare, once:
 
