@@ -16,9 +16,9 @@ required. A PR with neither label also has a failing `validation` check; its ord
 the gate. Main pushes and manual CI requests request the full suite. Release CI
 continues to reuse only a verified full pass for the exact main/tag commit.
 
-A change confined to documentation is the exception: it runs `check` and skips E2E, on
-its PR and on the push to `main` that follows. See
-[Documentation-only changes](#documentation-only-changes).
+A change confined to documentation or the allowlisted publication/review workflows and
+their release test is the exception: it runs `check` and skips E2E, on its PR and on the
+push to `main` that follows. See [E2E-exempt changes](#e2e-exempt-changes).
 
 Optional [AI code review](ai-reviews.md) is requested separately with the `ai review`
 label. It can run while a PR is a draft, is advisory, and does not authorize merging.
@@ -130,7 +130,7 @@ labels such as `duplicate`, `invalid` or `wontfix`.
    and rely on the mandatory full suite before merge; do not run full local E2E as a
    routine finishing check. An explicit user request can also justify an early full run.
 2. Once functionality and design are approved for merging after tests pass, mark the PR
-   ready and add `merge on pass` (for a documentation-only change this runs no E2E):
+   ready and add `merge on pass` (for an E2E-exempt change this runs no E2E):
 
    ```bash
    gh pr ready <number>
@@ -249,27 +249,42 @@ next focus change; `signUp` in `e2e/helpers.ts` gives Firefox a keyboard that ne
 the reported height stands. A Firefox test that reports a keyboard without `signUp` needs
 the same.
 
-## Documentation-only changes
+## E2E-exempt changes
 
-A change needs no E2E when every file it touches is one the app, its image and its tests
-never load. [`scripts/change-scope.ts`](../scripts/change-scope.ts) holds the list:
+A change needs no E2E when every file it touches is outside the app build, production image
+and Playwright inputs. [`scripts/change-scope.ts`](../scripts/change-scope.ts) holds the list:
 
 - `docs/**`
 - Markdown in the repository root (`README.md`, `AGENTS.md`, `DEPLOYMENT.md`, ...) and
   under `branding/`
 - `.github/pull_request_template.md`, `LICENSE`, `.gitignore` and `cubic.yaml`
+- `.github/workflows/release.yml`, `.github/workflows/site.yml`,
+  `.github/workflows/tag-release.yml`, `.github/workflows/promote-release.yml` and
+  `.github/workflows/ai-review.yml`
+- `scripts/release-workflows.test.ts`
+
+The allowlisted workflows orchestrate publication, deployment, tag creation or advisory
+review; the app build, production image and Playwright tests do not load them. Their release
+workflow unit test still runs in `check`. This is an explicit list, not a workflow or script
+wildcard: `.github/workflows/ci.yml` defines the E2E jobs and must remain covered.
 
 Everything else counts as code, including Markdown anywhere else (an importer fixture is
-test input), workflows, scripts and the files CI itself runs from. A change that mixes the
-two is code. A renamed file counts under both its old and its new path, and a change the
-workflow cannot read counts as code. Add a path to the list only when nothing that runs
-reads it.
+test input), other workflows and scripts. Release helpers remain outside this exemption:
+`release.ts` and `changelog.ts` feed the site build and release tooling, while `release.sh`
+and `tag-release.ts` create local tags. This change exempts workflow orchestration and its
+release test, not release scripts or site source generally. `wait-for-ci.ts`,
+`ci-validation.sh` and `change-scope.ts` control validation and still require E2E.
+
+A change that mixes an exempt path with any other path is code. A renamed file counts
+under both its old and its new path, and a change the workflow cannot read counts as code.
+Add a path only after verifying that it is outside the app build, production image and
+Playwright inputs.
 
 For such a change:
 
 - `check` still runs: lint, type checks, unit tests and builds.
 - `merge on pass` does not start E2E, and `validation` passes on `check` alone. The label
-  is still required, because it records approval, so an unlabeled documentation PR fails
+  is still required, because it records approval, so an unlabeled exempt PR fails
   `validation` like any other.
 - `run e2e` still starts the full suite, and `validation` then waits for it.
 - The push to `main` skips E2E as well. That run is green without being a full pass, so a

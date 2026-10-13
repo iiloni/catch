@@ -156,7 +156,7 @@ test('an overall green run must include successful checks and both E2E projects'
   }
 });
 
-test('a documentation-only push that skipped E2E is tested on the release tag', async () => {
+test('an E2E-exempt push that skipped E2E is tested on the release tag', async () => {
   let time = 0;
   let requests = 0;
   const tagged = { ...run, id: 2, event: 'workflow_dispatch', head_branch: 'v0.2.2-preview' };

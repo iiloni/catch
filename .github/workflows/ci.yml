@@ -31,10 +31,10 @@ jobs:
       actions: read
     outputs:
       run_checks: ${{ steps.ci.outputs.run_checks }}
-      docs_only: ${{ steps.scope.outputs.docs_only }}
-      # `run e2e` always tests. Otherwise a change confined to documentation skips E2E, and
+      e2e_exempt: ${{ steps.scope.outputs.e2e_exempt }}
+      # `run e2e` always tests. Otherwise a change confined to exempt paths skips E2E, and
       # a PR waits for `merge on pass`.
-      run_e2e: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
+      run_e2e: ${{ contains(github.event.pull_request.labels.*.name, 'run e2e') || steps.scope.outputs.e2e_exempt != 'true' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'merge on pass')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,7 +48,7 @@ jobs:
       - run: pnpm install --frozen-lockfile --filter catch
       # Only a PR or a push has a change to read; a manual or release request tests the
       # commit, whatever last changed in it. Anything unreadable counts as code.
-      - name: Decide whether the change is documentation only
+      - name: Decide whether the change is exempt from E2E
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -59,12 +59,12 @@ jobs:
             pull_request) base='HEAD^1' ;;
             push) git fetch --quiet --depth=1 origin "$BEFORE" && base="$BEFORE" || true ;;
           esac
-          docs_only=false
+          e2e_exempt=false
           if [[ -n "$base" ]]; then
-            docs_only=$(git diff --name-only --no-renames "$base" HEAD | node scripts/change-scope.ts)
+            e2e_exempt=$(git diff --name-only --no-renames "$base" HEAD | node scripts/change-scope.ts)
           fi
-          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
-          echo "Documentation only: $docs_only"
+          echo "e2e_exempt=$e2e_exempt" >> "$GITHUB_OUTPUT"
+          echo "E2E exempt: $e2e_exempt"
       - name: Decide whether to reuse full CI
         id: ci
         env:
@@ -216,7 +216,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           E2E_REQUESTED: ${{ needs.reuse.outputs.run_e2e }}
-          DOCS_ONLY: ${{ needs.reuse.outputs.docs_only }}
+          E2E_EXEMPT: ${{ needs.reuse.outputs.e2e_exempt }}
           MERGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'merge on pass') }}
           REUSE_RESULT: ${{ needs.reuse.result }}
           RUN_CHECKS: ${{ needs.reuse.outputs.run_checks }}
