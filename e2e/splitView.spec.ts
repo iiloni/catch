@@ -13,6 +13,42 @@ import {
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
 
+test('a note pane resumes opening when history restores it during its entrance', async ({
+  page,
+}) => {
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Interrupted pane', body: 'Still reachable' }]);
+
+  const restored = page.evaluate(async () => {
+    const { paneReveal } = await import('/src/lib/splitView.ts');
+    await new Promise<void>((resolve) => {
+      const stop = paneReveal.on('change', (value) => {
+        if (value <= 0.2 || value >= 1) return;
+        stop();
+        window.addEventListener(
+          'popstate',
+          () => {
+            window.addEventListener('popstate', () => resolve(), { once: true });
+            requestAnimationFrame(() => history.forward());
+          },
+          { once: true },
+        );
+        history.back();
+      });
+    });
+  });
+  await Promise.all([
+    restored,
+    card(page, 'Interrupted pane').getByRole('button', { name: 'Open note' }).click(),
+  ]);
+
+  const dialog = page.getByRole('dialog', { name: 'Edit note' });
+  await expect(dialog.getByRole('textbox')).toContainText('Still reachable');
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeInViewport();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
+});
+
 test('an open note sits beside the page, which stays usable', async ({ page }) => {
   await signUp(page);
   await seedNotes(page, [

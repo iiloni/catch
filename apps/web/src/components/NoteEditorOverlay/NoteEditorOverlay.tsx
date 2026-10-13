@@ -471,13 +471,26 @@ function EditorSurface({
 
   // Unfolding a foldable with a note open turns it into a pane, which slides into place. Its
   // card stays in view beside it, marked as open.
+  const wasPresent = useRef(isPresent);
   // biome-ignore lint/correctness/useExhaustiveDependencies: recompute when the layout changes
   useEffect(() => {
-    if (!settled || !split || !isPresent) return;
+    // AnimatePresence restores the same instance when a note returns during its exit. Its
+    // first entrance may have been cancelled before it settled, so resume that slide too.
+    const reopened = isPresent && !wasPresent.current;
+    wasPresent.current = isPresent;
+    if ((!settled && !reopened) || !split || !isPresent) return;
     showCard(note.id);
     if (leadSurface === self && paneReveal.get() < 1) {
       stopSteady(paneReveal);
-      animate(paneReveal, 1, springs.pane);
+      let active = true;
+      const animation = animate(paneReveal, 1, springs.pane);
+      void animation.then(() => {
+        if (active) setSettled(true);
+      });
+      return () => {
+        active = false;
+        animation.stop();
+      };
     }
   }, [settled, split, isPresent, note.id, self, target.x, target.width, target.height]);
 
@@ -507,8 +520,13 @@ function EditorSurface({
       // Closed before it finished sliding in, or before it began.
       cancelSlide.current();
       stopSteady(paneReveal);
-      void animate(paneReveal, 0, springs.pane).then(finish);
-      return;
+      const animation = animate(paneReveal, 0, springs.pane);
+      void animation.then(finish);
+      return () => {
+        done = true;
+        leavingPanes.delete(finish);
+        animation.stop();
+      };
     }
 
     // Measure a frame later: an action that closed the editor (trash, archive) may be about
