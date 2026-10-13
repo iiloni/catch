@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defaultAllowedOrigins } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { type ManifestOptions, VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
 import { type WebBuild, webBuildSchema } from '../../packages/shared/src/releases.ts';
@@ -13,6 +13,45 @@ import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.CATCH_CHANNEL);
 const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
+
+const manifest = {
+  name: 'Catch',
+  short_name: 'Catch',
+  description: 'Self-hosted notes that work offline.',
+  theme_color: brandTokens.colors.amberPrimary.hex,
+  background_color: '#f7f6f2',
+  display: 'standalone',
+  id: '/',
+  scope: '/',
+  lang: 'en',
+  start_url: '/',
+  share_target: {
+    action: '/share',
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    params: {
+      title: 'title',
+      text: 'text',
+      url: 'url',
+      files: [{ name: 'files', accept: ['*/*'] }],
+    },
+  },
+  icons: [
+    { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+    { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+    {
+      src: '/maskable-512x512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+  ],
+} satisfies Partial<ManifestOptions>;
+
+const previewManifest = {
+  ...manifest,
+  icons: manifest.icons.map((icon) => ({ ...icon, src: `/preview${icon.src}` })),
+};
 
 export default defineConfig(({ command }) => ({
   define: {
@@ -27,6 +66,11 @@ export default defineConfig(({ command }) => ({
       name: 'web-build-metadata',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
+        this.emitFile({
+          type: 'asset',
+          fileName: 'manifest-preview.webmanifest',
+          source: JSON.stringify(previewManifest),
+        });
       },
     },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
@@ -38,38 +82,9 @@ export default defineConfig(({ command }) => ({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      manifest: {
-        name: 'Catch',
-        short_name: 'Catch',
-        description: 'Self-hosted notes that work offline.',
-        theme_color: brandTokens.colors.amberPrimary.hex,
-        background_color: '#f7f6f2',
-        display: 'standalone',
-        start_url: '/',
-        share_target: {
-          action: '/share',
-          method: 'POST',
-          enctype: 'multipart/form-data',
-          params: {
-            title: 'title',
-            text: 'text',
-            url: 'url',
-            files: [{ name: 'files', accept: ['*/*'] }],
-          },
-        },
-        icons: [
-          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          {
-            src: '/maskable-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      manifest,
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
       },
     }),
   ],

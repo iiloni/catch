@@ -25,6 +25,20 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Restore the install identity before the app starts, including an offline launch.
+      try {
+        const preference = JSON.parse(localStorage.getItem('catch-app-icon') ?? 'null');
+        if (preference?.icon === 'preview' && preference.server === location.origin) {
+          for (const link of document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')) {
+            const filename = new URL(link.href).pathname.split('/').pop();
+            link.href = `/preview/${filename}`;
+          }
+          const manifest = document.querySelector('link[rel="manifest"]');
+          if (manifest) manifest.href = '/manifest-preview.webmanifest';
+        }
+      } catch {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

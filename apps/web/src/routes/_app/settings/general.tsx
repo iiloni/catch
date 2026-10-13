@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { Link2 } from 'lucide-react';
+import { AppIconPicker } from '@/components/AppIconPicker/AppIconPicker';
 import { BookmarkletSetup } from '@/components/BookmarkletSetup/BookmarkletSetup';
 import { ClockPicker } from '@/components/ClockPicker/ClockPicker';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
@@ -24,6 +25,7 @@ function GeneralSettings() {
       <SettingsSection title="Appearance">
         <ThemePicker value={theme} onChange={setTheme} />
       </SettingsSection>
+      <AppIconPicker />
       <SettingsSection
         title="Time format"
         description="Automatic follows this device's language, which may not match its clock setting."

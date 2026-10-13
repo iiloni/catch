@@ -82,10 +82,16 @@ and preview must advance independently, including preview versions ahead of stab
 - The tag parser's channel output supplies build-only `CATCH_CHANNEL` to web builds and
   Android sync. A build without one, Docker included, is the `dev` channel, which is
   never tagged or published; this is build identification, not a new official release channel.
-  Favicons, Apple touch icons and PWA icons use the stable artwork for every channel.
-  All Android flavors inherit stable legacy, round and adaptive launcher resources from
-  `src/main/res`, independently of debug/release build type. Only Settings > Update selects
-  channel artwork: amber for stable, purple for preview and light blue for development.
+  Favicons, Apple touch icons, PWA icons and Android launcher icons default to stable
+  artwork for every channel. On a preview server, Settings > General offers Stable and
+  Preview icons. The choice stays on the device, scoped to that server, and survives offline
+  launches; a confirmed stable or development server uses stable artwork. All Android flavors
+  ship the stable resources and separately named preview resources in `src/main/res`.
+  Enabled launcher aliases select the icon without disabling MainActivity, preserving
+  shares, reminders, widgets and existing shortcuts. Both PWA manifests use the same id,
+  start URL, scope and share target; installed PWA icon updates remain browser-controlled
+  and may need approval. Settings > Update always identifies the actual channel regardless
+  of the preference: amber for stable, purple for preview and light blue for development.
   Other application UI and theme colors remain stable (see [brand assets](../branding.md)).
 - Stable Android uses `org.iloni.catchnotes`; preview uses `org.iloni.catchnotes.preview`
   and the name Catch Preview. They can coexist and keep separate device data. Both are

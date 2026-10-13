@@ -108,8 +108,10 @@ render "$brand_dir/catch-adaptive-foreground.svg" 512 "$temp_dir/maskable-foregr
 magick "$temp_dir/maskable-background.png" "$temp_dir/maskable-foreground.png" \
   -compose Over -composite -strip "PNG32:$public_dir/maskable-512x512.png"
 
-# Channel artwork is available to Update; every Android flavor inherits stable icons.
-[[ "$channel" == stable ]] || exit 0
+# Every flavor ships stable by default and a separately named preview launcher option.
+[[ "$channel" == dev ]] && exit 0
+launcher_suffix=""
+[[ "$channel" == preview ]] && launcher_suffix="_preview"
 
 # Android tints the monochrome drawable by alpha. Retain the supplied transparent
 # line knockouts and apply the adaptive foreground's scale from the token file.
@@ -142,10 +144,11 @@ for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:32
   IFS=: read -r name launcher_size splash_size layer_size <<< "$density"
   mipmap_dir="$res_dir/mipmap-$name"
   mkdir -p "$mipmap_dir"
-  render_icon "$launcher_size" "$mipmap_dir/ic_launcher.png"
-  render_round "$launcher_size" "$mipmap_dir/ic_launcher_round.png"
-  render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background.png"
+  render_icon "$launcher_size" "$mipmap_dir/ic_launcher${launcher_suffix}.png"
+  render_round "$launcher_size" "$mipmap_dir/ic_launcher_round${launcher_suffix}.png"
+  render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background${launcher_suffix}.png"
 
+  [[ "$channel" == stable ]] || continue
   render "$brand_dir/catch-adaptive-foreground.svg" "$layer_size" \
     "$mipmap_dir/ic_launcher_foreground.png"
   render "$temp_dir/monochrome.svg" "$layer_size" \
@@ -162,6 +165,7 @@ for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:32
   done
 done
 
+[[ "$channel" == stable ]] || exit 0
 render_icon 96 "$temp_dir/splash-icon.png"
 magick -size 480x320 xc:'#f7f6f2' "$temp_dir/splash-icon.png" \
   -gravity center -composite -strip "PNG32:$res_dir/drawable/splash.png"
