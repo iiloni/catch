@@ -4,7 +4,6 @@ import {
   Bell,
   ChevronLeft,
   LayoutDashboard,
-  ListX,
   type LucideIcon,
   Palette,
   Paperclip,
@@ -202,7 +201,6 @@ function DockSample() {
           {toolbarButton(Paperclip)}
           {toolbarButton(LayoutDashboard)}
           {toolbarButton(Bell)}
-          {toolbarButton(ListX)}
         </div>
       </div>
     </div>

@@ -12,7 +12,6 @@ export type BlockKind =
 
 export type FormattingState = {
   attachmentIds: readonly string[];
-  hasCheckedItems: boolean;
   styles: Record<TextStyle, boolean>;
   /** The type of the block holding the cursor. */
   block: string;
@@ -32,7 +31,6 @@ export type EditorControls = {
   /** Captures the insertion point before a system picker takes focus. */
   attachmentInserter(): (files: Attachment[]) => void;
   removeAttachment(id: string): void;
-  deleteCheckedItems(): void;
   showAttachment(id: string): boolean;
   /** Calls the listener whenever `getState()` may have changed. */
   subscribe(listener: () => void): () => void;

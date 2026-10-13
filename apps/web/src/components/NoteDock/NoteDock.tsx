@@ -4,7 +4,6 @@ import {
   CircleMinus,
   Columns3,
   LayoutDashboard,
-  ListX,
   type LucideIcon,
   Palette,
   Paperclip,
@@ -12,14 +11,7 @@ import {
   Tags,
 } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
-import {
-  type ComponentProps,
-  type PointerEvent,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { type ComponentProps, type PointerEvent, useEffect, useRef, useState } from 'react';
 import { AttachmentPicker } from '@/components/AttachmentPicker/AttachmentPicker';
 import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
 import { FormattingBar } from '@/components/FormattingBar/FormattingBar';
@@ -75,9 +67,6 @@ type Hold = {
   column: string | null | undefined;
 };
 
-const noSubscribe = () => () => {};
-const noState = () => null;
-
 /**
  * What the dock shows while a note is open: the note's actions, a palette, the reminder or
  * the Deck's columns growing the dock upward, and the formatting bar in their place while the keyboard
@@ -86,10 +75,6 @@ const noState = () => null;
 export function NoteDock() {
   const note = editorNote.use();
   const controls = editorControls.use();
-  const state = useSyncExternalStore(
-    controls?.subscribe ?? noSubscribe,
-    controls?.getState ?? noState,
-  );
   const keyboardOpen = useKeyboardOpen();
   const isPresent = useIsPresent();
   const { close } = useOpenNote();
@@ -333,18 +318,6 @@ export function NoteDock() {
         },
       },
     ];
-    if (state?.hasCheckedItems) {
-      actions.push({
-        id: 'delete-checked',
-        label: 'Delete checked items',
-        icon: ListX,
-        onPress: () => {
-          haptics.warning();
-          setPanel(null);
-          controls?.deleteCheckedItems();
-        },
-      });
-    }
   }
 
   return (
@@ -494,7 +467,6 @@ function DockAction({ action }: { action: Action }) {
     <motion.button
       type="button"
       aria-label={action.label}
-      title={action.label}
       disabled={action.disabled}
       aria-pressed={action.expanded === undefined ? action.active : undefined}
       data-filled={action.filled ? '' : undefined}

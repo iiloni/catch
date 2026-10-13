@@ -16,6 +16,7 @@ import {
   useComponentsContext,
   useCreateBlockNote,
   useDictionary,
+  useEditorState,
   useExtension,
   useExtensionState,
 } from '@blocknote/react';
@@ -29,6 +30,7 @@ import { SearchSelectDialog, type SelectOption } from '@/components/SearchSelect
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
 import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
 import { CODE_LANGUAGES, codeLanguageId } from '@/lib/codeLanguages';
+import { haptics } from '@/lib/haptics';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -358,6 +360,7 @@ function NoteSideMenu() {
       <NoteDragHandle>
         <AddBlockMenuItem />
         <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
+        <DeleteCheckedItemsMenuItem />
         <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
         <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
         <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
@@ -408,6 +411,55 @@ function NoteDragHandle({ children }: { children: ReactNode }) {
         {children}
       </Menu.DropdownMenuContent>
     </Menu.DropdownMenu>
+  );
+}
+
+function checkedItemIds(editor: AnyEditor) {
+  const matching: string[] = [];
+  function collect(blocks: typeof editor.document) {
+    for (const block of blocks) {
+      if (block.type === 'checkListItem' && block.props.checked === true) {
+        // Removing a parent also removes its children; do not remove them twice.
+        matching.push(block.id);
+      } else collect(block.children);
+    }
+  }
+  collect(editor.document);
+  return matching;
+}
+
+function DeleteCheckedItemsMenuItem() {
+  const Components = useComponentsContext();
+  const editor = useBlockNoteEditor();
+  const block = useExtensionState(SideMenuExtension, { selector: (state) => state?.block });
+  const hasCheckedItems = useEditorState({
+    editor,
+    on: 'change',
+    selector: ({ editor }) => checkedItemIds(editor).length > 0,
+  });
+
+  if (!Components || block?.type !== 'checkListItem' || !editor.isEditable || !hasCheckedItems)
+    return null;
+
+  return (
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={() => {
+        if (!editor.isEditable) return;
+        const matching = checkedItemIds(editor);
+        if (!matching.length) return;
+        haptics.warning();
+        editor.transact((tr) => {
+          closeHistory(tr);
+          editor.removeBlocks(matching);
+        });
+        editor.transact((tr) => closeHistory(tr));
+        // Return to editing after the block menu finishes restoring its own focus.
+        requestAnimationFrame(() => editor.focus());
+      }}
+    >
+      Delete all checked items in note
+    </Components.Generic.Menu.Item>
   );
 }
 
@@ -495,28 +547,6 @@ function createControls(editor: AnyEditor): EditorControls {
       });
       if (matching.length) editor.removeBlocks(matching);
     },
-    deleteCheckedItems() {
-      if (!editor.isEditable) return;
-      const matching: string[] = [];
-      function collect(blocks: typeof editor.document) {
-        for (const block of blocks) {
-          if (block.type === 'checkListItem' && block.props.checked === true) {
-            // Removing a parent also removes its children; do not remove them twice.
-            matching.push(block.id);
-          } else collect(block.children);
-        }
-      }
-      collect(editor.document);
-      if (!matching.length) return;
-      const focused = editor.isFocused();
-      editor.transact((tr) => {
-        closeHistory(tr);
-        editor.removeBlocks(matching);
-      });
-      editor.transact((tr) => closeHistory(tr));
-      if (focused) editor.focus();
-      refresh();
-    },
     showAttachment(id) {
       let found = false;
       editor.forEachBlock((block) => {
@@ -602,9 +632,7 @@ function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
   const history = editor.getExtension(HistoryExtension);
   const attachmentIds: string[] = [];
-  let hasCheckedItems = false;
   editor.forEachBlock((block) => {
-    if (block.type === 'checkListItem' && block.props.checked === true) hasCheckedItems = true;
     const id =
       'url' in block.props && typeof block.props.url === 'string'
         ? attachmentId(block.props.url)
@@ -614,7 +642,6 @@ function readState(editor: AnyEditor): FormattingState {
   });
   return {
     attachmentIds,
-    hasCheckedItems,
     styles: {
       bold: Boolean(active.bold),
       italic: Boolean(active.italic),

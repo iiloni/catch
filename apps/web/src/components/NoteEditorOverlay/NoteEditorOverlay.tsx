@@ -775,7 +775,7 @@ function EditorSurface({
             if (
               !target.isConnected ||
               target.closest(
-                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], [data-share-panel], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar',
+                '[data-dock], [data-sonner-toaster], [aria-label="New note"], [data-link-overlay], [data-link-scrim], [data-attachment-menu], [data-share-panel], .bn-suggestion-menu, .bn-file-panel, .bn-toolbar, .bn-side-menu, .bn-menu-dropdown',
               )
             ) {
               event.preventDefault();

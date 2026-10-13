@@ -34,6 +34,19 @@ async function center(item: Locator) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+async function checklistMenu(page: Page, dialog: Locator) {
+  const row = dialog.locator('[data-content-type="checkListItem"] .bn-inline-content').first();
+  const handle = dialog.getByRole('button', { name: 'Open block menu' });
+  if (test.info().project.use.isMobile) {
+    await row.tap();
+    await handle.tap();
+  } else {
+    await row.hover();
+    await handle.click();
+  }
+  return page.getByRole('menuitem', { name: 'Delete all checked items in note', exact: true });
+}
+
 test('delete checked items removes nested lists in one undo step and persists', async ({
   page,
 }) => {
@@ -81,13 +94,24 @@ test('delete checked items removes nested lists in one undo step and persists', 
     'Keep this bullet',
     'Keep this number',
   ];
-  const remove = page.getByRole('button', { name: 'Delete checked items', exact: true });
-  await expect(remove).toBeVisible();
+  const remove = page.getByRole('menuitem', {
+    name: 'Delete all checked items in note',
+    exact: true,
+  });
+  await expect(page.getByRole('toolbar', { name: 'Note actions' }).getByRole('button')).toHaveCount(
+    5,
+  );
+  await dialog.locator('[data-content-type="bulletListItem"] .bn-inline-content').first().hover();
+  await dialog.getByRole('button', { name: 'Open block menu' }).click();
+  await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
   const editor = dialog.locator('[contenteditable="true"]');
   await dialog.locator('.bn-editor h3').click();
   await page.keyboard.press('End');
   await page.keyboard.type('!');
-  // End the prior typing event without a timeout: deletion must be its own history entry.
+  // Opening a block menu must not combine deletion with the preceding typing event.
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeVisible();
   await remove.click();
   await expect(editor).toBeFocused();
   await expect(rows).toHaveText(['Checked lists!', ...remaining.slice(1)]);
@@ -95,7 +119,9 @@ test('delete checked items removes nested lists in one undo step and persists', 
   const history = page.getByRole('toolbar', { name: 'Undo and redo' });
   await history.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(rows).toHaveText(['Checked lists!', ...original.slice(1)]);
+  await checklistMenu(page, dialog);
   await expect(remove).toBeVisible();
+  await page.keyboard.press('Escape');
   await history.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(rows).toHaveText(original);
   await history.getByRole('button', { name: 'Redo', exact: true }).click();
@@ -109,6 +135,7 @@ test('delete checked items removes nested lists in one undo step and persists', 
     'Checked lists!',
     ...remaining.slice(1),
   ]);
+  await checklistMenu(page, reopened);
   await expect(remove).toBeHidden();
 });
 
@@ -132,17 +159,24 @@ test('delete checked items follows checkbox changes and handles an entirely chec
     .click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('textbox')).toBeVisible();
-  const remove = page.getByRole('button', { name: 'Delete checked items', exact: true });
+  const remove = page.getByRole('menuitem', {
+    name: 'Delete all checked items in note',
+    exact: true,
+  });
+  await checklistMenu(page, dialog);
   await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
   await dialog.getByRole('checkbox').check();
+  await checklistMenu(page, dialog);
   await expect(remove).toBeVisible();
+  await page.keyboard.press('Escape');
   await dialog.getByRole('checkbox').uncheck();
+  await checklistMenu(page, dialog);
   await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
   await dialog.getByRole('checkbox').check();
-  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
-  await expect(dialog.getByRole('textbox')).not.toBeFocused();
+  await checklistMenu(page, dialog);
   await remove.click();
-  await expect(dialog.getByRole('textbox')).not.toBeFocused();
   await expect(dialog.locator('[data-content-type="checkListItem"]')).toHaveCount(0);
   await expect(remove).toBeHidden();
   await page
@@ -151,6 +185,7 @@ test('delete checked items follows checkbox changes and handles an entirely chec
     .click();
   await expect(dialog.getByRole('checkbox')).toBeChecked();
   await expect(dialog.locator('.bn-editor p')).toHaveText('Only item');
+  await checklistMenu(page, dialog);
   await expect(remove).toBeVisible();
 });
 
