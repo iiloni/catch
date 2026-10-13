@@ -3,11 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { e2eExempt } from './change-scope.ts';
 
 const passing = {
   EVENT_NAME: 'pull_request',
   E2E_REQUESTED: 'true',
-  DOCS_ONLY: 'false',
+  E2E_EXEMPT: 'false',
   MERGE_APPROVED: 'true',
   REUSE_RESULT: 'success',
   RUN_CHECKS: 'true',
@@ -80,49 +81,75 @@ test('only main/tag CI can reuse an independently verified full pass', () => {
   }
 });
 
-test('a documentation-only PR or main push passes on checks alone', () => {
-  const docs = {
-    DOCS_ONLY: 'true',
+test('an E2E-exempt PR or main push passes on checks alone', () => {
+  const exempt = {
+    E2E_EXEMPT: 'true',
     E2E_REQUESTED: 'false',
     DESKTOP_RESULT: 'skipped',
     ANDROID_RESULT: 'skipped',
   };
   for (const EVENT_NAME of ['pull_request', 'push']) {
-    const result = validate({ ...docs, EVENT_NAME });
+    const result = validate({ ...exempt, EVENT_NAME });
     assert.equal(result.status, 0);
-    assert.match(result.stdout, /E2E is not required for a documentation-only change/);
+    assert.match(result.stdout, /E2E is not required for an E2E-exempt change/);
     for (const CHECK_RESULT of ['failure', 'cancelled', 'skipped', '']) {
-      assert.equal(validate({ ...docs, EVENT_NAME, CHECK_RESULT }).status, 1);
+      assert.equal(validate({ ...exempt, EVENT_NAME, CHECK_RESULT }).status, 1);
     }
-    assert.equal(validate({ ...docs, EVENT_NAME, REUSE_RESULT: 'failure' }).status, 1);
+    assert.equal(validate({ ...exempt, EVENT_NAME, REUSE_RESULT: 'failure' }).status, 1);
   }
   // Skipped E2E stays a failure wherever the change was not read, or was read as code.
   for (const EVENT_NAME of ['workflow_dispatch', 'merge_group', '']) {
-    assert.equal(validate({ ...docs, EVENT_NAME }).status, 1);
+    assert.equal(validate({ ...exempt, EVENT_NAME }).status, 1);
   }
-  for (const DOCS_ONLY of ['false', '']) {
-    assert.equal(validate({ ...docs, DOCS_ONLY }).status, 1);
-    assert.equal(validate({ ...docs, DOCS_ONLY, EVENT_NAME: 'push' }).status, 1);
+  for (const E2E_EXEMPT of ['false', '']) {
+    assert.equal(validate({ ...exempt, E2E_EXEMPT }).status, 1);
+    assert.equal(validate({ ...exempt, E2E_EXEMPT, EVENT_NAME: 'push' }).status, 1);
   }
 });
 
-test('a documentation-only PR still needs merge approval, and tests when asked to', () => {
+test('classified workflow changes skip E2E validation only when every path is exempt', () => {
+  const workflowPaths = [
+    '.github/workflows/release.yml',
+    '.github/workflows/site.yml',
+    'scripts/release-workflows.test.ts',
+    'docs/ci.md',
+  ];
+  for (const paths of [
+    workflowPaths,
+    [...workflowPaths, '.github/workflows/ci.yml'],
+    [...workflowPaths, 'apps/web/src/routes/index.tsx'],
+  ]) {
+    const exempt = e2eExempt(paths);
+    for (const EVENT_NAME of ['pull_request', 'push']) {
+      assert.equal(
+        validate({
+          EVENT_NAME,
+          E2E_EXEMPT: String(exempt),
+          E2E_REQUESTED: 'false',
+          DESKTOP_RESULT: 'skipped',
+          ANDROID_RESULT: 'skipped',
+        }).status,
+        exempt ? 0 : 1,
+        paths.join(', '),
+      );
+    }
+  }
+});
+
+test('an E2E-exempt PR still needs merge approval, and tests when asked to', () => {
   const unapproved = validate({
-    DOCS_ONLY: 'true',
+    E2E_EXEMPT: 'true',
     E2E_REQUESTED: 'false',
     MERGE_APPROVED: 'false',
     DESKTOP_RESULT: 'skipped',
     ANDROID_RESULT: 'skipped',
   });
   assert.equal(unapproved.status, 1);
-  assert.match(
-    unapproved.stdout,
-    /documentation-only change, but merge approval is still required/,
-  );
+  assert.match(unapproved.stdout, /E2E-exempt change, but merge approval is still required/);
   // `run e2e` requested the suite, so its result counts again.
-  assert.equal(validate({ DOCS_ONLY: 'true' }).status, 0);
-  assert.equal(validate({ DOCS_ONLY: 'true', ANDROID_RESULT: 'failure' }).status, 1);
-  assert.equal(validate({ DOCS_ONLY: 'true', DESKTOP_RESULT: 'skipped' }).status, 1);
+  assert.equal(validate({ E2E_EXEMPT: 'true' }).status, 0);
+  assert.equal(validate({ E2E_EXEMPT: 'true', ANDROID_RESULT: 'failure' }).status, 1);
+  assert.equal(validate({ E2E_EXEMPT: 'true', DESKTOP_RESULT: 'skipped' }).status, 1);
 });
 
 test('missing test-plan outputs cannot turn skipped jobs into successful validation', () => {
@@ -134,6 +161,9 @@ test('CI runs E2E for `run e2e`, and otherwise for code that is approved or alre
   const workflow = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   const expression = workflow.match(/^\s+run_e2e: \$\{\{ (.+) \}\}$/m)?.[1];
   assert.ok(expression);
+  assert.match(workflow, /e2e_exempt: \$\{\{ steps\.scope\.outputs\.e2e_exempt \}\}/);
+  assert.match(workflow, /echo "e2e_exempt=\$e2e_exempt" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /E2E_EXEMPT: \$\{\{ needs\.reuse\.outputs\.e2e_exempt \}\}/);
   assert.match(workflow, /types: \[opened, synchronize, reopened, labeled, unlabeled\]/);
   assert.match(
     workflow,
@@ -155,12 +185,12 @@ test('CI runs E2E for `run e2e`, and otherwise for code that is approved or alre
       ['run e2e', 'merge on pass'],
     ]) {
       // An empty output is a scope step that wrote nothing.
-      for (const docsOnly of ['true', 'false', '']) {
+      for (const e2eExempt of ['true', 'false', '']) {
         const requested = runInNewContext(
           expression.replaceAll('github.event.pull_request.labels.*.name', 'labels'),
           {
             github: { event_name: event },
-            steps: { scope: { outputs: { docs_only: docsOnly } } },
+            steps: { scope: { outputs: { e2e_exempt: e2eExempt } } },
             labels,
             contains: (values: string[], value: string) => values.includes(value),
           },
@@ -168,8 +198,9 @@ test('CI runs E2E for `run e2e`, and otherwise for code that is approved or alre
         assert.equal(
           requested,
           labels.includes('run e2e') ||
-            (docsOnly !== 'true' && (event !== 'pull_request' || labels.includes('merge on pass'))),
-          `${event}: ${labels.join(', ')}; docs only: ${docsOnly}`,
+            (e2eExempt !== 'true' &&
+              (event !== 'pull_request' || labels.includes('merge on pass'))),
+          `${event}: ${labels.join(', ')}; E2E exempt: ${e2eExempt}`,
         );
       }
     }
