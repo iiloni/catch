@@ -1,9 +1,10 @@
 import { motion } from 'motion/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
 import {
   type AppIcon,
+  getNativeAppIconPreview,
   setNativeAppIcon,
   useAppIconOptions,
   useAppIconPreference,
@@ -18,7 +19,37 @@ export function AppIconPicker() {
   const { devBuild, serverChannel } = useAppIconOptions();
   const [value, setValue] = useAppIconPreference();
   const [pending, setPending] = useState(false);
-  if (!devBuild && serverChannel !== 'preview') return null;
+  const available = devBuild || serverChannel === 'preview';
+  const [nativePreview, setNativePreview] = useState<{
+    icon: AppIcon;
+    attempt: number;
+    src: string | null;
+  } | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  useEffect(() => {
+    if (!android || !available) return;
+    let stopped = false;
+    void getNativeAppIconPreview(value).then(
+      (src) => {
+        if (!stopped) setNativePreview({ icon: value, attempt: previewAttempt, src });
+      },
+      () => {
+        if (!stopped) setNativePreview({ icon: value, attempt: previewAttempt, src: null });
+      },
+    );
+    return () => {
+      stopped = true;
+    };
+  }, [android, available, value, previewAttempt]);
+  if (!available) return null;
+  const currentPreview =
+    nativePreview?.icon === value && nativePreview.attempt === previewAttempt
+      ? nativePreview
+      : null;
+  const previewSrc = android
+    ? currentPreview?.src
+    : `${value === 'stable' ? '' : `/${value}`}/pwa-512x512.png`;
+  const previewFailed = android && currentPreview?.src === null;
   const choices: AppIcon[] = devBuild ? ['stable', 'preview', 'dev'] : ['stable', 'preview'];
 
   async function choose(icon: AppIcon) {
@@ -44,12 +75,31 @@ export function AppIconPicker() {
           : 'Choose an icon for this device. Installed web apps may ask you to approve the change.'
       }
     >
-      <div className="flex justify-center px-4 pt-6 pb-4">
-        <img
-          src={value === 'stable' ? '/icon-small.svg' : `/${value}/icon-small.svg`}
-          alt={`${value === 'dev' ? 'Dev' : value === 'preview' ? 'Preview' : 'Stable'} app icon`}
-          className="size-20"
-        />
+      <div className="flex min-h-30 items-center justify-center px-4 pt-6 pb-4">
+        {previewSrc ? (
+          <img
+            src={previewSrc}
+            alt={`${value === 'dev' ? 'Dev' : value === 'preview' ? 'Preview' : 'Stable'} app icon`}
+            className="size-20"
+          />
+        ) : previewFailed ? (
+          <div className="flex flex-col items-center gap-2 text-center text-sm">
+            <p role="status">Could not load the app icon preview.</p>
+            <button
+              type="button"
+              className="rounded-lg px-3 py-2 text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              onClick={() => {
+                setPreviewAttempt((attempt) => attempt + 1);
+              }}
+            >
+              Retry preview
+            </button>
+          </div>
+        ) : (
+          <div role="status" className="size-20 rounded-2xl bg-foreground/5">
+            <span className="sr-only">Loading app icon preview…</span>
+          </div>
+        )}
       </div>
       <fieldset
         className={cn('grid min-w-0 gap-1 p-1.5', devBuild ? 'grid-cols-3' : 'grid-cols-2')}

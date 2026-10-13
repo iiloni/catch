@@ -10,7 +10,17 @@ export const APP_ICON_KEY = 'catch-app-icon';
 const iconSchema = z.enum(['stable', 'preview', 'dev']);
 export type AppIcon = z.infer<typeof iconSchema>;
 const preferenceSchema = z.object({ icon: iconSchema, server: z.string() });
-const AppIcons = registerPlugin<{ setIcon(options: { icon: AppIcon }): Promise<void> }>('AppIcons');
+const AppIcons = registerPlugin<{
+  setIcon(options: { icon: AppIcon }): Promise<void>;
+  getPreview(options: { icon: AppIcon }): Promise<unknown>;
+}>('AppIcons');
+const previewSchema = z.object({
+  dataUrl: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
+});
+
+export async function getNativeAppIconPreview(icon: AppIcon): Promise<string> {
+  return previewSchema.parse(await AppIcons.getPreview({ icon })).dataUrl;
+}
 
 export function useAppIconOptions() {
   const { android, app, server } = useUpdates();

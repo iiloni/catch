@@ -87,7 +87,10 @@ and preview must advance independently, including preview versions ahead of stab
   offer Stable, Preview and Dev choices in Settings > General, even on a released server.
   Released builds on a preview server offer Stable and Preview icons. The choice stays on the device, scoped to that server, and survives offline
   launches; a confirmed non-preview server uses stable artwork in released builds. The
-  picker shows the selected icon above a text-only segmented control. All Android flavors
+  picker shows the selected icon above a text-only segmented control, using the actual
+  512 px PWA install asset on web and the installed launcher drawable on Android. Android
+  renders that drawable with the platform’s adaptive mask; the preview never substitutes
+  simplified favicon artwork. All Android flavors
   ship stable and separately named preview/dev resources in `src/main/res`, with flavor
   booleans selecting the stable or dev launcher default. Only dev APKs accept the Dev option.
   Enabled launcher aliases select the icon without disabling MainActivity, preserving

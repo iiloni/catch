@@ -72,7 +72,7 @@ test('dev builds default to dev and preview the selected icon above three text-o
   );
   await expect(picker.getByRole('img', { name: 'Dev app icon', exact: true })).toHaveAttribute(
     'src',
-    '/dev/icon-small.svg',
+    '/dev/pwa-512x512.png',
   );
   await expect(picker.locator('button img')).toHaveCount(0);
   for (const [name, path] of [
@@ -83,7 +83,10 @@ test('dev builds default to dev and preview the selected icon above three text-o
     await picker.getByRole('button', { name, exact: true }).click();
     await expect(
       picker.getByRole('img', { name: `${name} app icon`, exact: true }),
-    ).toHaveAttribute('src', `${path}/icon-small.svg`);
+    ).toHaveAttribute('src', `${path}/pwa-512x512.png`);
+    await expect(
+      picker.getByRole('img', { name: `${name} app icon`, exact: true }),
+    ).toHaveJSProperty('naturalWidth', 512);
     await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
       'href',
       `${path}/favicon-mark.svg`,

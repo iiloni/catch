@@ -3,21 +3,51 @@ package org.iloni.catchnotes;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 final class AppIcons {
+    private static final String[] ALIASES = {"StableIcon", "PreviewIcon", "DevIcon"};
+
+    private static int iconIndex(Context context, String icon) {
+        if ("stable".equals(icon)) return 0;
+        if ("preview".equals(icon)) return 1;
+        if ("dev".equals(icon) && context.getResources().getBoolean(R.bool.default_dev_icon)) return 2;
+        throw new IllegalArgumentException("Unknown app icon.");
+    }
+
+    static String preview(Context context, String icon) throws PackageManager.NameNotFoundException {
+        int selected = iconIndex(context, icon);
+        PackageManager manager = context.getPackageManager();
+        ComponentName component = new ComponentName(context.getPackageName(), "org.iloni.catchnotes." + ALIASES[selected]);
+        // Loading the alias also works while disabled and preserves the platform's adaptive mask.
+        Drawable drawable = manager.getActivityInfo(component, PackageManager.MATCH_DISABLED_COMPONENTS).loadIcon(manager);
+        Bitmap bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
+        try {
+            drawable.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
+            drawable.draw(new Canvas(bitmap));
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, bytes)) {
+                throw new IllegalStateException("Could not render the launcher icon.");
+            }
+            return "data:image/png;base64," + Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP);
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
     static void set(Context context, String icon) {
         boolean devBuild = context.getResources().getBoolean(R.bool.default_dev_icon);
-        int selected;
-        if ("stable".equals(icon)) selected = 0;
-        else if ("preview".equals(icon)) selected = 1;
-        else if ("dev".equals(icon) && devBuild) selected = 2;
-        else throw new IllegalArgumentException("Unknown app icon.");
+        int selected = iconIndex(context, icon);
 
         PackageManager manager = context.getPackageManager();
-        String[] names = {"StableIcon", "PreviewIcon", "DevIcon"};
+        String[] names = ALIASES;
         ComponentName[] components = new ComponentName[names.length];
         int[] previous = new int[names.length];
         boolean changed = false;

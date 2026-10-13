@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   channel: 'preview' as 'stable' | 'preview' | 'dev' | null,
   platform: 'web',
   setIcon: vi.fn().mockResolvedValue(undefined),
+  getPreview: vi.fn(),
 }));
 vi.mock('@/lib/updates', () => ({
   useUpdates: () => ({
@@ -17,7 +18,7 @@ vi.mock('@/lib/updates', () => ({
 vi.mock('@/lib/serverUrl', () => ({ getServerUrl: () => 'https://preview.example' }));
 vi.mock('@capacitor/core', () => ({
   Capacitor: { getPlatform: () => mocks.platform },
-  registerPlugin: () => ({ setIcon: mocks.setIcon }),
+  registerPlugin: () => ({ setIcon: mocks.setIcon, getPreview: mocks.getPreview }),
 }));
 vi.mock('@/lib/haptics', () => ({ haptics: { selection: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -28,6 +29,10 @@ beforeEach(() => {
   mocks.channel = 'preview';
   mocks.platform = 'web';
   mocks.setIcon.mockReset().mockResolvedValue(undefined);
+  mocks.getPreview.mockReset().mockResolvedValue({
+    dataUrl:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6yFkAAAAASUVORK5CYII=',
+  });
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -40,7 +45,7 @@ describe('AppIconPicker', () => {
     expect(screen.getByRole('button', { name: 'Dev' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('img', { name: 'Dev app icon' })).toHaveAttribute(
       'src',
-      '/dev/icon-small.svg',
+      '/dev/pwa-512x512.png',
     );
     for (const button of screen.getAllByRole('button'))
       expect(button.querySelector('img')).toBeNull();
@@ -48,7 +53,7 @@ describe('AppIconPicker', () => {
     await waitFor(() =>
       expect(screen.getByRole('img', { name: 'Preview app icon' })).toHaveAttribute(
         'src',
-        '/preview/icon-small.svg',
+        '/preview/pwa-512x512.png',
       ),
     );
     expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true');
@@ -72,6 +77,33 @@ describe('AppIconPicker', () => {
     });
     fireEvent.click(stable);
     await waitFor(() => expect(stable).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('uses the native launcher rendering on Android', async () => {
+    mocks.platform = 'android';
+    render(<AppIconPicker />);
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'Stable app icon' })).toHaveAttribute(
+        'src',
+        expect.stringMatching(/^data:image\/png;base64,/),
+      ),
+    );
+    expect(mocks.getPreview).toHaveBeenCalledWith({ icon: 'stable' });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'Preview app icon' })).toBeVisible(),
+    );
+    expect(mocks.getPreview).toHaveBeenLastCalledWith({ icon: 'preview' });
+  });
+
+  it('shows a retry when the native preview fails without showing substitute artwork', async () => {
+    mocks.platform = 'android';
+    mocks.getPreview.mockRejectedValueOnce(new Error('Preview failed'));
+    render(<AppIconPicker />);
+    const retry = await screen.findByRole('button', { name: 'Retry preview' });
+    expect(screen.queryByRole('img', { name: 'Stable app icon' })).toBeNull();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Stable app icon' })).toBeVisible());
   });
 
   it('leaves the preference unchanged if the Android launcher rejects the choice', async () => {

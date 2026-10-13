@@ -6,12 +6,17 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.util.Base64;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = {24, 36})
@@ -74,5 +79,33 @@ public class AppIconsTest {
         assertThrows(IllegalArgumentException.class, () -> AppIcons.set(context, "nightly"));
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, manager.getComponentEnabledSetting(component("StableIcon")));
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, manager.getComponentEnabledSetting(component("PreviewIcon")));
+    }
+
+    @Test
+    @Config(sdk = 36)
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void previewsRenderTheAdaptiveLauncherArtworkWithoutChangingTheChoice() throws Exception {
+        String[] icons = context.getResources().getBoolean(R.bool.default_dev_icon)
+                ? new String[] {"stable", "preview", "dev"} : new String[] {"stable", "preview"};
+        for (String icon : icons) {
+            String source = AppIcons.preview(context, icon);
+            assertTrue(source.startsWith("data:image/png;base64,"));
+            byte[] bytes = Base64.decode(source.substring(source.indexOf(',') + 1), Base64.DEFAULT);
+            Bitmap image = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            assertNotNull(image);
+            assertEquals(256, image.getWidth());
+            assertEquals(256, image.getHeight());
+            assertEquals(0, Color.alpha(image.getPixel(0, 0)));
+            // The first motion mark belongs to the adaptive foreground, not the small favicon.
+            int motionMark = image.getPixel(52, 69);
+            assertTrue(Color.red(motionMark) > 230 && Color.green(motionMark) > 230 && Color.blue(motionMark) > 220);
+            int background = image.getPixel(16, 128);
+            assertTrue("stable".equals(icon) ? Color.red(background) > Color.blue(background)
+                    : Color.blue(background) > Color.red(background));
+            image.recycle();
+        }
+        for (String alias : new String[] {"StableIcon", "PreviewIcon", "DevIcon"}) {
+            assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, manager.getComponentEnabledSetting(component(alias)));
+        }
     }
 }

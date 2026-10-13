@@ -115,7 +115,10 @@ Released builds default app icons and favicons to stable artwork; dev builds kee
 dev artwork by default and offer all three icon treatments. General settings on a
 preview server can select preview icons for this device; the choice does not change
 other in-app branding or Update’s channel identity. The picker shows one selected icon
-preview above its text-only segmented control. `BrandLockup`
+preview above its text-only segmented control. Web previews use the manifest’s 512 px
+PWA PNG; Android previews render the chosen alias’s packaged launcher drawable at 256 px,
+including its adaptive foreground scale and the platform mask. Displaying a preview at
+80 CSS px does not select simplified small/favicons; install artwork stays authoritative. `BrandLockup`
 defaults to stable; Update passes its channel explicitly. Ink follows the resolved app theme (including stored preferences),
 with a surface override for a differently themed surrounding surface.
 
