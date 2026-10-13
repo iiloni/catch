@@ -8,6 +8,7 @@ import { reminderSnooze, watchReminderAlarms } from './collections';
 import { snoozeReminder } from './reminders';
 import { getServerUrl } from './serverUrl';
 import { onSnoozeChange, snoozeMinutes } from './snooze';
+import { currentAccountId } from './storageIdentity';
 import { getPendingWriteIds, subscribeToSyncStatus } from './syncStatus';
 
 const statusSchema = z.object({
@@ -38,7 +39,7 @@ const Reminders = registerPlugin<{
   }): Promise<void>;
   configure(options: { snoozeMinutes: number }): Promise<void>;
   pendingSnoozes(): Promise<unknown>;
-  ackSnoozes(options: { noteIds: string[] }): Promise<void>;
+  ackSnoozes(options: { account?: string; noteIds: string[] }): Promise<void>;
   test(): Promise<void>;
   clear(options: { account?: string }): Promise<void>;
   addListener(event: 'open', listener: (event: unknown) => void): Promise<PluginListenerHandle>;
@@ -82,7 +83,7 @@ export const nativeReminders = {
    * page next loads.
    */
   async clear(userId?: string) {
-    if (!userId || userId === getSignedInUser()?.id) cleared = true;
+    if (!userId || userId === currentAccountId()) cleared = true;
     if (available) await Reminders.clear({ account: userId });
   },
   /** A tapped notification opens its note, including the one that launched the app. */
@@ -109,7 +110,7 @@ const written = new Set<string>();
 async function settleSnoozes() {
   const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
   const settled: string[] = [];
-  const userId = getSignedInUser()?.id;
+  const userId = currentAccountId();
   for (const { noteId, until, account } of snoozes) {
     // Another account's, to be written when that account is next in use.
     if (account && account !== userId) continue;
@@ -122,7 +123,8 @@ async function settleSnoozes() {
       snoozeReminder(noteId, new Date(until));
     }
   }
-  if (settled.length > 0) await Reminders.ackSnoozes({ noteIds: settled });
+  if (settled.length > 0)
+    await Reminders.ackSnoozes({ account: userId ?? undefined, noteIds: settled });
 }
 
 /** Keeps the phone's alarms in step with the reminders while the app runs. */
@@ -139,8 +141,8 @@ export function watchNativeReminders() {
     wasUnsent = unsent();
     void Reminders.sync({
       // The phone keeps a list and a token for each account signed in on it (ADR 0019).
-      account: user.id,
-      label: user.name || user.email,
+      account: currentAccountId() ?? user.id,
+      label: `${user.name || user.email} · ${new URL(getServerUrl()).host}`,
       alarms,
       server: getServerUrl(),
       token,

@@ -127,6 +127,25 @@ public class WidgetStoreTest {
     }
 
     @Test
+    public void switchingServersRetainsEachWidgetsSnapshotAndLaunchOrigin() throws Exception {
+        JSONArray accounts = new JSONArray("[{id:'alice',label:'Alice',server:'https://catch.example'},{id:'work',label:'Alice',server:'https://work.example'}]");
+        String work = WidgetStore.begin(context, "work", "https://work.example", accounts);
+        JSONObject clone = new JSONObject(snapshot.toString());
+        clone.getJSONArray("notes").getJSONObject(0).put("title", "Work shopping");
+        assertTrue(WidgetStore.sync(context, work, clone));
+        assertEquals("Shopping", WidgetStore.notes(WidgetStore.snapshot(context, config), config).get(0).getString("title"));
+        assertEquals("https://catch.example", WidgetStore.launch(context, 42, "note", "one").getString("server"));
+        JSONObject workConfig = new JSONObject(config.toString()).put("account", "work");
+        WidgetStore.configure(context, 43, workConfig);
+        assertEquals("https://work.example", WidgetStore.launch(context, 43, "note", "one").getString("server"));
+        WidgetStore.begin(context, "alice", "https://catch.example", accounts);
+        assertEquals("Work shopping", WidgetStore.notes(WidgetStore.snapshot(context, workConfig), workConfig).get(0).getString("title"));
+        WidgetStore.clear(context, "alice");
+        assertEquals(0, WidgetStore.account(context, "alice").length());
+        assertEquals("work", WidgetStore.launch(context, 43, "note", "one").getString("account"));
+    }
+
+    @Test
     public void resolvesOnlyNotesInThisWidgetsFilterAndRetainsCommandsUntilAcknowledged() {
         assertNull(WidgetStore.launch(context, 42, "note", "two"));
         JSONObject launch = WidgetStore.launch(context, 42, "note", "one");

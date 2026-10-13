@@ -113,6 +113,16 @@ final class ReminderAlarms {
             // An object cannot fail to be put.
         }
         saveAccounts(context, accounts);
+        JSONArray snoozes = array(context, "snoozes");
+        for (int index = 0; index < snoozes.length(); index++) {
+            JSONObject snooze = snoozes.optJSONObject(index);
+            if (snooze != null && snooze.optString(ACCOUNT).isEmpty()) {
+                try {
+                    snooze.put(ACCOUNT, account);
+                } catch (JSONException ignored) {}
+            }
+        }
+        preferences(context).edit().putString("snoozes", snoozes.toString()).apply();
         store(context, account, alarms);
     }
 
@@ -163,12 +173,16 @@ final class ReminderAlarms {
         saveAccounts(context, accounts);
     }
 
-    private static PendingIntent broadcast(Context context, String action, String noteId, int flags) {
+    static String reminderKey(String account, String noteId) {
+        return account + ":" + noteId;
+    }
+
+    private static PendingIntent broadcast(Context context, String action, String account, String noteId, int flags) {
         Intent intent = new Intent(context, ReminderReceiver.class)
                 .setAction(action)
                 // The data makes each note's intent its own; extras alone would share one.
-                .setData(Uri.parse("catch://reminder/" + noteId))
-                .putExtra(NOTE, noteId);
+                .setData(new Uri.Builder().scheme("catch").authority("reminder").appendPath(account).appendPath(noteId).build())
+                .putExtra(NOTE, noteId).putExtra(ACCOUNT, account);
         return PendingIntent.getBroadcast(context, 0, intent, flags | PendingIntent.FLAG_IMMUTABLE);
     }
 
@@ -193,7 +207,11 @@ final class ReminderAlarms {
         AlarmManager manager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         SharedPreferences preferences = preferences(context);
         for (String noteId : preferences.getStringSet("scheduled", new HashSet<>())) {
-            PendingIntent pending = broadcast(context, ACTION_RING, noteId, PendingIntent.FLAG_NO_CREATE);
+            Intent intent = new Intent(context, ReminderReceiver.class).setAction(ACTION_RING)
+                    .setData(Uri.parse(noteId));
+            if (!noteId.startsWith("catch:")) intent.setData(Uri.parse("catch://reminder/" + noteId));
+            PendingIntent pending = PendingIntent.getBroadcast(context, 0, intent,
+                    PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
             if (pending != null) manager.cancel(pending);
         }
         Set<String> scheduled = new HashSet<>();
@@ -201,8 +219,8 @@ final class ReminderAlarms {
         JSONObject accounts = accounts(context);
         boolean asks = false;
         if (enabled) {
-            // Every account's reminders, each remembering whose it is. Note ids are unique
-            // across accounts, so what has rung is kept by note alone.
+            // Restored servers can contain the same note IDs; every alarm and receipt belongs
+            // to the local account identity as well as the note.
             JSONArray alarms = new JSONArray();
             List<String> owners = new ArrayList<>();
             for (java.util.Iterator<String> ids = accounts.keys(); ids.hasNext(); ) {
@@ -225,14 +243,17 @@ final class ReminderAlarms {
                 JSONObject alarm = alarms.optJSONObject(index);
                 if (alarm == null) continue;
                 String noteId = alarm.optString(NOTE);
+                String account = owners.get(index);
+                String identity = reminderKey(account, noteId);
                 long snoozedUntil = alarm.isNull("snoozedUntil") ? 0 : alarm.optLong("snoozedUntil");
-                long after = Math.max(rung.optLong(noteId), now - ReminderTimes.LATE_MS);
+                long after = Math.max(rung.optLong(identity, rung.optLong(noteId)), now - ReminderTimes.LATE_MS);
                 List<String> times = times(alarm);
                 // The wall clock time that last rang holds for the list it rang from: the
                 // same list read in a zone further west would bring that time round again.
                 // A list that has changed since is a reminder set anew, and starts clean.
                 String list = String.valueOf(alarm.optJSONArray("times"));
-                JSONObject wall = walls.optJSONObject(noteId);
+                JSONObject wall = walls.optJSONObject(identity);
+                if (wall == null) wall = walls.optJSONObject(noteId);
                 String rungWall = wall != null && list.equals(wall.optString("times")) ? wall.optString("wall") : "";
                 long next = ReminderTimes.next(times, snoozedUntil, zone(alarm), after, rungWall);
                 if (next >= 0 && next <= now) {
@@ -248,20 +269,20 @@ final class ReminderAlarms {
                 }
                 try {
                     // Only what is still a reminder is remembered, so the records cannot grow.
-                    if (after > now - ReminderTimes.LATE_MS) kept.put(noteId, after);
-                    if (!rungWall.isEmpty()) keptWalls.put(noteId, new JSONObject().put("wall", rungWall).put("times", list));
+                    if (after > now - ReminderTimes.LATE_MS) kept.put(identity, after);
+                    if (!rungWall.isEmpty()) keptWalls.put(identity, new JSONObject().put("wall", rungWall).put("times", list));
                 } catch (JSONException ignored) {
                     // Text and numbers cannot fail to be put.
                 }
                 if (next < 0) continue;
-                PendingIntent pending = broadcast(context, ACTION_RING, noteId, PendingIntent.FLAG_UPDATE_CURRENT);
+                PendingIntent pending = broadcast(context, ACTION_RING, account, noteId, PendingIntent.FLAG_UPDATE_CURRENT);
                 // Exact where the system allows it; otherwise it may ring some minutes late.
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
                     AlarmManagerCompat.setExactAndAllowWhileIdle(manager, AlarmManager.RTC_WAKEUP, next, pending);
                 } else {
                     manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending);
                 }
-                scheduled.add(noteId);
+                scheduled.add(new Uri.Builder().scheme("catch").authority("reminder").appendPath(account).appendPath(noteId).build().toString());
             }
             preferences.edit().putString("rung", kept.toString()).putString("walls", keptWalls.toString()).apply();
         }
@@ -296,7 +317,7 @@ final class ReminderAlarms {
     private static PendingIntent open(Context context, String account, String noteId) {
         Intent intent = new Intent(context, MainActivity.class)
                 .setAction(ACTION_OPEN)
-                .setData(Uri.parse("catch://reminder/" + noteId))
+                .setData(new Uri.Builder().scheme("catch").authority("reminder").appendPath(account).appendPath(noteId).build())
                 .putExtra(NOTE, noteId)
                 // The app may be showing another account when the notification is tapped.
                 .putExtra(ACCOUNT, account)
@@ -305,10 +326,10 @@ final class ReminderAlarms {
                 context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static void post(Context context, int id, NotificationCompat.Builder builder) {
+    private static void post(Context context, String id, NotificationCompat.Builder builder) {
         channel(context);
         try {
-            NotificationManagerCompat.from(context).notify(id, builder.build());
+            NotificationManagerCompat.from(context).notify(id, 0, builder.build());
         } catch (SecurityException denied) {
             // Notifications were turned off for the app since it last asked.
         }
@@ -333,23 +354,25 @@ final class ReminderAlarms {
         String body = alarm.optString("body");
         Intent snooze = new Intent(context, ReminderReceiver.class)
                 .setAction(ACTION_SNOOZE)
-                .setData(Uri.parse("catch://reminder/" + noteId))
+                .setData(new Uri.Builder().scheme("catch").authority("reminder").appendPath(account).appendPath(noteId).build())
                 .putExtra(NOTE, noteId)
                 .putExtra(ACCOUNT, account)
                 .putExtra("title", title)
                 .putExtra("body", body);
-        post(context, noteId.hashCode(), notification(context, title, body)
+        post(context, reminderKey(account, noteId), notification(context, title, body)
                 .setSubText(label.isEmpty() ? null : label)
                 .setContentIntent(open(context, account, noteId))
                 .addAction(0, "Snooze", PendingIntent.getBroadcast(context, 0, snooze, flags | PendingIntent.FLAG_IMMUTABLE))
-                .addAction(0, "Done", broadcast(context, ACTION_DONE, noteId, flags)));
+                .addAction(0, "Done", broadcast(context, ACTION_DONE, account, noteId, flags)));
     }
 
     static void test(Context context) {
-        post(context, TEST_NOTIFICATION, notification(context, "Catch notifications are on", "Reminders will show up here."));
+        post(context, String.valueOf(TEST_NOTIFICATION), notification(context, "Catch notifications are on", "Reminders will show up here."));
     }
 
-    static void dismiss(Context context, String noteId) {
+    static void dismiss(Context context, String account, String noteId) {
+        NotificationManagerCompat.from(context).cancel(reminderKey(account, noteId), 0);
+        // A notification posted by the old APK has no account tag.
         NotificationManagerCompat.from(context).cancel(noteId.hashCode());
     }
 
@@ -385,7 +408,7 @@ final class ReminderAlarms {
             JSONArray before = array(context, "snoozes");
             for (int index = 0; index < before.length(); index++) {
                 JSONObject snooze = before.optJSONObject(index);
-                if (snooze != null && !snooze.optString(NOTE).equals(noteId)) snoozes.put(snooze);
+                if (snooze != null && !(snooze.optString(NOTE).equals(noteId) && snooze.optString(ACCOUNT).equals(account))) snoozes.put(snooze);
             }
             snoozes.put(new JSONObject().put(NOTE, noteId).put(ACCOUNT, account)
                     .put("until", until).put("title", title).put("body", body));
@@ -397,7 +420,7 @@ final class ReminderAlarms {
         JSONObject entry = accounts(context).optJSONObject(account);
         JSONArray alarms = entry == null ? null : entry.optJSONArray("alarms");
         store(context, account, alarms == null ? new JSONArray() : alarms);
-        dismiss(context, noteId);
+        dismiss(context, account, noteId);
         schedule(context);
     }
 
@@ -419,12 +442,12 @@ final class ReminderAlarms {
     }
 
     /** The web app has written these as their reminders' snoozes, so they come with the alarms now. */
-    static synchronized void ackSnoozes(Context context, Set<String> noteIds) {
+    static synchronized void ackSnoozes(Context context, String account, Set<String> noteIds) {
         JSONArray left = new JSONArray();
         JSONArray snoozes = array(context, "snoozes");
         for (int index = 0; index < snoozes.length(); index++) {
             JSONObject snooze = snoozes.optJSONObject(index);
-            if (snooze != null && !noteIds.contains(snooze.optString(NOTE))) left.put(snooze);
+            if (snooze != null && (!noteIds.contains(snooze.optString(NOTE)) || (account != null && !account.equals(snooze.optString(ACCOUNT))))) left.put(snooze);
         }
         preferences(context).edit().putString("snoozes", left.toString()).apply();
     }
@@ -435,6 +458,18 @@ final class ReminderAlarms {
      */
     static synchronized void clear(Context context, String account) {
         JSONObject accounts = accounts(context);
+        NotificationManager notifications = context.getSystemService(NotificationManager.class);
+        for (android.service.notification.StatusBarNotification shown : notifications.getActiveNotifications()) {
+            String tag = shown.getTag();
+            if (account == null || (tag != null && tag.startsWith(account + ":")))
+                notifications.cancel(tag, shown.getId());
+        }
+        JSONObject leaving = accounts.optJSONObject(account == null ? LEGACY : account);
+        JSONArray oldAlarms = leaving == null ? null : leaving.optJSONArray("alarms");
+        for (int index = 0; oldAlarms != null && index < oldAlarms.length(); index++) {
+            JSONObject alarm = oldAlarms.optJSONObject(index);
+            if (alarm != null) notifications.cancel(alarm.optString(NOTE).hashCode());
+        }
         if (account == null) accounts = new JSONObject();
         else accounts.remove(account);
         // The unnamed account of an older install is whoever is signing out now.

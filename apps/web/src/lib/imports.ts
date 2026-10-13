@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { hasAttachment, type ImportedAttachment, importAttachment } from './attachments';
 import { getSignedInUser } from './auth';
 import { type ImportBatch, type ImportedNote, importNotes } from './notes';
+import { currentAccountId } from './storageIdentity';
 import { isPendingWrite, subscribeToSyncStatus } from './syncStatus';
 
 /**
@@ -46,7 +47,7 @@ export type ImportState = {
 };
 
 const user = getSignedInUser();
-const storageKey = user ? `catch-import-${user.id}` : null;
+const storageKey = user ? `catch-import-${currentAccountId()}` : null;
 
 function load(): StoredImport | null {
   if (!storageKey) return null;

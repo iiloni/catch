@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 vi.mock('./auth', () => ({
+  getAccountId: () => 'alice',
+  accountId: (account: { user: { id: string } }) => account.user.id,
   getSignedInUser: () => ({ id: 'alice' }),
   getAccounts: () => [],
   authClient: { signOut: mocks.signOut },

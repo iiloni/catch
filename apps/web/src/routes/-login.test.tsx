@@ -12,7 +12,10 @@ vi.mock('@/lib/webUpdates', () => ({
   updateSignedOutPage: async () => {},
   useWebUpdates: () => ({ reloading: false }),
 }));
-vi.mock('@/lib/serverUrl', () => ({ needsServerUrl: () => false }));
+vi.mock('@/lib/serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  needsServerUrl: () => false,
+}));
 vi.mock('@/components/BrandLockup/BrandLockup', () => ({ BrandLockup: () => <img alt="Catch" /> }));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),

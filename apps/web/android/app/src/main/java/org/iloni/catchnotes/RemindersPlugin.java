@@ -39,8 +39,8 @@ public class RemindersPlugin extends Plugin {
         if (noteId == null) return;
         // A rotation or a return from the background must not open it again.
         intent.setAction(Intent.ACTION_MAIN);
-        ReminderAlarms.dismiss(getContext(), noteId);
         String account = intent.getStringExtra(ReminderAlarms.ACCOUNT);
+        ReminderAlarms.dismiss(getContext(), account == null ? "" : account, noteId);
         // The web app switches to the account whose note it is before opening it.
         notifyListeners("open", new JSObject().put("noteId", noteId).put("userId", account == null ? "" : account), true);
     }
@@ -134,7 +134,7 @@ public class RemindersPlugin extends Plugin {
         Set<String> noteIds = new HashSet<>();
         JSArray given = call.getArray("noteIds", new JSArray());
         for (int index = 0; index < given.length(); index++) noteIds.add(given.optString(index));
-        ReminderAlarms.ackSnoozes(getContext(), noteIds);
+        ReminderAlarms.ackSnoozes(getContext(), call.getString("account"), noteIds);
         call.resolve();
     }
 

@@ -58,7 +58,11 @@ vi.mock('./syncStatus', () => ({
 }));
 vi.mock('./reminders', () => ({ snoozeReminder: native.snooze }));
 vi.mock('./snooze', () => ({ snoozeMinutes: () => 30, onSnoozeChange: native.snoozeChanged }));
-vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
+vi.mock('./serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  bindPageServer: () => {},
+  getServerUrl: () => 'https://catch.example',
+}));
 
 import { API_PROTOCOL_VERSION } from '@catch/shared';
 import { nativeReminders, watchNativeReminders } from './nativeReminders';
@@ -108,7 +112,7 @@ describe('native reminders', () => {
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).toHaveBeenCalledWith({
       account: 'ada',
-      label: 'Ada',
+      label: 'Ada · catch.example',
       alarms: [alarm],
       server: 'https://catch.example',
       token: 'signed-token',
@@ -160,7 +164,9 @@ describe('native reminders', () => {
     // The write shows in the reminder, which tells the alarms again.
     native.snoozedUntil.mockReturnValue(new Date(until));
     native.watch.mock.calls[0]?.[0]([{ ...alarm, snoozedUntil: until }]);
-    await vi.waitFor(() => expect(native.ackSnoozes).toHaveBeenCalledWith({ noteIds: [NOTE] }));
+    await vi.waitFor(() =>
+      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'ada', noteIds: [NOTE] }),
+    );
     expect(native.snooze).toHaveBeenCalledTimes(1);
   });
 
@@ -182,7 +188,9 @@ describe('native reminders', () => {
     });
     watchNativeReminders();
     native.watch.mock.calls[0]?.[0]([alarm]);
-    await vi.waitFor(() => expect(native.ackSnoozes).toHaveBeenCalledWith({ noteIds: [NOTE] }));
+    await vi.waitFor(() =>
+      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'ada', noteIds: [NOTE] }),
+    );
     expect(native.snooze).not.toHaveBeenCalled();
   });
 

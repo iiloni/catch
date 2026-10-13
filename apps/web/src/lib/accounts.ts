@@ -2,26 +2,30 @@ import { toast } from 'sonner';
 import { deleteAttachmentFiles } from './attachmentFiles';
 import {
   type Account,
+  accountId,
   accountPath,
+  accountServer,
   activateAccount,
   authClient,
   clearAuthToken,
   forgetAccount,
+  getAccountId,
   getAccounts,
   getSignedInUser,
   pageAccountGone,
   SWITCHED_KEY,
 } from './auth';
-import { clearLocalData } from './collections';
+import { clearLocalData, waitForPendingWritesStored } from './collections';
 import { editorNote, quickNote, quickNoteMounted } from './dockState';
 import { deleteHistoryStorage } from './historyStorage';
 import { forgetImport } from './imports';
 import { linkCaptureOpen } from './linkCapture';
 import { countQueuedWrites, deleteLocalDatabase, deleteOutbox } from './localStore';
+import { prepareNativeLogin } from './nativeAccounts';
 import { nativeReminders } from './nativeReminders';
 import { nativeWidgets } from './nativeWidgets';
 import { dropPushSubscription, leavePush, syncPush } from './push';
-import { getServerUrl } from './serverUrl';
+import { getServerUrl, supportsMultipleServers } from './serverUrl';
 import { clearIncomingShares } from './shareInbox';
 import { getSyncStatus } from './syncStatus';
 import { isUpdateReloadBlocked } from './useUpdateReloadBlocked';
@@ -40,24 +44,33 @@ import { forgetVault } from './vaultKeyStore';
 const removedKey = (userId: string) => `catch-account-removed:${userId}`;
 {
   const user = getSignedInUser();
-  if (user) localStorage.removeItem(removedKey(user.id));
+  if (user) localStorage.removeItem(removedKey(getAccountId() ?? user.id));
 }
 
 /**
  * Changes the account this tab shows, opening one of its notes if asked. A full load, so
  * the collections open that account's notes.
  */
-export function switchAccount(userId: string, noteId?: string) {
-  if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
+export async function switchAccount(userId: string, noteId?: string) {
+  if (userId === getAccountId() || !getAccounts().some((account) => accountId(account) === userId))
+    return false;
+  try {
+    await waitForPendingWritesStored();
+  } catch {
+    toast.error('Could not save your changes on this device. Try switching again.');
+    return false;
+  }
+  if (!activateAccount(userId)) return false;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
   window.location.assign(
     accountPath(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/'),
   );
+  return true;
 }
 
 const openStores = [editorNote, quickNote, quickNoteMounted, linkCaptureOpen];
 // Who this page was loaded for, still known after the account has been signed out.
-const pageUser = getSignedInUser();
+const pageUser = getAccountId();
 
 /**
  * Opens a note from its reminder's notification, which rings for every account on the
@@ -65,12 +78,12 @@ const pageUser = getSignedInUser();
  * for an open note or composer to close, since the load would drop what it has not saved.
  */
 export function openAccountNote(userId: string, noteId: string) {
-  if (!getAccounts().some(({ user }) => user.id === userId)) {
+  if (!getAccounts().some((account) => accountId(account) === userId)) {
     toast('That reminder is for an account that is no longer signed in here.');
     return;
   }
   if (!isUpdateReloadBlocked()) {
-    switchAccount(userId, noteId);
+    void switchAccount(userId, noteId);
     return;
   }
   toast('Close the open note to see that reminder.');
@@ -78,7 +91,7 @@ export function openAccountNote(userId: string, noteId: string) {
     store.subscribe(() => {
       if (isUpdateReloadBlocked()) return;
       for (const stop of stops) stop();
-      switchAccount(userId, noteId);
+      void switchAccount(userId, noteId);
     }),
   );
 }
@@ -118,7 +131,7 @@ export function followAccountChanges() {
     const user = pageUser;
     // The tab that signed it out could not delete a database this one had open.
     const cleared =
-      user && localStorage.getItem(removedKey(user.id)) === 'true'
+      user && localStorage.getItem(removedKey(user)) === 'true'
         ? clearLocalData().catch(() => undefined)
         : Promise.resolve();
     // Not a reload: the address names this account, and maybe a note the next does not have.
@@ -143,9 +156,9 @@ export function arrivedBySwitching() {
 
 /** How many of an account's changes on this device have not reached the server. */
 export async function unsyncedChanges(account: Account) {
-  return account.user.id === getSignedInUser()?.id
+  return accountId(account) === getAccountId()
     ? getSyncStatus().pending
-    : countQueuedWrites(account.user.id).catch(() => 0);
+    : countQueuedWrites(accountId(account)).catch(() => 0);
 }
 
 async function clearAccountWidgets(userId?: string) {
@@ -161,13 +174,13 @@ async function clearAccountWidgets(userId?: string) {
 
 /** Signs an account out of this device and deletes its data here. */
 export async function signOutAccount(account: Account) {
-  if (account.user.id === getSignedInUser()?.id) return signOutCurrentAccount();
-  if (!(await clearAccountWidgets(account.user.id))) return;
-  localStorage.setItem(removedKey(account.user.id), 'true');
+  if (accountId(account) === getAccountId()) return signOutCurrentAccount();
+  if (!(await clearAccountWidgets(accountId(account)))) return;
+  localStorage.setItem(removedKey(accountId(account)), 'true');
   await stopRinging(account);
-  await nativeReminders.clear(account.user.id).catch(() => undefined);
+  await nativeReminders.clear(accountId(account)).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
-  await fetch(`${getServerUrl()}/api/auth/sign-out`, {
+  await fetch(`${accountServer(account)}/api/auth/sign-out`, {
     method: 'POST',
     // The browser's own cookie is another account's session.
     credentials: 'omit',
@@ -175,7 +188,7 @@ export async function signOutAccount(account: Account) {
     body: '{}',
     signal: AbortSignal.timeout(5000),
   }).catch(() => undefined);
-  const { id } = account.user;
+  const id = accountId(account);
   const removed = await Promise.allSettled([
     deleteLocalDatabase(id),
     deleteHistoryStorage(id),
@@ -211,21 +224,22 @@ export async function signOutAccount(account: Account) {
 /** Signs out the account in use, then carries on as another if one is signed in. */
 export async function signOutCurrentAccount() {
   const user = getSignedInUser();
-  const account = getAccounts().find((other) => other.user.id === user?.id);
-  if (!(await clearAccountWidgets(user?.id))) return;
-  if (user) localStorage.setItem(removedKey(user.id), 'true');
+  const account = getAccounts().find((other) => accountId(other) === getAccountId());
+  if (!(await clearAccountWidgets(getAccountId() ?? undefined))) return;
+  if (user) localStorage.setItem(removedKey(getAccountId() ?? user.id), 'true');
   // The accounts that stay signed in go on ringing.
   if (account) await stopRinging(account);
   else await dropPushSubscription().catch(() => undefined);
   // The phone keeps reminders and a token of its own to ring with the app closed.
-  await nativeReminders.clear(user?.id).catch(() => undefined);
+  await nativeReminders.clear(getAccountId() ?? undefined).catch(() => undefined);
   // Offline the server keeps the session until it expires; the device forgets it either way.
   await authClient.signOut().catch(() => undefined);
   await clearLocalData();
   forgetImport();
+  if (supportsMultipleServers()) prepareNativeLogin(getServerUrl());
   clearAuthToken();
   const next = getAccounts()[0];
-  if (next) activateAccount(next.user.id);
+  if (next) activateAccount(accountId(next));
   // A full reload drops this user's synced notes from memory.
-  window.location.assign(next ? accountPath(next.user.id) : '/login');
+  window.location.assign(next ? accountPath(accountId(next)) : '/login');
 }

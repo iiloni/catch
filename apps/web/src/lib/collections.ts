@@ -99,6 +99,7 @@ import { shapeFetch } from './shapeFetch';
 import { createSharedNotesView } from './sharedNotesView';
 import { clearIncomingShares } from './shareInbox';
 import { watchPreferences } from './storage';
+import { currentAccountId } from './storageIdentity';
 import {
   addPendingWrite,
   getPendingWriteIds,
@@ -114,7 +115,8 @@ import { widgetSnapshot } from './widgetSnapshot';
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
 const user = await resolveSignedInUser();
-const database = user ? await openLocalDatabase(user.id) : null;
+const deviceAccount = currentAccountId();
+const database = deviceAccount ? await openLocalDatabase(deviceAccount) : null;
 
 /** Keeps nothing: without a database, collections live in memory as they did before. */
 const memoryOnly: PersistedCollectionPersistence = {
@@ -718,10 +720,10 @@ const onlineDetector = createOnlineDetector();
 const executor = startOfflineExecutor({
   collections: writableCollections,
   mutationFns: { push: pushWrites },
-  storage: createOutboxStorage(user?.id ?? null),
+  storage: createOutboxStorage(deviceAccount),
   // Without Web Locks the executor falls back to electing a leader over a BroadcastChannel.
   leaderElection: WebLocksLeader.isSupported()
-    ? new WebLocksLeader(`catch-outbox-${user?.id ?? ''}`)
+    ? new WebLocksLeader(`catch-outbox-${deviceAccount ?? ''}`)
     : undefined,
   onlineDetector,
   beforeRetry: (queued: OfflineTransaction[]) => mergeQueuedWrites(queued, notesCollection.id),
@@ -854,11 +856,11 @@ export async function clearLocalData() {
   await executor.clearOutbox();
   executor.dispose();
   await clearAttachmentFiles();
-  if (user) await clearIncomingShares(user.id);
-  if (user) await forgetVault(user.id);
-  if (user) await deleteHistoryStorage(user.id);
+  if (deviceAccount) await clearIncomingShares(deviceAccount);
+  if (deviceAccount) await forgetVault(deviceAccount);
+  if (deviceAccount) await deleteHistoryStorage(deviceAccount);
   await database?.destroy();
-  if (user) deleteOutbox(user.id);
+  if (deviceAccount) deleteOutbox(deviceAccount);
 }
 
 /**

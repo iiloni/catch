@@ -4,9 +4,16 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { accountPath, activateAccount, authClient, getAccounts, getSignedInUser } from '@/lib/auth';
+import {
+  accountId,
+  accountPath,
+  activateAccount,
+  authClient,
+  getAccounts,
+  getSignedInUser,
+} from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
-import { needsServerUrl } from '@/lib/serverUrl';
+import { getServerUrl, needsServerUrl, supportsMultipleServers } from '@/lib/serverUrl';
 import { updateSignedOutPage, useWebUpdates } from '@/lib/webUpdates';
 
 export const Route = createFileRoute('/login')({
@@ -50,6 +57,16 @@ function LoginPage() {
       setError('That is not a whole invite link. Copy the link again and paste all of it.');
       return;
     }
+    let invitedServer: string | null = null;
+    try {
+      invitedServer = new URL(pasted).origin;
+    } catch {
+      // A token alone is also accepted, and names no server.
+    }
+    if (supportsMultipleServers() && token && invitedServer && invitedServer !== getServerUrl()) {
+      setError('That invite is for another server. Choose Change server and paste the link there.');
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -79,6 +96,19 @@ function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 p-4">
       <BrandLockup orientation="stacked" iconSize={96} />
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+        {supportsMultipleServers() && (
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="truncate text-muted-foreground">{new URL(getServerUrl()).host}</span>
+            <Button
+              type="button"
+              variant="link"
+              disabled={pending}
+              onClick={() => window.location.assign('/setup')}
+            >
+              Change server
+            </Button>
+          </div>
+        )}
         {invite && mode === 'sign-up' && (
           <p className="text-center text-muted-foreground text-sm">
             You have been invited to this Catch server. Make your account to join.
@@ -128,8 +158,8 @@ function LoginPage() {
             onClick={() => {
               // A full load: the collections open the notes of the account that is in use.
               const user = getSignedInUser();
-              if (!user) activateAccount(signedIn.user.id);
-              window.location.assign(accountPath((user ?? signedIn.user).id));
+              if (!user) activateAccount(accountId(signedIn));
+              window.location.assign(accountPath(user?.id ?? accountId(signedIn)));
             }}
           >
             Back to your notes

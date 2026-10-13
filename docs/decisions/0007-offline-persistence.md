@@ -125,3 +125,7 @@ transactions on the small `note-history` control collection, so coalescing a liv
 save never removes a historical checkpoint. Startup reconciles staged jobs with the outbox.
 Original restores are freshness-checked online requests, not optimistic outbox mutations;
 cached versions can be copied offline. Sign-out deletes the history store for that account.
+
+Android server connections use a local account identity for database and outbox names
+(ADR 0023). Existing first-server stores retain their names; new connections cannot share
+stores even when their server user IDs match. Browser stores still use user IDs per origin.

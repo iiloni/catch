@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   stored: vi.fn(async () => {}),
   ack: vi.fn(async () => {}),
   stop: vi.fn(),
-  switch: vi.fn(),
+  switch: vi.fn(async () => true),
   leave: vi.fn(),
   toast: vi.fn(),
   user: vi.fn(() => ({ id: 'alice' })),
@@ -20,11 +20,18 @@ vi.mock('./nativeWidgets', () => ({
 vi.mock('./collections', () => ({ waitForPendingWritesStored: mocks.stored }));
 vi.mock('./accounts', () => ({ switchAccount: mocks.switch }));
 vi.mock('./auth', () => ({
+  accountId: (account: { user: { id: string } }) => account.user.id,
+  accountServer: () => 'https://catch.example',
+  getAccountId: () => mocks.user().id,
   getAccounts: mocks.accounts,
   getSignedInUser: mocks.user,
   pagePath: (path: string) => path,
 }));
-vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
+vi.mock('./serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  bindPageServer: () => {},
+  getServerUrl: () => 'https://catch.example',
+}));
 vi.mock('./vault', () => ({ leaveVault: mocks.leave }));
 vi.mock('sonner', () => ({ toast: mocks.toast }));
 vi.mock('./dockState', () => ({

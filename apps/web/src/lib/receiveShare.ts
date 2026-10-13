@@ -14,6 +14,7 @@ import { type LinkCapturePlacement, resolveLinkCapturePlacement } from './linkCa
 import { createNote, hasNote, updateNote } from './notes';
 import { sharedNoteContent } from './shareContent';
 import { getIncomingShare, saveIncomingShare } from './shareInbox';
+import { currentAccountId } from './storageIdentity';
 
 const active = new Map<string, Promise<string>>();
 
@@ -32,12 +33,12 @@ async function claimShare(id: string) {
   const share = await getIncomingShare(id);
   if (!share)
     throw new Error('This share is no longer available. Share it from the other app again.');
-  if (share.userId && share.userId !== user.id)
+  if (share.userId && share.userId !== currentAccountId())
     throw new Error(
       'This share belongs to another account. Sign in to that account to finish saving it.',
     );
   if (!share.userId) {
-    share.userId = user.id;
+    share.userId = currentAccountId();
     await saveIncomingShare(share);
   }
   return { share, user };
