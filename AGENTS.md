@@ -116,7 +116,8 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   `release.yml`, `site.yml`, `tag-release.yml`, `promote-release.yml` and `ai-review.yml`
   workflows, and `scripts/release-workflows.test.ts`. It still needs `merge on pass` to
   pass `validation`. Every changed path must be exempt; `ci.yml`, other scripts and app,
-  image or E2E inputs still require E2E. Do not add `run e2e` to an exempt PR.
+  image or E2E inputs still require E2E. The `run e2e` label overrides the exemption
+  and requests the full suite.
 - After the user approves functionality and design for merging, mark the PR ready and add
   `merge on pass`. Fix failures with the label left in place, then squash-merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.
