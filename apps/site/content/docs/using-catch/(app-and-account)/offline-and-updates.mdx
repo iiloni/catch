@@ -23,6 +23,8 @@ Only one tab per account owns its offline queue. If Catch says **Catch is open i
 
 The [vault](/docs/using-catch/vault) also works offline after it has synced here. Vault setup, password changes/recovery and deletion need a connection. You can create or stop a [sharing link](/docs/using-catch/links-and-sharing#share-a-catch-note) offline, but readers see the change only after it reaches the server.
 
+[Version history](/docs/using-catch/version-history) captures offline edits too. You can read cached versions and save them as new notes offline; restoring the original or clearing history requires a connection. Open the versions you need while online, because syncing notes does not download every version.
+
 ## Understand queued changes
 
 The cloud control in a page header explains why sync stopped and shows how many changes are waiting. The editor says **Saved on this device** when it has stored changes locally.
@@ -40,7 +42,7 @@ With several accounts on a device, only accounts open in a tab sync. Switch back
 
 ## Avoid conflicting edits
 
-Edits to different note fields can both survive. If two devices change the same field, the last change to reach the server wins. The note's text is one field: an offline text edit sent later can replace text another device saved while you were away. There is no merge editor or saved revision history.
+Edits to different note fields can both survive. If two devices change the same field, the last change to reach the server wins. The note's text is one field: an offline text edit sent later can replace text another device saved while you were away. There is no merge editor; use [version history](/docs/using-catch/version-history) to review and recover saved content.
 
 A vault note is encrypted as a whole: a later write replaces the entire note, including its organization, rather than merging different fields.
 

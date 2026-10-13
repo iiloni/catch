@@ -1,0 +1,44 @@
+---
+title: Android widgets
+description: Put quick capture, a note or a filtered note list on your Android home screen.
+---
+
+The native [Android app](/docs/using-catch/getting-started#install-the-android-app) includes three home-screen widgets. They keep their last preview available with Catch closed and work offline. Widgets are not available in the browser or installed web app.
+
+## Add a widget
+
+1. Open Catch, connect to your server and sign in. Let your notes sync.
+2. Touch and hold an empty area of your Android home screen, then open your launcher's widget picker.
+3. Find your installed Catch app and place **Quick capture**, **One note** or **Note list**.
+4. Choose the account and, for a note widget, its content. Choose **Device**, **Light** or **Dark** appearance and save the configuration.
+
+Your launcher controls placement and resizing; its menus may use different names. Each widget keeps its own account and appearance, so changing accounts in Catch does not repoint your widgets.
+
+<DocsVisuals>
+<DocsScreenshot name="androidWidgetNote" caption="One note on an Android home screen, showing a Lisbon itinerary with its image and note color." />
+<DocsScreenshot name="androidWidgetList" caption="Note list with its floating New note button, and Quick capture below it for New note or Search." />
+</DocsVisuals>
+
+## Choose what to show
+
+- **Quick capture** opens **New note** or **Search** in Catch. Its settings button lets you change its configuration.
+- **One note** shows a note you choose, with its color and checklist state. Scroll inside the widget to read longer text; tap it to open the editor.
+- **Note list** shows **Pinned notes**, **Gallery**, **All notes**, a tag (including its descendants), or a Deck column. Pinned notes appear first, in Catch's ordering. Scroll the list and tap a card to open it; the floating **+** creates a note.
+
+New notes from a Deck-column list start in that column. Other widgets create ordinary Gallery notes without automatically adding tags or pins.
+
+Both note widgets can show one cached image: the first image attachment, or a visible link-preview thumbnail if there is no attached image. Hidden or disabled link previews stay hidden. Checklists are read-only in the widget; tapping an item opens its note so you can change it in Catch.
+
+## Change a widget
+
+Touch and hold **One note** or **Note list** and choose your launcher's **Edit** or **Reconfigure** action. If your launcher does not offer it, remove the widget and add it again. Use Quick capture's settings button to change that widget.
+
+If a selected note, tag or Deck column is gone, the widget asks you to configure it again. Archived, trashed and deleted notes disappear when Catch refreshes the preview.
+
+## Refresh and privacy
+
+Widget previews refresh while their account is open in Catch, including for edits made offline. They do not fetch changes in the background with the app closed. To see changes from another device, open the widget's account in Catch and let it sync. Accounts not currently open keep their last preview.
+
+Only your ordinary notes appear. [Vault notes](/docs/using-catch/vault) and copies of notes shared with you are excluded, even with the vault unlocked. Signing out clears that account's widget previews; changing servers discards old widget configurations.
+
+Widgets display note text and cached thumbnails on your home screen. Choose notes you are comfortable leaving visible there.
