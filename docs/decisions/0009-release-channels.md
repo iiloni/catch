@@ -49,12 +49,18 @@ and preview must advance independently, including preview versions ahead of stab
   `run e2e` unless upcoming fixes or sweeping changes still warrant another full run.
   They reapply it when needed; removing it during a run would cancel that run.
   Fixes that change approved functionality or design require renewed approval. The always-running
-  `validation` gate fails when a PR lacks `merge on pass`, or E2E is unrequested, skipped,
-  cancelled or unsuccessful; it is the required branch check (see [CI setup](../ci.md)).
+  `validation` gate fails when a PR lacks `merge on pass`, or required E2E is unrequested,
+  skipped, cancelled or unsuccessful; it is the required branch check (see [CI setup](../ci.md)).
+  PRs and main pushes confined to the explicit exemption in `scripts/change-scope.ts`
+  run checks but skip E2E: documentation, the release/site/tag-release/promote-release/
+  AI-review workflows and `scripts/release-workflows.test.ts`. Every changed path must be
+  exempt; CI itself, release scripts and app, image or E2E inputs remain covered. Merge
+  approval is still required, and `run e2e` overrides the exemption. Manual requests and
+  merge groups always require full E2E; a release cannot reuse a pass that skipped it.
   PRs test GitHub's temporary merge
-  commit and need not be up to date with `main` to merge; the full suite on each `main` push
-  covers combinations of PRs (see [CI setup](../ci.md)). New PR runs cancel superseded
-  PR runs. Main pushes, manual CI requests and merge groups request checks and full E2E
+  commit and need not be up to date with `main` to merge; the full suite on each non-exempt
+  `main` push covers combinations of PRs (see [CI setup](../ci.md)). New PR runs cancel superseded
+  PR runs. Non-exempt main pushes, manual CI requests and merge groups request checks and full E2E
   without a label. PRs and merge groups always test their combined code rather than reusing
   main/tag CI. The tag-push or manually dispatched
   release workflow waits for successful CI at the exact tagged commit and verifies checks

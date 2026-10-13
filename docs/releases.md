@@ -64,8 +64,8 @@ commit messages, but choose release versions explicitly.
   E2E projects to have succeeded. It waits up to 30 minutes for queued or running CI.
   If no run appears within a minute, it requests CI on the release tag; this covers an
   intermediate commit in a batch push that only tested the tip. It does the same at once
-  for a commit whose only run is green without E2E, which is what a documentation-only
-  push to main leaves behind (see [CI](ci.md#documentation-only-changes)). Without a
+  for a commit whose only run is green without E2E, which is what an E2E-exempt
+  push to main leaves behind (see [CI](ci.md#e2e-exempt-changes)). Without a
   previous pass, failed or canceled CI blocks release until CI is rerun successfully. No
   release runs its own copy of E2E.
 - `tag-release.yml`: manual channel and version-bump inputs call `scripts/release.sh`,
@@ -93,14 +93,22 @@ commit messages, but choose release versions explicitly.
   Once both artifacts are ready, the publishing job uploads the APK and
   checksum to a draft release, updates the appropriate image aliases, and publishes the
   release. Preview GitHub Releases are marked as prereleases.
+- After a dispatched release publishes successfully, a separate `refresh-site` job
+  requests the public Site workflow on `main` when `CLOUDFLARE_SITE_ENABLED=true`. A
+  tag-push release skips this request because Site already follows external tag pushes.
+  Check the separate Site run for the deployment result. If dispatch fails, rerun only
+  the failed refresh job. If deployment fails, or the released commit predates this job
+  (including promotion of an older preview), run `gh workflow run site.yml --ref main`;
+  the release artifacts do not need to be rebuilt.
 
 The release notes list what changed (see [Release notes and changelog](#release-notes-and-changelog)),
 then record the exact image, its digest, the source commit, and the Android version code.
 The version job generates the notes into the run summary before any build starts, so a
 release whose notes cannot be generated stops there; the publishing job generates them
 again for the release body, including when a rerun edits an existing draft. Both jobs
-fetch full history and tags for this. There is no deployment job. Actions artifacts expire after seven days; APKs
-attached to a published GitHub Release remain available there.
+fetch full history and tags for this. No job deploys the app to a production server.
+Actions artifacts expire after seven days; APKs attached to a published GitHub Release
+remain available there.
 
 To promote a tested preview, open **Actions > Promote release > Run workflow**, leave the
 workflow branch on `main`, and enter the full preview tag, for example `v0.4.1-preview`.

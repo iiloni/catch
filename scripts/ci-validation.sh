@@ -16,12 +16,12 @@ fail() {
 
 [[ "${REUSE_RESULT:-}" == success ]] || fail 'CI setup failed or was cancelled. Rerun CI.'
 
-# A change confined to documentation is the one case where skipped E2E is not a failure.
+# A change confined to exempt paths is the one case where skipped E2E is not a failure.
 e2e_exempt=false
-if [[ "${DOCS_ONLY:-}" == true && "${E2E_REQUESTED:-}" == false ]]; then
+if [[ "${E2E_EXEMPT:-}" == true && "${E2E_REQUESTED:-}" == false ]]; then
     case "${EVENT_NAME:-}" in
         pull_request|push) e2e_exempt=true ;;
-        *) fail 'Only a PR or a push to main may skip E2E for a documentation-only change.' ;;
+        *) fail 'Only a PR or a push to main may skip E2E for an E2E-exempt change.' ;;
     esac
 fi
 
@@ -43,7 +43,7 @@ fi
 [[ "${RUN_CHECKS:-}" == true ]] || fail 'CI setup did not produce a valid test plan.'
 [[ "${CHECK_RESULT:-}" == success ]] || fail 'Lint, type checks, unit tests and build must all pass.'
 if [[ "$e2e_exempt" == true ]]; then
-    passed='Checks passed; E2E is not required for a documentation-only change'
+    passed='Checks passed; E2E is not required for an E2E-exempt change'
 else
     [[ "${DESKTOP_RESULT:-}" == success ]] || fail 'Desktop E2E must pass; skipped or cancelled tests do not count.'
     [[ "${ANDROID_RESULT:-}" == success ]] || fail 'Android E2E must pass; skipped or cancelled tests do not count.'

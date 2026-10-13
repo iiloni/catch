@@ -34,6 +34,161 @@ async function center(item: Locator) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+async function checklistMenu(page: Page, dialog: Locator) {
+  const row = dialog.locator('[data-content-type="checkListItem"] .bn-inline-content').first();
+  const handle = dialog.getByRole('button', { name: 'Open block menu' });
+  if (test.info().project.use.isMobile) {
+    await row.tap();
+    await handle.tap();
+  } else {
+    await row.hover();
+    await handle.click();
+  }
+  return page.getByRole('menuitem', { name: 'Delete all checked items in note', exact: true });
+}
+
+test('delete checked items removes nested lists in one undo step and persists', async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.evaluate(async () => {
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
+    const { transaction } = createNote({
+      userId: getSignedInUser().id,
+      content: [
+        { type: 'heading', props: { level: 3 }, content: 'Checked lists' },
+        { type: 'paragraph', content: 'Keep this paragraph' },
+        {
+          id: 'unchecked-parent',
+          type: 'checkListItem',
+          content: 'Unchecked parent',
+          children: [
+            { type: 'checkListItem', props: { checked: true }, content: 'Checked child' },
+            { type: 'checkListItem', content: 'Unchecked child' },
+          ],
+        },
+        {
+          type: 'checkListItem',
+          props: { checked: true },
+          content: 'Checked parent',
+          children: [
+            { type: 'checkListItem', props: { checked: true }, content: 'Checked descendant' },
+            { type: 'bulletListItem', content: 'Child of deleted parent' },
+          ],
+        },
+        { type: 'bulletListItem', content: 'Keep this bullet' },
+        { type: 'checkListItem', props: { checked: true }, content: 'Another checked item' },
+        { type: 'numberedListItem', content: 'Keep this number' },
+      ],
+    });
+    await transaction.isPersisted.promise;
+  });
+  const dialog = await openNote(page, 'Checked lists');
+  const rows = dialog.locator('.bn-editor > .bn-block-group > .bn-block-outer');
+  const original = await rows.allTextContents();
+  const remaining = [
+    'Checked lists',
+    'Keep this paragraph',
+    'Unchecked parentUnchecked child',
+    'Keep this bullet',
+    'Keep this number',
+  ];
+  const remove = page.getByRole('menuitem', {
+    name: 'Delete all checked items in note',
+    exact: true,
+  });
+  await expect(page.getByRole('toolbar', { name: 'Note actions' }).getByRole('button')).toHaveCount(
+    5,
+  );
+  await dialog.locator('[data-content-type="bulletListItem"] .bn-inline-content').first().hover();
+  await dialog.getByRole('button', { name: 'Open block menu' }).click();
+  await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
+  const editor = dialog.locator('[contenteditable="true"]');
+  await dialog.locator('.bn-editor h3').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('!');
+  // Opening a block menu must not combine deletion with the preceding typing event.
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeVisible();
+  await remove.click();
+  await expect(editor).toBeFocused();
+  await expect(rows).toHaveText(['Checked lists!', ...remaining.slice(1)]);
+  await expect(remove).toBeHidden();
+  const history = page.getByRole('toolbar', { name: 'Undo and redo' });
+  await history.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(rows).toHaveText(['Checked lists!', ...original.slice(1)]);
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeVisible();
+  await page.keyboard.press('Escape');
+  await history.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(rows).toHaveText(original);
+  await history.getByRole('button', { name: 'Redo', exact: true }).click();
+  await history.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(rows).toHaveText(['Checked lists!', ...remaining.slice(1)]);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  const reopened = await openNote(page, 'Checked lists!');
+  await expect(reopened.locator('.bn-editor > .bn-block-group > .bn-block-outer')).toHaveText([
+    'Checked lists!',
+    ...remaining.slice(1),
+  ]);
+  await checklistMenu(page, reopened);
+  await expect(remove).toBeHidden();
+});
+
+test('delete checked items follows checkbox changes and handles an entirely checked note', async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.evaluate(async () => {
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
+    const { transaction } = createNote({
+      userId: getSignedInUser().id,
+      content: [{ type: 'checkListItem', content: 'Only item' }],
+    });
+    await transaction.isPersisted.promise;
+  });
+  await page
+    .getByRole('article')
+    .filter({ hasText: 'Only item' })
+    .getByRole('button', { name: 'Open note' })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('textbox')).toBeVisible();
+  const remove = page.getByRole('menuitem', {
+    name: 'Delete all checked items in note',
+    exact: true,
+  });
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
+  await dialog.getByRole('checkbox').check();
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeVisible();
+  await page.keyboard.press('Escape');
+  await dialog.getByRole('checkbox').uncheck();
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeHidden();
+  await page.keyboard.press('Escape');
+  await dialog.getByRole('checkbox').check();
+  await checklistMenu(page, dialog);
+  await remove.click();
+  await expect(dialog.locator('[data-content-type="checkListItem"]')).toHaveCount(0);
+  await expect(remove).toBeHidden();
+  await page
+    .getByRole('toolbar', { name: 'Undo and redo' })
+    .getByRole('button', { name: 'Undo', exact: true })
+    .click();
+  await expect(dialog.getByRole('checkbox')).toBeChecked();
+  await expect(dialog.locator('.bn-editor p')).toHaveText('Only item');
+  await checklistMenu(page, dialog);
+  await expect(remove).toBeVisible();
+});
+
 test('checkboxes have a 44px target and toggle from its padding', async ({ page, isMobile }) => {
   const dialog = await listNote(page);
   const item = dialog.locator('[data-content-type="checkListItem"]').first();

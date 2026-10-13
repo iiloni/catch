@@ -316,3 +316,27 @@ jobs:
           fi
           gh release edit "$RELEASE_TAG" --draft=false --prerelease="$PRERELEASE" --latest="$latest"
           printf 'Published [%s](%s/%s/releases/tag/%s) (%s).\n' "$VERSION" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$CHANNEL" >> "$GITHUB_STEP_SUMMARY"
+
+  refresh-site:
+    needs: publish
+    # External tag pushes already trigger Site; dispatched releases need an explicit
+    # dispatch because GITHUB_TOKEN also suppresses their workflow_run follow-ups.
+    if: github.event_name == 'workflow_dispatch' && vars.CLOUDFLARE_SITE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Refresh published changelog
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'site.yml',
+              ref: 'main',
+            });
+            await core.summary
+              .addRaw('Requested Site on main. Follow its run for the deployment result.\n')
+              .addRaw('If deployment fails, run Site on main; release artifacts are already published.\n')
+              .write();
