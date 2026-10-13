@@ -262,6 +262,8 @@ test('a pending native link share offers placement and tag choices inside the ap
   await expect(capture).toBeHidden();
   await page.goto(`/share?id=${link}`);
   const editor = page.getByRole('dialog', { name: 'Edit note' });
+  // Tags are already in the preview while the pane is off screen; wait for its editor.
+  await expect(editor.getByRole('textbox')).toContainText('Shared link');
   await expect(editor.getByRole('button', { name: 'Reading / Web', exact: true })).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Later', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
