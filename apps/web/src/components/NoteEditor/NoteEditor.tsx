@@ -22,6 +22,7 @@ import {
 import { BlockNoteView, useShadCNComponentsContext } from '@blocknote/shadcn';
 import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
+import { closeHistory } from '@tiptap/pm/history';
 import { GripVertical } from 'lucide-react';
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { SearchSelectDialog, type SelectOption } from '@/components/SearchSelect/SearchSelect';
@@ -494,6 +495,28 @@ function createControls(editor: AnyEditor): EditorControls {
       });
       if (matching.length) editor.removeBlocks(matching);
     },
+    deleteCheckedItems() {
+      if (!editor.isEditable) return;
+      const matching: string[] = [];
+      function collect(blocks: typeof editor.document) {
+        for (const block of blocks) {
+          if (block.type === 'checkListItem' && block.props.checked === true) {
+            // Removing a parent also removes its children; do not remove them twice.
+            matching.push(block.id);
+          } else collect(block.children);
+        }
+      }
+      collect(editor.document);
+      if (!matching.length) return;
+      const focused = editor.isFocused();
+      editor.transact((tr) => {
+        closeHistory(tr);
+        editor.removeBlocks(matching);
+      });
+      editor.transact((tr) => closeHistory(tr));
+      if (focused) editor.focus();
+      refresh();
+    },
     showAttachment(id) {
       let found = false;
       editor.forEachBlock((block) => {
@@ -579,7 +602,9 @@ function readState(editor: AnyEditor): FormattingState {
   const active: Partial<Record<TextStyle, unknown>> = editor.getActiveStyles();
   const history = editor.getExtension(HistoryExtension);
   const attachmentIds: string[] = [];
+  let hasCheckedItems = false;
   editor.forEachBlock((block) => {
+    if (block.type === 'checkListItem' && block.props.checked === true) hasCheckedItems = true;
     const id =
       'url' in block.props && typeof block.props.url === 'string'
         ? attachmentId(block.props.url)
@@ -589,6 +614,7 @@ function readState(editor: AnyEditor): FormattingState {
   });
   return {
     attachmentIds,
+    hasCheckedItems,
     styles: {
       bold: Boolean(active.bold),
       italic: Boolean(active.italic),

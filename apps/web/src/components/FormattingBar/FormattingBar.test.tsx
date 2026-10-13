@@ -7,6 +7,7 @@ import { FormattingBar } from './FormattingBar';
 function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
   const full: FormattingState = {
     attachmentIds: [],
+    hasCheckedItems: false,
     styles: { bold: false, italic: false, underline: false, strike: false },
     block: 'paragraph',
     canIndent: false,
@@ -20,6 +21,7 @@ function fakeControls(state: Partial<FormattingState> = {}): EditorControls {
     getContent: () => [],
     attachmentInserter: vi.fn(() => vi.fn()),
     removeAttachment: vi.fn(),
+    deleteCheckedItems: vi.fn(),
     showAttachment: vi.fn(),
     subscribe: () => () => {},
     toggleStyle: vi.fn(),

@@ -377,6 +377,10 @@ usual; checkbox taps keep toggling, and links keep opening. A drop marker and ed
 guide the move, which is committed as one undo step on release. The mouse drag handle
 remains available.
 
+When a note has checked checklist items, its dock also offers Delete checked items. It
+removes checked items across every list, including nested lists, in one undo step. As with
+the per-item delete control, deleting a checked parent also removes its children.
+
 Block menu handles sit in a compact 40 px gutter on touch screens, with a 32 px button and
 a 4 px gap before the block. Their
 vertical position follows the rendered first line, including larger headings and touch-sized

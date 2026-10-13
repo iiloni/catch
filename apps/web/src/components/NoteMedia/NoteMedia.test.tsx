@@ -33,6 +33,7 @@ const file: Attachment = {
 };
 const state: FormattingState = {
   attachmentIds: [],
+  hasCheckedItems: false,
   styles: { bold: false, italic: false, underline: false, strike: false },
   block: 'paragraph',
   canIndent: false,
@@ -47,6 +48,7 @@ const controls: EditorControls = {
   attachmentInserter: () => insert,
   showAttachment: vi.fn(() => false),
   removeAttachment: vi.fn(),
+  deleteCheckedItems: vi.fn(),
   subscribe: () => () => {},
   toggleStyle: vi.fn(),
   toggleBlock: vi.fn(),

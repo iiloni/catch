@@ -8,6 +8,7 @@ describe('HistoryToolbar', () => {
   it('appears on the first edit and follows the undo and redo availability', () => {
     let state: FormattingState = {
       attachmentIds: [],
+      hasCheckedItems: false,
       styles: { bold: false, italic: false, underline: false, strike: false },
       block: 'paragraph',
       canIndent: false,
@@ -20,6 +21,7 @@ describe('HistoryToolbar', () => {
       getContent: () => [],
       attachmentInserter: vi.fn(() => vi.fn()),
       removeAttachment: vi.fn(),
+      deleteCheckedItems: vi.fn(),
       showAttachment: vi.fn(),
       getState: () => state,
       subscribe(listener) {
