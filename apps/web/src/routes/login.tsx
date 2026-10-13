@@ -4,14 +4,8 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  accountId,
-  accountPath,
-  activateAccount,
-  authClient,
-  getAccounts,
-  getSignedInUser,
-} from '@/lib/auth';
+import { openAccountPage } from '@/lib/accounts';
+import { accountId, accountPath, authClient, getReturnAccount } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { getServerUrl, needsServerUrl, supportsMultipleServers } from '@/lib/serverUrl';
 import { updateSignedOutPage, useWebUpdates } from '@/lib/webUpdates';
@@ -38,7 +32,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Reached from the account list to add another, or after the session in use ended.
-  const [signedIn] = useState(() => getAccounts()[0]);
+  const [signedIn] = useState(getReturnAccount);
   // A sign-in page cached before invites existed would ignore the link that opened it.
   const { reloading } = useWebUpdates();
   useEffect(() => {
@@ -157,9 +151,7 @@ function LoginPage() {
             variant="ghost"
             onClick={() => {
               // A full load: the collections open the notes of the account that is in use.
-              const user = getSignedInUser();
-              if (!user) activateAccount(accountId(signedIn));
-              window.location.assign(accountPath(user?.id ?? accountId(signedIn)));
+              void openAccountPage(accountId(signedIn));
             }}
           >
             Back to your notes

@@ -39,7 +39,7 @@ const Reminders = registerPlugin<{
   }): Promise<void>;
   configure(options: { snoozeMinutes: number }): Promise<void>;
   pendingSnoozes(): Promise<unknown>;
-  ackSnoozes(options: { account?: string; noteIds: string[] }): Promise<void>;
+  ackSnoozes(options: { account: string; noteIds: string[] }): Promise<void>;
   test(): Promise<void>;
   clear(options: { account?: string }): Promise<void>;
   addListener(event: 'open', listener: (event: unknown) => void): Promise<PluginListenerHandle>;
@@ -111,6 +111,7 @@ async function settleSnoozes() {
   const { snoozes } = snoozesSchema.parse(await Reminders.pendingSnoozes());
   const settled: string[] = [];
   const userId = currentAccountId();
+  if (!userId) return;
   for (const { noteId, until, account } of snoozes) {
     // Another account's, to be written when that account is next in use.
     if (account && account !== userId) continue;
@@ -123,8 +124,7 @@ async function settleSnoozes() {
       snoozeReminder(noteId, new Date(until));
     }
   }
-  if (settled.length > 0)
-    await Reminders.ackSnoozes({ account: userId ?? undefined, noteIds: settled });
+  if (settled.length > 0) await Reminders.ackSnoozes({ account: userId, noteIds: settled });
 }
 
 /** Keeps the phone's alarms in step with the reminders while the app runs. */

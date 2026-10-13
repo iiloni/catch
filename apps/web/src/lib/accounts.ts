@@ -52,19 +52,26 @@ const removedKey = (userId: string) => `catch-account-removed:${userId}`;
  * the collections open that account's notes.
  */
 export async function switchAccount(userId: string, noteId?: string) {
-  if (userId === getAccountId() || !getAccounts().some((account) => accountId(account) === userId))
-    return false;
+  if (userId === getAccountId()) return false;
+  return openAccountPage(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/');
+}
+
+/** A full account load must not overtake a local save or a newly opened editor. */
+export async function openAccountPage(userId: string, path = '/') {
+  if (!getAccounts().some((account) => accountId(account) === userId)) return false;
   try {
     await waitForPendingWritesStored();
   } catch {
     toast.error('Could not save your changes on this device. Try switching again.');
     return false;
   }
+  if (isUpdateReloadBlocked()) {
+    toast('Close the open note before changing accounts.');
+    return false;
+  }
   if (!activateAccount(userId)) return false;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
-  window.location.assign(
-    accountPath(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/'),
-  );
+  window.location.assign(accountPath(userId, path));
   return true;
 }
 

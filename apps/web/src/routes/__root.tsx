@@ -11,18 +11,10 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { openAccountPage } from '@/lib/accounts';
 import { parseAppLink, watchAppLinks } from '@/lib/appLinks';
-import {
-  accountId,
-  accountPath,
-  activateAccount,
-  currentPath,
-  getAccounts,
-  getAuthToken,
-  getSignedInUser,
-} from '@/lib/auth';
+import { accountId, currentPath, getAccounts, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
-import { waitForPendingWritesStored } from '@/lib/collections';
 import { quickNote } from '@/lib/dockState';
 import { headerPills } from '@/lib/headerState';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
@@ -150,14 +142,7 @@ function Root() {
                   });
                   return;
                 }
-                void waitForPendingWritesStored()
-                  .then(() => {
-                    if (activateAccount(accountId(account)))
-                      window.location.assign(accountPath(accountId(account), `/s/${link.token}`));
-                  })
-                  .catch(() =>
-                    toast.error('Could not save your changes on this device. Try again.'),
-                  );
+                void openAccountPage(accountId(account), `/s/${link.token}`);
               },
             },
           });

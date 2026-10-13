@@ -1,5 +1,6 @@
 import type { Note, WidgetLaunch } from '@catch/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Account } from './auth';
 import { createStore } from './store';
 
 const mocks = vi.hoisted(() => ({
@@ -11,8 +12,21 @@ const mocks = vi.hoisted(() => ({
   switch: vi.fn(async () => true),
   leave: vi.fn(),
   toast: vi.fn(),
-  user: vi.fn(() => ({ id: 'alice' })),
-  accounts: vi.fn(() => [{ user: { id: 'alice' } }, { user: { id: 'bob' } }]),
+  page: vi.fn(() => 'alice'),
+  accounts: vi.fn<() => Account[]>(() => [
+    {
+      id: 'alice',
+      server: 'https://catch.example',
+      token: 'home',
+      user: { id: 'remote-user', name: 'Alice', email: 'alice@example.com' },
+    },
+    {
+      id: 'bob',
+      server: 'https://work.example',
+      token: 'work',
+      user: { id: 'remote-user', name: 'Alice', email: 'alice@example.com' },
+    },
+  ]),
 }));
 vi.mock('./nativeWidgets', () => ({
   nativeWidgets: { watchLaunch: mocks.watch, acknowledge: mocks.ack, pending: mocks.pending },
@@ -20,11 +34,10 @@ vi.mock('./nativeWidgets', () => ({
 vi.mock('./collections', () => ({ waitForPendingWritesStored: mocks.stored }));
 vi.mock('./accounts', () => ({ switchAccount: mocks.switch }));
 vi.mock('./auth', () => ({
-  accountId: (account: { user: { id: string } }) => account.user.id,
-  accountServer: () => 'https://catch.example',
-  getAccountId: () => mocks.user().id,
+  accountId: (account: Account) => account.id ?? account.user.id,
+  accountServer: (account: Account) => account.server,
+  getAccountId: mocks.page,
   getAccounts: mocks.accounts,
-  getSignedInUser: mocks.user,
   pagePath: (path: string) => path,
 }));
 vi.mock('./serverUrl', () => ({
@@ -70,7 +83,7 @@ beforeEach(() => {
   editorNote.set(null);
   quickNote.set('closed');
   quickNoteMounted.set(false);
-  mocks.user.mockReturnValue({ id: 'alice' });
+  mocks.page.mockReturnValue('alice');
   quickNoteColumn.set(null);
 });
 function deliver(command = launch) {
@@ -93,14 +106,14 @@ describe('widget launch delivery', () => {
   it('keeps a command pending across the full account-switch reload', async () => {
     const navigate = vi.fn(async () => {});
     const stop = watchWidgetLaunch(navigate, vi.fn());
-    deliver({ ...launch, account: 'bob' });
+    deliver({ ...launch, account: 'bob', server: 'https://work.example' });
     await vi.waitFor(() => expect(mocks.switch).toHaveBeenCalledWith('bob', undefined));
     expect(mocks.ack).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     stop();
-    mocks.user.mockReturnValue({ id: 'bob' });
+    mocks.page.mockReturnValue('bob');
     const stopAfterReload = watchWidgetLaunch(navigate, vi.fn());
-    deliver({ ...launch, account: 'bob' });
+    deliver({ ...launch, account: 'bob', server: 'https://work.example' });
     await vi.waitFor(() => expect(mocks.ack).toHaveBeenCalledWith('tap-1'));
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(quickNoteColumn.get()).toBe('garden');
@@ -113,7 +126,7 @@ describe('widget launch delivery', () => {
       vi.fn(async () => {}),
       vi.fn(),
     );
-    deliver({ ...launch, account: 'bob' });
+    deliver({ ...launch, account: 'bob', server: 'https://work.example' });
     expect(mocks.switch).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(quickNote.get()).toBe('closed'));
     expect(mocks.switch).not.toHaveBeenCalled();
@@ -159,7 +172,11 @@ describe('direct widget opening', () => {
     window.history.replaceState(null, '', '/');
   });
   it('passes the note through the cold account reload and keeps the wrong account from rendering', async () => {
-    mocks.pending.mockResolvedValue({ ...noteLaunch, account: 'bob' });
+    mocks.pending.mockResolvedValue({
+      ...noteLaunch,
+      account: 'bob',
+      server: 'https://work.example',
+    });
     expect(await prepareInitialWidgetLaunch()).toBe(true);
     expect(mocks.switch).toHaveBeenCalledWith('bob', 'note-2');
     expect(mocks.ack).not.toHaveBeenCalled();
@@ -195,7 +212,7 @@ describe('direct widget opening', () => {
       vi.fn(async () => {}),
       vi.fn(),
     );
-    deliver({ ...noteLaunch, account: 'bob' });
+    deliver({ ...noteLaunch, account: 'bob', server: 'https://work.example' });
     await vi.waitFor(() => expect(mocks.stored).toHaveBeenCalledOnce());
     expect(mocks.switch).not.toHaveBeenCalled();
     stored();
@@ -212,7 +229,7 @@ describe('direct widget opening', () => {
     );
     const navigate = vi.fn(async () => {});
     const stop = watchWidgetLaunch(navigate, vi.fn());
-    deliver({ ...noteLaunch, account: 'bob' });
+    deliver({ ...noteLaunch, account: 'bob', server: 'https://work.example' });
     await vi.waitFor(() => expect(mocks.stored).toHaveBeenCalledOnce());
     deliver({ ...noteLaunch, id: 'tap-2', noteId: 'note-3' });
     stored();
@@ -276,7 +293,7 @@ describe('direct widget opening', () => {
       vi.fn(async () => {}),
       vi.fn(),
     );
-    deliver({ ...noteLaunch, account: 'bob' });
+    deliver({ ...noteLaunch, account: 'bob', server: 'https://work.example' });
     await vi.waitFor(() => expect(mocks.toast).toHaveBeenCalled());
     expect(mocks.switch).not.toHaveBeenCalled();
     expect(mocks.ack).not.toHaveBeenCalled();

@@ -122,6 +122,20 @@ describe('installed Android server connections', () => {
     expect(auth.getAuthToken()).toBe('new-token');
   });
 
+  it('returns to the previous server after cancelling addition from a later account', async () => {
+    await addServer(first, 'home-token');
+    await addServer(second, 'work-token');
+    const work = auth.getReturnAccount();
+    if (!work) throw new Error('Missing work account');
+    expect(work.server).toBe(second);
+    (await import('./nativeAccounts')).prepareNativeLogin('https://third.example');
+    await load('/login');
+    expect(auth.getSignedInUser()).toBeNull();
+    expect(auth.getReturnAccount()).toEqual(work);
+    await load('/setup');
+    expect(auth.getReturnAccount()).toEqual(work);
+  });
+
   it('removes only the selected account and rejects late session responses', async () => {
     await addServer(first, 'home-token');
     await addServer(second, 'work-token');

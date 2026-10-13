@@ -3,9 +3,15 @@ package org.iloni.catchnotes;
 import static org.junit.Assert.*;
 
 import android.app.NotificationManager;
+import android.app.AlarmManager;
+import android.content.Intent;
 import android.content.Context;
 import android.service.notification.StatusBarNotification;
 import java.util.Set;
+import java.util.HashSet;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Before;
@@ -13,6 +19,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Shadows;
+import org.robolectric.shadows.ShadowAlarmManager;
 import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
@@ -74,6 +82,46 @@ public class ReminderAccountsTest {
         assertEquals(2, scheduled.size());
         assertTrue(scheduled.contains("catch://reminder/home/" + NOTE));
         assertTrue(scheduled.contains("catch://reminder/work/" + NOTE));
+        Set<String> intents = new HashSet<>();
+        for (ShadowAlarmManager.ScheduledAlarm alarm : Shadows.shadowOf(context.getSystemService(AlarmManager.class)).getScheduledAlarms()) {
+            Intent intent = Shadows.shadowOf(alarm.operation).getSavedIntent();
+            intents.add(intent.getData().toString());
+            assertEquals(NOTE, intent.getStringExtra(ReminderAlarms.NOTE));
+            assertEquals(intent.getData().getPathSegments().get(0), intent.getStringExtra(ReminderAlarms.ACCOUNT));
+        }
+        assertEquals(scheduled, intents);
+    }
+
+    @Test
+    public void missingAccountAcknowledgementCannotClearAnOwnedSnooze() throws Exception {
+        account("home", "https://home.example");
+        account("work", "https://work.example");
+        ReminderAlarms.snooze(context, "home", NOTE, "Home", "");
+        ReminderAlarms.snooze(context, "work", NOTE, "Work", "");
+        ReminderAlarms.ackSnoozes(context, null, Set.of(NOTE));
+        assertEquals(2, ReminderAlarms.pendingSnoozes(context).length());
+        ReminderAlarms.ackSnoozes(context, "", Set.of(NOTE));
+        assertEquals(2, ReminderAlarms.pendingSnoozes(context).length());
+    }
+
+    @Test
+    public void bootTimeLegacyReceiptsSurviveAdoptionWithoutRingingAgain() throws Exception {
+        long now = System.currentTimeMillis();
+        String wall = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm").withZone(ZoneOffset.UTC).format(Instant.ofEpochMilli(now - 120000));
+        JSONArray times = new JSONArray().put(wall);
+        JSONArray alarms = new JSONArray().put(new JSONObject().put("noteId", NOTE).put("title", "Already rung").put("times", times).put("timeZone", "UTC"));
+        ReminderAlarms.preferences(context).edit()
+                .putString("alarms", alarms.toString()).putBoolean("enabled", true)
+                .putString("rung", new JSONObject().put(NOTE, now - 60000).toString())
+                .putString("walls", new JSONObject().put(NOTE, new JSONObject().put("wall", wall).put("times", times.toString())).toString()).commit();
+        ReminderAlarms.schedule(context);
+        assertTrue(new JSONObject(ReminderAlarms.preferences(context).getString("rung", "{}")).has(":" + NOTE));
+        ReminderAlarms.sync(context, "home", new JSONObject(), alarms);
+        ReminderAlarms.schedule(context);
+        String adopted = ReminderAlarms.reminderKey("home", NOTE);
+        assertTrue(new JSONObject(ReminderAlarms.preferences(context).getString("rung", "{}")).has(adopted));
+        assertTrue(new JSONObject(ReminderAlarms.preferences(context).getString("walls", "{}")).has(adopted));
+        assertEquals(0, context.getSystemService(NotificationManager.class).getActiveNotifications().length);
     }
 
     @Test

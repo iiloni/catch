@@ -104,6 +104,12 @@ final class ReminderAlarms {
     /** One account's settings as the web app gave them, replacing what the phone had. */
     static synchronized void sync(Context context, String account, JSONObject settings, JSONArray alarms) {
         JSONObject accounts = accounts(context);
+        if (accounts.has(LEGACY)) {
+            // A boot/reschedule can already have converted bare note receipts to the
+            // unnamed account's namespace before the WebView adopts that account.
+            migrateReceipts(context, "rung", account);
+            migrateReceipts(context, "walls", account);
+        }
         // The unnamed account is this one or one that has since signed out: either way the
         // web app now speaks for it.
         accounts.remove(LEGACY);
@@ -124,6 +130,23 @@ final class ReminderAlarms {
         }
         preferences(context).edit().putString("snoozes", snoozes.toString()).apply();
         store(context, account, alarms);
+    }
+
+    private static void migrateReceipts(Context context, String key, String account) {
+        JSONObject receipts = object(context, key);
+        List<String> legacyKeys = new ArrayList<>();
+        for (java.util.Iterator<String> keys = receipts.keys(); keys.hasNext(); ) {
+            String old = keys.next();
+            if (old.startsWith(":")) legacyKeys.add(old);
+        }
+        for (String old : legacyKeys) {
+            String adopted = account + old;
+            try {
+                if (!receipts.has(adopted)) receipts.put(adopted, receipts.get(old));
+                receipts.remove(old);
+            } catch (JSONException ignored) {}
+        }
+        preferences(context).edit().putString(key, receipts.toString()).apply();
     }
 
     /**
@@ -443,11 +466,12 @@ final class ReminderAlarms {
 
     /** The web app has written these as their reminders' snoozes, so they come with the alarms now. */
     static synchronized void ackSnoozes(Context context, String account, Set<String> noteIds) {
+        String owner = account == null ? LEGACY : account;
         JSONArray left = new JSONArray();
         JSONArray snoozes = array(context, "snoozes");
         for (int index = 0; index < snoozes.length(); index++) {
             JSONObject snooze = snoozes.optJSONObject(index);
-            if (snooze != null && (!noteIds.contains(snooze.optString(NOTE)) || (account != null && !account.equals(snooze.optString(ACCOUNT))))) left.put(snooze);
+            if (snooze != null && (!noteIds.contains(snooze.optString(NOTE)) || !owner.equals(snooze.optString(ACCOUNT)))) left.put(snooze);
         }
         preferences(context).edit().putString("snoozes", left.toString()).apply();
     }

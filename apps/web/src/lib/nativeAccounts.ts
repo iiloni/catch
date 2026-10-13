@@ -97,6 +97,10 @@ export function nativeAccounts() {
   return read().accounts;
 }
 
+export function nativeActiveAccountId() {
+  return read().active;
+}
+
 export function nativeServers() {
   return read().servers;
 }

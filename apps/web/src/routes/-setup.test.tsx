@@ -1,11 +1,18 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 
-const mock = vi.hoisted(() => ({ fetch: vi.fn(), stored: vi.fn(async () => {}) }));
+const mock = vi.hoisted(() => ({
+  fetch: vi.fn(),
+  stored: vi.fn(async () => {}),
+  back: vi.fn(),
+  open: vi.fn(),
+}));
 vi.mock('@/lib/auth', () => ({
-  getAccounts: () => [],
+  getReturnAccount: mock.back,
+  accountId: (account: { id: string }) => account.id,
   pagePath: (path: string) => path,
 }));
+vi.mock('@/lib/accounts', () => ({ openAccountPage: mock.open }));
 vi.mock('@/lib/serverUrl', () => ({
   supportsMultipleServers: () => true,
   getServerUrl: () => '',
@@ -22,6 +29,7 @@ import { Route } from './setup';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.back.mockReturnValue(undefined);
   vi.stubGlobal('fetch', mock.fetch);
 });
 async function show() {
@@ -60,4 +68,15 @@ it('allows retry after the server cannot be reached', async () => {
     await screen.findByText('Could not reach a Catch server at that address.'),
   ).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled();
+});
+
+it('returns to the account that opened setup, using its device identity', async () => {
+  mock.back.mockReturnValue({
+    id: 'n-work',
+    server: 'https://work.example',
+    user: { id: 'remote-user' },
+  });
+  await show();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to your notes' }));
+  expect(mock.open).toHaveBeenCalledWith('n-work');
 });

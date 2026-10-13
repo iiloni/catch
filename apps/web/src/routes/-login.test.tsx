@@ -5,9 +5,11 @@ const auth = vi.hoisted(() => ({ signIn: vi.fn(), signUp: vi.fn() }));
 vi.mock('@/lib/auth', () => ({
   authClient: { signIn: { email: auth.signIn }, signUp: { email: auth.signUp } },
   getAccounts: () => [],
+  getReturnAccount: () => undefined,
   getSignedInUser: () => null,
   activateAccount: () => false,
 }));
+vi.mock('@/lib/accounts', () => ({ openAccountPage: vi.fn() }));
 vi.mock('@/lib/webUpdates', () => ({
   updateSignedOutPage: async () => {},
   useWebUpdates: () => ({ reloading: false }),

@@ -739,6 +739,8 @@ onlineDetector.subscribe(updateConnection);
 await executor.waitForInit();
 for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
 
+const writeCompletions = new Map<string, Promise<unknown>>();
+
 /**
  * Applies the changes `mutate` makes to the collections optimistically and queues them for
  * the server. The returned transaction's `isPersisted.promise` settles once the server has
@@ -768,9 +770,14 @@ export function write(mutate: () => void): Transaction {
     readingKeys[String(mutation.key)] = keys.readingKey;
   }
   addPendingWrite(transaction.id);
+  writeCompletions.set(transaction.id, transaction.isPersisted.promise);
   offline.commit().then(
-    () => settlePendingWrite(transaction.id),
+    () => {
+      writeCompletions.delete(transaction.id);
+      settlePendingWrite(transaction.id);
+    },
     (error: unknown) => {
+      writeCompletions.delete(transaction.id);
       settlePendingWrite(transaction.id);
       // `pushWrites` reports the changes the server refused. Anything else failed on the
       // device: in a tab without the outbox, a write that could not be sent straight away.
@@ -795,6 +802,13 @@ export async function waitForWriteStored(transaction: Transaction): Promise<void
 export async function waitForPendingWritesStored(): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (getPendingWriteIds().length) {
+    // Capture outcomes before awaiting storage: a failed commit clears its pending ID,
+    // which must never be mistaken for a successful save by a reload waiting here.
+    const completions = getPendingWriteIds().flatMap((id) => {
+      const completion = writeCompletions.get(id);
+      return completion ? [waitForQueuedWrite(id, completion)] : [];
+    });
+    await Promise.all(completions);
     const queued = new Set((await executor.peekOutbox()).map((write) => write.id));
     if (getPendingWriteIds().every((id) => queued.has(id))) return;
     if (Date.now() >= deadline) {

@@ -4,11 +4,13 @@ import { type FormEvent, useState } from 'react';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { accountId, accountPath, activateAccount, getAccounts, pagePath } from '@/lib/auth';
+import { openAccountPage } from '@/lib/accounts';
+import { accountId, getReturnAccount, pagePath } from '@/lib/auth';
 import { authRedirectSearchSchema, authReturnTo } from '@/lib/authRedirect';
 import { waitForPendingWritesStored } from '@/lib/collections';
 import { nativeServers, prepareNativeLogin } from '@/lib/nativeAccounts';
 import { getServerUrl, setServerUrl, supportsMultipleServers } from '@/lib/serverUrl';
+import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 
 /** First-run screen for the Android app: which Catch server to connect to. */
 export const Route = createFileRoute('/setup')({
@@ -22,13 +24,14 @@ function SetupPage() {
   const [pending, setPending] = useState(false);
   const multiple = supportsMultipleServers();
   const [servers] = useState(() => (multiple ? nativeServers() : []));
-  const [saved] = useState(() => getAccounts()[0]);
+  const [saved] = useState(getReturnAccount);
   const [address, setAddress] = useState(() => server ?? getServerUrl());
 
   async function connect(url: string) {
     setPending(true);
     try {
       await waitForPendingWritesStored();
+      if (isUpdateReloadBlocked()) throw new Error('Close the open note before changing servers.');
     } catch (error) {
       setPending(false);
       throw error;
@@ -127,8 +130,7 @@ function SetupPage() {
             variant="ghost"
             disabled={pending}
             onClick={() => {
-              activateAccount(accountId(saved));
-              window.location.assign(accountPath(accountId(saved)));
+              void openAccountPage(accountId(saved));
             }}
           >
             Back to your notes

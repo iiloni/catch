@@ -5,6 +5,7 @@ import {
   activateNativeAccount,
   forgetNativeAccount,
   nativeAccounts,
+  nativeActiveAccountId,
   nativePage,
   saveNativeAccount,
   signedInUserSchema,
@@ -216,6 +217,13 @@ export function getAccounts(): Account[] {
   return accounts.some((account) => account.user.id === user.id)
     ? accounts.map((account) => (account.user.id === user.id ? active : account))
     : [...accounts, active];
+}
+
+/** Adding an account keeps the previous session as the destination when cancelled. */
+export function getReturnAccount(): Account | undefined {
+  const accounts = getAccounts();
+  const id = getAccountId() ?? (native ? nativeActiveAccountId() : activeUser()?.id);
+  return accounts.find((account) => accountId(account) === id) ?? accounts[0];
 }
 
 function writeAccounts(accounts: Account[]) {

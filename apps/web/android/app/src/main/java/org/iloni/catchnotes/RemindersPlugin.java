@@ -134,7 +134,7 @@ public class RemindersPlugin extends Plugin {
         Set<String> noteIds = new HashSet<>();
         JSArray given = call.getArray("noteIds", new JSArray());
         for (int index = 0; index < given.length(); index++) noteIds.add(given.optString(index));
-        ReminderAlarms.ackSnoozes(getContext(), call.getString("account"), noteIds);
+        ReminderAlarms.ackSnoozes(getContext(), call.getString("account", ""), noteIds);
         call.resolve();
     }
 

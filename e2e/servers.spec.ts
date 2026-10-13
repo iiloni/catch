@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, seedNotes } from './helpers';
+import { card, seedNotes, signUp } from './helpers';
 
 // Enable the installed bundle's connection boundary while retaining browser SQLite for
 // these routing/outbox tests. Both mock origins serve the same fixture user ID, as cloned
@@ -44,6 +44,7 @@ test('Android connections keep restored IDs and offline writes in separate accou
   expect(signup.ok()).toBeTruthy();
 
   await page.goto('/');
+  await expect(page).toHaveURL(/\/setup(?:[?#]|$)/);
   await page.getByLabel('Server URL').fill(home);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await page.getByLabel('Email').fill(email);
@@ -77,6 +78,22 @@ test('Android connections keep restored IDs and offline writes in separate accou
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(avatar).toBeVisible();
   await expect(card(page, 'Unsent home note')).toBeHidden();
+  // Cancellation from the second account returns to that account, on setup and login.
+  await avatar.click();
+  await page.getByRole('link', { name: 'Add account' }).click();
+  await page.getByRole('button', { name: 'Back to your notes' }).click();
+  await expect(avatar).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(async () => (await import('/src/lib/serverUrl.ts')).getServerUrl()))
+    .toBe(work);
+  await avatar.click();
+  await page.getByRole('link', { name: 'Add account' }).click();
+  await page.getByRole('button', { name: 'work.catch.test', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to your notes' }).click();
+  await expect(avatar).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(async () => (await import('/src/lib/serverUrl.ts')).getServerUrl()))
+    .toBe(work);
   const accounts = await page.evaluate(async () => {
     const { getAccounts } = await import('/src/lib/auth.ts');
     return getAccounts().map(({ id, server, user }) => ({ id, server, userId: user.id }));
@@ -102,4 +119,39 @@ test('Android connections keep restored IDs and offline writes in separate accou
   await expect.poll(() => routed.includes(`${work}/api/auth/sign-out`)).toBe(true);
   expect(routed.filter((url) => url === `${home}/api/auth/sign-out`)).toEqual([]);
   await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
+test('a failed outbox commit rejects the reload barrier even after its pending ID is cleared', async ({
+  page,
+}) => {
+  await signUp(page);
+  const failed = await page.evaluate(async () => {
+    const { createNote } = await import('/src/lib/notes.ts');
+    const { getSignedInUser } = await import('/src/lib/auth.ts');
+    const { waitForPendingWritesStored } = await import('/src/lib/collections.ts');
+    const { getPendingWriteIds } = await import('/src/lib/syncStatus.ts');
+    const original = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value, key) {
+      if (this.name === 'transactions') throw new Error('Outbox storage failure');
+      return original.call(this, value, key);
+    };
+    try {
+      const { transaction } = createNote({
+        userId: getSignedInUser().id,
+        content: [{ type: 'paragraph', content: 'Must not be lost during reload' }],
+      });
+      const completed = transaction.isPersisted.promise.catch(() => undefined);
+      let rejected = false;
+      try {
+        await waitForPendingWritesStored();
+      } catch {
+        rejected = true;
+      }
+      await completed;
+      return { rejected, pending: getPendingWriteIds() };
+    } finally {
+      IDBObjectStore.prototype.put = original;
+    }
+  });
+  expect(failed).toEqual({ rejected: true, pending: [] });
 });

@@ -47,6 +47,12 @@ vi.mock('./auth', () => ({
   getAuthToken: native.token,
   getSignedInUser: () => ({ id: 'ada', name: 'Ada', email: 'ada@example.com' }),
 }));
+vi.mock('./nativeAccounts', () => ({
+  nativeAccounts: () => [
+    { id: 'n-home-ada', server: 'https://catch.example', user: { id: 'ada' } },
+    { id: 'n-work-ada', server: 'https://work.example', user: { id: 'ada' } },
+  ],
+}));
 vi.mock('./clock', () => ({ setSystemHour12: native.hour12 }));
 vi.mock('./collections', () => ({
   reminderSnooze: (noteId: string) => (noteId === NOTE ? native.snoozedUntil() : undefined),
@@ -59,7 +65,7 @@ vi.mock('./syncStatus', () => ({
 vi.mock('./reminders', () => ({ snoozeReminder: native.snooze }));
 vi.mock('./snooze', () => ({ snoozeMinutes: () => 30, onSnoozeChange: native.snoozeChanged }));
 vi.mock('./serverUrl', () => ({
-  supportsMultipleServers: () => false,
+  supportsMultipleServers: () => true,
   bindPageServer: () => {},
   getServerUrl: () => 'https://catch.example',
 }));
@@ -111,7 +117,7 @@ describe('native reminders', () => {
     const stop = watchNativeReminders();
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).toHaveBeenCalledWith({
-      account: 'ada',
+      account: 'n-home-ada',
       label: 'Ada · catch.example',
       alarms: [alarm],
       server: 'https://catch.example',
@@ -165,7 +171,7 @@ describe('native reminders', () => {
     native.snoozedUntil.mockReturnValue(new Date(until));
     native.watch.mock.calls[0]?.[0]([{ ...alarm, snoozedUntil: until }]);
     await vi.waitFor(() =>
-      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'ada', noteIds: [NOTE] }),
+      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'n-home-ada', noteIds: [NOTE] }),
     );
     expect(native.snooze).toHaveBeenCalledTimes(1);
   });
@@ -189,14 +195,14 @@ describe('native reminders', () => {
     watchNativeReminders();
     native.watch.mock.calls[0]?.[0]([alarm]);
     await vi.waitFor(() =>
-      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'ada', noteIds: [NOTE] }),
+      expect(native.ackSnoozes).toHaveBeenCalledWith({ account: 'n-home-ada', noteIds: [NOTE] }),
     );
     expect(native.snooze).not.toHaveBeenCalled();
   });
 
   it('leaves another account’s snooze for when that account is in use', async () => {
     native.pendingSnoozes.mockResolvedValue({
-      snoozes: [{ noteId: NOTE, until: Date.now() - 1000, account: 'bob' }],
+      snoozes: [{ noteId: NOTE, until: Date.now() - 1000, account: 'n-work-ada' }],
     });
     watchNativeReminders();
     native.watch.mock.calls[0]?.[0]([alarm]);
@@ -208,8 +214,8 @@ describe('native reminders', () => {
 
   it('keeps handing the phone its reminders after another account signs out', async () => {
     watchNativeReminders();
-    await nativeReminders.clear('bob');
-    expect(native.clear).toHaveBeenCalledWith({ account: 'bob' });
+    await nativeReminders.clear('n-work-ada');
+    expect(native.clear).toHaveBeenCalledWith({ account: 'n-work-ada' });
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).toHaveBeenCalledTimes(1);
   });
@@ -245,8 +251,8 @@ describe('native reminders', () => {
   // Last: the flag holds until the page next loads.
   it('hands nothing more to the phone after signing out clears it', async () => {
     watchNativeReminders();
-    await nativeReminders.clear('ada');
-    expect(native.clear).toHaveBeenCalledWith({ account: 'ada' });
+    await nativeReminders.clear('n-home-ada');
+    expect(native.clear).toHaveBeenCalledWith({ account: 'n-home-ada' });
     native.watch.mock.calls[0]?.[0]([alarm]);
     expect(native.sync).not.toHaveBeenCalled();
   });
