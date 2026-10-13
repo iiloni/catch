@@ -47,8 +47,8 @@ Deleted, trashed and archived notes disappear when
 observed. A missing selected note, tag or column directs the user to configuration.
 
 **The account belongs to the widget.** A widget keeps its account ID; switching
-accounts never repoints it. Startup reconciles the native account list and changing
-servers discards old configurations and previews. Sign-out clears that account's
+accounts never repoints it. Startup reconciles the native account list. With several server connections (ADR 0023),
+each local account identity keeps its own origin, configuration and preview across switches. Sign-out clears that account's
 snapshot and pending launch, including when signing out an inactive account.
 Native session generations reject late snapshot writes after sign-out or a reload.
 Vault plaintext remains memory-only (ADR 0020), even when unlocked, so no widget can

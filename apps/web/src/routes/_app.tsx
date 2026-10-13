@@ -18,7 +18,7 @@ import { SplitHandle } from '@/components/SplitHandle/SplitHandle';
 import { VaultEntry } from '@/components/VaultEntry/VaultEntry';
 import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
-import { getAuthToken, getSignedInUser } from '@/lib/auth';
+import { getAccountId, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { startNoteCollections } from '@/lib/collections';
 import { editorNote, quickNote, searchFocusRequest } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
@@ -64,7 +64,7 @@ function AppLayout() {
     () =>
       onNotificationOpen((noteId, userId) => {
         // A reminder rings for every account on the device; this one may be another's.
-        if (!userId || userId === getSignedInUser()?.id) {
+        if (!userId || userId === getAccountId()) {
           if (!inVaultFor(noteId, () => open(noteId))) open(noteId);
         } else openAccountNote(userId, noteId);
       }),

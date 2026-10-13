@@ -11,18 +11,21 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { openAccountPage } from '@/lib/accounts';
 import { parseAppLink, watchAppLinks } from '@/lib/appLinks';
-import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
+import { accountId, currentPath, getAccounts, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
 import { headerPills } from '@/lib/headerState';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
 import { watchNativeShares } from '@/lib/nativeShares';
 import { prepareShare } from '@/lib/receiveShare';
-import { getServerUrl, needsServerUrl } from '@/lib/serverUrl';
+import { getServerUrl, needsServerUrl, supportsMultipleServers } from '@/lib/serverUrl';
 import { pendingIncomingShares } from '@/lib/shareInbox';
+import { currentAccountId } from '@/lib/storageIdentity';
 import { useSystemBarsStyle } from '@/lib/systemBars';
 import { useApplyTheme } from '@/lib/theme';
+import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 
 export const Route = createRootRoute({
   component: Root,
@@ -100,9 +103,8 @@ function Root() {
     if (currentPath() !== '/share' && getSignedInUser()) {
       void pendingIncomingShares()
         .then(async (shares) => {
-          const user = getSignedInUser();
           for (const share of shares) {
-            if (!share.userId || share.userId === user?.id) await open(share.id);
+            if (!share.userId || share.userId === currentAccountId()) await open(share.id);
           }
         })
         .catch(fail);
@@ -118,7 +120,32 @@ function Root() {
         const link = parseAppLink(address, getServerUrl());
         if (!link) return;
         if (link.kind === 'elsewhere') {
-          toast.error(`This note is on ${link.host}, not the server this app is connected to.`);
+          if (!supportsMultipleServers()) {
+            toast.error(`This note is on ${link.host}, not the server this app is connected to.`);
+            return;
+          }
+          const account = supportsMultipleServers()
+            ? getAccounts().find((account) => account.server === link.server)
+            : undefined;
+          toast(`This note is on ${link.host}.`, {
+            action: {
+              label: account ? 'Open' : 'Connect',
+              onClick: () => {
+                if (isUpdateReloadBlocked()) {
+                  toast('Close the open note before changing servers.');
+                  return;
+                }
+                if (!account) {
+                  void navigate({
+                    to: '/setup',
+                    search: { server: link.server, redirect: `/s/${link.token}` },
+                  });
+                  return;
+                }
+                void openAccountPage(accountId(account), `/s/${link.token}`);
+              },
+            },
+          });
           return;
         }
         // The app reads the note from its own server, so it needs one first.

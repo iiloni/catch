@@ -99,6 +99,7 @@ import { shapeFetch } from './shapeFetch';
 import { createSharedNotesView } from './sharedNotesView';
 import { clearIncomingShares } from './shareInbox';
 import { watchPreferences } from './storage';
+import { currentAccountId } from './storageIdentity';
 import {
   addPendingWrite,
   getPendingWriteIds,
@@ -114,7 +115,8 @@ import { widgetSnapshot } from './widgetSnapshot';
 // Collections read from and write to the signed-in user's store on this device, so notes
 // show and can be edited without a connection (ADR 0007).
 const user = await resolveSignedInUser();
-const database = user ? await openLocalDatabase(user.id) : null;
+const deviceAccount = currentAccountId();
+const database = deviceAccount ? await openLocalDatabase(deviceAccount) : null;
 
 /** Keeps nothing: without a database, collections live in memory as they did before. */
 const memoryOnly: PersistedCollectionPersistence = {
@@ -718,10 +720,10 @@ const onlineDetector = createOnlineDetector();
 const executor = startOfflineExecutor({
   collections: writableCollections,
   mutationFns: { push: pushWrites },
-  storage: createOutboxStorage(user?.id ?? null),
+  storage: createOutboxStorage(deviceAccount),
   // Without Web Locks the executor falls back to electing a leader over a BroadcastChannel.
   leaderElection: WebLocksLeader.isSupported()
-    ? new WebLocksLeader(`catch-outbox-${user?.id ?? ''}`)
+    ? new WebLocksLeader(`catch-outbox-${deviceAccount ?? ''}`)
     : undefined,
   onlineDetector,
   beforeRetry: (queued: OfflineTransaction[]) => mergeQueuedWrites(queued, notesCollection.id),
@@ -736,6 +738,8 @@ onlineDetector.subscribe(updateConnection);
 // Restores the writes an earlier visit left in the outbox, so they show until they sync.
 await executor.waitForInit();
 for (const queued of await executor.peekOutbox()) addPendingWrite(queued.id);
+
+const writeCompletions = new Map<string, Promise<unknown>>();
 
 /**
  * Applies the changes `mutate` makes to the collections optimistically and queues them for
@@ -766,9 +770,14 @@ export function write(mutate: () => void): Transaction {
     readingKeys[String(mutation.key)] = keys.readingKey;
   }
   addPendingWrite(transaction.id);
+  writeCompletions.set(transaction.id, transaction.isPersisted.promise);
   offline.commit().then(
-    () => settlePendingWrite(transaction.id),
+    () => {
+      writeCompletions.delete(transaction.id);
+      settlePendingWrite(transaction.id);
+    },
     (error: unknown) => {
+      writeCompletions.delete(transaction.id);
       settlePendingWrite(transaction.id);
       // `pushWrites` reports the changes the server refused. Anything else failed on the
       // device: in a tab without the outbox, a write that could not be sent straight away.
@@ -793,6 +802,13 @@ export async function waitForWriteStored(transaction: Transaction): Promise<void
 export async function waitForPendingWritesStored(): Promise<void> {
   const deadline = Date.now() + 10_000;
   while (getPendingWriteIds().length) {
+    // Capture outcomes before awaiting storage: a failed commit clears its pending ID,
+    // which must never be mistaken for a successful save by a reload waiting here.
+    const completions = getPendingWriteIds().flatMap((id) => {
+      const completion = writeCompletions.get(id);
+      return completion ? [waitForQueuedWrite(id, completion)] : [];
+    });
+    await Promise.all(completions);
     const queued = new Set((await executor.peekOutbox()).map((write) => write.id));
     if (getPendingWriteIds().every((id) => queued.has(id))) return;
     if (Date.now() >= deadline) {
@@ -854,11 +870,11 @@ export async function clearLocalData() {
   await executor.clearOutbox();
   executor.dispose();
   await clearAttachmentFiles();
-  if (user) await clearIncomingShares(user.id);
-  if (user) await forgetVault(user.id);
-  if (user) await deleteHistoryStorage(user.id);
+  if (deviceAccount) await clearIncomingShares(deviceAccount);
+  if (deviceAccount) await forgetVault(deviceAccount);
+  if (deviceAccount) await deleteHistoryStorage(deviceAccount);
   await database?.destroy();
-  if (user) deleteOutbox(user.id);
+  if (deviceAccount) deleteOutbox(deviceAccount);
 }
 
 /**

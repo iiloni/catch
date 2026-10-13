@@ -41,3 +41,13 @@ describe('server selection', () => {
     expect(needsServerUrl()).toBe(false);
   });
 });
+
+it('keeps an installed page on its origin and retains the legacy origin for adopted stores', async () => {
+  vi.resetModules();
+  const server = await import('./serverUrl');
+  server.setServerUrl('https://home.example');
+  server.bindPageServer('https://home.example');
+  server.setServerUrl('https://work.example');
+  expect(server.getServerUrl()).toBe('https://home.example');
+  expect(localStorage.getItem('catch-server-url')).toBe('https://home.example');
+});

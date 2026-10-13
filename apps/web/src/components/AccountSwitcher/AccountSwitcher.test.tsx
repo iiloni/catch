@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   blocked: vi.fn(() => false),
 }));
 vi.mock('@/lib/auth', () => ({
+  accountId: (account: Account) => account.id ?? account.user.id,
+  getAccountId: () => mocks.accounts[0]?.id ?? mocks.accounts[0]?.user.id ?? null,
   getAccounts: () => mocks.accounts,
   getSignedInUser: () => mocks.accounts[0]?.user ?? null,
 }));
