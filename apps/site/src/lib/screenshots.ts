@@ -11,8 +11,8 @@ import androidSetupDark from '@/screenshots/docs-android-setup-dark.webp';
 import androidSetupLight from '@/screenshots/docs-android-setup-light.webp';
 import androidShareDark from '@/screenshots/docs-android-share-dark.webp';
 import androidShareLight from '@/screenshots/docs-android-share-light.webp';
-import androidWidgetsDark from '@/screenshots/docs-android-widgets-dark.webp';
-import androidWidgetsLight from '@/screenshots/docs-android-widgets-light.webp';
+import androidWidgetList from '@/screenshots/docs-android-widget-list.webp';
+import androidWidgetNote from '@/screenshots/docs-android-widget-note.webp';
 import attachmentsDark from '@/screenshots/docs-attachments-dark.webp';
 import attachmentsLight from '@/screenshots/docs-attachments-light.webp';
 import desktopBackupsDark from '@/screenshots/docs-backups-dark.webp';
@@ -133,10 +133,16 @@ export const docShots = {
     dark: historyVersionsDark,
     alt: 'The expanded version-history dock on a phone with Current note, saved times and Clear history',
   },
-  androidWidgets: {
-    light: androidWidgetsLight,
-    dark: androidWidgetsDark,
-    alt: 'Native Android widgets with example notes: Quick capture, One note and a scrollable Note list',
+  // These supplied home-screen captures retain their original appearance in either site theme.
+  androidWidgetNote: {
+    light: androidWidgetNote,
+    dark: androidWidgetNote,
+    alt: 'Catch’s One note widget on an Android home screen showing a Lisbon weekend itinerary and image',
+  },
+  androidWidgetList: {
+    light: androidWidgetList,
+    dark: androidWidgetList,
+    alt: 'Catch’s Note list widget on an Android home screen, with Quick capture below it and a floating New note button',
   },
   androidSetup: {
     light: androidSetupLight,

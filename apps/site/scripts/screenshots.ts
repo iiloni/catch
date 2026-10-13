@@ -3,8 +3,8 @@
  * development stack: `./scripts/dev.sh screenshots`. Each run signs up a fresh account
  * and fills it with the notes below, so the pictures only change when the app does.
  * `./scripts/dev.sh screenshots site <site-url>` captures the site's link preview instead.
- * `./scripts/dev.sh screenshots android-widgets` encodes the real native captures in
- * `docs/screenshots`; see `docs/android-widgets.md` for their device capture workflow.
+ * `./scripts/dev.sh screenshots android-widgets` encodes the supplied Android home-screen
+ * captures in `docs/screenshots`, preserving the full original images.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -1089,10 +1089,9 @@ const clips: {
 mkdirSync(output, { recursive: true });
 mkdirSync(recordings, { recursive: true });
 if (process.argv[2] === 'android-widgets') {
-  // Lossless source screenshots are real RemoteViews painted by the native widget test host.
-  for (const theme of themes) {
-    const source = path.join(root, `docs/screenshots/android-widgets-${theme}.png`);
-    const file = path.join(output, `docs-android-widgets-${theme}.webp`);
+  for (const kind of ['note', 'list']) {
+    const source = path.join(root, `docs/screenshots/android-widget-${kind}-home-screen.png`);
+    const file = path.join(output, `docs-android-widget-${kind}.webp`);
     await sharp(source).webp({ quality: 86 }).toFile(file);
     console.log(path.relative(root, file));
   }
