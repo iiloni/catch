@@ -82,13 +82,16 @@ and preview must advance independently, including preview versions ahead of stab
 - The tag parser's channel output supplies build-only `CATCH_CHANNEL` to web builds and
   Android sync. A build without one, Docker included, is the `dev` channel, which is
   never tagged or published; this is build identification, not a new official release channel.
-  Favicons, Apple touch icons, PWA icons and Android launcher icons default to stable
-  artwork for every channel. On a preview server, Settings > General offers Stable and
-  Preview icons. The choice stays on the device, scoped to that server, and survives offline
-  launches; a confirmed stable or development server uses stable artwork. All Android flavors
-  ship the stable resources and separately named preview resources in `src/main/res`.
+  Released stable and preview builds default to stable artwork for favicons, Apple touch
+  icons, PWA icons and Android launcher icons. Dev builds retain the blue dev default and
+  offer Stable, Preview and Dev choices in Settings > General, even on a released server.
+  Released builds on a preview server offer Stable and Preview icons. The choice stays on the device, scoped to that server, and survives offline
+  launches; a confirmed non-preview server uses stable artwork in released builds. The
+  picker shows the selected icon above a text-only segmented control. All Android flavors
+  ship stable and separately named preview/dev resources in `src/main/res`, with flavor
+  booleans selecting the stable or dev launcher default. Only dev APKs accept the Dev option.
   Enabled launcher aliases select the icon without disabling MainActivity, preserving
-  shares, reminders, widgets and existing shortcuts. Both PWA manifests use the same id,
+  shares, reminders, widgets and existing shortcuts. All PWA manifests use the same id,
   start URL, scope and share target; installed PWA icon updates remain browser-controlled
   and may need approval. Settings > Update always identifies the actual channel regardless
   of the preference: amber for stable, purple for preview and light blue for development.

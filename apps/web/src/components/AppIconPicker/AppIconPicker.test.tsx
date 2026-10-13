@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_ICON_KEY } from '@/lib/appIcon';
 import { AppIconPicker } from './AppIconPicker';
 
@@ -23,13 +23,36 @@ vi.mock('@/lib/haptics', () => ({ haptics: { selection: vi.fn() } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 beforeEach(() => {
+  vi.stubEnv('CATCH_CHANNEL', 'stable');
   localStorage.clear();
   mocks.channel = 'preview';
   mocks.platform = 'web';
   mocks.setIcon.mockReset().mockResolvedValue(undefined);
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe('AppIconPicker', () => {
+  it('dev builds offer three text-only choices and preview the selection above them', async () => {
+    vi.stubEnv('CATCH_CHANNEL', 'dev');
+    mocks.channel = 'stable';
+    render(<AppIconPicker />);
+    expect(screen.getByRole('button', { name: 'Dev' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('img', { name: 'Dev app icon' })).toHaveAttribute(
+      'src',
+      '/dev/icon-small.svg',
+    );
+    for (const button of screen.getAllByRole('button'))
+      expect(button.querySelector('img')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'Preview app icon' })).toHaveAttribute(
+        'src',
+        '/preview/icon-small.svg',
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true');
+  });
   it.each(['stable', 'dev', null] as const)('offers no choice for a %s server', (channel) => {
     mocks.channel = channel;
     render(<AppIconPicker />);

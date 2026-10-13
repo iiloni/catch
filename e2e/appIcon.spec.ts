@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signUp } from './helpers';
 
-test('preview servers offer a device icon choice that survives reload and leaves Update branding alone', async ({
+test('dev builds offer all icon choices on preview servers and leave Update branding alone', async ({
   page,
 }) => {
   let channel = 'preview';
@@ -13,10 +13,13 @@ test('preview servers offer a device icon choice that survives reload and leaves
   const picker = page.getByRole('region', { name: 'App icon', exact: true });
   const stable = picker.getByRole('button', { name: 'Stable', exact: true });
   const preview = picker.getByRole('button', { name: 'Preview', exact: true });
-  await expect(stable).toHaveAttribute('aria-pressed', 'true');
+  await expect(picker.getByRole('button', { name: 'Dev', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
     'href',
-    '/favicon-mark.svg',
+    '/dev/favicon-mark.svg',
   );
   await preview.click();
   await expect(preview).toHaveAttribute('aria-pressed', 'true');
@@ -50,20 +53,46 @@ test('preview servers offer a device icon choice that survives reload and leaves
   await expect(preview).toHaveAttribute('aria-pressed', 'true');
   channel = 'stable';
   await page.reload();
-  await expect(picker).toBeHidden();
+  await expect(picker).toBeVisible();
   await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
     'href',
-    '/favicon-mark.svg',
+    '/preview/favicon-mark.svg',
   );
 });
 
-test('development servers keep the stable icon without an icon chooser', async ({ page }) => {
+test('dev builds default to dev and preview the selected icon above three text-only choices', async ({
+  page,
+}) => {
   await signUp(page);
   await page.goto('/settings/general');
-  await expect(page.getByRole('button', { name: 'Dark', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'App icon', exact: true })).toBeHidden();
-  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
-    'href',
-    '/favicon-mark.svg',
+  const picker = page.getByRole('region', { name: 'App icon', exact: true });
+  await expect(picker.getByRole('button', { name: 'Dev', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
   );
+  await expect(picker.getByRole('img', { name: 'Dev app icon', exact: true })).toHaveAttribute(
+    'src',
+    '/dev/icon-small.svg',
+  );
+  await expect(picker.locator('button img')).toHaveCount(0);
+  for (const [name, path] of [
+    ['Stable', ''],
+    ['Preview', '/preview'],
+    ['Dev', '/dev'],
+  ] as const) {
+    await picker.getByRole('button', { name, exact: true }).click();
+    await expect(
+      picker.getByRole('img', { name: `${name} app icon`, exact: true }),
+    ).toHaveAttribute('src', `${path}/icon-small.svg`);
+    await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute(
+      'href',
+      `${path}/favicon-mark.svg`,
+    );
+  }
+  await page.reload();
+  await expect(picker.getByRole('button', { name: 'Dev', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(picker.getByRole('img', { name: 'Dev app icon', exact: true })).toBeVisible();
 });

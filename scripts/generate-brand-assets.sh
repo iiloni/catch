@@ -108,10 +108,9 @@ render "$brand_dir/catch-adaptive-foreground.svg" 512 "$temp_dir/maskable-foregr
 magick "$temp_dir/maskable-background.png" "$temp_dir/maskable-foreground.png" \
   -compose Over -composite -strip "PNG32:$public_dir/maskable-512x512.png"
 
-# Every flavor ships stable by default and a separately named preview launcher option.
-[[ "$channel" == dev ]] && exit 0
+# Named alternatives keep the default launcher resources independent of icon choices.
 launcher_suffix=""
-[[ "$channel" == preview ]] && launcher_suffix="_preview"
+[[ "$channel" == stable ]] || launcher_suffix="_$channel"
 
 # Android tints the monochrome drawable by alpha. Retain the supplied transparent
 # line knockouts and apply the adaptive foreground's scale from the token file.

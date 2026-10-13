@@ -30,10 +30,14 @@ public class AppIconsTest {
     }
 
     @Test
-    public void stableIsTheOnlyLauncherByDefault() throws Exception {
-        assertTrue(manager.getActivityInfo(component("StableIcon"), 0).enabled);
+    public void buildDefaultIsTheOnlyLauncher() throws Exception {
+        boolean dev = context.getResources().getBoolean(R.bool.default_dev_icon);
+        String chosen = dev ? "DevIcon" : "StableIcon";
+        String other = dev ? "StableIcon" : "DevIcon";
+        assertTrue(manager.getActivityInfo(component(chosen), 0).enabled);
+        assertFalse(manager.getActivityInfo(component(other), PackageManager.MATCH_DISABLED_COMPONENTS).enabled);
         assertFalse(manager.getActivityInfo(component("PreviewIcon"), PackageManager.MATCH_DISABLED_COMPONENTS).enabled);
-        assertEquals(component("StableIcon"), manager.getLaunchIntentForPackage(context.getPackageName()).getComponent());
+        assertEquals(component(chosen), manager.getLaunchIntentForPackage(context.getPackageName()).getComponent());
     }
 
     @Test
@@ -52,8 +56,22 @@ public class AppIconsTest {
     }
 
     @Test
+    public void devBuildsCanSelectDevAndReleasedBuildsCannot() throws Exception {
+        if (context.getResources().getBoolean(R.bool.default_dev_icon)) {
+            AppIcons.set(context, "preview");
+            AppIcons.set(context, "dev");
+            assertEquals(component("DevIcon"), manager.getLaunchIntentForPackage(context.getPackageName()).getComponent());
+            assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, manager.getComponentEnabledSetting(component("StableIcon")));
+            assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DISABLED, manager.getComponentEnabledSetting(component("PreviewIcon")));
+            assertTrue(manager.getActivityInfo(component("MainActivity"), 0).enabled);
+        } else {
+            assertThrows(IllegalArgumentException.class, () -> AppIcons.set(context, "dev"));
+        }
+    }
+
+    @Test
     public void invalidChoicesLeaveTheLauncherAlone() {
-        assertThrows(IllegalArgumentException.class, () -> AppIcons.set(context, "dev"));
+        assertThrows(IllegalArgumentException.class, () -> AppIcons.set(context, "nightly"));
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, manager.getComponentEnabledSetting(component("StableIcon")));
         assertEquals(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, manager.getComponentEnabledSetting(component("PreviewIcon")));
     }

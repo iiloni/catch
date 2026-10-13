@@ -2,17 +2,24 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsSection } from '@/components/SettingsSection/SettingsSection';
-import { type AppIcon, setNativeAppIcon, useAppIconPreference } from '@/lib/appIcon';
+import {
+  type AppIcon,
+  setNativeAppIcon,
+  useAppIconOptions,
+  useAppIconPreference,
+} from '@/lib/appIcon';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useUpdates } from '@/lib/updates';
 import { cn } from '@/lib/utils';
 
 export function AppIconPicker() {
-  const { android, server } = useUpdates();
+  const { android } = useUpdates();
+  const { devBuild, serverChannel } = useAppIconOptions();
   const [value, setValue] = useAppIconPreference();
   const [pending, setPending] = useState(false);
-  if (server?.channel !== 'preview') return null;
+  if (!devBuild && serverChannel !== 'preview') return null;
+  const choices: AppIcon[] = devBuild ? ['stable', 'preview', 'dev'] : ['stable', 'preview'];
 
   async function choose(icon: AppIcon) {
     if (icon === value || pending) return;
@@ -37,9 +44,19 @@ export function AppIconPicker() {
           : 'Choose an icon for this device. Installed web apps may ask you to approve the change.'
       }
     >
-      <fieldset className="grid min-w-0 grid-cols-2 gap-1 p-1.5" disabled={pending}>
+      <div className="flex justify-center px-4 pt-6 pb-4">
+        <img
+          src={value === 'stable' ? '/icon-small.svg' : `/${value}/icon-small.svg`}
+          alt={`${value === 'dev' ? 'Dev' : value === 'preview' ? 'Preview' : 'Stable'} app icon`}
+          className="size-20"
+        />
+      </div>
+      <fieldset
+        className={cn('grid min-w-0 gap-1 p-1.5', devBuild ? 'grid-cols-3' : 'grid-cols-2')}
+        disabled={pending}
+      >
         <legend className="sr-only">App icon</legend>
-        {(['stable', 'preview'] as const).map((icon) => {
+        {choices.map((icon) => {
           const selected = value === icon;
           return (
             <button
@@ -48,7 +65,7 @@ export function AppIconPicker() {
               aria-pressed={selected}
               onClick={() => void choose(icon)}
               className={cn(
-                'relative flex flex-col items-center gap-2 rounded-xl py-3 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-60',
+                'relative rounded-xl py-2.5 font-medium text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-60',
                 selected ? 'text-foreground' : 'text-muted-foreground',
               )}
             >
@@ -60,12 +77,9 @@ export function AppIconPicker() {
                   transition={springs.snappy}
                 />
               )}
-              <img
-                src={icon === 'preview' ? '/preview/icon-small.svg' : '/icon-small.svg'}
-                alt=""
-                className="relative size-12"
-              />
-              <span className="relative">{icon === 'preview' ? 'Preview' : 'Stable'}</span>
+              <span className="relative">
+                {icon === 'dev' ? 'Dev' : icon === 'preview' ? 'Preview' : 'Stable'}
+              </span>
             </button>
           );
         })}

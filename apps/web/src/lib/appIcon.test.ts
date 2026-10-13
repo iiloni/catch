@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   platform: 'web',
+  appChannel: null as 'stable' | 'preview' | 'dev' | null,
   channel: null as 'stable' | 'preview' | 'dev' | null,
   serverUrl: 'https://preview.example',
   setIcon: vi.fn().mockResolvedValue(undefined),
@@ -13,15 +14,21 @@ vi.mock('@capacitor/core', () => ({
 }));
 vi.mock('./serverUrl', () => ({ getServerUrl: () => mocks.serverUrl }));
 vi.mock('./updates', () => ({
-  useUpdates: () => ({ server: mocks.channel ? { channel: mocks.channel } : null }),
+  useUpdates: () => ({
+    android: mocks.platform === 'android',
+    app: mocks.appChannel ? { channel: mocks.appChannel } : null,
+    server: mocks.channel ? { channel: mocks.channel } : null,
+  }),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 import { APP_ICON_KEY, setNativeAppIcon, useAppIconPreference, useApplyAppIcon } from './appIcon';
 
 beforeEach(() => {
+  vi.stubEnv('CATCH_CHANNEL', 'stable');
   localStorage.clear();
   mocks.platform = 'web';
+  mocks.appChannel = null;
   mocks.channel = null;
   mocks.serverUrl = 'https://preview.example';
   mocks.setIcon.mockReset().mockResolvedValue(undefined);
@@ -31,10 +38,43 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const link of document.head.querySelectorAll('link')) link.remove();
 });
 
 describe('app icon preference', () => {
+  it('dev builds default to dev, preserve all choices, and use dev install artwork', () => {
+    vi.stubEnv('CATCH_CHANNEL', 'dev');
+    mocks.channel = 'stable';
+    const preference = renderHook(useAppIconPreference);
+    expect(preference.result.current[0]).toBe('dev');
+    const applied = renderHook(useApplyAppIcon);
+    expect(document.querySelector('link[rel="icon"]')).toHaveAttribute('href', '/dev/favicon.ico');
+    expect(document.querySelector('link[rel="manifest"]')).toHaveAttribute(
+      'href',
+      '/manifest-dev.webmanifest',
+    );
+    act(() => preference.result.current[1]('stable'));
+    expect(preference.result.current[0]).toBe('stable');
+    expect(document.querySelector('link[rel="manifest"]')).toHaveAttribute(
+      'href',
+      '/manifest-stable.webmanifest',
+    );
+    applied.unmount();
+  });
+
+  it('uses the installed dev app identity even with released web metadata', () => {
+    mocks.platform = 'android';
+    mocks.appChannel = 'dev';
+    mocks.channel = 'preview';
+    expect(renderHook(useAppIconPreference).result.current[0]).toBe('dev');
+  });
+
+  it('released builds ignore a dev preference', () => {
+    mocks.channel = 'preview';
+    localStorage.setItem(APP_ICON_KEY, JSON.stringify({ icon: 'dev', server: mocks.serverUrl }));
+    expect(renderHook(useAppIconPreference).result.current[0]).toBe('stable');
+  });
   it('defaults to stable and ignores corrupt preferences', () => {
     localStorage.setItem(APP_ICON_KEY, 'invalid');
     expect(renderHook(useAppIconPreference).result.current[0]).toBe('stable');
@@ -76,7 +116,7 @@ describe('app icon preference', () => {
     expect(document.querySelector('link[rel="icon"]')).toHaveAttribute('href', '/favicon.ico');
     expect(document.querySelector('link[rel="manifest"]')).toHaveAttribute(
       'href',
-      '/manifest.webmanifest',
+      '/manifest-stable.webmanifest',
     );
     mocks.channel = 'preview';
     hook.rerender();

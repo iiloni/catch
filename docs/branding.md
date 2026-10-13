@@ -55,12 +55,14 @@ Android uses its existing density sizes: legacy regular/round launcher icons at
 48/72/96/144/192 px and adaptive layers at 108/162/216/324/432 px. Every flavor inherits
 the stable resources in `apps/web/android/app/src/main/res/`; preview and dev have no
 launcher resource overlays. Separately named `ic_launcher_preview` resources in main
-provide an optional purple launcher icon for every flavor. StableIcon and PreviewIcon
+provide an optional purple launcher icon for every flavor. Separately named
+`ic_launcher_dev` resources supply the dev default; only dev builds offer the Dev choice.
+StableIcon, PreviewIcon and DevIcon
 aliases select the launcher artwork while MainActivity remains enabled for other intents.
 The adaptive XML uses the selected background and shared foreground and monochrome resources. The foreground is the unchanged `catch-adaptive-foreground.svg`,
 retaining transparency, scale 0.76,
 position and safe area. Maskable PWA icons composite that same foreground with the
-variant's full-bleed background; the chosen PWA manifest selects the stable or preview maskable icon.
+variant's full-bleed background; the chosen PWA manifest selects its maskable icon.
 System tint removes colors from themed icons.
 Settings > Update shows the installed app's channel icon on Android and the server's channel
 icon on the web, falling back to development while channel metadata is unavailable.
@@ -109,16 +111,19 @@ Android's existing first-run server setup uses a stacked lockup with a 96 px ico
 Settings > Update's existing product area uses a stacked lockup with an 80 px icon.
 Inside the app, branding always uses stable
 artwork, except Update, which keeps its existing installed-app/server channel selection.
-App icons and favicons default to stable artwork in every build. General settings on a
+Released builds default app icons and favicons to stable artwork; dev builds keep blue
+dev artwork by default and offer all three icon treatments. General settings on a
 preview server can select preview icons for this device; the choice does not change
-other in-app branding or Update’s channel identity. `BrandLockup`
+other in-app branding or Update’s channel identity. The picker shows one selected icon
+preview above its text-only segmented control. `BrandLockup`
 defaults to stable; Update passes its channel explicitly. Ink follows the resolved app theme (including stored preferences),
 with a surface override for a differently themed surrounding surface.
 
 All these surfaces use SVG directly on web and Android, preserving gradients and filters
 without density-specific bitmap exports or VectorDrawable conversion. Launcher/adaptive,
-PWA and favicon resources remain icon-only, with stable as the default and preview
-available by choice on preview servers. Android system splash resources stay stable. Dev
+PWA and favicon resources remain icon-only, defaulting to stable in released builds and
+dev in development builds. Preview is available by choice on preview servers; dev builds
+can choose any of the three treatments. Android system splash resources stay stable. Dev
 remains a development build, with release builds still forbidden. No API, synced shape,
 queued write, protocol version, route, application palette, or typography changes.
 
@@ -128,9 +133,12 @@ The release workflow's existing tag parser selects stable from `vMAJOR.MINOR.PAT
 preview from `vMAJOR.MINOR.PATCH-preview`. Its `channel` output becomes the build-only
 `CATCH_CHANNEL` for Android web sync and the Docker build argument. It defaults to dev
 and rejects unsupported values. Browser favicon links, Apple touch icons and PWA manifest
-icons default to the stable assets at root paths. A device preference on a preview server
-selects `/preview/` icon paths and `/manifest-preview.webmanifest`. Both manifests have
+icons default to stable root paths for released builds and `/dev/` paths for dev builds.
+A device preference on a preview server
+selects `/preview/` icon paths and `/manifest-preview.webmanifest`. All manifests have
 the same app id, start URL, scope and share target, and are cached for offline use.
+Dev builds can select `/manifest-dev.webmanifest`, `/manifest-preview.webmanifest` or
+`/manifest-stable.webmanifest`; the stable variant uses root icon paths.
 Installed web apps may ask users to approve an icon change; browser support varies.
 The `/preview/` and `/dev/` artwork
 remains available for Settings > Update, including its icon-only fallback. PWA names,
@@ -138,7 +146,7 @@ URLs, theme/background colors and release behavior are unchanged.
 
 Android launcher resources come from `src/main/res` for every flavor and build type.
 The asset generator writes stable Android resources and separately named preview
-resources into main; dev writes no Android launcher resources. Regeneration never
+and dev resources into main. Regeneration never
 restores channel launcher overlays. Capacitor uses `CATCH_CHANNEL` for
 its default flavor too. Sync the matching web channel before building an APK:
 
@@ -161,8 +169,9 @@ CATCH_CHANNEL=dev pnpm --filter @catch/web android:sync
 Release signing still requires the values in [Releasing and deployment](releases.md).
 An unset `CATCH_CHANNEL` selects dev for web builds and Capacitor's default flavor.
 `./scripts/dev.sh android` explicitly installs dev. Debugging never reclassifies stable or
-preview: all three flavors default to amber launcher icons and can choose purple on a
-preview server, while their names and Update artwork identify the actual build.
+preview: released flavors default to amber launcher icons and can choose purple on a
+preview server; dev defaults to blue and can choose all three. Their names and Update
+artwork identify the actual build.
 Application IDs remain `org.iloni.catchnotes`, `org.iloni.catchnotes.preview` and
 `org.iloni.catchnotes.dev`; dev release APKs remain forbidden. A local production image can
 select preview with `docker build --build-arg CATCH_CHANNEL=preview --target production .`;

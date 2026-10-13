@@ -40,7 +40,7 @@
         <activity-alias
             android:name=".StableIcon"
             android:targetActivity=".MainActivity"
-            android:enabled="true"
+            android:enabled="@bool/default_stable_icon"
             android:exported="true"
             android:icon="@mipmap/ic_launcher">
             <intent-filter>
@@ -54,6 +54,18 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_preview">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".DevIcon"
+            android:targetActivity=".MainActivity"
+            android:enabled="@bool/default_dev_icon"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dev">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -48,13 +48,19 @@ const manifest = {
   ],
 } satisfies Partial<ManifestOptions>;
 
-const previewManifest = {
-  ...manifest,
-  icons: manifest.icons.map((icon) => ({ ...icon, src: `/preview${icon.src}` })),
-};
+function iconManifest(icon: 'stable' | 'preview' | 'dev') {
+  return {
+    ...manifest,
+    icons: manifest.icons.map((entry) => ({
+      ...entry,
+      src: icon === 'stable' ? entry.src : `/${icon}${entry.src}`,
+    })),
+  };
+}
 
 export default defineConfig(({ command }) => ({
   define: {
+    'import.meta.env.CATCH_CHANNEL': JSON.stringify(channel),
     'import.meta.env.CATCH_WEB_BUILD': JSON.stringify(String(command === 'build')),
     'import.meta.env.CATCH_BUILD_ID': JSON.stringify(webBuild.id),
     'import.meta.env.CATCH_DEV_SERVER_URL': JSON.stringify(
@@ -66,11 +72,24 @@ export default defineConfig(({ command }) => ({
       name: 'web-build-metadata',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
-        this.emitFile({
-          type: 'asset',
-          fileName: 'manifest-preview.webmanifest',
-          source: JSON.stringify(previewManifest),
-        });
+        for (const icon of ['stable', 'preview', 'dev'] as const) {
+          this.emitFile({
+            type: 'asset',
+            fileName: `manifest-${icon}.webmanifest`,
+            source: JSON.stringify(iconManifest(icon)),
+          });
+        }
+      },
+    },
+    {
+      name: 'default-channel-icons',
+      transformIndexHtml(html) {
+        return html
+          .replaceAll('__CATCH_DEFAULT_ICON__', channel === 'dev' ? 'dev' : 'stable')
+          .replace(
+            /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
+            channel === 'dev' ? 'href="/dev/$1"' : 'href="/$1"',
+          );
       },
     },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
@@ -82,7 +101,7 @@ export default defineConfig(({ command }) => ({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      manifest,
+      manifest: iconManifest(channel === 'dev' ? 'dev' : 'stable'),
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
       },
