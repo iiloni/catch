@@ -12,7 +12,6 @@ import { buildChannel } from '../../scripts/build-channel.ts';
 import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.CATCH_CHANNEL);
-const iconBase = channel === 'stable' ? '' : `/${channel}`;
 const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
 
 export default defineConfig(({ command }) => ({
@@ -28,15 +27,6 @@ export default defineConfig(({ command }) => ({
       name: 'web-build-metadata',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
-      },
-    },
-    {
-      name: 'channel-icons',
-      transformIndexHtml(html) {
-        return html.replace(
-          /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
-          `href="${iconBase}/$1"`,
-        );
       },
     },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
@@ -68,10 +58,10 @@ export default defineConfig(({ command }) => ({
           },
         },
         icons: [
-          { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
-          { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
           {
-            src: `${iconBase}/maskable-512x512.png`,
+            src: '/maskable-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

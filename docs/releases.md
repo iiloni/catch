@@ -201,7 +201,8 @@ web sync and the Docker build. The Docker build also receives the version as `CA
 which the server records in its backups and uses to notice an update. Local preview sync uses
 `CATCH_CHANNEL=preview pnpm --filter @catch/web android:sync` before building the preview
 flavor; an unset channel is dev. See [Brand assets](branding.md) for regeneration
-and the channel-specific icon paths. Application UI and theme colors are shared unchanged.
+and Update's channel artwork. Favicons and app icons use stable artwork for every channel.
+Application UI and theme colors are shared unchanged.
 
 ## Creating a release
 

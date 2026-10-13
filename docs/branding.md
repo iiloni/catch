@@ -13,7 +13,7 @@ UI tokens or theme colors.
 The additive development/testing extension in `branding/dev/` derives directly from stable.
 Its diagonal `(0,0) → (1024,1024)` gradient uses `#9AD6FA`, `#69B3F4` and `#3C86EC` at
 0%, 55% and 100%; the landing shadow uses `#225E92` at the unchanged 18% opacity.
-It identifies active development builds, including local APKs, and is not an official
+It identifies development builds on Settings > Update and is not an official
 release channel. Its spec, tokens and four supplied SVGs are authoritative; no blue
 values enter application UI, splash images or theme colors.
 
@@ -52,13 +52,14 @@ three SVG copies, 16 and 32 px PNG favicons, ICO frames at 16/24/32/48 px,
 and a 512 px maskable icon. The root `favicon.ico` remains stable.
 
 Android uses its existing density sizes: legacy regular/round launcher icons at
-48/72/96/144/192 px and adaptive layers at 108/162/216/324/432 px. Stable resources stay in
-`apps/web/android/app/src/main/res/`; preview and dev overlays in `src/preview/res/` and
-`src/dev/res/` contain only legacy icons and adaptive backgrounds. The inherited adaptive XML resolves the overlay's
-background and the shared main foreground and monochrome resources. The foreground is
-the unchanged `catch-adaptive-foreground.svg`, retaining transparency, scale 0.76,
+48/72/96/144/192 px and adaptive layers at 108/162/216/324/432 px. Every flavor inherits
+the stable resources in `apps/web/android/app/src/main/res/`; preview and dev have no
+launcher resource overlays. The adaptive XML resolves the stable background, foreground
+and monochrome resources. The foreground is the unchanged `catch-adaptive-foreground.svg`,
+retaining transparency, scale 0.76,
 position and safe area. Maskable PWA icons composite that same foreground with the
-channel's full-bleed background. System tint removes channel colors from themed icons.
+variant's full-bleed background; only the stable maskable icon is selected by the manifest.
+System tint removes colors from themed icons.
 Settings > Update shows the installed app's channel icon on Android and the server's channel
 icon on the web, falling back to development while channel metadata is unavailable.
 Splash images and other application styling remain unchanged.
@@ -106,29 +107,30 @@ Android's existing first-run server setup uses a stacked lockup with a 96 px ico
 Settings > Update's existing product area uses a stacked lockup with an 80 px icon.
 Inside the app, branding always uses stable
 artwork, except Update, which keeps its existing installed-app/server channel selection.
-App icons and favicons also keep their existing build-specific selection. `BrandLockup`
+App icons and favicons use stable artwork in every build. `BrandLockup`
 defaults to stable; Update passes its channel explicitly. Ink follows the resolved app theme (including stored preferences),
 with a surface override for a differently themed surrounding surface.
 
 All these surfaces use SVG directly on web and Android, preserving gradients and filters
 without density-specific bitmap exports or VectorDrawable conversion. Launcher/adaptive,
-PWA, favicon and Android system splash resources remain icon-only and unchanged. Dev
-remains a development build, with release builds still forbidden. No API, synced shape,
+PWA, favicon and Android system splash resources remain icon-only; every channel uses
+stable artwork. Dev remains a development build, with release builds still forbidden. No API, synced shape,
 queued write, protocol version, route, application palette, or typography changes.
 
 ## Channel selection
 
 The release workflow's existing tag parser selects stable from `vMAJOR.MINOR.PATCH` and
 preview from `vMAJOR.MINOR.PATCH-preview`. Its `channel` output becomes the build-only
-`CATCH_CHANNEL` for Android web sync and the Docker build argument. Vite selects icon paths
-from this explicit value; it defaults to dev, which uses the light-blue icons, and rejects
-unsupported values. PWA names, URLs, theme/background colors and release behavior are unchanged. Preview browser
-links and manifest icons use `/preview/` paths; dev uses `/dev/` paths, keeping each
-treatment's assets separate in browser caches.
+`CATCH_CHANNEL` for Android web sync and the Docker build argument. It defaults to dev
+and rejects unsupported values. Browser favicon links, Apple touch icons and PWA manifest
+icons always use the stable assets at root paths. The `/preview/` and `/dev/` artwork
+remains available for Settings > Update, including its icon-only fallback. PWA names,
+URLs, theme/background colors and release behavior are unchanged.
 
-Android launcher resources are selected by Gradle's existing `dev`, `stable` and `preview` flavors,
-independently of debug/release build type. Capacitor uses `CATCH_CHANNEL` for its default
-flavor too. Sync the matching web channel before building an APK:
+Android launcher resources come from `src/main/res` for every flavor and build type.
+The asset generator writes Android resources only for stable, so regenerating preview or
+dev artwork cannot restore channel launcher overlays. Capacitor uses `CATCH_CHANNEL` for
+its default flavor too. Sync the matching web channel before building an APK:
 
 ```bash
 ./scripts/dev.sh build stable
@@ -149,7 +151,8 @@ CATCH_CHANNEL=dev pnpm --filter @catch/web android:sync
 Release signing still requires the values in [Releasing and deployment](releases.md).
 An unset `CATCH_CHANNEL` selects dev for web builds and Capacitor's default flavor.
 `./scripts/dev.sh android` explicitly installs dev. Debugging never reclassifies stable or
-preview: `assembleStableDebug` stays amber and `assemblePreviewDebug` stays purple.
+preview: all three flavors use amber launcher icons, while their names and Update artwork
+identify them.
 Application IDs remain `org.iloni.catchnotes`, `org.iloni.catchnotes.preview` and
 `org.iloni.catchnotes.dev`; dev release APKs remain forbidden. A local production image can
 select preview with `docker build --build-arg CATCH_CHANNEL=preview --target production .`;

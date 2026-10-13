@@ -81,13 +81,12 @@ and preview must advance independently, including preview versions ahead of stab
   workflow's identity and publish forward releases in sequence so version codes increase.
 - The tag parser's channel output supplies build-only `CATCH_CHANNEL` to web builds and
   Android sync. A build without one, Docker included, is the `dev` channel, which is
-  never tagged or published and uses the light-blue development icon treatment; this is
-  build identification, not a new official release channel. Preview and dev browser/PWA icons
-  use distinct `/preview/` and `/dev/` paths, and their Android flavors overlay
-  launcher/background resources independently of debug/release build type.
-  Both reuse the stable adaptive foreground and monochrome geometry. Distribution icons and
-  the Settings > Update icon identify the channel; other application UI and theme colors
-  remain stable (see [brand assets](../branding.md)).
+  never tagged or published; this is build identification, not a new official release channel.
+  Favicons, Apple touch icons and PWA icons use the stable artwork for every channel.
+  All Android flavors inherit stable legacy, round and adaptive launcher resources from
+  `src/main/res`, independently of debug/release build type. Only Settings > Update selects
+  channel artwork: amber for stable, purple for preview and light blue for development.
+  Other application UI and theme colors remain stable (see [brand assets](../branding.md)).
 - Stable Android uses `org.iloni.catchnotes`; preview uses `org.iloni.catchnotes.preview`
   and the name Catch Preview. They can coexist and keep separate device data. Both are
   signed with the operator's persistent release key, held in Actions secrets and backed up
