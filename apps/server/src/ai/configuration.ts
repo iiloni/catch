@@ -9,7 +9,13 @@ import { eq, sql } from 'drizzle-orm';
 import { type Db, db } from '../db/client';
 import { aiConfiguration, embeddingJobs, noteEmbeddings, user } from '../db/schema';
 import { openCredential, sealCredential } from './credentials';
-import { embed, type Provider, ProviderError } from './provider';
+import {
+  embed,
+  type Provider,
+  ProviderError,
+  sameDocumentFormat,
+  sameQueryFormat,
+} from './provider';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 export async function readConfiguration() {
@@ -79,6 +85,7 @@ export async function overview(): Promise<AiConfiguration> {
     hasApiKey: !!saved?.apiKey,
     dimensions: saved?.dimensions ?? null,
     revision: saved?.revision ?? null,
+    similarityFloor: saved?.similarityFloor ?? null,
     progress: {
       total: counts?.total ?? 0,
       ready: counts?.ready ?? 0,
@@ -116,9 +123,11 @@ export async function saveConfiguration(input: SaveAiConfiguration, actor: strin
     if ((previous?.revision ?? null) !== input.revision) throw new ConfigurationConflict();
     const changed =
       !previous ||
-      (['provider', 'baseUrl', 'model', 'profile', 'profileVersion'] as const).some(
+      (['provider', 'baseUrl', 'model'] as const).some(
         (key) => previous.embedding[key] !== input.embedding[key],
       ) ||
+      // A corrected query format leaves the indexed notes as they are.
+      !sameDocumentFormat(previous.embedding, input.embedding) ||
       (dimensions !== null && dimensions !== previous.dimensions);
     const sameDestination =
       previous?.embedding.baseUrl === input.embedding.baseUrl &&
@@ -137,6 +146,10 @@ export async function saveConfiguration(input: SaveAiConfiguration, actor: strin
       dimensions: dimensions ?? (changed ? null : (previous?.dimensions ?? null)),
       generation: changed ? randomUUID() : previous!.generation,
       revision: randomUUID(),
+      // Measured again by the worker: a new index or query format moves every score.
+      ...(changed || !sameQueryFormat(previous!.embedding, input.embedding)
+        ? { similarityFloor: null, calibratedAt: null }
+        : {}),
     };
     await tx
       .insert(aiConfiguration)
@@ -163,7 +176,12 @@ export async function restartIndex(actor: string, rebuild: boolean, revision?: s
       if ((current?.revision ?? null) !== revision) throw new ConfigurationConflict();
       await tx
         .update(aiConfiguration)
-        .set({ generation: randomUUID(), revision: randomUUID() })
+        .set({
+          generation: randomUUID(),
+          revision: randomUUID(),
+          similarityFloor: null,
+          calibratedAt: null,
+        })
         .where(eq(aiConfiguration.id, 'default'));
       await tx.delete(noteEmbeddings);
       await tx.delete(embeddingJobs);

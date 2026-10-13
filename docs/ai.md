@@ -50,7 +50,7 @@ Input formats are selected from the model name, not exposed as an admin setting:
 
 - Plain text: neither receives a prefix.
 - Nomic: `search_document: ` / `search_query: `.
-- Standard E5: `passage: ` / `query: `. E5 instruct/Mistral variants use a query instruction and plain documents.
+- Standard E5: `passage: ` / `query: `. E5 instruct/Mistral variants and Qwen3 embedding models use a query instruction and plain documents.
 - English BGE small/base/large: documents stay plain; queries receive its retrieval instruction. BGE-M3 and other families use plain text.
 
 Use a canonical model name so Catch can identify its family; opaque aliases use plain text.
@@ -64,6 +64,8 @@ The optional stored `profileVersion` selects E5's instruction format. An older c
 without it retains its original prefixes until an admin save selects the new format and
 rebuilds the generation. Older clients ignore this optional field; other model formats and
 key-only rotations keep their existing generations.
+Where a corrected format leaves indexed notes unchanged (Qwen3 was first saved as plain text,
+and its notes are sent plain either way), searches use it at once: no save and no rebuild.
 The server normalizes nonzero finite vectors, checks dimensions, bounds responses to 16 MiB
 and limits each HTTP request to 60 seconds. Provider bodies and credentials are never shown
 in errors. See [Ollama's embed API](https://docs.ollama.com/api/embed) and
@@ -96,6 +98,18 @@ notes and timestamps, prepends confirmed optimistic keyword edits, appends other
 server ranks, and never reintroduces an
 unconfirmed shared copy into a successful hybrid response. Offline/unavailable fallback
 uses the existing local collection, including its existing shared-copy sync delay.
+
+**Relevance cutoff.** Nearest-neighbour retrieval always returns something, so without a
+cutoff every note in a small library is "related". Models also disagree on what an unrelated
+note scores, so no fixed number works. Once the index is complete, and again daily, the worker
+measures a floor for the configured model: it embeds up to 40 note titles as queries, scores
+each against the other notes of the same account, and takes the median over queries of each
+one's median score plus 1.5 robust standard deviations. Notes scoring under the floor are
+left out of the semantic ranking; a note whose words match is still returned. An account
+needs ten indexed notes to be sampled and five titles must be usable, otherwise no floor is
+saved and nothing is left out. Saving a different model or endpoint, a changed query format
+and Rebuild index all clear the floor until it is measured again. The Indexing section shows
+the current value. The titles sent are of notes the provider already received.
 
 Notes are split into 2,000 Unicode-character chunks with 200-character overlap and embedded
 across notes in requests of up to 50 inputs and 64 KiB of formatted UTF-8 text.

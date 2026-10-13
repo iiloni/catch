@@ -23,6 +23,11 @@ The server uses Postgres for hybrid ranking:
 - **Semantic**: normalized pgvector embeddings in server-only `note_embeddings`, one row
   per overlapping note chunk. Exact cosine retrieval currently scans eligible embeddings;
   there is no approximate index or separate vector service.
+- **Cutoff**: semantic candidates must reach a similarity floor measured for the configured
+  model from the library itself (`ai/calibration.ts`, `docs/ai.md`). Rank fusion ignores how
+  strong a match is, so without the floor a small library returned every note as related.
+  The idea is FGRM's calibration baseline, used here to filter rather than to scale a
+  displayed score. Until a floor is measured, nothing is left out.
 - **Fusion**: reciprocal rank fusion with constant 60, up to 120 candidates from each list,
   returning at most 60 hits. Each ranking applies user authorization and the same tag,
   color and archive filters before limiting. Reader copies require a current share token;

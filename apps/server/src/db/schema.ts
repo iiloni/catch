@@ -14,6 +14,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -445,6 +446,9 @@ export const aiConfiguration = pgTable('ai_configuration', {
   dimensions: integer(),
   generation: uuid().notNull(),
   revision: uuid().notNull(),
+  /** The similarity an unrelated note reaches with this model and index; null until measured. */
+  similarityFloor: real(),
+  calibratedAt: timestamp({ withTimezone: true }),
 });
 
 const embeddingVector = customType<{ data: number[]; driverData: string }>({

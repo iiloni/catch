@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { readConfiguration } from './configuration';
 import { openCredential } from './credentials';
-import { embed, ProviderError } from './provider';
+import { embed, ProviderError, queryProvider } from './provider';
 
 export async function capabilities(userId: string) {
   const config = await readConfiguration();
@@ -30,7 +30,7 @@ export async function hybridSearch(
   if (!config?.enabled || !config.dimensions)
     throw new ProviderError('AI search is not enabled on this server.');
   const [vector] = await embed(
-    { ...config.embedding, apiKey: openCredential(config.apiKey) },
+    queryProvider({ ...config.embedding, apiKey: openCredential(config.apiKey) }),
     [input.query],
     true,
     signal,
@@ -44,7 +44,7 @@ export async function hybridSearch(
   if (!current?.enabled || current.generation !== config.generation)
     throw new ProviderError('AI configuration changed. Try searching again.');
   lap('recheck');
-  const hits = await rankNotes(userId, input, vector, config.generation);
+  const hits = await rankNotes(userId, input, vector, config.generation, current.similarityFloor);
   lap('rank');
   const { indexing } = await capabilities(userId);
   lap('indexing');
@@ -57,6 +57,8 @@ export async function rankNotes(
   input: HybridSearch,
   vector: number[],
   generation: string,
+  /** Notes scoring under this are no more related than any other; null until measured. */
+  floor: number | null = null,
 ) {
   const rows = await db.execute<{ id: string; updated_at: Date; semantic: boolean }>(sql`
     WITH RECURSIVE ancestors(id, ancestor, parent, color) AS (
@@ -98,7 +100,9 @@ export async function rankNotes(
       SELECT n.id, min(e.embedding <=> ${JSON.stringify(vector)}::vector) AS distance
       FROM eligible n JOIN note_embeddings e ON e.note_id = n.id AND e.generation = ${generation}::uuid
         AND e.content_hash = md5(n.search_text)
-      GROUP BY n.id ORDER BY distance, n.id LIMIT 120
+      GROUP BY n.id
+      HAVING ${floor}::real IS NULL OR min(e.embedding <=> ${JSON.stringify(vector)}::vector) <= 1 - ${floor}::real
+      ORDER BY distance, n.id LIMIT 120
     ), semantic_rank AS (SELECT id, row_number() OVER (ORDER BY distance, id) AS rank FROM semantic_candidates),
     fused AS (
       SELECT coalesce(k.id, s.id) AS id, k.id IS NULL AS semantic,

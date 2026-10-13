@@ -22,6 +22,7 @@ import type { Db } from '../db/client';
 import { migrationsFolder } from '../db/migrations';
 import * as schema from '../db/schema';
 import { aiRoutes } from '../routes/ai';
+import { calibrateSearch } from './calibration';
 import {
   AiAccessDenied,
   ConfigurationConflict,
@@ -601,6 +602,51 @@ describe.skipIf(!serverUrl)('AI indexing and authorized hybrid search on Postgre
     expect(await rank('reader', { color: 'blue', showArchived: false })).toEqual([]);
     await database.update(schema.noteShares).set({ token: 'b'.repeat(43) });
     expect(await rank('reader', { color: 'blue' })).toEqual([]);
+  });
+  it('leaves out notes under the measured floor, except where their words match', async () => {
+    await database
+      .insert(schema.notes)
+      .values({ id: SECOND, userId: 'owner', searchText: 'Milk shopping', position: 'a1' });
+    await save();
+    await connection`UPDATE embedding_jobs SET available_at = now()`;
+    await processEmbeddingBatch();
+    const [config] = await database.select().from(schema.aiConfiguration);
+    const ranked = async (text: string, floor: number | null) =>
+      (await rankNotes('owner', query({ query: text }), [1, 0, 0], config!.generation, floor))
+        .map((hit) => hit.id)
+        .sort();
+    // The fake provider puts the two notes at right angles: similarity 1 and 0.
+    expect(await ranked('cycling', null)).toEqual([NOTE, SECOND]);
+    expect(await ranked('cycling', 0.3)).toEqual([NOTE]);
+    // Its words match, so the floor does not take it away.
+    expect(await ranked('milk', 0.3)).toEqual([NOTE, SECOND]);
+    expect(await ranked('cycling', 1.5)).toEqual([]);
+  });
+  it('measures a floor once the index is complete, and again for a new index', async () => {
+    const words = ['bicycle', 'milk', 'tax'];
+    await database.insert(schema.notes).values(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `0199a0a0-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
+        userId: 'owner',
+        searchText: `${words[index % 3]} note ${index}`,
+        position: `b${index}`,
+      })),
+    );
+    await save();
+    await calibrateSearch();
+    // Notes are still queued, so there is nothing to measure against yet.
+    expect((await overview()).similarityFloor).toBeNull();
+    await connection`UPDATE embedding_jobs SET available_at = now()`;
+    await processEmbeddingBatch();
+    await calibrateSearch();
+    const measured = (await overview()).similarityFloor;
+    expect(measured).toBeGreaterThanOrEqual(0);
+    expect(measured).toBeLessThan(1);
+    const calls = fake.calls.length;
+    await calibrateSearch();
+    expect(fake.calls.length).toBe(calls);
+    await restartIndex('owner', true, (await overview()).revision);
+    expect((await overview()).similarityFloor).toBeNull();
   });
   it('safely splits literal keyword terms and fuses them with semantic results', async () => {
     await save();

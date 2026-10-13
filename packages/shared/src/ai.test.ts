@@ -67,6 +67,12 @@ it('accepts discovery responses from servers that predate model classification',
     models: ['fake-embedding'],
   });
 });
+it.each(['Qwen/Qwen3-Embedding-4B-GGUF', 'qwen3-embedding:8b', 'dengcao/Qwen3-Embedding-0.6B'])(
+  'queries a Qwen embedding model with an instruction: %s',
+  (model) => {
+    expect(embeddingInputForModel(model)).toEqual({ profile: 'e5', profileVersion: 2 });
+  },
+);
 it('versions new E5 instruction formatting while accepting older stored configurations', () => {
   expect(embeddingInputForModel('e5-mistral-7b-instruct')).toEqual({
     profile: 'e5',

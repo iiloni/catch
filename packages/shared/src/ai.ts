@@ -88,6 +88,8 @@ export function embeddingProfileForModel(model: string): EmbeddingConfiguration[
   const name = model.toLowerCase();
   if (/nomic[-_](?:embed[-_])?text/.test(name)) return 'nomic';
   if (/(?:^|[/_-])e5(?:$|[-_:])/.test(name)) return 'e5';
+  // Qwen3's embedding models take the same instruction on a query, and none on a document.
+  if (/qwen3?[-_]embed/.test(name)) return 'e5';
   // M3 and newer BGE families do not use the English v1 retrieval instruction.
   if (/bge[-_](?:small|base|large)(?:[-_]en)?(?:$|[-_:])/.test(name) && !/[-_]zh/.test(name))
     return 'bge';
@@ -100,7 +102,7 @@ export function embeddingInputForModel(
   const profile = embeddingProfileForModel(model);
   return {
     profile,
-    profileVersion: profile === 'e5' && /instruct|mistral/i.test(model) ? 2 : undefined,
+    profileVersion: profile === 'e5' && /instruct|mistral|qwen/i.test(model) ? 2 : undefined,
   };
 }
 
@@ -166,6 +168,8 @@ export const aiConfigurationSchema = z.object({
   hasApiKey: z.boolean(),
   dimensions: z.number().int().positive().nullable(),
   revision: z.string().nullable(),
+  /** Below this similarity a note is left out of AI results; absent on older servers. */
+  similarityFloor: z.number().nullable().optional(),
   progress: aiProgressSchema,
 });
 export type AiConfiguration = z.infer<typeof aiConfigurationSchema>;

@@ -1,6 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fakeEmbeddingProvider } from '../../../../e2e/fixtures/embeddingProvider';
-import { chunkText, embed, formatInput, listModels, type Provider } from './provider';
+import {
+  chunkText,
+  embed,
+  formatInput,
+  listModels,
+  type Provider,
+  queryProvider,
+  sameDocumentFormat,
+} from './provider';
 
 let fake: Awaited<ReturnType<typeof fakeEmbeddingProvider>>;
 let provider: Provider;
@@ -20,6 +28,23 @@ afterAll(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   fake.state.fail = false;
+});
+
+it('queries with a corrected format only where indexed notes still match it', () => {
+  const base = { provider: 'vllm', baseUrl: 'http://llm/v1', apiKey: null } as const;
+  // Qwen was first saved as plain; its notes are sent unchanged either way.
+  const qwen = queryProvider({
+    ...base,
+    model: 'Qwen/Qwen3-Embedding-4B-GGUF',
+    profile: 'plain',
+  } as Provider);
+  expect(qwen).toMatchObject({ profile: 'e5', profileVersion: 2 });
+  expect(formatInput('bike', qwen.profile, true, qwen.profileVersion)).toMatch(/^Instruct: /);
+  // An older E5 index prefixed its notes, so its queries keep the format it was built with.
+  const legacy = { ...base, model: 'e5-mistral-7b-instruct', profile: 'e5' } as Provider;
+  expect(queryProvider(legacy)).toBe(legacy);
+  expect(sameDocumentFormat({ profile: 'plain' }, { profile: 'e5', profileVersion: 2 })).toBe(true);
+  expect(sameDocumentFormat({ profile: 'e5' }, { profile: 'e5', profileVersion: 2 })).toBe(false);
 });
 
 describe('embedding adapters', () => {

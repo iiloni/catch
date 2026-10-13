@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { aiConfiguration, embeddingJobs, noteEmbeddings, notes } from '../db/schema';
+import { calibrateSearch } from './calibration';
 import { enqueueMissing, readConfiguration } from './configuration';
 import { openCredential } from './credentials';
 import { chunkText, embed, formatInput, ProviderError } from './provider';
@@ -268,6 +269,9 @@ export function startEmbeddingWorker() {
       for (let batch = 0; batch < 8 && !signal.aborted; batch++) {
         if (!(await processEmbeddingBatch(signal))) break;
       }
+      // After the queue, which it waits for. A provider that is down fails here quietly and
+      // the next tick tries again.
+      if (!signal.aborted) await calibrateSearch(signal).catch(() => {});
     })()
       .catch(() => console.error('Embedding worker could not access its queue.'))
       .finally(() => {

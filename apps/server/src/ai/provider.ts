@@ -1,4 +1,8 @@
-import { type EmbeddingConfiguration, modelKindFromName } from '@catch/shared';
+import {
+  type EmbeddingConfiguration,
+  embeddingInputForModel,
+  modelKindFromName,
+} from '@catch/shared';
 import { z } from 'zod';
 
 export class ProviderError extends Error {
@@ -36,6 +40,37 @@ export function formatInput(
     default:
       return text;
   }
+}
+
+/**
+ * The provider as queries should address it. A model's query format can be corrected after
+ * its notes were indexed (Qwen's instruction was), and where its notes are formatted the same
+ * either way, searches use the corrected one without waiting for an admin to save again.
+ */
+export function queryProvider<T extends EmbeddingConfiguration>(provider: T): T {
+  const current = { ...provider, ...embeddingInputForModel(provider.model) };
+  return sameDocumentFormat(provider, current) ? current : provider;
+}
+
+/** Whether notes indexed with one format still match the other. */
+export function sameDocumentFormat(
+  a: Pick<EmbeddingConfiguration, 'profile' | 'profileVersion'>,
+  b: Pick<EmbeddingConfiguration, 'profile' | 'profileVersion'>,
+) {
+  return (
+    formatInput('', a.profile, false, a.profileVersion) ===
+    formatInput('', b.profile, false, b.profileVersion)
+  );
+}
+
+export function sameQueryFormat(
+  a: Pick<EmbeddingConfiguration, 'profile' | 'profileVersion'>,
+  b: Pick<EmbeddingConfiguration, 'profile' | 'profileVersion'>,
+) {
+  return (
+    formatInput('', a.profile, true, a.profileVersion) ===
+    formatInput('', b.profile, true, b.profileVersion)
+  );
 }
 
 /** Admin-selected destinations may be on a private network; user-controlled note URLs cannot. */

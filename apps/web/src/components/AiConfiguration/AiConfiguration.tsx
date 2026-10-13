@@ -330,6 +330,12 @@ export function AiConfiguration({ onAccessDenied }: { onAccessDenied: () => void
               {progress.lastError && (
                 <p className="text-destructive text-sm">{progress.lastError}</p>
               )}
+              {typeof saved.similarityFloor === 'number' && (
+                <p className="text-muted-foreground text-sm">
+                  Notes scoring under {saved.similarityFloor.toFixed(2)} are left out of AI results,
+                  measured for this model.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
