@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HapticFeedbackPlugin.class);
         registerPlugin(AttachmentsPlugin.class);
         registerPlugin(AppUpdatesPlugin.class);
+        registerPlugin(AppIconsPlugin.class);
         registerPlugin(KeyboardInsetsPlugin.class);
         registerPlugin(IncomingSharesPlugin.class);
         registerPlugin(OutgoingSharesPlugin.class);

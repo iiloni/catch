@@ -31,7 +31,6 @@ case "$channel" in
     favicon_source="$brand_dir/preview/catch-favicon-preview.svg"
     background_source="$brand_dir/preview/catch-adaptive-preview-background.svg"
     public_dir="$public_dir/preview"
-    res_dir="$repo_dir/apps/web/android/app/src/preview/res"
     ;;
   dev)
     python3 "$brand_dir/dev/derive-dev-icons.py"
@@ -41,7 +40,6 @@ case "$channel" in
     favicon_source="$brand_dir/dev/catch-favicon-dev.svg"
     background_source="$brand_dir/dev/catch-adaptive-dev-background.svg"
     public_dir="$public_dir/dev"
-    res_dir="$repo_dir/apps/web/android/app/src/dev/res"
     ;;
   *) echo 'Usage: generate-brand-assets.sh [stable|preview|dev|all]' >&2; exit 1 ;;
 esac
@@ -110,6 +108,10 @@ render "$brand_dir/catch-adaptive-foreground.svg" 512 "$temp_dir/maskable-foregr
 magick "$temp_dir/maskable-background.png" "$temp_dir/maskable-foreground.png" \
   -compose Over -composite -strip "PNG32:$public_dir/maskable-512x512.png"
 
+# Named alternatives keep the default launcher resources independent of icon choices.
+launcher_suffix=""
+[[ "$channel" == stable ]] || launcher_suffix="_$channel"
+
 # Android tints the monochrome drawable by alpha. Retain the supplied transparent
 # line knockouts and apply the adaptive foreground's scale from the token file.
 python3 - "$brand_dir/catch-mark-mono-light.svg" "$brand_dir/catch-brand-tokens.json" \
@@ -141,12 +143,10 @@ for density in mdpi:48:96:108 hdpi:72:144:162 xhdpi:96:192:216 xxhdpi:144:288:32
   IFS=: read -r name launcher_size splash_size layer_size <<< "$density"
   mipmap_dir="$res_dir/mipmap-$name"
   mkdir -p "$mipmap_dir"
-  render_icon "$launcher_size" "$mipmap_dir/ic_launcher.png"
-  render_round "$launcher_size" "$mipmap_dir/ic_launcher_round.png"
-  render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background.png"
+  render_icon "$launcher_size" "$mipmap_dir/ic_launcher${launcher_suffix}.png"
+  render_round "$launcher_size" "$mipmap_dir/ic_launcher_round${launcher_suffix}.png"
+  render "$background_source" "$layer_size" "$mipmap_dir/ic_launcher_background${launcher_suffix}.png"
 
-  # Flavor overlays change only channel paint. Android resolves the adaptive XML,
-  # foreground and themed geometry from main for every flavor.
   [[ "$channel" == stable ]] || continue
   render "$brand_dir/catch-adaptive-foreground.svg" "$layer_size" \
     "$mipmap_dir/ic_launcher_foreground.png"

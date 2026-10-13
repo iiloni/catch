@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useApplyAppIcon } from '@/lib/appIcon';
 import { parseAppLink, watchAppLinks } from '@/lib/appLinks';
 import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
@@ -48,6 +49,7 @@ const toastOffset = { top: 'calc(var(--safe-top) + 0.5rem)' };
 const belowHeaderToastOffset = { top: 'calc(var(--safe-top) + var(--header-height) + 0.75rem)' };
 
 function Root() {
+  useApplyAppIcon();
   const navigate = useNavigate();
   useEffect(() => {
     let stopped = false;

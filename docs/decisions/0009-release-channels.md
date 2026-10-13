@@ -87,13 +87,24 @@ and preview must advance independently, including preview versions ahead of stab
   workflow's identity and publish forward releases in sequence so version codes increase.
 - The tag parser's channel output supplies build-only `CATCH_CHANNEL` to web builds and
   Android sync. A build without one, Docker included, is the `dev` channel, which is
-  never tagged or published and uses the light-blue development icon treatment; this is
-  build identification, not a new official release channel. Preview and dev browser/PWA icons
-  use distinct `/preview/` and `/dev/` paths, and their Android flavors overlay
-  launcher/background resources independently of debug/release build type.
-  Both reuse the stable adaptive foreground and monochrome geometry. Distribution icons and
-  the Settings > Update icon identify the channel; other application UI and theme colors
-  remain stable (see [brand assets](../branding.md)).
+  never tagged or published; this is build identification, not a new official release channel.
+  Released stable and preview builds default to stable artwork for favicons, Apple touch
+  icons, PWA icons and Android launcher icons. Dev builds retain the blue dev default and
+  offer Stable, Preview and Dev choices in Settings > General, even on a released server.
+  Released builds on a preview server offer Stable and Preview icons. The choice stays on the device, scoped to that server, and survives offline
+  launches; a confirmed non-preview server uses stable artwork in released builds. The
+  picker shows the selected icon above a text-only segmented control, using the actual
+  512 px PWA install asset on web and the installed launcher drawable on Android. Android
+  renders that drawable with the platform’s adaptive mask; the preview never substitutes
+  simplified favicon artwork. All Android flavors
+  ship stable and separately named preview/dev resources in `src/main/res`, with flavor
+  booleans selecting the stable or dev launcher default. Only dev APKs accept the Dev option.
+  Enabled launcher aliases select the icon without disabling MainActivity, preserving
+  shares, reminders, widgets and existing shortcuts. All PWA manifests use the same id,
+  start URL, scope and share target; installed PWA icon updates remain browser-controlled
+  and may need approval. Settings > Update always identifies the actual channel regardless
+  of the preference: amber for stable, purple for preview and light blue for development.
+  Other application UI and theme colors remain stable (see [brand assets](../branding.md)).
 - Stable Android uses `org.iloni.catchnotes`; preview uses `org.iloni.catchnotes.preview`
   and the name Catch Preview. They can coexist and keep separate device data. Both are
   signed with the operator's persistent release key, held in Actions secrets and backed up
