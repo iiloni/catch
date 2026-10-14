@@ -816,7 +816,10 @@ function DraggableNote({
     [setNodeRef, setActivatorNodeRef],
   );
   // The same press picks the card up, and that buzzes already.
-  const longPress = useLongPress(onSelect && (() => onSelect(note, true)));
+  const longPress = useLongPress(
+    onSelect && (() => onSelect(note, true)),
+    onSelect && selected === undefined ? () => onSelect(note, false) : undefined,
+  );
   const toggle =
     onSelect &&
     ((note: Note) => {
