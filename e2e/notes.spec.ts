@@ -602,6 +602,89 @@ test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
   await expect(card(page, 'Swipe me')).toBeHidden();
 });
 
+for (const direction of [-1, 1]) {
+  for (const reducedMotion of [false, true]) {
+    test(`archive confirmation reuses the ${direction === 1 ? 'left' : 'right'} cue icon${reducedMotion ? ' with reduced motion' : ''}`, async ({
+      page,
+      isMobile,
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        !isMobile && browserName !== 'firefox',
+        'Touch layout and Firefox rendering coverage.',
+      );
+      await page.emulateMedia({
+        reducedMotion: reducedMotion ? 'reduce' : 'no-preference',
+        colorScheme: direction === 1 ? 'light' : 'dark',
+      });
+      await signUp(page);
+      await seedNotes(page, [
+        {
+          title: 'Archive confirmation',
+          body: 'Keep the confirmation centered on a tall note. '.repeat(12),
+        },
+      ]);
+      const noteCard = card(page, 'Archive confirmation');
+      const bounds = await settledBox(noteCard);
+      const surface = page.locator('[data-swipe-archive]').filter({ has: noteCard });
+      const icon = surface.locator('[data-swipe-archive-icon]');
+      const originalIcon = await icon.elementHandle();
+      await expect(icon.locator('svg')).toHaveCount(1);
+
+      await page.clock.install();
+      await page.clock.pauseAt(new Date(Date.now() + 1000));
+      // Firefox has no CDP touch input. Drive the touch pointer handlers directly here;
+      // the preceding test covers the browser's native touch recognition in Chromium.
+      await surface.evaluate((element, dx) => {
+        const pointer = { bubbles: true, pointerId: 1, pointerType: 'touch', clientY: 50 };
+        const capture = element.setPointerCapture;
+        element.setPointerCapture = () => {};
+        element.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, clientX: 100 }));
+        element.dispatchEvent(new PointerEvent('pointermove', { ...pointer, clientX: 100 + dx }));
+        element.setPointerCapture = capture;
+      }, direction * 80);
+      await page.clock.runFor(160);
+      const edge = await icon.boundingBox();
+      if (!edge) throw new Error('Missing swipe icon');
+      expect(edge.x + edge.width / 2).toBeCloseTo(
+        direction === 1 ? bounds.x + 30 : bounds.x + bounds.width - 30,
+        0,
+      );
+      await testInfo.attach('swipe-cue', {
+        body: await page.screenshot({ clip: bounds, path: testInfo.outputPath('swipe-cue.png') }),
+        contentType: 'image/png',
+      });
+      await surface.dispatchEvent('pointerup', {
+        pointerId: 1,
+        pointerType: 'touch',
+        clientX: 100 + direction * 80,
+        clientY: 50,
+      });
+      await page.clock.runFor(reducedMotion ? 32 : 300);
+      expect(await icon.evaluate((element, original) => element === original, originalIcon)).toBe(
+        true,
+      );
+      const centered = await icon.boundingBox();
+      if (!centered) throw new Error('Missing confirmation icon');
+      expect(centered.x + centered.width / 2).toBeCloseTo(bounds.x + bounds.width / 2, 0);
+      expect(centered.y + centered.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
+      await testInfo.attach('archive-confirmation', {
+        body: await page.screenshot({
+          clip: bounds,
+          path: testInfo.outputPath('archive-confirmation.png'),
+        }),
+        contentType: 'image/png',
+      });
+      await page.clock.runFor(400);
+      await expect(noteCard).toBeHidden();
+      await expect(
+        page.locator('[data-sonner-toast]').filter({ hasText: 'Note archived' }),
+      ).toBeVisible();
+      await page.clock.resume();
+    });
+  }
+}
+
 test('swiping the open note down or up closes it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'The editor swipe is a touch gesture.');
   await signUp(page);

@@ -1,6 +1,6 @@
 import type { Note } from '@catch/shared';
 import { Archive } from 'lucide-react';
-import { animate, motion, useMotionValue, useTransform } from 'motion/react';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { type PointerEvent, useEffect, useRef } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
@@ -46,10 +46,18 @@ export function SwipeArchiveCard({
   onSelect,
 }: Props) {
   const swipeable = !lifted && selected === undefined;
+  const reducedMotion = useReducedMotion();
   const x = useMotionValue(0);
   // Clip the moving card to its slot, but let resting shadows and focus rings extend outside it.
   const overflow = useTransform(x, (offset) => (offset === 0 ? 'visible' : 'hidden'));
   const cueOpacity = useMotionValue(0);
+  const iconX = useMotionValue(0);
+  const iconScale = useMotionValue(1);
+  const iconColor = useTransform(
+    cueOpacity,
+    (opacity) =>
+      `color-mix(in oklab, var(--brand-foreground) ${opacity * 100}%, var(--foreground))`,
+  );
   const swipe = useRef<Swipe | null>(null);
   const suppressClick = useRef(false);
   const committing = useRef(false);
@@ -63,7 +71,7 @@ export function SwipeArchiveCard({
   }, [swipeable]);
 
   function setCue(active: boolean) {
-    animate(cueOpacity, active ? 1 : 0, { duration: 0.14, ease: 'easeOut' });
+    animate(cueOpacity, active ? 1 : 0, { duration: reducedMotion ? 0 : 0.14, ease: 'easeOut' });
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -98,6 +106,8 @@ export function SwipeArchiveCard({
       event.currentTarget.setPointerCapture?.(event.pointerId);
     }
     x.set(Math.max(-MAX_SWIPE, Math.min(MAX_SWIPE, dx)));
+    // Keep one icon on the exposed edge, including when the finger reverses direction.
+    iconX.set(-Math.sign(dx) * (event.currentTarget.clientWidth / 2 - 30));
     const crossed = Math.abs(dx) >= ARCHIVE_THRESHOLD;
     if (crossed !== state.crossed) {
       if (crossed) haptics.threshold();
@@ -112,7 +122,7 @@ export function SwipeArchiveCard({
     swipe.current = null;
     const dx = event.clientX - state.startX;
     if (!state.locked || Math.abs(dx) < ARCHIVE_THRESHOLD) {
-      animate(x, 0, springs.snappy);
+      animate(x, 0, reducedMotion ? { duration: 0 } : springs.snappy);
       setCue(false);
       return;
     }
@@ -123,17 +133,26 @@ export function SwipeArchiveCard({
     }
     haptics.success();
     animate(x, Math.sign(dx) * (event.currentTarget.clientWidth + 32), {
-      duration: 0.16,
+      duration: reducedMotion ? 0 : 0.16,
       ease: 'easeOut',
     });
+    // The revealed icon travels into the slot as the card clears it, then settles.
+    animate(iconX, 0, {
+      duration: reducedMotion ? 0 : 0.22,
+      delay: reducedMotion ? 0 : 0.06,
+      ease: 'easeOut',
+    });
+    if (!reducedMotion) {
+      animate(iconScale, [1, 1.2, 1], { duration: 0.18, delay: 0.16, ease: 'easeInOut' });
+    }
     // Commit independently of the animation, which may stop if the view unmounts.
-    window.setTimeout(() => onArchive(note), 160);
+    window.setTimeout(() => onArchive(note), reducedMotion ? 120 : 360);
   }
 
   function onPointerCancel(event: PointerEvent<HTMLDivElement>) {
     if (swipe.current?.pointerId !== event.pointerId) return;
     swipe.current = null;
-    animate(x, 0, springs.snappy);
+    animate(x, 0, reducedMotion ? { duration: 0 } : springs.snappy);
     setCue(false);
   }
 
@@ -156,26 +175,24 @@ export function SwipeArchiveCard({
       <div
         aria-hidden
         className={cn(
-          'absolute inset-0 flex items-center justify-between rounded-2xl bg-foreground/[0.07] px-5 text-foreground/60',
+          'absolute inset-0 grid place-items-center rounded-2xl bg-foreground/[0.07]',
           UNDER_CARD_ONLY,
           bare && 'invisible',
         )}
       >
-        <Archive className="size-5" />
-        <Archive className="size-5" />
+        <motion.div
+          data-swipe-archive-cue
+          className="absolute inset-0 rounded-2xl bg-brand/70"
+          style={{ opacity: cueOpacity }}
+        />
+        <motion.div
+          data-swipe-archive-icon
+          className="relative"
+          style={{ x: iconX, scale: iconScale, color: iconColor }}
+        >
+          <Archive className="size-5" />
+        </motion.div>
       </div>
-      <motion.div
-        data-swipe-archive-cue
-        aria-hidden
-        className={cn(
-          'absolute inset-0 flex items-center justify-between rounded-2xl bg-brand/70 px-5 text-brand-foreground',
-          UNDER_CARD_ONLY,
-        )}
-        style={{ opacity: cueOpacity }}
-      >
-        <Archive className="size-5" />
-        <Archive className="size-5" />
-      </motion.div>
       <motion.div style={{ x }}>
         <NoteCard
           note={note}
