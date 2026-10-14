@@ -8,6 +8,7 @@ const second = 'https://example.com/second';
 test('a gallery preview image opens its link while the title opens the note', async ({
   page,
   context,
+  isMobile,
 }) => {
   const hash = 'b'.repeat(64);
   // Keep preview metadata deterministic while exercising the real shape subscription.
@@ -62,6 +63,7 @@ test('a gallery preview image opens its link while the title opens the note', as
   for (const keyboard of [false, true]) {
     const opened = page.waitForEvent('popup');
     if (keyboard) await imageLink.press('Enter');
+    else if (isMobile) await imageLink.tap();
     else await imageLink.click();
     const popup = await opened;
     await expect(popup).toHaveURL(`${first}#details`);
@@ -75,6 +77,8 @@ test('a gallery preview image opens its link while the title opens the note', as
     .click({ position: { x: 20, y: 6 } });
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`note=${id}`));
+  // Shape long polls can finish during teardown; discard their pending fixture handlers.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 test('any link can be the card preview, and the choice can return to text', async ({ page }) => {
