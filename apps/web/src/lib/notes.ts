@@ -34,7 +34,14 @@ import { getSealedFiles, insertVaultNote, isVaultNote } from './vault';
 type NoteChanges = Partial<
   Pick<
     Note,
-    'content' | 'color' | 'status' | 'isPinned' | 'isArchived' | 'deletedAt' | 'galleryPreviewUrl'
+    | 'content'
+    | 'color'
+    | 'status'
+    | 'isPinned'
+    | 'isArchived'
+    | 'deletedAt'
+    | 'galleryPreviewUrl'
+    | 'position'
   >
 >;
 
@@ -137,6 +144,7 @@ export function getNote(id: string): Note | undefined {
 function updateSharedNote(id: string, changes: NoteChanges) {
   return write(() =>
     sharedNotesCollection.update(id, (draft) => {
+      if (changes.position !== undefined) draft.position = changes.position;
       if (changes.isPinned !== undefined) draft.isPinned = changes.isPinned;
       if (changes.isArchived !== undefined) draft.isArchived = changes.isArchived;
     }),
@@ -157,16 +165,18 @@ export function updateNote(id: string, changes: NoteChanges) {
  * Moves a note to `index` among `others`, the notes it is shown with, in order and
  * without itself. Unlike an edit, this leaves `updatedAt` alone.
  */
-export function moveNote(id: string, others: readonly Note[], index: number) {
+export function moveNote(id: string, others: readonly Note[], index: number, isPinned?: boolean) {
   const position = positionForMove(others, index);
   return write(() => {
     if (sharedNotesCollection.has(id)) {
       sharedNotesCollection.update(id, (draft) => {
         draft.position = position;
+        if (isPinned !== undefined) draft.isPinned = isPinned;
       });
     } else {
       noteStore.update(id, (draft) => {
         draft.position = position;
+        if (isPinned !== undefined) draft.isPinned = isPinned;
       });
     }
   });
@@ -267,7 +277,15 @@ export function setNoteColor(id: string, color: NoteColor) {
   return setPrimaryTag(id, root?.id ?? null, root ? 'default' : color);
 }
 
-export const setNotePinned = (id: string, isPinned: boolean) => updateNote(id, { isPinned });
+export function setNotePinned(id: string, isPinned: boolean) {
+  const note = getNote(id);
+  // Unpinning in the gallery returns a note to the front, even after newer notes arrive.
+  const position =
+    note?.isPinned && !isPinned && note.status === null && !note.isArchived && !note.deletedAt
+      ? firstPosition(isVaultNote(id))
+      : undefined;
+  return updateNote(id, { isPinned, ...(position === undefined ? {} : { position }) });
+}
 
 export function setNoteArchived(id: string, isArchived: boolean) {
   const isPinned = getNote(id)?.isPinned ?? false;
