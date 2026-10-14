@@ -2,7 +2,7 @@ import { type MouseEvent, type PointerEvent, useCallback, useEffect, useRef } fr
 
 /**
  * A touch held this long without moving further than the tolerance picks a card up and
- * selects it. Both happen together, as in Keep.
+ * selects it. Moving in that same press can undo the selection.
  */
 export const LONG_PRESS_MS = 250;
 export const LONG_PRESS_TOLERANCE = 8;
@@ -24,11 +24,18 @@ export function swallowNextClick() {
  * Pointer handlers that call `onLongPress` when a touch (or pen) is held still. The click
  * that ends the press is swallowed, so it does not also open or toggle the note. A right
  * click is the mouse's long press, and calls it in place of the browser's menu.
+ * `onMove` is captured when the hold fires and called once if that press then moves.
  */
-export function useLongPress(onLongPress: (() => void) | undefined) {
-  const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
-  const callback = useRef(onLongPress);
-  callback.current = onLongPress;
+export function useLongPress(onLongPress: (() => void) | undefined, onMove?: () => void) {
+  const press = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    timer: number;
+    onMove?: () => void;
+  } | null>(null);
+  const callbacks = useRef({ onLongPress, onMove });
+  callbacks.current = { onLongPress, onMove };
   const touching = useRef(false);
 
   const cancel = useCallback(() => {
@@ -44,9 +51,9 @@ export function useLongPress(onLongPress: (() => void) | undefined) {
       if (!touching.current || !event.isPrimary) return;
       cancel();
       const timer = window.setTimeout(() => {
-        press.current = null;
+        if (press.current) press.current.onMove = callbacks.current.onMove;
         swallowNextClick();
-        callback.current?.();
+        callbacks.current.onLongPress?.();
       }, LONG_PRESS_MS);
       press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, timer };
     },
@@ -54,14 +61,18 @@ export function useLongPress(onLongPress: (() => void) | undefined) {
       const state = press.current;
       if (state?.pointerId !== event.pointerId) return;
       const distance = Math.hypot(event.clientX - state.x, event.clientY - state.y);
-      if (distance > LONG_PRESS_TOLERANCE) cancel();
+      if (distance > LONG_PRESS_TOLERANCE) {
+        const onMove = state.onMove;
+        cancel();
+        onMove?.();
+      }
     },
     onPointerUp: cancel,
     onPointerCancel: cancel,
     onContextMenu(event: MouseEvent<HTMLElement>) {
       event.preventDefault();
       // A held touch also asks for a menu, after its long press has been answered.
-      if (!touching.current) callback.current?.();
+      if (!touching.current) callbacks.current.onLongPress?.();
     },
   };
 }

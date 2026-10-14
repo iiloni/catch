@@ -540,6 +540,7 @@ const GridCard = memo(function GridCard({
         if (!movable) haptics.longPress();
         onSelect(note, true);
       }),
+    movable && onSelect && selected === undefined ? () => onSelect(note, false) : undefined,
   );
   // dnd-kit re-renders every draggable as the pointer moves; the card itself need not.
   const card = useMemo(() => {
