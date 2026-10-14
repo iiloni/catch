@@ -231,16 +231,39 @@ test('gallery keyboard drags cross pin groups and Escape leaves the note unchang
   await signUp(page);
   await seedNotes(page, ['Plain', 'Pinned']);
   await pin(page, 'Pinned', true);
-  await settledBox(cell(page, 'Plain'));
-  await cell(page, 'Plain').focus();
-  await page.keyboard.press('Space');
-  for (let step = 0; step < 8; step++) await page.keyboard.press('ArrowUp');
+  const plain = cell(page, 'Plain');
+  const pinned = await settledBox(cell(page, 'Pinned'));
+  await settledBox(plain);
+  const before = await states(page);
+  await plain.focus();
+
+  async function pickUpAndMove() {
+    await expect(plain).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(plain).toHaveAttribute('aria-pressed', 'true');
+    // dnd-kit attaches its keyboard listener in a deferred task. Let the pickup paint
+    // and settle before moving, then observe each move before sending another key.
+    let box = await settledBox(plain);
+    for (let step = 0; step < 8; step++) {
+      const previousY = box.y;
+      await page.keyboard.press('ArrowUp');
+      await expect.poll(async () => (await plain.boundingBox())?.y).toBeLessThan(previousY);
+      const moved = await plain.boundingBox();
+      if (!moved) throw new Error('Missing held note');
+      box = moved;
+    }
+    expect(box.y + box.height / 2).toBeLessThan(pinned.y + pinned.height);
+  }
+
+  await pickUpAndMove();
   await page.keyboard.press('Escape');
-  expect((await states(page)).find((note) => note.title.includes('Plain'))?.pin).toBe(false);
-  await settledBox(cell(page, 'Plain'));
+  await expect(plain).not.toHaveAttribute('aria-pressed');
+  await expect(plain).toBeFocused();
+  expect(await states(page)).toEqual(before);
+  await settledBox(plain);
+  await pickUpAndMove();
   await page.keyboard.press('Space');
-  for (let step = 0; step < 8; step++) await page.keyboard.press('ArrowUp');
-  await page.keyboard.press('Space');
+  await expect(plain).not.toHaveAttribute('aria-pressed');
   await expect
     .poll(async () => (await states(page)).find((note) => note.title.includes('Plain'))?.pin)
     .toBe(true);
