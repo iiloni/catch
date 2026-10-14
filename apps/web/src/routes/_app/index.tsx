@@ -28,7 +28,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
-import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
@@ -99,8 +98,6 @@ function GalleryPage() {
     : notes;
   const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);
   const sorted = sortNotes(shown, sort.field, sort.direction);
-  const pinned = sorted.filter((note) => note.isPinned);
-  const others = sorted.filter((note) => !note.isPinned);
   // Notes can only be dragged into place while they are shown in that order.
   const onMove = sort.field === 'position' ? moveNote : undefined;
 
@@ -158,51 +155,19 @@ function GalleryPage() {
             </EmptyState>
           )
         ) : (
-          <>
-            {pinned.length > 0 && (
-              <NoteSection label="Pinned">
-                <NoteGrid
-                  notes={pinned}
-                  layout={activeLayout}
-                  onOpen={(note, card) => open(note.id, card)}
-                  onArchive={(note) => setNoteArchived(note.id, true)}
-                  onMove={onMove}
-                  selected={selection.ids}
-                  onSelect={selection.select}
-                />
-              </NoteSection>
-            )}
-            {others.length > 0 && (
-              <NoteSection label={pinned.length > 0 ? 'Others' : undefined}>
-                <NoteGrid
-                  notes={others}
-                  layout={activeLayout}
-                  onOpen={(note, card) => open(note.id, card)}
-                  onArchive={(note) => setNoteArchived(note.id, true)}
-                  onMove={onMove}
-                  selected={selection.ids}
-                  onSelect={selection.select}
-                />
-              </NoteSection>
-            )}
-          </>
+          <NoteGrid
+            notes={sorted}
+            groupPinned
+            layout={activeLayout}
+            onOpen={(note, card) => open(note.id, card)}
+            onArchive={(note) => setNoteArchived(note.id, true)}
+            onMove={onMove}
+            selected={selection.ids}
+            onSelect={selection.select}
+          />
         )}
       </motion.section>
     </>
-  );
-}
-
-function NoteSection({ label, children }: { label?: string; children: React.ReactNode }) {
-  const entry = useEntryMotion(`gallery:section:${label}`, Boolean(label), 40);
-  return (
-    <div className="flex flex-col gap-2">
-      {label && (
-        <motion.h2 style={entry} className="px-1 font-medium text-muted-foreground text-sm">
-          {label}
-        </motion.h2>
-      )}
-      {children}
-    </div>
   );
 }
 
