@@ -207,7 +207,8 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   }, id);
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
   await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog').getByText('Synced', { exact: true })).toBeVisible({
+  // The previous Synced label can still be fading out beside the new Syncing label.
+  await expect(page.getByRole('dialog').locator('[data-sync-pill]')).toHaveText('Synced', {
     timeout: 30000,
   });
   await page.reload();
@@ -235,7 +236,7 @@ test('attachments preview, retain their catalog without blocks, and remove priva
     const { editorControls } = await import('/src/lib/dockState.ts');
     return editorControls.get().getContent();
   });
-  await expect(page.getByRole('dialog').getByText('Synced', { exact: true })).toBeVisible({
+  await expect(page.getByRole('dialog').locator('[data-sync-pill]')).toHaveText('Synced', {
     timeout: 30000,
   });
   // Each device receives Electric independently. The editor reads content once on mount,
