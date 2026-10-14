@@ -1,6 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 import { bearerToken, card, seedNotes, settledBox, signUp } from './helpers';
 
+test.use({ video: 'on' });
+
 async function pin(page: Page, title: string, isPinned: boolean) {
   await page.evaluate(
     async ({ title, isPinned }) => {
@@ -159,8 +161,6 @@ test('gallery drags can land in empty pinned and unpinned sections', async ({ pa
 });
 
 test.describe('motion', () => {
-  test.use({ video: 'on' });
-
   test('gallery pin changes animate the moved card and displaced cards', async ({
     page,
   }, testInfo) => {
@@ -266,7 +266,7 @@ test('gallery unpinning and dragging work on sealed vault notes', async ({ page,
     await createNote({
       userId: getSignedInUser().id,
       vault: true,
-      content: [{ type: 'heading', props: { level: 3 }, content: 'New secret' }],
+      content: [{ type: 'heading', props: { level: 3 }, content: 'Vault peer' }],
     }).transaction.isPersisted.promise;
   });
   await expect(card(page, 'Secret')).toBeVisible();
@@ -278,6 +278,15 @@ test('gallery unpinning and dragging work on sealed vault notes', async ({ page,
     .poll(async () => (await states(page)).find((note) => note.title.includes('Secret'))?.pin)
     .toBe(true);
   await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { vaultStatus } = await import('/src/lib/vault.ts');
+        return vaultStatus.get();
+      }),
+    )
+    .toBe('unlocked');
+  await page.getByRole('button', { name: 'Open the vault' }).click();
   await expect(card(page, 'Secret')).toBeVisible();
   expect((await states(page)).find((note) => note.title.includes('Secret'))?.pin).toBe(true);
   await expect(card(page, 'Ordinary')).toHaveCount(0);
