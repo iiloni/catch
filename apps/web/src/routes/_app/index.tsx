@@ -144,27 +144,29 @@ function GalleryPage() {
         style={{ x: gutterShift }}
         className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        {awaitingSync ? null : shown.length === 0 ? (
-          vault ? (
-            <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
-              Tap + to write a note only your devices can read.
-            </EmptyState>
-          ) : (
-            <EmptyState icon={Lightbulb} title="Catch your first note">
-              Tap + to write something down. It lands here.
-            </EmptyState>
-          )
-        ) : (
-          <NoteGrid
-            notes={sorted}
-            groupPinned
-            layout={activeLayout}
-            onOpen={(note, card) => open(note.id, card)}
-            onArchive={(note) => setNoteArchived(note.id, true)}
-            onMove={onMove}
-            selected={selection.ids}
-            onSelect={selection.select}
-          />
+        {awaitingSync ? null : (
+          <div>
+            <NoteGrid
+              notes={sorted}
+              groupPinned
+              layout={activeLayout}
+              onOpen={(note, card) => open(note.id, card)}
+              onArchive={(note) => setNoteArchived(note.id, true)}
+              onMove={onMove}
+              selected={selection.ids}
+              onSelect={selection.select}
+            />
+            {shown.length === 0 &&
+              (vault ? (
+                <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+                  Tap + to write a note only your devices can read.
+                </EmptyState>
+              ) : (
+                <EmptyState icon={Lightbulb} title="Catch your first note">
+                  Tap + to write something down. It lands here.
+                </EmptyState>
+              ))}
+          </div>
         )}
       </motion.section>
     </>

@@ -10,7 +10,15 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { animate, type MotionValue, motion, motionValue, useReducedMotion } from 'motion/react';
+import {
+  AnimatePresence,
+  animate,
+  type MotionValue,
+  motion,
+  motionValue,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
 import { memo, useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
@@ -544,26 +552,28 @@ export function NoteGrid({
             Others
           </motion.h2>
         )}
-        {grouped.map(
-          (note) =>
-            rendered.has(note.id) && (
-              <GridCard
-                key={note.id}
-                note={note}
-                place={placeOf(note.id)}
-                placed={isMeasured(note, columnWidth)}
-                layoutReady={!pending}
-                entryDelay={entryDelays.get(note.id) ?? 0}
-                lifted={note.id === drag?.id}
-                movable={Boolean(onMove)}
-                selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
-                onSelect={onSelect}
-                register={register}
-                onOpen={onOpen}
-                onArchive={onArchive}
-              />
-            ),
-        )}
+        <AnimatePresence initial={false}>
+          {grouped.map(
+            (note) =>
+              rendered.has(note.id) && (
+                <GridCard
+                  key={note.id}
+                  note={note}
+                  place={placeOf(note.id)}
+                  placed={isMeasured(note, columnWidth)}
+                  layoutReady={!pending}
+                  entryDelay={entryDelays.get(note.id) ?? 0}
+                  lifted={note.id === drag?.id}
+                  movable={Boolean(onMove)}
+                  selected={selecting ? Boolean(selected?.has(note.id)) : undefined}
+                  onSelect={onSelect}
+                  register={register}
+                  onOpen={onOpen}
+                  onArchive={onArchive}
+                />
+              ),
+          )}
+        </AnimatePresence>
       </div>
     </DndContext>
   );
@@ -598,6 +608,7 @@ const GridCard = memo(function GridCard({
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive?: (note: Note) => void;
 }) {
+  const isPresent = useIsPresent();
   const entry = useEntryMotion(`note:${note.id}`, placed && layoutReady, entryDelay);
   const { setNodeRef, setActivatorNodeRef, attributes, listeners } = useDraggable({
     id: note.id,
@@ -654,12 +665,13 @@ const GridCard = memo(function GridCard({
     <motion.div
       ref={ref}
       data-note-cell={note.id}
+      inert={!isPresent}
       {...(movable ? { ...attributes, ...listeners, 'aria-label': 'Move note' } : {})}
       {...longPress}
       style={{
         x: place.x,
         y: place.y,
-        zIndex: place.z,
+        zIndex: isPresent ? place.z : 1,
         width: place.width,
         visibility: placed ? undefined : 'hidden',
       }}

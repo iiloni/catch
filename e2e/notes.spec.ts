@@ -618,7 +618,11 @@ for (const direction of [-1, 1]) {
         colorScheme: direction === 1 ? 'light' : 'dark',
       });
       await signUp(page);
+      // Cover both a closing masonry gap and the last card yielding to the empty state.
+      const peerTitles =
+        direction === 1 ? ['Remaining one', 'Remaining two', 'Remaining three'] : [];
       await seedNotes(page, [
+        ...peerTitles,
         {
           title: 'Archive confirmation',
           body: 'Keep the confirmation centered on a tall note. '.repeat(12),
@@ -626,7 +630,12 @@ for (const direction of [-1, 1]) {
       ]);
       const noteCard = card(page, 'Archive confirmation');
       const bounds = await settledBox(noteCard);
-      const surface = page.locator('[data-swipe-archive]').filter({ has: noteCard });
+      const peerBounds = await Promise.all(
+        peerTitles.map((title) => settledBox(card(page, title))),
+      );
+      const noteId = await noteCard.getAttribute('data-note-card');
+      // Exiting cards are inert, so role locators intentionally stop finding them.
+      const surface = page.locator(`[data-note-cell="${noteId}"] [data-swipe-archive]`);
       const icon = surface.locator('[data-swipe-archive-icon]');
       const originalIcon = await icon.elementHandle();
       await expect(icon.locator('svg')).toHaveCount(1);
@@ -675,6 +684,59 @@ for (const direction of [-1, 1]) {
         }),
         contentType: 'image/png',
       });
+      if (!reducedMotion) {
+        await page.clock.runFor(80);
+        await expect(surface).toHaveAttribute('inert', '');
+        await page.clock.runFor(80);
+        // The archive has committed and the grid is moving, but its confirmation remains.
+        const opacity = await surface.evaluate((element) =>
+          Number(getComputedStyle(element).opacity),
+        );
+        expect(opacity).toBeGreaterThan(0);
+        expect(opacity).toBeLessThan(1);
+        const fading = await icon.boundingBox();
+        if (!fading) throw new Error('Missing fading confirmation');
+        expect(fading.x + fading.width / 2).toBeCloseTo(bounds.x + bounds.width / 2, 0);
+        expect(fading.y + fading.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
+        if (peerTitles.length) {
+          const moving = await Promise.all(
+            peerTitles.map((title) => card(page, title).boundingBox()),
+          );
+          expect(
+            moving.some(
+              (box, index) =>
+                box && (box.x !== peerBounds[index]?.x || box.y !== peerBounds[index]?.y),
+            ),
+          ).toBe(true);
+        } else {
+          await expect(page.getByText('Catch your first note', { exact: true })).toBeVisible();
+        }
+        await testInfo.attach('confirmation-during-grid-reflow', {
+          body: await page.screenshot({
+            path: testInfo.outputPath('confirmation-during-grid-reflow.png'),
+          }),
+          contentType: 'image/png',
+        });
+        if (peerTitles.length) {
+          // An immediate Undo revives the fading card rather than leaving its face offscreen.
+          await page
+            .locator('[data-sonner-toast]')
+            .getByRole('button', { name: 'Undo' })
+            .evaluate((button) => button.click());
+          await page.clock.runFor(32);
+          await expect(surface).not.toHaveAttribute('inert', '');
+          expect(
+            await icon.evaluate((element, original) => element === original, originalIcon),
+          ).toBe(true);
+          await page.clock.runFor(400);
+          const restored = await noteCard.boundingBox();
+          expect(restored?.x).toBeCloseTo(bounds.x, 0);
+          await page.clock.resume();
+          await noteCard.getByRole('button', { name: 'Open note' }).click();
+          await expect(page.getByRole('dialog')).toBeVisible();
+          return;
+        }
+      }
       await page.clock.runFor(400);
       await expect(noteCard).toBeHidden();
       await expect(

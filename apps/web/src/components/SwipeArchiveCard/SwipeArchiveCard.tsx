@@ -1,7 +1,14 @@
 import type { Note } from '@catch/shared';
 import { Archive } from 'lucide-react';
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { type PointerEvent, useEffect, useRef } from 'react';
+import {
+  animate,
+  motion,
+  useMotionValue,
+  usePresence,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
+import { type PointerEvent, useEffect, useLayoutEffect, useRef } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
@@ -47,7 +54,13 @@ export function SwipeArchiveCard({
 }: Props) {
   const swipeable = !lifted && selected === undefined;
   const reducedMotion = useReducedMotion();
+  const [isPresent, safeToRemove] = usePresence();
+  // Grid updates must not restart a fade already in progress.
+  const finishExit = useRef(safeToRemove);
+  finishExit.current = safeToRemove;
+  const wasPresent = useRef(isPresent);
   const x = useMotionValue(0);
+  const opacity = useMotionValue(1);
   // Clip the moving card to its slot, but let resting shadows and focus rings extend outside it.
   const overflow = useTransform(x, (offset) => (offset === 0 ? 'visible' : 'hidden'));
   const cueOpacity = useMotionValue(0);
@@ -64,6 +77,34 @@ export function SwipeArchiveCard({
   // No backing under a card that is lifted into the editor: its slot reads as empty.
   const hidden = useIsCardHidden(note.id);
   const bare = lifted || hidden;
+
+  useLayoutEffect(() => {
+    // Undo can restore the same card before its exit fade finishes.
+    if (isPresent && !wasPresent.current) {
+      x.jump(0);
+      cueOpacity.jump(0);
+      iconX.jump(0);
+      iconScale.jump(1);
+      opacity.jump(1);
+      committing.current = false;
+      suppressClick.current = false;
+    }
+    wasPresent.current = isPresent;
+  }, [isPresent, x, cueOpacity, iconX, iconScale, opacity]);
+
+  useEffect(() => {
+    if (isPresent) return;
+    if (!committing.current || reducedMotion) {
+      finishExit.current?.();
+      return;
+    }
+    const fade = animate(opacity, 0, {
+      duration: 0.18,
+      ease: 'easeOut',
+      onComplete: () => finishExit.current?.(),
+    });
+    return () => fade.stop();
+  }, [isPresent, reducedMotion, opacity]);
 
   // A held finger that starts dragging (or selecting) the card must not also swipe it.
   useEffect(() => {
@@ -159,8 +200,9 @@ export function SwipeArchiveCard({
   return (
     <motion.div
       data-swipe-archive
+      inert={!isPresent}
       className="group/swipe relative rounded-2xl touch-pan-y"
-      style={{ overflow }}
+      style={{ overflow, opacity }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
