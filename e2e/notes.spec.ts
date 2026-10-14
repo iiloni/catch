@@ -910,6 +910,7 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
       ],
     });
   }
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await page.waitForTimeout(100);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(order).toEqual(['One', 'Three', 'Two']);
@@ -972,6 +973,7 @@ test('a long press picks up a gallery note to move it', async ({ page, isMobile 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
   await page.waitForTimeout(400);
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   for (let step = 1; step <= 10; step++) {
     const point = {
       x: from.x + ((to.x - from.x) * step) / 10,
@@ -979,10 +981,12 @@ test('a long press picks up a gallery note to move it', async ({ page, isMobile 
     };
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [point] });
   }
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
   await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await page.reload();
   await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
 });
@@ -992,6 +996,32 @@ function cell(page: Page, title: string) {
   return page
     .locator('[data-note-cell]')
     .filter({ has: page.getByRole('heading', { name: title }) });
+}
+
+for (const view of ['Gallery', 'Deck'] as const) {
+  test(`a long press drag in ${view} keeps a selection from an earlier press`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Long press is a touch gesture.');
+    await signUp(page);
+    await seedNotes(page, ['One', 'Two'], view === 'Deck' ? 'new' : undefined);
+    if (view === 'Deck') await openDeck(page);
+    await longPress(page, card(page, 'One'));
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    const from = await centerOf(page, 'One');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: from.x + 30, y: from.y }],
+    });
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    await expect(page.getByRole('dialog')).toBeHidden();
+  });
 }
 
 /** Selects a note with the check that appears when hovering its card. */

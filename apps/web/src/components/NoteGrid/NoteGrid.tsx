@@ -10,7 +10,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { animate, type MotionValue, motion, motionValue } from 'motion/react';
+import { animate, type MotionValue, motion, motionValue, useReducedMotion } from 'motion/react';
 import { memo, useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
@@ -23,7 +23,7 @@ import {
   swallowNextClick,
   useLongPress,
 } from '@/lib/longPress';
-import { dropIndex, masonry, type Point } from '@/lib/masonry';
+import { dropIndex, galleryMasonry, masonry, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -40,13 +40,15 @@ const RESIZE_SETTLE_MS = 150;
 type Props = {
   notes: Note[];
   layout?: 'masonry' | 'single-column';
+  /** Keep pinned and other gallery notes in one animated grid. */
+  groupPinned?: boolean;
   onOpen: (note: Note, card: HTMLElement) => void;
   onArchive?: (note: Note) => void;
   /**
    * Lets notes be rearranged by dragging (after a long press on touch). Receives the
    * other notes, in order, and the index the note was dropped at among them.
    */
-  onMove?: (id: string, others: Note[], index: number) => void;
+  onMove?: (id: string, others: Note[], index: number, isPinned?: boolean) => void;
   /**
    * The selected notes' ids. With `onSelect`, a long press selects a note and, while any
    * note is selected, a tap selects or deselects one instead of opening it.
@@ -134,6 +136,7 @@ type Drag = {
   height: number;
   /** Where it would land: an index among the other notes. */
   index: number;
+  isPinned: boolean;
 };
 
 /**
@@ -163,12 +166,14 @@ type Place = {
 export function NoteGrid({
   notes,
   layout: viewLayout = 'masonry',
+  groupPinned = false,
   onOpen,
   onArchive,
   onMove,
   selected,
   onSelect,
 }: Props) {
+  const reducedMotion = useReducedMotion();
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View | null>(null);
@@ -178,7 +183,11 @@ export function NoteGrid({
   const places = useRef(new Map<string, Place>());
   const [drag, setDrag] = useState<Drag | null>(null);
   // The order just dropped, shown until the move comes back through `notes`.
-  const [dropped, setDropped] = useState<{ ids: string[]; basis: string } | null>(null);
+  const [dropped, setDropped] = useState<{
+    ids: string[];
+    basis: string;
+    pin?: { id: string; isPinned: boolean };
+  } | null>(null);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A long press before dragging keeps touch scrolling (and swiping to archive) working.
@@ -199,7 +208,7 @@ export function NoteGrid({
   const settling = useRef({ places: new Set<Place>(), cancel: () => {} });
   useLayoutEffect(() => () => settling.current.cancel(), []);
 
-  const basis = notes.map((note) => note.id).join();
+  const basis = notes.map((note) => `${note.id}:${note.isPinned}`).join();
   if (dropped && dropped.basis !== basis) setDropped(null);
   const ordered = useMemo(() => {
     if (dropped?.basis !== basis) return notes;
@@ -207,14 +216,35 @@ export function NoteGrid({
     return dropped.ids.flatMap((id) => byId.get(id) ?? []);
   }, [notes, dropped, basis]);
 
-  const dragged = drag ? ordered.find((note) => note.id === drag.id) : undefined;
-  const others = dragged ? ordered.filter((note) => note !== dragged) : ordered;
+  const isPinned = (note: Note) =>
+    note.id === drag?.id
+      ? drag.isPinned
+      : note.id === dropped?.pin?.id
+        ? dropped.pin.isPinned
+        : note.isPinned;
+  const grouped = groupPinned
+    ? [...ordered.filter(isPinned), ...ordered.filter((note) => !isPinned(note))]
+    : ordered;
+  const dragged = drag ? grouped.find((note) => note.id === drag.id) : undefined;
+  const others = dragged ? grouped.filter((note) => note !== dragged) : grouped;
+  const peers =
+    groupPinned && drag ? others.filter((note) => isPinned(note) === drag.isPinned) : others;
   const shown =
     dragged && drag
-      ? [...others.slice(0, drag.index), dragged, ...others.slice(drag.index)]
-      : ordered;
+      ? groupPinned
+        ? [true, false].flatMap((pin) => {
+            const group = others.filter((note) => isPinned(note) === pin);
+            return pin === drag.isPinned
+              ? [...group.slice(0, drag.index), dragged, ...group.slice(drag.index)]
+              : group;
+          })
+        : [...others.slice(0, drag.index), dragged, ...others.slice(drag.index)]
+      : grouped;
   const heights = shown.map((note) => heightOf(note, columnWidth));
-  const layout = width > 0 ? masonry(heights, grid) : null;
+  const sections = groupPinned
+    ? galleryMasonry(heights, grid, shown.filter(isPinned).length, Boolean(drag))
+    : null;
+  const layout = width > 0 ? (sections ?? masonry(heights, grid)) : null;
 
   const rendered = new Set<string>();
   const entryDelays = new Map<string, number>();
@@ -223,7 +253,10 @@ export function NoteGrid({
     const to = view.top + view.screen / 2 + 2 * view.screen;
     shown.forEach((note, index) => {
       const slot = layout.slots[index];
-      if (slot && slot.y <= to && slot.y + (heights[index] ?? 0) >= from) {
+      const live = places.current.get(note.id)?.y.get();
+      const height = heights[index] ?? 0;
+      const near = (y: number) => y <= to && y + height >= from;
+      if (slot && (near(slot.y) || (live !== undefined && near(live)))) {
         rendered.add(note.id);
         entryDelays.set(note.id, entryDelayForTop(view.origin + slot.y));
       }
@@ -390,6 +423,11 @@ export function NoteGrid({
         place.y.jump(slot.y);
         place.width.jump(columnWidth);
         place.z.set(0);
+      } else if (reducedMotion) {
+        place.x.jump(slot.x);
+        place.y.jump(slot.y);
+        place.width.jump(columnWidth);
+        place.z.set(0);
       } else if (dragging) {
         place.width.jump(columnWidth);
         if (moved) spring(place);
@@ -413,8 +451,7 @@ export function NoteGrid({
 
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
-    const index = ordered.findIndex((note) => note.id === id);
-    const note = ordered[index];
+    const note = grouped.find((note) => note.id === id);
     if (!note) return;
     const height = heightOf(note, columnWidth);
     const place = placeOf(id);
@@ -422,7 +459,16 @@ export function NoteGrid({
     place.y.stop();
     place.z.set(LIFTED_Z);
     haptics.longPress();
-    setDrag({ id, origin: { x: place.x.get(), y: place.y.get() }, height, index });
+    const group = groupPinned
+      ? grouped.filter((peer) => isPinned(peer) === note.isPinned)
+      : grouped;
+    setDrag({
+      id,
+      origin: { x: place.x.get(), y: place.y.get() },
+      height,
+      index: group.indexOf(note),
+      isPinned: note.isPinned,
+    });
   }
 
   function handleDragMove(event: DragMoveEvent) {
@@ -433,14 +479,25 @@ export function NoteGrid({
     const y = drag.origin.y + event.delta.y;
     place.x.set(x);
     place.y.set(y);
+    const center = { x: x + columnWidth / 2, y: y + drag.height / 2 };
+    // Hysteresis around the section boundary prevents a held card flickering between pins.
+    const boundary = sections ? sections.othersTop - 24 : 0;
+    // Revealing the first pin target must not turn a horizontal reorder into a pin.
+    const revealingPins =
+      !ordered.some((note) => note.isPinned) && !drag.isPinned && event.delta.y >= -16;
+    const pin = sections
+      ? !revealingPins && center.y < boundary + (drag.isPinned ? 16 : -16)
+      : drag.isPinned;
+    const destination = groupPinned ? others.filter((note) => isPinned(note) === pin) : others;
+    const top = sections ? (pin ? sections.pinnedTop : sections.othersTop) : 0;
     const index = dropIndex({
       ...grid,
-      heights: others.map((note) => heightOf(note, columnWidth)),
+      heights: destination.map((note) => heightOf(note, columnWidth)),
       height: drag.height,
-      center: { x: x + columnWidth / 2, y: y + drag.height / 2 },
-      current: drag.index,
+      center: { ...center, y: center.y - top },
+      current: pin === drag.isPinned ? drag.index : -1,
     });
-    if (index !== drag.index) setDrag({ ...drag, index });
+    if (index !== drag.index || pin !== drag.isPinned) setDrag({ ...drag, index, isPinned: pin });
   }
 
   function handleDragEnd(commit: boolean) {
@@ -448,11 +505,19 @@ export function NoteGrid({
     setDrag(null);
     swallowNextClick();
     placeOf(drag.id).released = true;
-    const from = ordered.findIndex((note) => note.id === drag.id);
-    if (!commit || !dragged || drag.index === from) return;
+    const from = groupPinned
+      ? ordered
+          .filter((note) => note.isPinned === dragged?.isPinned)
+          .findIndex((note) => note.id === drag.id)
+      : ordered.findIndex((note) => note.id === drag.id);
+    if (!commit || !dragged || (drag.index === from && drag.isPinned === dragged.isPinned)) return;
     haptics.success();
-    setDropped({ ids: shown.map((note) => note.id), basis });
-    onMove?.(drag.id, others, drag.index);
+    setDropped({
+      ids: shown.map((note) => note.id),
+      basis,
+      pin: groupPinned ? { id: drag.id, isPinned: drag.isPinned } : undefined,
+    });
+    onMove?.(drag.id, peers, drag.index, groupPinned ? drag.isPinned : undefined);
   }
 
   return (
@@ -464,7 +529,22 @@ export function NoteGrid({
       onDragCancel={() => handleDragEnd(false)}
     >
       <div ref={container} className="relative" style={{ height: layout?.height }}>
-        {ordered.map(
+        {sections?.showPinned && (
+          <h2 className="absolute top-0 left-1 font-medium text-muted-foreground text-sm">
+            Pinned
+          </h2>
+        )}
+        {sections?.showOthers && (
+          <motion.h2
+            initial={false}
+            animate={{ y: sections.othersHeading }}
+            transition={reducedMotion ? { duration: 0 } : springs.smooth}
+            className="absolute top-0 left-1 font-medium text-muted-foreground text-sm"
+          >
+            Others
+          </motion.h2>
+        )}
+        {grouped.map(
           (note) =>
             rendered.has(note.id) && (
               <GridCard
@@ -540,6 +620,7 @@ const GridCard = memo(function GridCard({
         if (!movable) haptics.longPress();
         onSelect(note, true);
       }),
+    movable && onSelect && selected === undefined ? () => onSelect(note, false) : undefined,
   );
   // dnd-kit re-renders every draggable as the pointer moves; the card itself need not.
   const card = useMemo(() => {

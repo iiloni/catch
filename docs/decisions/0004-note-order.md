@@ -21,8 +21,14 @@ not change `updatedAt`, so "Last edited" still means edited.
 
 **Sorting.** The gallery's sort menu has Custom (by position, the default), Last edited
 and Date created. Dragging works only in Custom, where what you see is the stored order.
-Pinned and other notes are separate grids, so a note can't be dragged between them; pinning
-does that.
+Pinned and other notes share one grid and drag context, with separate masonry layouts
+in the same coordinate space. Cards stay mounted and spring between the groups when pinned
+or unpinned, including the other cards displaced by the change. Dragging across the section
+boundary changes the pin state and position in one write, bounded only by the destination
+group's neighbours. While dragging, empty groups keep a visible landing area.
+Unpinning with a note action in the gallery gives the note a position ahead of every other
+note, so it returns to the top of Custom order instead of its old place. Deck unpinning
+keeps its position. Date-based sorts still follow the selected date and direction.
 
 **Grid.** `NoteGrid` lays cards out itself: each goes to the top of the shortest column (as
 in Keep), absolutely positioned from measured heights, and springs to new slots through
@@ -46,6 +52,11 @@ The same fractional keys work independently in each column and pin group because
 that group's neighbours bound a move.
 
 ## Consequences
+
+The existing `isPinned` and `position` fields travel together in the existing note,
+shared-note or sealed vault write. Both old clients on new servers and new clients on old
+supported servers can read and write them; shapes, outbox formats and protocol versions
+are unchanged (ADR 0013).
 
 - The Gallery's custom order uses `sortNotes(notes, 'position')`; the Deck sorts by position
   with pinned notes first, so every card can be rearranged within its pin group.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dropIndex, masonry } from './masonry';
+import { dropIndex, galleryMasonry, masonry } from './masonry';
 
 const grid = { columns: 2, columnWidth: 100, gap: 10 };
 
@@ -38,5 +38,37 @@ describe('dropIndex', () => {
   it('stays put when another slot is barely closer', () => {
     // Just past the bottom of slot 0, and only slightly nearer slot 2.
     expect(drop({ x: 50, y: 58 }, 0)).toBe(0);
+  });
+});
+
+describe('galleryMasonry', () => {
+  it('lays out each pin group independently in shared coordinates', () => {
+    const layout = galleryMasonry([100, 50, 60, 40], grid, 2);
+    expect(layout.slots).toEqual([
+      { x: 0, y: 28 },
+      { x: 110, y: 28 },
+      { x: 0, y: 176 },
+      { x: 110, y: 176 },
+    ]);
+    expect(layout.height).toBe(236);
+    expect(layout.othersHeading).toBe(148);
+  });
+
+  it('removes section spacing when the last pin is removed', () => {
+    const layout = galleryMasonry([100, 50], grid, 0);
+    expect(layout.slots).toEqual(masonry([100, 50], grid).slots);
+    expect(layout.height).toBe(100);
+    expect(layout.showPinned).toBe(false);
+    expect(layout.showOthers).toBe(false);
+  });
+
+  it('reserves destinations for empty groups during a drag', () => {
+    for (const pinned of [0, 1]) {
+      const layout = galleryMasonry([50], grid, pinned, true);
+      expect(layout.showPinned).toBe(true);
+      expect(layout.showOthers).toBe(true);
+      expect(layout.othersTop).toBeGreaterThan(layout.pinnedTop + 50);
+      expect(layout.height).toBeGreaterThanOrEqual(layout.othersTop + 64);
+    }
   });
 });

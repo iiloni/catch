@@ -117,7 +117,9 @@ so the count and selection actions have the corners to themselves.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash
 selects it (in the Gallery and Deck, the same press picks it up to rearrange it), and while
-any note is selected a tap selects or deselects one instead of opening it. With a mouse, a
+any note is selected a tap selects or deselects one instead of opening it. Dragging in the
+press that starts selecting deselects the card as soon as it moves beyond the hold
+tolerance; dragging an existing selection keeps it. With a mouse, a
 check at the card's corner appears on hover. A close button with the count takes the top
 left, and the selection's actions (`SelectionToolbar`) take the top right toolbar: color,
 archive, move to trash and copy, with Send to gallery in the Deck, Unarchive in the Archive,
