@@ -1,7 +1,7 @@
 import { attachmentUrl, type Note } from '@catch/shared';
 import { Pin } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
-import { useLayoutEffect, useReducer, useRef } from 'react';
+import { type MouseEvent, useLayoutEffect, useReducer, useRef } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
@@ -154,6 +154,15 @@ export function NoteCard({
     wasHidden.current = underlayHidden;
   }, [underlayHidden, underlayY]);
 
+  function openFromButton(event: MouseEvent<HTMLButtonElement>) {
+    if (selecting) {
+      onSelect?.(note);
+      return;
+    }
+    const card = event.currentTarget.closest('article');
+    if (card) onOpen?.(note, card);
+  }
+
   const card = (
     <motion.article
       data-note-card={note.id}
@@ -184,24 +193,21 @@ export function NoteCard({
         className,
       )}
     >
-      <button
-        type="button"
-        onClick={(event) => {
-          if (selecting) {
-            onSelect?.(note);
-            return;
-          }
-          const card = event.currentTarget.closest('article');
-          if (card) onOpen?.(note, card);
-        }}
-        // The face swaps elements as previews load (a placeholder for its thumbnail), and a
-        // press on one that is gone by the release makes no click. The button takes the press.
-        className="min-h-12 cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>*]:pointer-events-none"
-        aria-label={selecting ? 'Select note' : 'Open note'}
-        aria-pressed={selecting ? selected : undefined}
-      >
-        <NoteCardContent note={note} />
-      </button>
+      {face && !selecting ? (
+        <LinkNoteFace link={face} tinted={color === 'default'} onOpen={openFromButton} />
+      ) : (
+        <button
+          type="button"
+          onClick={openFromButton}
+          // The face swaps elements as previews load (a placeholder for its thumbnail), and a
+          // press on one that is gone by the release makes no click. The button takes the press.
+          className="min-h-12 cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>*]:pointer-events-none"
+          aria-label={selecting ? 'Select note' : 'Open note'}
+          aria-pressed={selecting ? selected : undefined}
+        >
+          <NoteCardContent note={note} />
+        </button>
+      )}
       <NoteBadges note={note} />
       <NoteTags noteId={note.id} className="px-3.5 pb-3" />
       {tagged && note.content.length === 0 && <MediaOnlyFace note={note} />}
