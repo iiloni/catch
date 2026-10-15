@@ -17,23 +17,26 @@ import {
 } from './helpers';
 
 test('notes are created, edited, and synced across tabs', async ({ page, context }) => {
+  // Two copies of the app share the runner's CPU, and a second tab syncs through the first
+  // tab's device database. Each hand-over takes about 2s on a fast machine and grows with load.
+  const crossTab = { timeout: 15_000 };
   await signUp(page);
   await createNote(page, 'Groceries', 'Oat milk');
 
   const otherTab = await context.newPage();
   await otherTab.goto('/');
-  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk');
+  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk', crossTab);
 
   const dialog = await openNote(otherTab, 'Groceries');
   await dialog.getByText('Oat milk').click();
   await otherTab.keyboard.press('End');
   await otherTab.keyboard.type(' and eggs');
-  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible(crossTab);
   await dialog.getByRole('button', { name: 'Close' }).click();
 
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
   await page.reload();
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
 });
 
 test('swiping the quick-note handle up expands after the release threshold', async ({
