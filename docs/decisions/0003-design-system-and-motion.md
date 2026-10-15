@@ -177,7 +177,10 @@ The Gallery pages and Search split. In Gallery, Reminders, Archive and Trash, an
 button beside the note's Back button hides the page and gives its width to the same
 note pane. Its rounded card, header, dock and editor stay mounted; Show gallery restores
 the saved split width. The device remembers the choice independently of the split ratio.
-One pane spring moves the note's left edge, its width and the dock together, advancing by
+The Gallery, its header and its dock keep their split widths and fade out together; they
+fade back into the same positions when restored. The note's growing width is separate from
+the space reserved for the page's fixed controls, so they never squeeze toward the edge.
+One pane spring moves the note's left edge, its width, its dock and the Gallery fade together, advancing by
 painted frames so busy rendering cannot skip its entrance. A tap can reverse it from its
 current width, with no text scaling, and reduced motion changes the layout immediately. Folding to phone
 width temporarily uses the phone layout; unfolding restores the chosen pane layout.

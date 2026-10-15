@@ -252,7 +252,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
             'pointer-events-none fixed top-0 bottom-[calc(var(--dock-bottom)+var(--dock-height)/2)] flex items-end justify-center overflow-x-visible overflow-y-clip pt-[calc(var(--safe-top)+0.75rem)]',
             layer(fromEditor),
             inPane
-              ? 'right-0 left-[calc(100%-var(--note-pane))] pr-3'
+              ? 'right-0 left-[calc(100%-var(--expanded-note-pane))] pr-3'
               : 'right-[var(--note-pane)] left-0 px-3',
           )}
           style={inPane ? { paddingLeft: GUTTER + 12 } : undefined}

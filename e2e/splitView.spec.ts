@@ -29,6 +29,10 @@ test.describe('expanded Gallery panes', () => {
     const before = await settledBox(dialog);
     const cardBefore = await settledBox(dialog.locator('[data-note-scroll]'));
     const dockBefore = await settledBox(noteToolbar(page));
+    const galleryDock = page.locator('[data-dock] > div');
+    const galleryBefore = await settledBox(galleryDock);
+    const account = page.getByRole('button', { name: /^Account:/ });
+    const accountBefore = await settledBox(account);
     const expand = dialog.getByRole('button', { name: 'Expand note', exact: true });
     const close = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
     const control = await expand.boundingBox();
@@ -40,16 +44,56 @@ test.describe('expanded Gallery panes', () => {
 
     const motion = page.evaluate(
       () =>
-        new Promise<{ left: number; width: number; dock: number }[]>((resolve) => {
-          const samples: { left: number; width: number; dock: number }[] = [];
+        new Promise<
+          {
+            left: number;
+            width: number;
+            dock: number;
+            galleryX: number;
+            galleryY: number;
+            galleryWidth: number;
+            accountX: number;
+            pageOpacity: number;
+            dockOpacity: number;
+            accountOpacity: number;
+          }[]
+        >((resolve) => {
+          const samples: {
+            left: number;
+            width: number;
+            dock: number;
+            galleryX: number;
+            galleryY: number;
+            galleryWidth: number;
+            accountX: number;
+            pageOpacity: number;
+            dockOpacity: number;
+            accountOpacity: number;
+          }[] = [];
           const end = performance.now() + 5_000;
           const sample = () => {
             const note = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
             const dock = document
               .querySelector('[aria-label="Note actions"]')
               ?.getBoundingClientRect();
-            if (note && dock)
-              samples.push({ left: note.x, width: note.width, dock: dock.x + dock.width / 2 });
+            const gallery = document.querySelector('[data-dock] > div')?.getBoundingClientRect();
+            const account = document.querySelector('[aria-label^="Account:"]');
+            const page = document.querySelector('section[aria-label="Gallery"]');
+            const glass = document.querySelector('[data-dock] .glass');
+            const foreground = account?.closest('.header-fade');
+            if (note && dock && gallery && account && page && glass && foreground)
+              samples.push({
+                left: note.x,
+                width: note.width,
+                dock: dock.x + dock.width / 2,
+                galleryX: gallery.x,
+                galleryY: gallery.y,
+                galleryWidth: gallery.width,
+                accountX: account.getBoundingClientRect().x,
+                pageOpacity: Number(getComputedStyle(page).opacity),
+                dockOpacity: Number(getComputedStyle(glass).opacity),
+                accountOpacity: Number(getComputedStyle(foreground).opacity),
+              });
             if (performance.now() < end && (!note || note.x > 12.1)) requestAnimationFrame(sample);
             else resolve(samples);
           };
@@ -67,6 +111,21 @@ test.describe('expanded Gallery panes', () => {
     expect(expanded.height).toBeCloseTo(before.height, 0);
     expect(new Set(samples.map((frame) => Math.round(frame.width))).size).toBeGreaterThan(4);
     expect(new Set(samples.map((frame) => Math.round(frame.dock))).size).toBeGreaterThan(4);
+    const fading = samples.filter((frame) => frame.pageOpacity > 0.05 && frame.pageOpacity < 0.95);
+    expect(fading.length).toBeGreaterThan(3);
+    for (const frame of samples) {
+      expect(frame.galleryX).toBeCloseTo(galleryBefore.x, 0);
+      expect(frame.galleryY).toBeCloseTo(galleryBefore.y, 0);
+      expect(frame.galleryWidth).toBeCloseTo(galleryBefore.width, 0);
+      expect(frame.accountX).toBeCloseTo(accountBefore.x, 0);
+      expect(frame.dockOpacity).toBeCloseTo(frame.pageOpacity, 2);
+      expect(frame.accountOpacity).toBeCloseTo(frame.pageOpacity, 2);
+    }
+    await testInfo.attach('expansion-frames', {
+      body: JSON.stringify(samples),
+      contentType: 'application/json',
+    });
+    await expect(account).toBeHidden();
     await expect(editor).toBeFocused();
     expect(await originalEditor?.evaluate((element) => element.isConnected)).toBe(true);
     await expect(handle).toBeHidden();
@@ -94,6 +153,9 @@ test.describe('expanded Gallery panes', () => {
     expect((await settledBox(dialog)).width).toBeCloseTo(before.width, 0);
     await expect(handle).toHaveAttribute('aria-valuenow', savedShare ?? '');
     await expect(page.getByRole('link', { name: 'Gallery', exact: true })).toBeVisible();
+    await expect(account).toBeVisible();
+    expect((await settledBox(galleryDock)).width).toBeCloseTo(galleryBefore.width, 0);
+    expect((await settledBox(account)).x).toBeCloseTo(accountBefore.x, 0);
     await expect(editor).toBeFocused();
     expect(await originalEditor?.evaluate((element) => element.isConnected)).toBe(true);
     await page

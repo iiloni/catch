@@ -31,8 +31,10 @@ export function useGalleryExpanded() {
   return usePersistentState('catch-gallery-expanded', expandedSchema, false);
 }
 
-/** Shared by the note surface, its dock and the page's fixed layers. */
+/** Shared by the note surface and its dock. */
 export const paneExpansion = motionValue(0);
+/** The Gallery fades in place while the note takes its width. */
+export const galleryOpacity = motionValue(1);
 
 const watchExpansion = (listener: () => void) => paneExpansion.on('change', listener);
 
@@ -167,7 +169,7 @@ export function useNotePane(): NotePane {
 }
 
 /**
- * Publishes how much of the screen the pane covers as `--note-pane`, which fixed UI over the
+ * Publishes the ordinary split width as `--note-pane`, which fixed UI over the
  * page (headers, the dock, the quick note) leaves free on the right. It follows the pane as
  * it slides; the page itself takes its new width at once, so its cards move only once. Called
  * once, by the app layout.
@@ -208,7 +210,12 @@ export function useNotePaneLayout(): NotePane & { covered: boolean } {
     const root = document.documentElement;
     const update = () => {
       const covered = width + (pane.split ? pane.listWidth * paneExpansion.get() : 0);
-      root.style.setProperty('--note-pane', `${covered * paneReveal.get()}px`);
+      const reveal = paneReveal.get();
+      root.style.setProperty('--note-pane', `${width * reveal}px`);
+      root.style.setProperty('--expanded-note-pane', `${covered * reveal}px`);
+      const opacity = pane.split ? 1 - paneExpansion.get() * reveal : 1;
+      galleryOpacity.set(opacity);
+      root.style.setProperty('--gallery-opacity', String(opacity));
     };
     update();
     const stopReveal = paneReveal.on('change', update);

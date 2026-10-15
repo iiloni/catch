@@ -29,7 +29,7 @@ import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
 import { pageBounceY } from '@/lib/scrollBounce';
-import { PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
+import { galleryOpacity, PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
 import { cn } from '@/lib/utils';
 
@@ -50,7 +50,7 @@ function useHeaderTransition() {
   });
   const opacity = useTransform(() => {
     const progress = editorProgress.get();
-    return split ? 1 : Math.max(0, 1 - progress / CARD_FACE_FADE_END);
+    return split ? galleryOpacity.get() : Math.max(0, 1 - progress / CARD_FACE_FADE_END);
   });
   const zIndex = useTransform(() => {
     const progress = editorProgress.get();

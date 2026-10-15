@@ -71,7 +71,7 @@ function TrashPage() {
       <motion.section
         aria-label="Trash"
         style={{ x: gutterShift }}
-        className="mx-auto max-w-7xl px-3 pt-3 sm:px-6"
+        className="gallery-fade mx-auto max-w-7xl px-3 pt-3 sm:px-6"
       >
         {awaitingSync ? null : notes.length > 0 ? (
           <NoteGrid

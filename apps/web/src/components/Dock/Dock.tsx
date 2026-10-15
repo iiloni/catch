@@ -78,6 +78,7 @@ import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { isSharedNote } from '@/lib/sharing';
 import {
   GUTTER,
+  galleryOpacity,
   HEADER_HISTORY_MIN,
   paneExpansion,
   useNotePane,
@@ -122,8 +123,10 @@ export function Dock() {
   const noteState = quickNote.use();
   const capture = linkCaptureControls.use();
   const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
-  const hidden =
-    ((useWideSettings() && inSettings) || (pane.shown && pane.expanded)) && !quickNoteOpen;
+  const hidden = useWideSettings() && inSettings && !quickNoteOpen;
+  const galleryVisibility = useTransform(() =>
+    !quickNoteOpen && galleryOpacity.get() === 0 ? 'hidden' : 'visible',
+  );
   const entry = useEntryMotion('dock', !hidden, 120);
   const historyOpen = noteHistoryOpen.use();
   // A tap changes the dock before the router mounts the page, alongside the keyboard.
@@ -257,13 +260,14 @@ export function Dock() {
         ref={dockRef}
         data-dock
         // Translate the dock without fading its glass's ancestor.
-        style={{ zIndex, y: dockY }}
+        style={{ zIndex, y: dockY, visibility: galleryVisibility }}
+        inert={pane.shown && pane.expanded && !quickNoteOpen}
         // Spans the whole width and pads the pane away rather than ending at it: a page
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
           'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center overflow-x-clip',
-          quickNoteOpen && 'z-[75]!',
+          quickNoteOpen && 'z-[75]! [--gallery-opacity:1]',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
             : 'pr-[calc(var(--note-pane)+0.75rem)] pl-3',
@@ -307,44 +311,55 @@ export function Dock() {
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && !historyOpen && <NoteLinkTray />}
                   {mode === 'note' && !historyOpen && <FloatingNoteToolbars />}
-                  <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
-                    <SearchField
-                      inputRef={inputRef}
-                      active={searchActive}
-                      visible={mode === 'tabs' || mode === 'search'}
-                      progress={searchProgress}
-                      openedAt={searchOpenedAt}
-                      onClose={closeSearch}
+                  <div className="relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)] border border-transparent">
+                    {/* Fade the glass separately so it keeps blurring the Gallery. */}
+                    <span
+                      aria-hidden
+                      className="glass gallery-fade pointer-events-none absolute -inset-px rounded-[inherit]"
                     />
-                    <AnimatePresence initial={false}>
-                      {(mode === 'tabs' || mode === 'search') && (
-                        <Tabs
-                          key="tabs"
-                          active={tab}
-                          searchProgress={searchProgress}
-                          searchActive={searchActive}
-                          // Focusing inside the tap keeps Android willing to raise the keyboard.
-                          onSearch={openSearch}
-                          switcherOpen={switcherOpen}
-                          onSwitcher={setSwitcher}
-                          onSwitcherHover={setSwitcherHover}
-                          onSwitcherSelect={selectGalleryPage}
-                        />
-                      )}
-                      {mode === 'settings' && (
-                        <SettingsTabSelector
-                          key="settings"
-                          current={settingsTab}
-                          open={switcherOpen}
-                          onOpenChange={setSwitcher}
-                          onHover={setSettingsHover}
-                          onSelect={selectSettingsTab}
-                          pickerRoot={() => dockRef.current}
-                        />
-                      )}
-                      {mode === 'note' &&
-                        (historyOpen ? <HistoryDockSlot key="history" /> : <NoteDock key="note" />)}
-                    </AnimatePresence>
+                    <div className="gallery-fade relative min-h-[calc(var(--dock-height)-2px)]">
+                      <SearchField
+                        inputRef={inputRef}
+                        active={searchActive}
+                        visible={mode === 'tabs' || mode === 'search'}
+                        progress={searchProgress}
+                        openedAt={searchOpenedAt}
+                        onClose={closeSearch}
+                      />
+                      <AnimatePresence initial={false}>
+                        {(mode === 'tabs' || mode === 'search') && (
+                          <Tabs
+                            key="tabs"
+                            active={tab}
+                            searchProgress={searchProgress}
+                            searchActive={searchActive}
+                            // Focusing inside the tap keeps Android willing to raise the keyboard.
+                            onSearch={openSearch}
+                            switcherOpen={switcherOpen}
+                            onSwitcher={setSwitcher}
+                            onSwitcherHover={setSwitcherHover}
+                            onSwitcherSelect={selectGalleryPage}
+                          />
+                        )}
+                        {mode === 'settings' && (
+                          <SettingsTabSelector
+                            key="settings"
+                            current={settingsTab}
+                            open={switcherOpen}
+                            onOpenChange={setSwitcher}
+                            onHover={setSettingsHover}
+                            onSelect={selectSettingsTab}
+                            pickerRoot={() => dockRef.current}
+                          />
+                        )}
+                        {mode === 'note' &&
+                          (historyOpen ? (
+                            <HistoryDockSlot key="history" />
+                          ) : (
+                            <NoteDock key="note" />
+                          ))}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </div>
                 <AnimatePresence initial={false}>
@@ -429,7 +444,7 @@ function PaneDock({
   return (
     <motion.div
       className={cn(
-        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center overflow-x-clip',
+        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--expanded-note-pane))] z-[60] flex justify-center overflow-x-clip',
         compact ? 'pr-1' : 'pr-3',
       )}
       style={{ width: animatedWidth, paddingLeft }}
@@ -850,7 +865,7 @@ function DockActionButton({
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
-          'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
+          'gallery-fade relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
           search
             ? filtersOpen || count > 0
               ? 'text-brand'
