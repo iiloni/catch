@@ -617,6 +617,10 @@ for (const direction of [-1, 1]) {
         reducedMotion: reducedMotion ? 'reduce' : 'no-preference',
         colorScheme: direction === 1 ? 'light' : 'dark',
       });
+      // Motion keeps the requestAnimationFrame it finds when the app loads. Installed later,
+      // the fake clock would only move its animations on the browser's next real frame,
+      // which can paint after a measurement; installed first, `runFor` paints each frame.
+      await page.clock.install();
       await signUp(page);
       // Cover both a closing masonry gap and the last card yielding to the empty state.
       const peerTitles =
@@ -640,7 +644,6 @@ for (const direction of [-1, 1]) {
       const originalIcon = await icon.elementHandle();
       await expect(icon.locator('svg')).toHaveCount(1);
 
-      await page.clock.install();
       await page.clock.pauseAt(new Date(Date.now() + 1000));
       // Firefox has no CDP touch input. Drive the touch pointer handlers directly here;
       // the preceding test covers the browser's native touch recognition in Chromium.
