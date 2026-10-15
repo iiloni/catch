@@ -421,6 +421,13 @@ function EditorSurface({
     if (splitRef.current) return t.width + (t.x - GUTTER / 2) * expansion;
     return card ? lerp(card.width, t.width, p) : t.width;
   });
+  // Keep one binding while folding between pane and phone. Swapping a live Motion value
+  // for a numeric style can leave the editor at its previous pane width.
+  const contentWidth = useTransform(() => {
+    const paneWidth = width.get();
+    layoutTick.get();
+    return splitRef.current ? paneWidth : targetRef.current.width;
+  });
   const height = useTransform(() => {
     const card = cardRect.current;
     const t = targetRef.current;
@@ -872,7 +879,7 @@ function EditorSurface({
               )}
               // The surface can be any size; the editor keeps its viewport and scroll.
               style={{
-                width: split ? width : target.width,
+                width: contentWidth,
                 height: target.height,
                 opacity: contentOpacity,
                 y: contentY,

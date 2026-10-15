@@ -149,6 +149,9 @@ test.describe('expanded Gallery panes', () => {
       await page.setViewportSize(viewport);
       const box = await settledBox(dialog);
       expect(box.width).toBeCloseTo(viewport.width - (viewport.width < 672 ? 0 : 12), 0);
+      const header = await dialog.locator('[data-note-header]').boundingBox();
+      expect(header && header.x + header.width <= box.x + box.width + 1).toBe(true);
+      await expect(noteToolbar(page)).toHaveCount(1);
       await expect(dialog.getByRole('textbox')).toContainText('My tablet layout');
     }
     await page.reload();

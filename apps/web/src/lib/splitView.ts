@@ -92,15 +92,37 @@ export const paneNoteId = createStore<string | null>(null);
  */
 export const paneReveal = motionValue(0);
 
+function viewportSize(): Viewport {
+  return {
+    width: document.documentElement.clientWidth || window.innerWidth,
+    height: document.documentElement.clientHeight || window.innerHeight,
+  };
+}
+
 export function useViewport(): Viewport {
-  const [viewport, setViewport] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
+  const [viewport, setViewport] = useState(viewportSize);
   useEffect(() => {
-    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    let frame = 0;
+    const update = () =>
+      setViewport((previous) => {
+        const next = viewportSize();
+        return previous.width === next.width && previous.height === next.height ? previous : next;
+      });
+    const resize = () => {
+      update();
+      // The root's client size stays within the screen while mobile innerWidth can briefly
+      // include content from before a fold. Recheck after that content paints too.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('resize', resize);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    observer?.observe(document.documentElement);
+    return () => {
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, []);
   return viewport;
 }
