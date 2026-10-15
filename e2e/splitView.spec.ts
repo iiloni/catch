@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  APP_LOAD_TIMEOUT,
   card,
   moveNote,
   noteToolbar,
@@ -12,6 +13,86 @@ import {
 
 // A landscape tablet, wide enough to show an open note beside the page.
 test.use({ viewport: { width: 1180, height: 820 } });
+
+test('Gallery full screen persists across reloads, folding and rotation, and can return to split', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 740, height: 860 });
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Full note', body: 'Room to write' }]);
+  await openNote(page, 'Full note');
+  const handle = page.getByRole('separator', { name: 'Resize note' });
+  await expect(handle).toBeVisible();
+  await handle.press('ArrowRight');
+  const savedShare = await handle.getAttribute('aria-valuenow');
+  await page.goBack();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.getByRole('button', { name: 'View options', exact: true }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Split view', exact: true })).toBeChecked();
+  await page.getByRole('menuitemradio', { name: 'Full screen', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'View options', exact: true }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Full screen', exact: true })).toBeChecked();
+  await page.keyboard.press('Escape');
+
+  const dialog = await openNote(page, 'Full note');
+  await expect(handle).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Deck' })).toBeHidden();
+  await expect(noteToolbar(page)).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page
+        .locator('section[aria-label="Gallery"]')
+        .evaluate((element) => Boolean(element.closest('[inert]'))),
+    )
+    .toBe(true);
+  const editor = dialog.getByRole('textbox');
+  await editor.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' with more space');
+  for (const viewport of [
+    { width: 740, height: 860 },
+    { width: 412, height: 915 },
+    { width: 860, height: 740 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const box = await settledBox(dialog);
+    expect(box.x).toBeCloseTo(0, 0);
+    expect(box.y).toBeCloseTo(0, 0);
+    expect(box.width).toBeCloseTo(viewport.width, 0);
+    expect(box.height).toBeCloseTo(viewport.height, 0);
+    await expect(editor).toBeFocused();
+    await expect(editor).toContainText('with more space');
+    await expect(handle).toBeHidden();
+  }
+  await testInfo.attach('browser-version', {
+    body: page.context().browser()?.version() ?? 'unknown',
+    contentType: 'text/plain',
+  });
+  await page.screenshot({ path: testInfo.outputPath('gallery-full-screen.png') });
+
+  // Reloading a direct note URL keeps the chosen view and the saved edit.
+  await page.reload();
+  await expect(dialog.getByRole('textbox')).toContainText('with more space', {
+    timeout: APP_LOAD_TIMEOUT,
+  });
+  expect((await settledBox(dialog)).width).toBeCloseTo(860, 0);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(card(page, 'Full note')).toBeVisible();
+
+  await page.getByRole('button', { name: 'View options', exact: true }).click();
+  await page.getByRole('menuitemradio', { name: 'Split view', exact: true }).click();
+  await page.setViewportSize({ width: 740, height: 860 });
+  await openNote(page, 'Full note');
+  await expect(handle).toBeVisible();
+  await expect(handle).toHaveAttribute('aria-valuenow', savedShare ?? '');
+  await expect(page.getByRole('link', { name: 'Deck' })).toBeVisible();
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+});
 
 test('a note pane resumes opening when history restores it during its entrance', async ({
   page,

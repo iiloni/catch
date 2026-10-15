@@ -27,6 +27,20 @@ describe('splitView', () => {
     }
   });
 
+  it('honors full screen for every Gallery page while Search and Deck keep their layouts', () => {
+    for (const viewport of [
+      { width: 690, height: 830 },
+      { width: 1180, height: 820 },
+    ]) {
+      for (const page of ['/', '/reminders', '/archive', '/trash']) {
+        expect(canSplit(viewport, page, 'full')).toBe(false);
+        expect(canSplit(viewport, page, 'split')).toBe(true);
+      }
+      expect(canSplit(viewport, '/search', 'full')).toBe(true);
+      expect(canSplit(viewport, '/deck', 'full')).toBe(false);
+    }
+  });
+
   it('keeps the page between a quarter and 70% of wide screens', () => {
     expect(listWidthLimits(1920)).toEqual({ min: 480, max: 1344 });
   });

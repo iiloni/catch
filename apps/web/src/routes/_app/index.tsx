@@ -1,12 +1,12 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute } from '@tanstack/react-router';
 import {
-  ArrowDownUp,
   LayoutDashboard,
   LayoutGrid,
   Lightbulb,
   LockKeyholeOpen,
   Rows3,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo, useState } from 'react';
@@ -34,7 +34,7 @@ import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
-import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
+import { PAGE_MAX, useGalleryNoteView, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
@@ -174,15 +174,29 @@ function GalleryPage() {
 }
 
 function ViewOptions({ sort, onChange }: { sort: Sort; onChange: (sort: Sort) => void }) {
+  const [noteView, setNoteView] = useGalleryNoteView();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="Sort"
+        aria-label="View options"
         className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        <ArrowDownUp className="size-5" aria-hidden />
+        <SlidersHorizontal className="size-5" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8}>
+        <DropdownMenuLabel>Open notes</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={noteView}
+          onValueChange={(value) => {
+            if (value !== 'split' && value !== 'full') return;
+            haptics.toggle();
+            setNoteView(value);
+          }}
+        >
+          <DropdownMenuRadioItem value="split">Split view</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="full">Full screen</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Sort by</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={sort.field}

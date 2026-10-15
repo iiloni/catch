@@ -1,6 +1,9 @@
 import { useRouterState } from '@tanstack/react-router';
 import { type MotionValue, motionValue, useTransform } from 'motion/react';
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { z } from 'zod';
+import { GALLERY_PAGES } from './galleryPages';
+import { usePersistentState } from './storage';
 import { createStore } from './store';
 
 /**
@@ -22,6 +25,17 @@ export const GUTTER = 24;
 const DEFAULT_RATIO = 0.42;
 const STORAGE_KEY = 'catch-split';
 
+const noteViewSchema = z.enum(['split', 'full']);
+type NoteView = z.infer<typeof noteViewSchema>;
+
+export function useGalleryNoteView() {
+  return usePersistentState('catch-gallery-note-view', noteViewSchema, 'split');
+}
+
+function fullGalleryNote(pathname: string, view: NoteView) {
+  return view === 'full' && GALLERY_PAGES.some((page) => page === pathname);
+}
+
 export type Viewport = { width: number; height: number };
 
 /**
@@ -30,8 +44,13 @@ export type Viewport = { width: number; height: number };
  */
 const UNSPLIT_PAGES = new Set(['/deck']);
 
-export function canSplit({ width, height }: Viewport, pathname: string) {
-  return width >= MIN_WIDTH && height >= MIN_HEIGHT && !UNSPLIT_PAGES.has(pathname);
+export function canSplit({ width, height }: Viewport, pathname: string, view: NoteView = 'split') {
+  return (
+    width >= MIN_WIDTH &&
+    height >= MIN_HEIGHT &&
+    !UNSPLIT_PAGES.has(pathname) &&
+    !fullGalleryNote(pathname, view)
+  );
 }
 
 /** How wide the page may be beside a note, in CSS pixels. */
@@ -84,6 +103,8 @@ export function useViewport(): Viewport {
 }
 
 export type NotePane = {
+  /** Gallery notes use the whole display when the device preference requests it. */
+  full: boolean;
   /** The screen is wide enough to show a note beside the page. */
   split: boolean;
   /** A note is open beside the page, which is narrowed for it. */
@@ -96,6 +117,7 @@ export type NotePane = {
 
 export function useNotePane(): NotePane {
   const viewport = useViewport();
+  const [view] = useGalleryNoteView();
   const ratio = listRatio.use();
   // The page as rendered: `location` runs ahead of it while a navigation resolves, and a note
   // leaving for the Deck must still be closing in a pane when the Deck's path arrives.
@@ -104,9 +126,10 @@ export function useNotePane(): NotePane {
       Boolean((state.matches.at(-1)?.search as { note?: string } | undefined)?.note),
   });
   const pathname = useRouterState({ select: (state) => state.matches.at(-1)?.pathname ?? '/' });
-  const split = canSplit(viewport, pathname);
+  const split = canSplit(viewport, pathname, view);
   const listWidth = listWidthFor(ratio, viewport.width);
   return {
+    full: fullGalleryNote(pathname, view),
     split,
     shown: split && noteOpen,
     listWidth,

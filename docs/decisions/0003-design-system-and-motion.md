@@ -172,8 +172,13 @@ advancing by frames (`animateSteadySpring`), as the container transform does. Cl
 pane has no such frame and keeps its spring.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
-The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered
-panel.
+The Gallery pages and Search split by default. The Gallery's View options menu offers
+Split view or Full screen for notes in Gallery, Reminders, Archive and Trash. This
+device-local preference is independent of the card layout and the saved split ratio.
+Full screen uses the phone's card-to-editor transform and single note dock across the
+whole display, including after rotating or unfolding. Search keeps its split and the
+Deck its centered panel. Landscape phones are too short for two panes and keep the
+centered panel unless Full screen was chosen for a Gallery page.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel

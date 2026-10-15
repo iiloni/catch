@@ -160,12 +160,12 @@ const PANEL_GAP = 12;
 const LAND_EARLY = 0.25;
 
 /** The editor's rectangle: the whole screen on phones, the pane or a centered panel otherwise. */
-function targetRect({ split, listWidth, viewport }: NotePane, insets: Insets): Rect {
+function targetRect({ split, full, listWidth, viewport }: NotePane, insets: Insets): Rect {
   if (split) {
     const x = listWidth + GUTTER;
     return { x, y: 0, width: viewport.width - x, height: viewport.height, radius: 0 };
   }
-  if (viewport.width < 640) return { x: 0, y: 0, ...viewport, radius: 0 };
+  if (full || viewport.width < 640) return { x: 0, y: 0, ...viewport, radius: 0 };
   // The panel is centered in the space above the dock, which holds its toolbar, so the note
   // never runs under it.
   const top = insets.top + PANEL_GAP;
@@ -293,7 +293,11 @@ function EditorSurface({
   // Leaving for the Deck closes the note on a page that does not split, so a closing note
   // keeps the layout it had: a pane slides away rather than turning into a panel.
   const splitRef = useRef(pane.split);
-  if (isPresent) splitRef.current = pane.split;
+  const fullRef = useRef(pane.full);
+  if (isPresent) {
+    splitRef.current = pane.split;
+    fullRef.current = pane.full;
+  }
   const split = splitRef.current;
   const { width: viewportWidth, height: viewportHeight } = pane.viewport;
   // biome-ignore lint/correctness/useExhaustiveDependencies: the insets change with the viewport
@@ -304,7 +308,7 @@ function EditorSurface({
     }),
     [viewportWidth, viewportHeight],
   );
-  const target = targetRect({ ...pane, split }, insets);
+  const target = targetRect({ ...pane, split, full: fullRef.current }, insets);
   const narrowPane = split && target.width < HEADER_HISTORY_MIN;
   const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
