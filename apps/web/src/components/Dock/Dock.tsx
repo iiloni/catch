@@ -76,7 +76,13 @@ import {
 } from '@/lib/settings';
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { isSharedNote } from '@/lib/sharing';
-import { GUTTER, HEADER_HISTORY_MIN, useNotePane } from '@/lib/splitView';
+import {
+  GUTTER,
+  HEADER_HISTORY_MIN,
+  paneExpansion,
+  useNotePane,
+  usePaneWidthAtLeast,
+} from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 import { focusWidgetInput } from '@/lib/widgetInputFocus';
 
@@ -116,7 +122,8 @@ export function Dock() {
   const noteState = quickNote.use();
   const capture = linkCaptureControls.use();
   const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
-  const hidden = useWideSettings() && inSettings && !quickNoteOpen;
+  const hidden =
+    ((useWideSettings() && inSettings) || (pane.shown && pane.expanded)) && !quickNoteOpen;
   const entry = useEntryMotion('dock', !hidden, 120);
   const historyOpen = noteHistoryOpen.use();
   // A tap changes the dock before the router mounts the page, alongside the keyboard.
@@ -358,7 +365,13 @@ export function Dock() {
       </motion.div>
       <AnimatePresence>
         {pane.shown && noteOpen && !quickNoteOpen && (
-          <PaneDock key="pane" width={pane.noteWidth} compact={keyboardOpen} />
+          <PaneDock
+            key="pane"
+            width={pane.noteWidth}
+            listWidth={pane.listWidth}
+            compact={keyboardOpen}
+            historyMin={HEADER_HISTORY_MIN + (pane.expandable ? 40 : 0)}
+          />
         )}
       </AnimatePresence>
     </>
@@ -398,18 +411,31 @@ function FloatingNoteToolbars({ inPane = false }: { inPane?: boolean }) {
  * for the page's dock (the page transition names it), and the editor ignores every
  * interaction outside it in a pane.
  */
-function PaneDock({ width, compact }: { width: number; compact: boolean }) {
+function PaneDock({
+  width,
+  listWidth,
+  compact,
+  historyMin,
+}: {
+  width: number;
+  listWidth: number;
+  compact: boolean;
+  historyMin: number;
+}) {
   const historyOpen = noteHistoryOpen.use();
+  const headerWide = usePaneWidthAtLeast(width - GUTTER, listWidth + GUTTER / 2, historyMin);
+  const animatedWidth = useTransform(() => width + listWidth * paneExpansion.get());
+  const paddingLeft = useTransform(() => GUTTER * (1 - paneExpansion.get()) + (compact ? 4 : 12));
   return (
-    <div
+    <motion.div
       className={cn(
         'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center overflow-x-clip',
         compact ? 'pr-1' : 'pr-3',
       )}
-      style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
+      style={{ width: animatedWidth, paddingLeft }}
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
-        {!historyOpen && width - GUTTER < HEADER_HISTORY_MIN && <FloatingNoteToolbars inPane />}
+        {!historyOpen && !headerWide && <FloatingNoteToolbars inPane />}
         {!historyOpen && <NoteLinkTray />}
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
@@ -423,7 +449,7 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
           </AnimatePresence>
         </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

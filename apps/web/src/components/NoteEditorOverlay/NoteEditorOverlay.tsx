@@ -1,6 +1,15 @@
 import type { HistoryRestoreResult, Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { Archive, ArchiveRestore, ChevronLeft, Pin, Share2, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Pin,
+  Share2,
+  Trash2,
+} from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -83,9 +92,12 @@ import {
   GUTTER,
   HEADER_HISTORY_MIN,
   type NotePane,
+  paneExpansion,
   paneNoteId,
   paneReveal,
+  useGalleryExpanded,
   useNotePane,
+  usePaneWidthAtLeast,
 } from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
@@ -160,12 +172,12 @@ const PANEL_GAP = 12;
 const LAND_EARLY = 0.25;
 
 /** The editor's rectangle: the whole screen on phones, the pane or a centered panel otherwise. */
-function targetRect({ split, full, listWidth, viewport }: NotePane, insets: Insets): Rect {
+function targetRect({ split, listWidth, viewport }: NotePane, insets: Insets): Rect {
   if (split) {
     const x = listWidth + GUTTER;
     return { x, y: 0, width: viewport.width - x, height: viewport.height, radius: 0 };
   }
-  if (full || viewport.width < 640) return { x: 0, y: 0, ...viewport, radius: 0 };
+  if (viewport.width < 640) return { x: 0, y: 0, ...viewport, radius: 0 };
   // The panel is centered in the space above the dock, which holds its toolbar, so the note
   // never runs under it.
   const top = insets.top + PANEL_GAP;
@@ -290,14 +302,11 @@ function EditorSurface({
     setEditorGeneration((value) => value + 1);
   };
   const pane = useNotePane();
+  const [, setExpanded] = useGalleryExpanded();
   // Leaving for the Deck closes the note on a page that does not split, so a closing note
   // keeps the layout it had: a pane slides away rather than turning into a panel.
   const splitRef = useRef(pane.split);
-  const fullRef = useRef(pane.full);
-  if (isPresent) {
-    splitRef.current = pane.split;
-    fullRef.current = pane.full;
-  }
+  if (isPresent) splitRef.current = pane.split;
   const split = splitRef.current;
   const { width: viewportWidth, height: viewportHeight } = pane.viewport;
   // biome-ignore lint/correctness/useExhaustiveDependencies: the insets change with the viewport
@@ -308,8 +317,16 @@ function EditorSurface({
     }),
     [viewportWidth, viewportHeight],
   );
-  const target = targetRect({ ...pane, split, full: fullRef.current }, insets);
-  const narrowPane = split && target.width < HEADER_HISTORY_MIN;
+  const target = targetRect({ ...pane, split }, insets);
+  const gainedWidth = split ? target.x - GUTTER / 2 : 0;
+  const headerWide = usePaneWidthAtLeast(
+    target.width,
+    gainedWidth,
+    HEADER_HISTORY_MIN + (pane.expandable ? 40 : 0),
+  );
+  const linksWide = usePaneWidthAtLeast(target.width, gainedWidth, SIDE_LINKS_MIN);
+  const historyWide = usePaneWidthAtLeast(target.width, gainedWidth, HISTORY_LIST_MIN);
+  const narrowPane = split && !headerWide;
   const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -321,7 +338,7 @@ function EditorSurface({
   useEditorDock(note, historyOpen ? null : controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
-  const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia || hasTags);
+  const sideLinks = split && linksWide && (hasLinks || hasMedia || hasTags);
 
   useEffect(() => {
     if (!split || !isPresent) return;
@@ -374,9 +391,13 @@ function EditorSurface({
   const x = useTransform(() => {
     const p = progress.get();
     const reveal = paneReveal.get();
+    const expansion = paneExpansion.get();
     layoutTick.get();
     const card = cardRect.current;
-    if (splitRef.current) return (1 - reveal) * targetRef.current.width;
+    if (splitRef.current) {
+      const gained = (targetRef.current.x - GUTTER / 2) * expansion;
+      return (1 - reveal) * (targetRef.current.width + gained) - gained;
+    }
     return card ? (1 - p) * (card.x - targetRef.current.x) : 0;
   });
   const y = useTransform(() => {
@@ -395,8 +416,10 @@ function EditorSurface({
     const card = cardRect.current;
     const t = targetRef.current;
     const p = progress.get();
+    const expansion = paneExpansion.get();
     layoutTick.get();
-    return card && !splitRef.current ? lerp(card.width, t.width, p) : t.width;
+    if (splitRef.current) return t.width + (t.x - GUTTER / 2) * expansion;
+    return card ? lerp(card.width, t.width, p) : t.width;
   });
   const height = useTransform(() => {
     const card = cardRect.current;
@@ -808,7 +831,7 @@ function EditorSurface({
             data-note-color={color}
             className={cn(
               'fixed z-50 flex flex-col text-card-foreground outline-none',
-              !split && 'overflow-hidden bg-note',
+              split ? 'bg-background' : 'overflow-hidden bg-note',
             )}
             style={{
               left: target.x,
@@ -849,7 +872,7 @@ function EditorSurface({
               )}
               // The surface can be any size; the editor keeps its viewport and scroll.
               style={{
-                width: target.width,
+                width: split ? width : target.width,
                 height: target.height,
                 opacity: contentOpacity,
                 y: contentY,
@@ -897,6 +920,37 @@ function EditorSurface({
                       >
                         <ChevronLeft />
                       </IconButton>
+                      {split && pane.expandable && (
+                        <IconButton
+                          label={pane.expanded ? 'Show gallery' : 'Expand note'}
+                          aria-pressed={pane.expanded}
+                          onPointerDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            haptics.toggle();
+                            setExpanded(!pane.expanded);
+                          }}
+                          className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-5"
+                        >
+                          <span className="relative size-5">
+                            <AnimatePresence initial={false}>
+                              <motion.span
+                                key={pane.expanded ? 'restore' : 'expand'}
+                                className="absolute inset-0 [&_svg]:size-5"
+                                initial={{ opacity: 0, scale: 0.7 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.7 }}
+                                transition={reducedMotion ? { duration: 0 } : springs.snappy}
+                              >
+                                {pane.expanded ? (
+                                  <Minimize2 className="size-5" />
+                                ) : (
+                                  <Maximize2 className="size-5" />
+                                )}
+                              </motion.span>
+                            </AnimatePresence>
+                          </span>
+                        </IconButton>
+                      )}
                     </div>
                     {editable && (
                       <HistoryToolbar
@@ -915,7 +969,13 @@ function EditorSurface({
                       // narrow panes. A phone has no history there and no width to spare.
                       editable &&
                         !narrowPane &&
-                        (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
+                        (pane.expandable
+                          ? note.isArchived
+                            ? 'sm:ml-10'
+                            : 'sm:ml-[5.5625rem]'
+                          : note.isArchived
+                            ? 'sm:ml-20'
+                            : 'sm:ml-[8.0625rem]'),
                     )}
                   >
                     <SaveStatus state={state} compact={narrowPane} />
@@ -1050,7 +1110,7 @@ function EditorSurface({
                         onClose={closeHistory}
                         onRestored={historyRestored}
                         split={split}
-                        wide={target.width >= HISTORY_LIST_MIN}
+                        wide={historyWide}
                         headerClassName={headerSpacing}
                         scrollRef={historyScrollRef}
                       />

@@ -12,86 +12,157 @@ import {
 } from './helpers';
 
 // A landscape tablet, wide enough to show an open note beside the page.
-test.use({ viewport: { width: 1180, height: 820 } });
+test.use({ viewport: { width: 1180, height: 820 }, video: 'on' });
 
-test('Gallery full screen persists across reloads, folding and rotation, and can return to split', async ({
-  page,
-}, testInfo) => {
-  test.setTimeout(120_000);
-  await page.setViewportSize({ width: 740, height: 860 });
-  await signUp(page);
-  await seedNotes(page, [{ title: 'Full note', body: 'Room to write' }]);
-  await openNote(page, 'Full note');
-  const handle = page.getByRole('separator', { name: 'Resize note' });
-  await expect(handle).toBeVisible();
-  await handle.press('ArrowRight');
-  const savedShare = await handle.getAttribute('aria-valuenow');
-  await page.goBack();
-  await expect(page.getByRole('dialog')).toBeHidden();
+test.describe('expanded Gallery panes', () => {
+  test('expanding beside Back animates the same card and dock, preserves editing, and restores the split', async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 690, height: 830 });
+    await signUp(page);
+    await seedNotes(page, [{ title: 'More room', body: 'Keep writing here' }]);
+    const dialog = await openNote(page, 'More room');
+    const editor = dialog.getByRole('textbox');
+    const originalEditor = await editor.elementHandle();
+    const handle = page.getByRole('separator', { name: 'Resize note' });
+    const savedShare = await handle.getAttribute('aria-valuenow');
+    const before = await settledBox(dialog);
+    const cardBefore = await settledBox(dialog.locator('[data-note-scroll]'));
+    const dockBefore = await settledBox(noteToolbar(page));
+    const expand = dialog.getByRole('button', { name: 'Expand note', exact: true });
+    const close = await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+    const control = await expand.boundingBox();
+    expect(close && control && control.x >= close.x + close.width).toBe(true);
+    await editor.click();
+    await editor.press('Control+End');
+    await page.keyboard.type(' extra');
+    await expect(editor).toContainText('extra');
 
-  await page.getByRole('button', { name: 'View options', exact: true }).click();
-  await expect(page.getByRole('menuitemradio', { name: 'Split view', exact: true })).toBeChecked();
-  await page.getByRole('menuitemradio', { name: 'Full screen', exact: true }).click();
-  await page.reload();
-  await page.getByRole('button', { name: 'View options', exact: true }).click();
-  await expect(page.getByRole('menuitemradio', { name: 'Full screen', exact: true })).toBeChecked();
-  await page.keyboard.press('Escape');
-
-  const dialog = await openNote(page, 'Full note');
-  await expect(handle).toBeHidden();
-  await expect(page.getByRole('link', { name: 'Deck' })).toBeHidden();
-  await expect(noteToolbar(page)).toHaveCount(1);
-  await expect
-    .poll(() =>
-      page
-        .locator('section[aria-label="Gallery"]')
-        .evaluate((element) => Boolean(element.closest('[inert]'))),
-    )
-    .toBe(true);
-  const editor = dialog.getByRole('textbox');
-  await editor.click();
-  await page.keyboard.press('End');
-  await page.keyboard.type(' with more space');
-  for (const viewport of [
-    { width: 740, height: 860 },
-    { width: 412, height: 915 },
-    { width: 860, height: 740 },
-  ]) {
-    await page.setViewportSize(viewport);
-    const box = await settledBox(dialog);
-    expect(box.x).toBeCloseTo(0, 0);
-    expect(box.y).toBeCloseTo(0, 0);
-    expect(box.width).toBeCloseTo(viewport.width, 0);
-    expect(box.height).toBeCloseTo(viewport.height, 0);
+    const motion = page.evaluate(
+      () =>
+        new Promise<{ left: number; width: number; dock: number }[]>((resolve) => {
+          const samples: { left: number; width: number; dock: number }[] = [];
+          const end = performance.now() + 5_000;
+          const sample = () => {
+            const note = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
+            const dock = document
+              .querySelector('[aria-label="Note actions"]')
+              ?.getBoundingClientRect();
+            if (note && dock)
+              samples.push({ left: note.x, width: note.width, dock: dock.x + dock.width / 2 });
+            if (performance.now() < end && (!note || note.x > 12.1)) requestAnimationFrame(sample);
+            else resolve(samples);
+          };
+          document
+            .querySelector('[aria-label="Expand note"]')
+            ?.addEventListener('pointerdown', () => requestAnimationFrame(sample), { once: true });
+        }),
+    );
+    await expand.click();
+    const samples = await motion;
+    const expanded = await settledBox(dialog);
+    expect(expanded.width - before.width).toBeGreaterThan(250);
+    expect(expanded.x).toBeCloseTo(12, 0);
+    expect(expanded.y).toBeCloseTo(before.y, 0);
+    expect(expanded.height).toBeCloseTo(before.height, 0);
+    expect(new Set(samples.map((frame) => Math.round(frame.width))).size).toBeGreaterThan(4);
+    expect(new Set(samples.map((frame) => Math.round(frame.dock))).size).toBeGreaterThan(4);
     await expect(editor).toBeFocused();
-    await expect(editor).toContainText('with more space');
+    expect(await originalEditor?.evaluate((element) => element.isConnected)).toBe(true);
     await expect(handle).toBeHidden();
-  }
-  await testInfo.attach('browser-version', {
-    body: page.context().browser()?.version() ?? 'unknown',
-    contentType: 'text/plain',
-  });
-  await page.screenshot({ path: testInfo.outputPath('gallery-full-screen.png') });
+    await expect(page.getByRole('link', { name: 'Gallery', exact: true })).toBeHidden();
+    const noteCard = dialog.locator('[data-note-scroll]');
+    const cardAfter = await settledBox(noteCard);
+    const dockAfter = await settledBox(noteToolbar(page));
+    expect(cardAfter.y).toBeCloseTo(cardBefore.y, 0);
+    expect(cardAfter.y + cardAfter.height).toBeLessThanOrEqual(dockAfter.y);
+    expect(dockAfter.y).toBeCloseTo(dockBefore.y, 0);
+    expect(
+      Number.parseFloat(
+        await noteCard.evaluate((element) => getComputedStyle(element).borderTopLeftRadius),
+      ),
+    ).toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath('expanded-note.png') });
+    await testInfo.attach('browser-version', {
+      body: page.context().browser()?.version() ?? 'unknown',
+      contentType: 'text/plain',
+    });
 
-  // Reloading a direct note URL keeps the chosen view and the saved edit.
-  await page.reload();
-  await expect(dialog.getByRole('textbox')).toContainText('with more space', {
-    timeout: APP_LOAD_TIMEOUT,
-  });
-  expect((await settledBox(dialog)).width).toBeCloseTo(860, 0);
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(card(page, 'Full note')).toBeVisible();
+    const restore = dialog.getByRole('button', { name: 'Show gallery', exact: true });
+    await expect(restore).toHaveAttribute('aria-pressed', 'true');
+    await restore.click();
+    expect((await settledBox(dialog)).width).toBeCloseTo(before.width, 0);
+    await expect(handle).toHaveAttribute('aria-valuenow', savedShare ?? '');
+    await expect(page.getByRole('link', { name: 'Gallery', exact: true })).toBeVisible();
+    await expect(editor).toBeFocused();
+    expect(await originalEditor?.evaluate((element) => element.isConnected)).toBe(true);
+    await page
+      .getByRole('toolbar', { name: 'Undo and redo' })
+      .getByRole('button', { name: 'Undo', exact: true })
+      .click();
+    await expect(editor).not.toContainText('extra');
 
-  await page.getByRole('button', { name: 'View options', exact: true }).click();
-  await page.getByRole('menuitemradio', { name: 'Split view', exact: true }).click();
-  await page.setViewportSize({ width: 740, height: 860 });
-  await openNote(page, 'Full note');
-  await expect(handle).toBeVisible();
-  await expect(handle).toHaveAttribute('aria-valuenow', savedShare ?? '');
-  await expect(page.getByRole('link', { name: 'Deck' })).toBeVisible();
-  await page.goBack();
-  await expect(dialog).toBeHidden();
+    // A second tap can reverse the width spring before it settles.
+    await expand.click();
+    await restore.click();
+    expect((await settledBox(dialog)).width).toBeCloseTo(before.width, 0);
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(card(page, 'More room')).toBeVisible();
+  });
+
+  test('the expanded pane is remembered through reopening, reload, folding and rotation with reduced motion', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 740, height: 860 });
+    await signUp(page);
+    await seedNotes(page, [
+      {
+        title: 'Remember this view',
+        body: [
+          'My tablet layout',
+          ...Array.from({ length: 40 }, (_, index) => `Line ${index + 1}`),
+        ].join('\n'),
+      },
+    ]);
+    const dialog = await openNote(page, 'Remember this view');
+    const scroller = dialog.locator('[data-note-scroll]');
+    await scroller.evaluate((element) => {
+      element.scrollTop = 180;
+    });
+    const scrollTop = await scroller.evaluate((element) => element.scrollTop);
+    expect(scrollTop).toBeGreaterThan(100);
+    await dialog.getByRole('button', { name: 'Expand note', exact: true }).click();
+    expect((await settledBox(dialog)).x).toBeCloseTo(12, 0);
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+    await page.goBack();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Gallery', exact: true })).toBeVisible();
+    await openNote(page, 'Remember this view');
+    await expect(dialog.getByRole('button', { name: 'Show gallery', exact: true })).toBeVisible();
+    for (const viewport of [
+      { width: 412, height: 915 },
+      { width: 860, height: 740 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const box = await settledBox(dialog);
+      expect(box.width).toBeCloseTo(viewport.width - (viewport.width < 672 ? 0 : 12), 0);
+      await expect(dialog.getByRole('textbox')).toContainText('My tablet layout');
+    }
+    await page.reload();
+    await expect(dialog.getByRole('textbox')).toContainText('My tablet layout', {
+      timeout: APP_LOAD_TIMEOUT,
+    });
+    await expect(dialog.getByRole('button', { name: 'Show gallery', exact: true })).toBeVisible();
+    expect((await settledBox(dialog)).x).toBeCloseTo(12, 0);
+    await page.screenshot({ path: testInfo.outputPath('expanded-note-reduced-motion.png') });
+    await dialog.getByRole('button', { name: 'Show gallery', exact: true }).click();
+    await expect(page.getByRole('separator', { name: 'Resize note' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden();
+  });
 });
 
 test('a note pane resumes opening when history restores it during its entrance', async ({

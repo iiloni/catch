@@ -126,7 +126,8 @@ function AppLayout() {
   const activeNote = editorNote.use();
   const directNote = Boolean(note && widgetNote === note);
   const waitingForWidgetNote = directNote && activeNote?.id !== note;
-  const hideBrowsingPage = directNote && (waitingForWidgetNote || !pane.split);
+  const hideBrowsingPage =
+    (directNote && (waitingForWidgetNote || !pane.split)) || (pane.shown && pane.covered);
 
   return (
     <>
@@ -148,7 +149,7 @@ function AppLayout() {
           opacity: hideBrowsingPage ? 0 : undefined,
         }}
         inert={
-          (Boolean(note) && !pane.split) ||
+          (Boolean(note) && (!pane.split || pane.expanded)) ||
           noteState === 'open' ||
           noteState === 'capture' ||
           Boolean(capture)
@@ -175,7 +176,7 @@ function AppLayout() {
       <AppUpdatePrompt />
       <WebUpdatePrompt />
       <AnimatePresence>
-        {pane.shown && note && (
+        {pane.shown && !pane.expanded && note && (
           <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />
         )}
       </AnimatePresence>
