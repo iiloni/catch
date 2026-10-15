@@ -230,6 +230,209 @@ test.describe('expanded Gallery panes', () => {
   });
 });
 
+test('link and media previews crossfade into their column throughout note expansion', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 740, height: 860 });
+  await signUp(page);
+  await seedNotes(page, [
+    {
+      title: 'Room for previews',
+      body: 'Read https://example.com/one and https://example.org/two',
+    },
+  ]);
+  const dialog = await openNote(page, 'Room for previews');
+  await noteToolbar(page).getByRole('button', { name: 'Attach files', exact: true }).click();
+  const picker = page.getByRole('region', { name: 'Add attachment' });
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    picker.getByRole('button', { name: 'Files', exact: true }).click(),
+  ]);
+  await chooser.setFiles({
+    name: 'preview.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  });
+  const inline = dialog.locator('[data-note-extras="inline"]');
+  const side = dialog.locator('[data-note-extras="side"]');
+  await expect(inline.getByRole('region', { name: 'Links', exact: true })).toBeVisible();
+  await expect(inline.getByRole('region', { name: 'Media', exact: true })).toBeVisible();
+  const editor = await dialog.getByRole('textbox').elementHandle();
+  const surface = dialog.locator('[data-note-scroll]');
+  const before = await settledBox(surface);
+  await page.screenshot({ path: testInfo.outputPath('inline-previews.png') });
+  const animation = page.evaluate(
+    () =>
+      new Promise<
+        {
+          card: number;
+          slot: number;
+          preview: number;
+          inlineOpacity: number;
+          sideOpacity: number;
+        }[]
+      >((resolve) => {
+        const frames: {
+          card: number;
+          slot: number;
+          preview: number;
+          inlineOpacity: number;
+          sideOpacity: number;
+        }[] = [];
+        const end = performance.now() + 5_000;
+        function capture() {
+          const dialog = document.querySelector('[role="dialog"]');
+          const card = dialog?.querySelector('[data-note-scroll]');
+          const inline = dialog?.querySelector('[data-note-extras="inline"]');
+          const side = dialog?.querySelector('[data-note-extras="side"]');
+          const preview = side?.querySelector('[data-note-links]');
+          if (!dialog || !card || !inline || !side || !preview) return resolve(frames);
+          frames.push({
+            card: card.getBoundingClientRect().width,
+            slot: side.getBoundingClientRect().width,
+            preview: preview.getBoundingClientRect().width,
+            inlineOpacity: Number(getComputedStyle(inline).opacity),
+            sideOpacity: Number(getComputedStyle(side).opacity),
+          });
+          if (performance.now() < end && dialog.getBoundingClientRect().x > 12.1)
+            requestAnimationFrame(capture);
+          else resolve(frames);
+        }
+        document
+          .querySelector('[aria-label="Expand note"]')
+          ?.addEventListener('pointerdown', () => requestAnimationFrame(capture), { once: true });
+      }),
+  );
+  await dialog.getByRole('button', { name: 'Expand note', exact: true }).click();
+  const frames = await animation;
+  const after = await settledBox(surface);
+  expect(frames.length).toBeGreaterThan(5);
+  expect(new Set(frames.map((frame) => Math.round(frame.slot))).size).toBeGreaterThan(4);
+  expect(frames.some((frame) => frame.inlineOpacity > 0.05 && frame.inlineOpacity < 0.95)).toBe(
+    true,
+  );
+  expect(frames.some((frame) => frame.sideOpacity > 0.05 && frame.sideOpacity < 0.95)).toBe(true);
+  for (const frame of frames) {
+    expect(frame.card).toBeLessThanOrEqual(Math.max(before.width, after.width) + 2);
+    expect(frame.card).toBeGreaterThanOrEqual(Math.min(before.width, after.width) - 2);
+    expect(frame.preview).toBeCloseTo(256, 0);
+  }
+  expect(after.y).toBeCloseTo(before.y, 0);
+  expect(after.height).toBeCloseTo(before.height, 0);
+  await expect(inline).toBeHidden();
+  await expect(side.getByRole('region', { name: 'Links', exact: true })).toBeVisible();
+  await expect(side.getByRole('region', { name: 'Media', exact: true })).toBeVisible();
+  expect(await editor?.evaluate((element) => element.isConnected)).toBe(true);
+  await testInfo.attach('preview-expansion-frames', {
+    body: JSON.stringify(frames),
+    contentType: 'application/json',
+  });
+  await page.screenshot({ path: testInfo.outputPath('side-previews.png') });
+  const returning = page.evaluate(
+    () =>
+      new Promise<{ slot: number; height: number; opacity: number }[]>((resolve) => {
+        const frames: { slot: number; height: number; opacity: number }[] = [];
+        const end = performance.now() + 5_000;
+        function capture() {
+          const inline = document.querySelector('[data-note-extras="inline"]');
+          const side = document.querySelector('[data-note-extras="side"]');
+          if (!inline || !side) return resolve(frames);
+          const slot = side.getBoundingClientRect().width;
+          frames.push({
+            slot,
+            height: inline.getBoundingClientRect().height,
+            opacity: Number(getComputedStyle(inline).opacity),
+          });
+          if (performance.now() < end && slot > 0.1) requestAnimationFrame(capture);
+          else resolve(frames);
+        }
+        document
+          .querySelector('[aria-label="Show gallery"]')
+          ?.addEventListener('pointerdown', () => requestAnimationFrame(capture), { once: true });
+      }),
+  );
+  await dialog.getByRole('button', { name: 'Show gallery', exact: true }).click();
+  const returnFrames = await returning;
+  const moving = returnFrames.filter((frame) => frame.slot > 30 && frame.slot < 235);
+  expect(moving.length).toBeGreaterThan(3);
+  for (const frame of moving) {
+    expect(frame.height).toBeGreaterThan(5);
+    expect(frame.opacity).toBeGreaterThan(0.05);
+  }
+  await testInfo.attach('preview-return-frames', {
+    body: JSON.stringify(returnFrames),
+    contentType: 'application/json',
+  });
+  expect((await settledBox(surface)).width).toBeCloseTo(before.width, 0);
+  await expect(inline.getByRole('region', { name: 'Links', exact: true })).toBeVisible();
+  await expect(side).toBeHidden();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await dialog.getByRole('button', { name: 'Expand note', exact: true }).click();
+  expect((await settledBox(surface)).width).toBeCloseTo(after.width, 0);
+  await expect(inline).toBeHidden();
+  await expect(side.getByRole('region', { name: 'Links', exact: true })).toBeVisible();
+});
+
+test('the scrolled page edge blur paints continuously behind both split panes', async ({
+  page,
+}, testInfo) => {
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 24 }, (_, index) => ({
+      title: `Edge blur ${index}`,
+      body: 'A card beneath the shared edge blur. '.repeat(8),
+    })),
+  );
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-area-inset-top', '64px');
+    document.documentElement.dataset.theme = 'dark';
+  });
+  const dialog = await openNote(page, 'Edge blur 0');
+  await page.evaluate(() => window.scrollTo(0, 180));
+  await expect(page.locator('[data-page-header] .page-top-blur')).toHaveCSS('opacity', '1');
+
+  async function checkSeam(name: string) {
+    const pane = await settledBox(dialog);
+    const image = await page.screenshot({ path: testInfo.outputPath(`${name}.png`), scale: 'css' });
+    const colors = await page.evaluate(
+      async ({ encoded, edge }) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${encoded}`;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Missing screenshot canvas');
+        context.drawImage(image, 0, 0);
+        const pixel = (x: number, y: number) =>
+          Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+        return { left: pixel(edge - 8, 2), right: pixel(edge + 8, 2), page: pixel(edge - 8, 300) };
+      },
+      { encoded: image.toString('base64'), edge: Math.round(pane.x) },
+    );
+    // The empty status-bar strip has the same tint on either side of the pane boundary.
+    // Checking the painted pixels catches an opaque pane hiding a correctly sized blur.
+    for (let channel = 0; channel < 3; channel++) {
+      expect(Math.abs(colors.left[channel] - colors.right[channel])).toBeLessThanOrEqual(2);
+    }
+    expect(
+      Math.max(...colors.left.map((value, channel) => Math.abs(value - colors.page[channel]))),
+    ).toBeGreaterThan(3);
+  }
+
+  await checkSeam('split-edge-blur');
+  await dialog.getByRole('button', { name: 'Expand note', exact: true }).click();
+  expect((await settledBox(dialog)).x).toBeCloseTo(12, 0);
+  await dialog.getByRole('button', { name: 'Show gallery', exact: true }).click();
+  await checkSeam('restored-edge-blur');
+});
+
 test('a note pane resumes opening when history restores it during its entrance', async ({
   page,
 }) => {

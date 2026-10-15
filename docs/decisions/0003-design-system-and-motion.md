@@ -181,7 +181,12 @@ The Gallery, its header and its dock keep their split widths and fade out togeth
 fade back into the same positions when restored. The note's growing width is separate from
 the space reserved for the page's fixed controls, so they never squeeze toward the edge.
 One pane spring moves the note's left edge, its width, its dock and the Gallery fade together, advancing by
-painted frames so busy rendering cannot skip its entrance. A tap can reverse it from its
+painted frames so busy rendering cannot skip its entrance. The preview layout is chosen from
+both endpoint widths before expansion: the card reserves the sidebar's space on that same
+spring while its inline links, media and tags fade and collapse. The fixed-width sidebar
+fades into the opening space, so previews never stretch across the note and then snap to a
+column at an intermediate breakpoint. Only the destination link list reports visibility to
+the dock while the two copies crossfade. A tap can reverse it from its
 current width, with no text scaling, and reduced motion changes the layout immediately. Folding to phone
 width temporarily uses the phone layout; unfolding restores the chosen pane layout.
 Search keeps its ordinary split. Landscape phones are too short for two panes and keep

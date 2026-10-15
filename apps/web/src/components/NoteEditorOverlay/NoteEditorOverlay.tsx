@@ -324,7 +324,6 @@ function EditorSurface({
     gainedWidth,
     HEADER_HISTORY_MIN + (pane.expandable ? 40 : 0),
   );
-  const linksWide = usePaneWidthAtLeast(target.width, gainedWidth, SIDE_LINKS_MIN);
   const historyWide = usePaneWidthAtLeast(target.width, gainedWidth, HISTORY_LIST_MIN);
   const narrowPane = split && !headerWide;
   const fullscreen = !split && target.radius === 0;
@@ -338,7 +337,38 @@ function EditorSurface({
   useEditorDock(note, historyOpen ? null : controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
-  const sideLinks = split && linksWide && (hasLinks || hasMedia || hasTags);
+  const hasExtras = hasLinks || hasMedia || hasTags;
+  const splitLinks = split && hasExtras && target.width >= SIDE_LINKS_MIN;
+  const expandedLinks =
+    split && pane.expandable && hasExtras && target.width + gainedWidth >= SIDE_LINKS_MIN;
+  const sideLinks = splitLinks || (pane.expanded && expandedLinks);
+  // Choose both endpoint layouts before the width spring starts. Reserving the sidebar
+  // gradually makes the card's growth and sideways move one motion, without a breakpoint snap.
+  const linksProgress = useTransform(() =>
+    splitLinks ? 1 : expandedLinks ? paneExpansion.get() : 0,
+  );
+  const linksSpace = useTransform(() => (256 + PANEL_GAP) * linksProgress.get());
+  const sideOpacity = useTransform(linksProgress, [0, 0.3, 1], [0, 0, 1]);
+  const inlineOpacity = useTransform(linksProgress, [0, 1], [1, 0]);
+  const sideVisibility = useTransform(() => (linksProgress.get() === 0 ? 'hidden' : 'visible'));
+  const inlineVisibility = useTransform(() => (linksProgress.get() === 1 ? 'hidden' : 'visible'));
+  const inlineSize = useMotionValue(0);
+  // The portal mounts after this surface's layout effects. Measure on attachment so the
+  // inline previews have a real height throughout both directions of the width spring.
+  const measureInlineExtras = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) return;
+      const update = () => inlineSize.set(element.getBoundingClientRect().height);
+      update();
+      const observer = new ResizeObserver(update);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+    [inlineSize],
+  );
+  const inlineHeight = useTransform(() =>
+    linksProgress.get() === 0 ? 'auto' : inlineSize.get() * (1 - linksProgress.get()),
+  );
 
   useEffect(() => {
     if (!split || !isPresent) return;
@@ -715,8 +745,6 @@ function EditorSurface({
         split &&
           cn(
             'border border-transparent bg-note shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
-            // The card stops above the pane's dock, which follows the keyboard up.
-            !sideLinks && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
           ),
       )}
     >
@@ -747,13 +775,24 @@ function EditorSurface({
           ) : (
             <NotePreview content={note.content} maxBlocks={200} variant="editor" />
           )}
-          {!sideLinks && <NoteTags noteId={note.id} className="note-links-inset pt-5" />}
-          {!sideLinks && (
-            <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
-          )}
-          {!sideLinks && (
-            <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />
-          )}
+          <motion.div
+            data-note-extras="inline"
+            inert={sideLinks}
+            aria-hidden={sideLinks || undefined}
+            className="shrink-0 overflow-hidden"
+            style={{ height: inlineHeight, opacity: inlineOpacity, visibility: inlineVisibility }}
+          >
+            <div ref={measureInlineExtras}>
+              <NoteTags noteId={note.id} className="note-links-inset pt-5" />
+              <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
+              <NoteLinks
+                note={note}
+                variant="below"
+                active={!sideLinks}
+                className="note-links-inset pt-5"
+              />
+            </div>
+          </motion.div>
           {reminder && !note.deletedAt && (
             <div className="flex justify-center px-4 pt-6">
               <ReminderChip
@@ -838,7 +877,7 @@ function EditorSurface({
             data-note-color={color}
             className={cn(
               'fixed z-50 flex flex-col text-card-foreground outline-none',
-              split ? 'bg-background' : 'overflow-hidden bg-note',
+              !split && 'overflow-hidden bg-note',
             )}
             style={{
               left: target.x,
@@ -1068,32 +1107,41 @@ function EditorSurface({
                   </div>
                 </header>
 
-                <div
+                <motion.div
                   className={cn(
-                    'flex min-h-0 flex-1',
-                    sideLinks &&
-                      'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] gap-3',
+                    'relative flex min-h-0 flex-1',
+                    // Both columns stop above the dock; only the space reserved beside the
+                    // card changes while expanding, never its height or scroll viewport.
+                    split && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
                   )}
+                  style={{ paddingRight: linksSpace }}
                 >
                   {scrollArea}
-                  {sideLinks && (
+                  {(splitLinks || expandedLinks) && (
                     <motion.aside
-                      className="min-h-0 w-64 shrink-0"
-                      initial={{ opacity: 0, x: 16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={springs.smooth}
+                      data-note-extras="side"
+                      inert={!sideLinks}
+                      aria-hidden={!sideLinks || undefined}
+                      className="absolute inset-y-0 right-0 min-h-0 overflow-hidden"
+                      style={{
+                        width: linksSpace,
+                        opacity: sideOpacity,
+                        visibility: sideVisibility,
+                      }}
                     >
-                      <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
-                        <ScrollAreaViewport className="pb-6">
-                          <NoteTags noteId={note.id} className="mb-4" />
-                          <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
-                          <NoteLinks note={note} variant="side" />
-                        </ScrollAreaViewport>
-                        <ScrollBar />
-                      </ScrollArea>
+                      <div className="absolute inset-y-0 right-0 w-64">
+                        <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
+                          <ScrollAreaViewport className="pb-6">
+                            <NoteTags noteId={note.id} className="mb-4" />
+                            <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
+                            <NoteLinks note={note} variant="side" active={sideLinks} />
+                          </ScrollAreaViewport>
+                          <ScrollBar />
+                        </ScrollArea>
+                      </div>
                     </motion.aside>
                   )}
-                </div>
+                </motion.div>
               </motion.div>
               <AnimatePresence>
                 {historyOpen && (
