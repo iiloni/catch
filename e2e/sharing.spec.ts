@@ -27,14 +27,15 @@ test('shared text and multiple files become one note, with no duplicate after re
   const id = await stageShare(page, true);
   await page.goto(`/share?id=${id}`);
   const editor = page.getByRole('dialog', { name: 'Edit note' });
+  const media = editor.getByRole('region', { name: 'Media', exact: true });
   await expect(editor).toBeVisible({ timeout: 15_000 });
   await expect(editor.getByRole('textbox')).toContainText('Shared trip');
   await expect(editor.getByRole('textbox')).toContainText('Pack light');
   await expect(
     editor.getByRole('link', { name: 'https://example.com/trip', exact: true }),
   ).toBeVisible();
-  await expect(editor.getByText('tickets.txt', { exact: true })).toBeVisible();
-  await expect(editor.getByText('map.txt', { exact: true })).toBeVisible();
+  await expect(media.getByText('tickets.txt', { exact: true })).toBeVisible();
+  await expect(media.getByText('map.txt', { exact: true })).toBeVisible();
   const saved = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/notes/${id}`) && response.request().method() === 'PATCH',
@@ -74,12 +75,13 @@ test('an offline share is queued locally and survives reload', async ({ page }) 
   const id = await stageShare(page, true);
   await page.goto(`/share?id=${id}`);
   const editor = page.getByRole('dialog', { name: 'Edit note' });
+  const media = editor.getByRole('region', { name: 'Media', exact: true });
   await expect(editor).toBeVisible({ timeout: 15_000 });
   await expect(editor.getByRole('textbox')).toContainText('Shared trip');
   await page.reload();
   await expect(editor).toBeVisible({ timeout: 15_000 });
   await expect(editor.getByRole('textbox')).toContainText('Pack light');
-  await expect(editor.getByText('tickets.txt', { exact: true })).toBeVisible();
+  await expect(media.getByText('tickets.txt', { exact: true })).toBeVisible();
 });
 
 test.describe('production PWA share target', () => {
@@ -136,10 +138,11 @@ test.describe('production PWA share target', () => {
       form.submit();
     });
     const editor = page.getByRole('dialog', { name: 'Edit note' });
+    const media = editor.getByRole('region', { name: 'Media', exact: true });
     await expect(editor).toBeVisible({ timeout: 15_000 });
     await expect(editor.getByRole('textbox')).toContainText('Offline PWA share');
-    await expect(editor.getByText('first.txt', { exact: true })).toBeVisible();
-    await expect(editor.getByText('second.txt', { exact: true })).toBeVisible();
+    await expect(media.getByText('first.txt', { exact: true })).toBeVisible();
+    await expect(media.getByText('second.txt', { exact: true })).toBeVisible();
     await page.reload();
     await expect(editor.getByRole('textbox')).toContainText('Saved from another app');
     await context.setOffline(false);
