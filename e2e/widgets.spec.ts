@@ -7,6 +7,12 @@ async function widgetBridge(page: Page) {
     route.fulfill({
       contentType: 'text/javascript',
       body: `
+        // A cold tap belongs to the next launch, like the one Android retains for a new process.
+        const cold = sessionStorage.getItem('widget-test-cold-launch');
+        if (cold) {
+          sessionStorage.setItem('widget-test-launch', cold);
+          sessionStorage.removeItem('widget-test-cold-launch');
+        }
         const read = () => JSON.parse(sessionStorage.getItem('widget-test-launch') || 'null');
         export const nativeWidgets = {
           available: true,
@@ -41,8 +47,9 @@ async function stageTap(
     async ({ action, noteId, deliver, deliveries }) => {
       const { getSignedInUser } = await import('/src/lib/auth.ts');
       const { getServerUrl } = await import('/src/lib/serverUrl.ts');
+      // Staged for the next page load, the tap must not reach this page's pending initial delivery.
       sessionStorage.setItem(
-        'widget-test-launch',
+        deliver ? 'widget-test-launch' : 'widget-test-cold-launch',
         JSON.stringify({
           id: crypto.randomUUID(),
           account: getSignedInUser().id,

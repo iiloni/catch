@@ -17,23 +17,26 @@ import {
 } from './helpers';
 
 test('notes are created, edited, and synced across tabs', async ({ page, context }) => {
+  // Two copies of the app share the runner's CPU, and a second tab syncs through the first
+  // tab's device database. Each hand-over takes about 2s on a fast machine and grows with load.
+  const crossTab = { timeout: 15_000 };
   await signUp(page);
   await createNote(page, 'Groceries', 'Oat milk');
 
   const otherTab = await context.newPage();
   await otherTab.goto('/');
-  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk');
+  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk', crossTab);
 
   const dialog = await openNote(otherTab, 'Groceries');
   await dialog.getByText('Oat milk').click();
   await otherTab.keyboard.press('End');
   await otherTab.keyboard.type(' and eggs');
-  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible(crossTab);
   await dialog.getByRole('button', { name: 'Close' }).click();
 
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
   await page.reload();
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
 });
 
 test('swiping the quick-note handle up expands after the release threshold', async ({
@@ -617,6 +620,10 @@ for (const direction of [-1, 1]) {
         reducedMotion: reducedMotion ? 'reduce' : 'no-preference',
         colorScheme: direction === 1 ? 'light' : 'dark',
       });
+      // Motion keeps the requestAnimationFrame it finds when the app loads. Installed later,
+      // the fake clock would only move its animations on the browser's next real frame,
+      // which can paint after a measurement; installed first, `runFor` paints each frame.
+      await page.clock.install();
       await signUp(page);
       // Cover both a closing masonry gap and the last card yielding to the empty state.
       const peerTitles =
@@ -640,7 +647,6 @@ for (const direction of [-1, 1]) {
       const originalIcon = await icon.elementHandle();
       await expect(icon.locator('svg')).toHaveCount(1);
 
-      await page.clock.install();
       await page.clock.pauseAt(new Date(Date.now() + 1000));
       // Firefox has no CDP touch input. Drive the touch pointer handlers directly here;
       // the preceding test covers the browser's native touch recognition in Chromium.
