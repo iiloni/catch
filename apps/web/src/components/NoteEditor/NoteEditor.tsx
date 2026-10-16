@@ -267,6 +267,7 @@ export function NoteEditor({
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
       <NoteSideMenuController />
+      <EndHiddenEmojiSuggestions />
       <SuggestionMenuController
         triggerCharacter="/"
         shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
@@ -340,6 +341,29 @@ function CodeLanguagePicker({
       }}
     />
   );
+}
+
+/**
+ * BlockNote's emoji picker hides once its query starts with a space ("Note: ...") but keeps
+ * the suggestion session open for the rest of the line. Every keystroke in it then updates
+ * the menus' shared state, and after about 50 React reports an update loop, or on a slow
+ * device unmounts the app. Ending the session when the picker hides changes nothing visible.
+ */
+function EndHiddenEmojiSuggestions() {
+  const suggestionMenu = useExtension(SuggestionMenu);
+  const hidden = useExtensionState(SuggestionMenu, {
+    selector: (state) =>
+      Boolean(
+        state?.show &&
+          state.triggerCharacter === ':' &&
+          !state.ignoreQueryLength &&
+          state.query.startsWith(' '),
+      ),
+  });
+  useEffect(() => {
+    if (hidden) suggestionMenu.closeMenu();
+  }, [hidden, suggestionMenu]);
+  return null;
 }
 
 function NoteSideMenuController() {
