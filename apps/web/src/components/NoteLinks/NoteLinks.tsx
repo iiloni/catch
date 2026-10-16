@@ -17,6 +17,8 @@ type Props = {
    * the note, for editors wide enough to hold one.
    */
   variant: 'below' | 'side';
+  /** Only the destination list publishes dock visibility during a layout crossfade. */
+  active?: boolean;
   className?: string;
 };
 
@@ -25,34 +27,40 @@ type Props = {
  * after it (or beside it) rather than in it. Reports whether they are on screen, so the dock
  * can offer them when they are not.
  */
-export function NoteLinks({ note, variant, className }: Props) {
+export function NoteLinks({ note, variant, className, active = true }: Props) {
   const links = useNoteLinks(note);
   if (links.length === 0) return null;
-  return <LinkList note={note} links={links} variant={variant} className={className} />;
+  return (
+    <LinkList note={note} links={links} variant={variant} className={className} active={active} />
+  );
 }
 
-function LinkList({ note, links, variant, className }: Props & { links: ResolvedLink[] }) {
+function LinkList({ note, links, variant, className, active }: Props & { links: ResolvedLink[] }) {
   const ref = useRef<HTMLElement>(null);
   const noteId = note.id;
 
   useEffect(() => {
     const element = ref.current;
-    if (!element) return;
+    if (!element || !active) return;
     if (variant === 'side') {
       setEditorLinksInView(noteId, true);
       return () => setEditorLinksInView(noteId, false);
     }
     // The dock covers the bottom of the screen, so cards behind it are not in view.
+    let observing = true;
     const observer = new IntersectionObserver(
-      ([entry]) => setEditorLinksInView(noteId, Boolean(entry?.isIntersecting)),
+      ([entry]) => {
+        if (observing) setEditorLinksInView(noteId, Boolean(entry?.isIntersecting));
+      },
       { rootMargin: '0px 0px -120px 0px' },
     );
     observer.observe(element);
     return () => {
+      observing = false;
       observer.disconnect();
       setEditorLinksInView(noteId, false);
     };
-  }, [variant, noteId]);
+  }, [variant, noteId, active]);
 
   return (
     <section

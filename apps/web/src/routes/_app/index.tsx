@@ -142,7 +142,7 @@ function GalleryPage() {
         ref={measureGallery}
         aria-label="Gallery"
         style={{ x: gutterShift }}
-        className="mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
+        className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
         {awaitingSync ? null : (
           <div>

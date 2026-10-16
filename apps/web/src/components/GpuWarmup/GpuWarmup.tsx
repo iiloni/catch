@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   LayoutDashboard,
   type LucideIcon,
+  Maximize2,
   Palette,
   Paperclip,
   Pin,
@@ -130,7 +131,10 @@ function NoteSample() {
       <div className="page-top-blur absolute inset-x-0 top-0 z-10 h-32" />
       <div className="page-bottom-blur absolute inset-x-0 bottom-0 z-10 h-32" />
       <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-3 pt-[calc(var(--safe-top)+0.5rem)]">
-        <div className="glass flex rounded-[var(--dock-radius)] p-1">{icon(ChevronLeft)}</div>
+        <div className="glass flex rounded-[var(--dock-radius)] p-1">
+          {icon(ChevronLeft)}
+          {icon(Maximize2)}
+        </div>
         <div className="glass flex items-center rounded-[var(--dock-radius)] p-1">
           {icon(Pin, 'size-6 fill-current')}
           <span className="mx-1 h-6 w-px bg-foreground/15" />

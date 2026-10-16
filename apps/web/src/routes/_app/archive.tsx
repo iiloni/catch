@@ -47,7 +47,7 @@ function ArchivePage() {
       <motion.section
         aria-label="Archive"
         style={{ x: gutterShift }}
-        className="mx-auto max-w-7xl px-3 pt-3 sm:px-6"
+        className="gallery-fade mx-auto max-w-7xl px-3 pt-3 sm:px-6"
       >
         {awaitingSync ? null : shown.length > 0 ? (
           <NoteGrid

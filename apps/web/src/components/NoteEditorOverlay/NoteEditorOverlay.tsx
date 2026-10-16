@@ -1,6 +1,15 @@
 import type { HistoryRestoreResult, Note } from '@catch/shared';
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { Archive, ArchiveRestore, ChevronLeft, Pin, Share2, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Pin,
+  Share2,
+  Trash2,
+} from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -83,9 +92,12 @@ import {
   GUTTER,
   HEADER_HISTORY_MIN,
   type NotePane,
+  paneExpansion,
   paneNoteId,
   paneReveal,
+  useGalleryExpanded,
   useNotePane,
+  usePaneWidthAtLeast,
 } from '@/lib/splitView';
 import { useNoteColor, useResolvedNoteTags } from '@/lib/tags';
 import { useNoteAutosave } from '@/lib/useNoteAutosave';
@@ -290,6 +302,7 @@ function EditorSurface({
     setEditorGeneration((value) => value + 1);
   };
   const pane = useNotePane();
+  const [, setExpanded] = useGalleryExpanded();
   // Leaving for the Deck closes the note on a page that does not split, so a closing note
   // keeps the layout it had: a pane slides away rather than turning into a panel.
   const splitRef = useRef(pane.split);
@@ -305,7 +318,14 @@ function EditorSurface({
     [viewportWidth, viewportHeight],
   );
   const target = targetRect({ ...pane, split }, insets);
-  const narrowPane = split && target.width < HEADER_HISTORY_MIN;
+  const gainedWidth = split ? target.x - GUTTER / 2 : 0;
+  const headerWide = usePaneWidthAtLeast(
+    target.width,
+    gainedWidth,
+    HEADER_HISTORY_MIN + (pane.expandable ? 40 : 0),
+  );
+  const historyWide = usePaneWidthAtLeast(target.width, gainedWidth, HISTORY_LIST_MIN);
+  const narrowPane = split && !headerWide;
   const fullscreen = !split && target.radius === 0;
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -317,7 +337,38 @@ function EditorSurface({
   useEditorDock(note, historyOpen ? null : controls, isPresent);
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
-  const sideLinks = split && target.width >= SIDE_LINKS_MIN && (hasLinks || hasMedia || hasTags);
+  const hasExtras = hasLinks || hasMedia || hasTags;
+  const splitLinks = split && hasExtras && target.width >= SIDE_LINKS_MIN;
+  const expandedLinks =
+    split && pane.expandable && hasExtras && target.width + gainedWidth >= SIDE_LINKS_MIN;
+  const sideLinks = splitLinks || (pane.expanded && expandedLinks);
+  // Choose both endpoint layouts before the width spring starts. Reserving the sidebar
+  // gradually makes the card's growth and sideways move one motion, without a breakpoint snap.
+  const linksProgress = useTransform(() =>
+    splitLinks ? 1 : expandedLinks ? paneExpansion.get() : 0,
+  );
+  const linksSpace = useTransform(() => (256 + PANEL_GAP) * linksProgress.get());
+  const sideOpacity = useTransform(linksProgress, [0, 0.3, 1], [0, 0, 1]);
+  const inlineOpacity = useTransform(linksProgress, [0, 1], [1, 0]);
+  const sideVisibility = useTransform(() => (linksProgress.get() === 0 ? 'hidden' : 'visible'));
+  const inlineVisibility = useTransform(() => (linksProgress.get() === 1 ? 'hidden' : 'visible'));
+  const inlineSize = useMotionValue(0);
+  // The portal mounts after this surface's layout effects. Measure on attachment so the
+  // inline previews have a real height throughout both directions of the width spring.
+  const measureInlineExtras = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) return;
+      const update = () => inlineSize.set(element.getBoundingClientRect().height);
+      update();
+      const observer = new ResizeObserver(update);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+    [inlineSize],
+  );
+  const inlineHeight = useTransform(() =>
+    linksProgress.get() === 0 ? 'auto' : inlineSize.get() * (1 - linksProgress.get()),
+  );
 
   useEffect(() => {
     if (!split || !isPresent) return;
@@ -370,9 +421,13 @@ function EditorSurface({
   const x = useTransform(() => {
     const p = progress.get();
     const reveal = paneReveal.get();
+    const expansion = paneExpansion.get();
     layoutTick.get();
     const card = cardRect.current;
-    if (splitRef.current) return (1 - reveal) * targetRef.current.width;
+    if (splitRef.current) {
+      const gained = (targetRef.current.x - GUTTER / 2) * expansion;
+      return (1 - reveal) * (targetRef.current.width + gained) - gained;
+    }
     return card ? (1 - p) * (card.x - targetRef.current.x) : 0;
   });
   const y = useTransform(() => {
@@ -391,8 +446,17 @@ function EditorSurface({
     const card = cardRect.current;
     const t = targetRef.current;
     const p = progress.get();
+    const expansion = paneExpansion.get();
     layoutTick.get();
-    return card && !splitRef.current ? lerp(card.width, t.width, p) : t.width;
+    if (splitRef.current) return t.width + (t.x - GUTTER / 2) * expansion;
+    return card ? lerp(card.width, t.width, p) : t.width;
+  });
+  // Keep one binding while folding between pane and phone. Swapping a live Motion value
+  // for a numeric style can leave the editor at its previous pane width.
+  const contentWidth = useTransform(() => {
+    const paneWidth = width.get();
+    layoutTick.get();
+    return splitRef.current ? paneWidth : targetRef.current.width;
   });
   const height = useTransform(() => {
     const card = cardRect.current;
@@ -681,8 +745,6 @@ function EditorSurface({
         split &&
           cn(
             'border border-transparent bg-note shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-16px_oklch(0_0_0/0.18)] data-[note-color=default]:border-border',
-            // The card stops above the pane's dock, which follows the keyboard up.
-            !sideLinks && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
           ),
       )}
     >
@@ -713,13 +775,24 @@ function EditorSurface({
           ) : (
             <NotePreview content={note.content} maxBlocks={200} variant="editor" />
           )}
-          {!sideLinks && <NoteTags noteId={note.id} className="note-links-inset pt-5" />}
-          {!sideLinks && (
-            <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
-          )}
-          {!sideLinks && (
-            <NoteLinks note={note} variant="below" className="note-links-inset pt-5" />
-          )}
+          <motion.div
+            data-note-extras="inline"
+            inert={sideLinks}
+            aria-hidden={sideLinks || undefined}
+            className="shrink-0 overflow-hidden"
+            style={{ height: inlineHeight, opacity: inlineOpacity, visibility: inlineVisibility }}
+          >
+            <div ref={measureInlineExtras}>
+              <NoteTags noteId={note.id} className="note-links-inset pt-5" />
+              <NoteMedia noteId={note.id} readOnly={!editable} className="note-links-inset pt-5" />
+              <NoteLinks
+                note={note}
+                variant="below"
+                active={!sideLinks}
+                className="note-links-inset pt-5"
+              />
+            </div>
+          </motion.div>
           {reminder && !note.deletedAt && (
             <div className="flex justify-center px-4 pt-6">
               <ReminderChip
@@ -845,7 +918,7 @@ function EditorSurface({
               )}
               // The surface can be any size; the editor keeps its viewport and scroll.
               style={{
-                width: target.width,
+                width: contentWidth,
                 height: target.height,
                 opacity: contentOpacity,
                 y: contentY,
@@ -893,6 +966,37 @@ function EditorSurface({
                       >
                         <ChevronLeft />
                       </IconButton>
+                      {split && pane.expandable && (
+                        <IconButton
+                          label={pane.expanded ? 'Show gallery' : 'Expand note'}
+                          aria-pressed={pane.expanded}
+                          onPointerDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            haptics.toggle();
+                            setExpanded(!pane.expanded);
+                          }}
+                          className="size-10 rounded-[calc(var(--dock-radius)-0.25rem)] [&_svg]:size-5"
+                        >
+                          <span className="relative size-5">
+                            <AnimatePresence initial={false}>
+                              <motion.span
+                                key={pane.expanded ? 'restore' : 'expand'}
+                                className="absolute inset-0 [&_svg]:size-5"
+                                initial={{ opacity: 0, scale: 0.7 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.7 }}
+                                transition={reducedMotion ? { duration: 0 } : springs.snappy}
+                              >
+                                {pane.expanded ? (
+                                  <Minimize2 className="size-5" />
+                                ) : (
+                                  <Maximize2 className="size-5" />
+                                )}
+                              </motion.span>
+                            </AnimatePresence>
+                          </span>
+                        </IconButton>
+                      )}
                     </div>
                     {editable && (
                       <HistoryToolbar
@@ -911,7 +1015,13 @@ function EditorSurface({
                       // narrow panes. A phone has no history there and no width to spare.
                       editable &&
                         !narrowPane &&
-                        (note.isArchived ? 'sm:ml-20' : 'sm:ml-[8.0625rem]'),
+                        (pane.expandable
+                          ? note.isArchived
+                            ? 'sm:ml-10'
+                            : 'sm:ml-[5.5625rem]'
+                          : note.isArchived
+                            ? 'sm:ml-20'
+                            : 'sm:ml-[8.0625rem]'),
                     )}
                   >
                     <SaveStatus state={state} compact={narrowPane} />
@@ -997,32 +1107,41 @@ function EditorSurface({
                   </div>
                 </header>
 
-                <div
+                <motion.div
                   className={cn(
-                    'flex min-h-0 flex-1',
-                    sideLinks &&
-                      'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)] gap-3',
+                    'relative flex min-h-0 flex-1',
+                    // Both columns stop above the dock; only the space reserved beside the
+                    // card changes while expanding, never its height or scroll viewport.
+                    split && 'mr-3 mb-[calc(var(--dock-height)+var(--dock-bottom)+0.75rem)]',
                   )}
+                  style={{ paddingRight: linksSpace }}
                 >
                   {scrollArea}
-                  {sideLinks && (
+                  {(splitLinks || expandedLinks) && (
                     <motion.aside
-                      className="min-h-0 w-64 shrink-0"
-                      initial={{ opacity: 0, x: 16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={springs.smooth}
+                      data-note-extras="side"
+                      inert={!sideLinks}
+                      aria-hidden={!sideLinks || undefined}
+                      className="absolute inset-y-0 right-0 min-h-0 overflow-hidden"
+                      style={{
+                        width: linksSpace,
+                        opacity: sideOpacity,
+                        visibility: sideVisibility,
+                      }}
                     >
-                      <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
-                        <ScrollAreaViewport className="pb-6">
-                          <NoteTags noteId={note.id} className="mb-4" />
-                          <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
-                          <NoteLinks note={note} variant="side" />
-                        </ScrollAreaViewport>
-                        <ScrollBar />
-                      </ScrollArea>
+                      <div className="absolute inset-y-0 right-0 w-64">
+                        <ScrollArea className="h-full [--scrollbar-inset:0.5rem]">
+                          <ScrollAreaViewport className="pb-6">
+                            <NoteTags noteId={note.id} className="mb-4" />
+                            <NoteMedia noteId={note.id} readOnly={!editable} className="mb-4" />
+                            <NoteLinks note={note} variant="side" active={sideLinks} />
+                          </ScrollAreaViewport>
+                          <ScrollBar />
+                        </ScrollArea>
+                      </div>
                     </motion.aside>
                   )}
-                </div>
+                </motion.div>
               </motion.div>
               <AnimatePresence>
                 {historyOpen && (
@@ -1046,7 +1165,7 @@ function EditorSurface({
                         onClose={closeHistory}
                         onRestored={historyRestored}
                         split={split}
-                        wide={target.width >= HISTORY_LIST_MIN}
+                        wide={historyWide}
                         headerClassName={headerSpacing}
                         scrollRef={historyScrollRef}
                       />

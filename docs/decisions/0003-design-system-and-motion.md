@@ -139,7 +139,8 @@ pane, and the note itself is a large rounded card between its back and trash too
 top and that dock at the bottom, so it reads as the page's card opened up. Tapping another card swaps the pane's note in place (replacing the history entry, so
 back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
 at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
-saved so it survives rotation and unfolding. Below 480 px of note width, undo and redo float
+saved so it survives rotation and unfolding. Below 480 px of note width (520 px with the
+Gallery's expand control), undo and redo float
 above the note's dock as on phones, leaving the header's actions and compact sync pill room
 to fit. Wider panes keep undo and redo beside Back. The pane does not use the container transform:
 opening it narrows the page, which moves the card it would grow from, so a morph chases a moving
@@ -172,8 +173,24 @@ advancing by frames (`animateSteadySpring`), as the container transform does. Cl
 pane has no such frame and keeps its spring.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
-The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered
-panel.
+The Gallery pages and Search split. In Gallery, Reminders, Archive and Trash, an expand
+button beside the note's Back button hides the page and gives its width to the same
+note pane. Its rounded card, header, dock and editor stay mounted; Show gallery restores
+the saved split width. The device remembers the choice independently of the split ratio.
+The Gallery, its header and its dock keep their split widths and fade out together; they
+fade back into the same positions when restored. The note's growing width is separate from
+the space reserved for the page's fixed controls, so they never squeeze toward the edge.
+One pane spring moves the note's left edge, its width, its dock and the Gallery fade together, advancing by
+painted frames so busy rendering cannot skip its entrance. The preview layout is chosen from
+both endpoint widths before expansion: the card reserves the sidebar's space on that same
+spring while its inline links, media and tags fade and collapse. The fixed-width sidebar
+fades into the opening space, so previews never stretch across the note and then snap to a
+column at an intermediate breakpoint. Only the destination link list reports visibility to
+the dock while the two copies crossfade. A tap can reverse it from its
+current width, with no text scaling, and reduced motion changes the layout immediately. Folding to phone
+width temporarily uses the phone layout; unfolding restores the chosen pane layout.
+Search keeps its ordinary split. Landscape phones are too short for two panes and keep
+the centered panel.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel
@@ -356,7 +373,7 @@ dropdown menu, and a time of day is the reminder panel's clock face in a popover
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
 redo history. From 640 px it sits beside the back button, including in narrow split panes.
 It is positioned outside the header's flow so it never moves the centered sync pill.
-Split panes narrower than 480 px show the sync pill's icon with an accessible status label
+Split panes narrower than 480 px (520 px with the Gallery's expand control) show the sync pill's icon with an accessible status label
 and a tooltip, leaving room for every header control. On phones the history toolbar floats
 at the dock's left edge above either the note actions or formatting bar, and the jump to
 the note's end at its right. Both slide out to their sides while the list of the note's
