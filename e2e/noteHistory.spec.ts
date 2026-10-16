@@ -398,15 +398,20 @@ test('history preview leaves the editor alone, restores online, and saves a cach
   await seedNotes(page, [{ title: 'Original title', body: previewUrl }]);
   const originalId = await card(page, 'Original title').getAttribute('data-note-card');
   const dialog = await openNote(page, 'Original title');
-  await dialog
+  const linkOptions = dialog
     .locator(`[data-link-card="${previewUrl}"]`)
-    .getByRole('button', { name: 'Link options' })
-    .click();
+    .getByRole('button', { name: 'Link options' });
+  await linkOptions.click();
   await page.getByRole('menuitem', { name: 'Show as Gallery Preview' }).click();
+  // The closing menu restores focus to its trigger. Let that finish
+  // before focusing the editor, or Select All can select the page instead of the note.
+  await expect(linkOptions).toBeFocused();
   const editor = dialog.getByRole('textbox');
   await editor.click();
+  await expect(editor).toBeFocused();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type('Changed title');
+  await expect(editor).toHaveText('Changed title');
   await page
     .getByRole('dialog', { name: 'Edit note' })
     .getByRole('button', { name: 'Version history', exact: true })
