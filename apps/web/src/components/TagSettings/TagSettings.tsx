@@ -55,6 +55,7 @@ export function TagSettings({ userId }: { userId: string }) {
             </p>
           ) : (
             <TagTree
+              scrollMode="page"
               estimatedRowHeight={48}
               tags={tags}
               renderTag={(tag, path) => {

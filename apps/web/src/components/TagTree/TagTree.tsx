@@ -14,6 +14,7 @@ export function TagTree({
   searchPosition = 'top',
   searchAccessory,
   estimatedRowHeight = 44,
+  scrollMode = 'contained',
 }: {
   tags: readonly Tag[];
   renderTag: (tag: Tag, path: readonly Tag[]) => ReactNode;
@@ -21,6 +22,7 @@ export function TagTree({
   searchPosition?: 'top' | 'bottom';
   searchAccessory?: (focused: boolean) => ReactNode;
   estimatedRowHeight?: number;
+  scrollMode?: 'contained' | 'page';
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -58,89 +60,105 @@ export function TagTree({
   return (
     <>
       {searchPosition === 'top' && searchInput}
-      <ScrollArea className={cn('flex flex-col [--scrollbar-inset:0.25rem]', className)}>
-        <ScrollAreaViewport className="h-auto max-h-[inherit] pr-3">
-          <AnimatePresence initial={false}>
-            {rows.map(({ tag, depth }, rowIndex) => {
-              const renderRow = () => {
-                const path = index.pathFor(tag.id);
-                const hasChildren = index.hasChildren(tag.id);
-                const expanded = !collapsed.has(tag.id);
-                return (
-                  <div
-                    className="relative flex min-h-11 items-center gap-1"
-                    style={{ paddingLeft: `${Math.min(depth, 8) * 12}px` }}
-                  >
-                    <span aria-hidden className="pointer-events-none absolute inset-0">
-                      {path
-                        .slice(0, Math.min(path.length - 1, 8))
-                        .map((ancestor, level) =>
-                          visibleIds.has(ancestor.id) ? (
-                            <span
-                              key={ancestor.id}
-                              className="absolute inset-y-0 border-l border-foreground/15"
-                              style={{ left: `${18 + level * 12}px` }}
-                            />
-                          ) : null,
-                        )}
-                    </span>
-                    {hasChildren ? (
-                      <button
-                        type="button"
-                        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
-                        aria-expanded={expanded}
-                        onClick={() =>
-                          setCollapsed((current) => {
-                            const next = new Set(current);
-                            if (next.has(tag.id)) next.delete(tag.id);
-                            else next.add(tag.id);
-                            return next;
-                          })
-                        }
-                        className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+      <TagTreeContainer scrollMode={scrollMode} className={className}>
+        <AnimatePresence initial={false}>
+          {rows.map(({ tag, depth }, rowIndex) => {
+            const renderRow = () => {
+              const path = index.pathFor(tag.id);
+              const hasChildren = index.hasChildren(tag.id);
+              const expanded = !collapsed.has(tag.id);
+              return (
+                <div
+                  className="relative flex min-h-11 items-center gap-1"
+                  style={{ paddingLeft: `${Math.min(depth, 8) * 12}px` }}
+                >
+                  <span aria-hidden className="pointer-events-none absolute inset-0">
+                    {path
+                      .slice(0, Math.min(path.length - 1, 8))
+                      .map((ancestor, level) =>
+                        visibleIds.has(ancestor.id) ? (
+                          <span
+                            key={ancestor.id}
+                            className="absolute inset-y-0 border-l border-foreground/15"
+                            style={{ left: `${18 + level * 12}px` }}
+                          />
+                        ) : null,
+                      )}
+                  </span>
+                  {hasChildren ? (
+                    <button
+                      type="button"
+                      aria-label={`${expanded ? 'Collapse' : 'Expand'} ${tag.name}`}
+                      aria-expanded={expanded}
+                      onClick={() =>
+                        setCollapsed((current) => {
+                          const next = new Set(current);
+                          if (next.has(tag.id)) next.delete(tag.id);
+                          else next.add(tag.id);
+                          return next;
+                        })
+                      }
+                      className="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <motion.span
+                        className="flex size-4 items-center justify-center"
+                        initial={false}
+                        animate={{ rotate: expanded ? 90 : 0 }}
+                        transition={reducedMotion ? { duration: 0 } : springs.snappy}
                       >
-                        <motion.span
-                          className="flex size-4 items-center justify-center"
-                          initial={false}
-                          animate={{ rotate: expanded ? 90 : 0 }}
-                          transition={reducedMotion ? { duration: 0 } : springs.snappy}
-                        >
-                          <ChevronRight className="size-4" />
-                        </motion.span>
-                      </button>
-                    ) : (
-                      <span className="w-9 shrink-0" />
-                    )}
-                    {renderTag(tag, path)}
-                  </div>
-                );
-              };
-              return observer ? (
-                <DeferredTagRow
-                  key={tag.id}
-                  observer={observer}
-                  initiallyVisible={rowIndex < 40}
-                  estimatedRowHeight={estimatedRowHeight}
-                  reducedMotion={!!reducedMotion}
-                  renderRow={renderRow}
-                />
-              ) : (
-                <AnimatedTagRow key={tag.id} reducedMotion={!!reducedMotion}>
-                  {renderRow()}
-                </AnimatedTagRow>
+                        <ChevronRight className="size-4" />
+                      </motion.span>
+                    </button>
+                  ) : (
+                    <span className="w-9 shrink-0" />
+                  )}
+                  {renderTag(tag, path)}
+                </div>
               );
-            })}
-            {!rows.length && (
-              <AnimatedTagRow key="empty" reducedMotion={!!reducedMotion}>
-                <p className="px-2 py-3 text-sm text-muted-foreground">No matching tags</p>
+            };
+            return observer ? (
+              <DeferredTagRow
+                key={tag.id}
+                observer={observer}
+                initiallyVisible={rowIndex < 40}
+                estimatedRowHeight={estimatedRowHeight}
+                reducedMotion={!!reducedMotion}
+                renderRow={renderRow}
+              />
+            ) : (
+              <AnimatedTagRow key={tag.id} reducedMotion={!!reducedMotion}>
+                {renderRow()}
               </AnimatedTagRow>
-            )}
-          </AnimatePresence>
-        </ScrollAreaViewport>
-        <ScrollBar />
-      </ScrollArea>
+            );
+          })}
+          {!rows.length && (
+            <AnimatedTagRow key="empty" reducedMotion={!!reducedMotion}>
+              <p className="px-2 py-3 text-sm text-muted-foreground">No matching tags</p>
+            </AnimatedTagRow>
+          )}
+        </AnimatePresence>
+      </TagTreeContainer>
       {searchPosition === 'bottom' && searchInput}
     </>
+  );
+}
+
+function TagTreeContainer({
+  scrollMode,
+  className,
+  children,
+}: {
+  scrollMode: 'contained' | 'page';
+  className?: string;
+  children: ReactNode;
+}) {
+  // An unconstrained viewport with overscroll containment traps gestures meant for the page.
+  if (scrollMode === 'page') return <div className={cn('pr-3', className)}>{children}</div>;
+  return (
+    <ScrollArea className={cn('flex flex-col [--scrollbar-inset:0.25rem]', className)}>
+      <ScrollAreaViewport className="h-auto max-h-[inherit] pr-3">{children}</ScrollAreaViewport>
+      <ScrollBar />
+    </ScrollArea>
   );
 }
 
