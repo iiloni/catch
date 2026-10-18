@@ -49,6 +49,7 @@ import {
   editorNote,
   lastBrowsingTab,
   noteHistoryOpen,
+  pageSwipePosition,
   quickNote,
   quickNoteCanSave,
   searchFilterCount,
@@ -159,6 +160,7 @@ export function Dock() {
   const searchProgress = useMotionValue(mode === 'search' ? 1 : 0);
   const reducedMotion = useReducedMotion();
   const searchActive = mode === 'search';
+  const swipePosition = pageSwipePosition.use();
   useEffect(() => {
     if (!requestedSearchFocus || !searchActive) return;
     return focusWidgetInput(
@@ -169,6 +171,11 @@ export function Dock() {
     );
   }, [requestedSearchFocus, searchActive]);
   useLayoutEffect(() => {
+    if (swipePosition && (mode === 'tabs' || mode === 'search') && !reducedMotion) {
+      const update = () => searchProgress.set(Math.max(0, Math.min(1, swipePosition.get() - 1)));
+      update();
+      return swipePosition.on('change', update);
+    }
     if (searchProgress.get() === (searchActive ? 1 : 0)) return;
     if (reducedMotion) {
       searchProgress.set(searchActive ? 1 : 0);
@@ -181,7 +188,7 @@ export function Dock() {
       duration: 0.35,
     });
     return () => animation.stop();
-  }, [searchActive, reducedMotion, searchProgress]);
+  }, [searchActive, reducedMotion, searchProgress, swipePosition, mode]);
 
   function openSearch() {
     searchOpenedAt.current = performance.now();
@@ -683,7 +690,6 @@ function SearchField({
   openedAt: RefObject<number>;
   onClose: () => void;
 }) {
-  const reducedMotion = useReducedMotion();
   const query = searchQuery.use();
   const fieldRef = useRef<HTMLElement>(null);
   const width = useMotionValue(0);
@@ -746,24 +752,26 @@ function SearchField({
       <motion.span className="relative shrink-0" style={{ x: iconX, opacity: visible ? 1 : 0 }}>
         <Search className="size-6" aria-hidden />
       </motion.span>
-      <motion.input
-        ref={inputRef}
-        type="text"
-        inputMode="search"
-        enterKeyHint="search"
-        aria-label="Search notes"
-        aria-hidden={!active}
-        tabIndex={active ? 0 : -1}
-        placeholder="Search notes"
-        value={query}
-        onChange={(event) => searchQuery.set(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-        }}
-        animate={{ opacity: active ? 1 : 0, x: active ? 0 : 8 }}
-        transition={reducedMotion ? { duration: 0 } : { duration: 0.25, delay: active ? 0.1 : 0 }}
-        className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-      />
+      {/* Text travels beside the icon, clipped before the close button as it emerges. */}
+      <div className="h-full min-w-0 flex-1 overflow-hidden">
+        <motion.input
+          ref={inputRef}
+          type="text"
+          inputMode="search"
+          enterKeyHint="search"
+          aria-label="Search notes"
+          aria-hidden={!active}
+          tabIndex={active ? 0 : -1}
+          placeholder="Search notes"
+          value={query}
+          onChange={(event) => searchQuery.set(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+          style={{ opacity: contentOpacity, x: iconX }}
+          className="h-full w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        />
+      </div>
       <motion.button
         key="close"
         type="button"
@@ -883,7 +891,10 @@ function DockActionButton({
           style={{ opacity: gradientOpacity }}
         />
         <motion.span
-          className="relative flex size-7 items-center justify-center"
+          className={cn(
+            'relative flex size-7 items-center justify-center',
+            gradient ? 'text-brand-foreground' : 'text-foreground',
+          )}
           style={{ opacity: composeOpacity, rotate: composeRotate }}
           aria-hidden
         >
@@ -947,7 +958,10 @@ function DockActionButton({
         </motion.span>
         <motion.span
           aria-hidden
-          className="absolute flex size-7 items-center justify-center"
+          className={cn(
+            'absolute flex size-7 items-center justify-center',
+            filtersOpen || count > 0 ? 'text-brand' : 'text-foreground',
+          )}
           style={{ opacity: searchProgress, rotate: filterRotate }}
         >
           <SlidersHorizontal className="size-7" strokeWidth={2.25} />

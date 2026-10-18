@@ -31,6 +31,16 @@ function setup(page: TabPath | null = '/') {
         <div data-note-card="note" data-testid="card">
           Note
         </div>
+        <div data-page-swipe-controls>
+          <button type="button">Search tag</button>
+          <article data-note-card="result" data-testid="result">
+            <button type="button">Search result</button>
+          </article>
+          <input aria-label="Protected input" />
+          <div role="menu">
+            <button type="button">Menu item</button>
+          </div>
+        </div>
         <div data-testid="scroller" style={{ overflowX: 'auto' }}>
           <span data-testid="column">Column</span>
         </div>
@@ -46,7 +56,9 @@ function setup(page: TabPath | null = '/') {
     setPage: (path: TabPath | null) => view.rerender(<Page path={path} />),
     blank: screen.getByTestId('blank'),
     card: screen.getByTestId('card'),
-    button: screen.getByRole('button'),
+    button: screen.getByRole('button', { name: 'Control' }),
+    searchTag: screen.getByRole('button', { name: 'Search tag' }),
+    searchResult: screen.getByRole('button', { name: 'Search result' }),
     scroller: screen.getByTestId('scroller'),
     column: screen.getByTestId('column'),
   };
@@ -111,6 +123,34 @@ describe('page swipes', () => {
     const page = setup();
     expect(swipe(page[part], 100).defaultPrevented).toBe(false);
     expect(page.navigate).not.toHaveBeenCalled();
+  });
+
+  it.each(['searchTag', 'searchResult'] as const)(
+    'allows swipes on %s without activating its tap action',
+    (part) => {
+      const page = setup('/search');
+      const clicked = vi.fn();
+      page[part].addEventListener('click', clicked);
+      touch(page[part], 'start');
+      touch(page[part], 'end');
+      expect(fireEvent.click(page[part])).toBe(true);
+      expect(clicked).toHaveBeenCalledOnce();
+      expect(swipe(page[part], 100).defaultPrevented).toBe(true);
+      expect(fireEvent.click(page[part])).toBe(false);
+      expect(clicked).toHaveBeenCalledOnce();
+      expect(page.navigate).toHaveBeenCalledExactlyOnceWith('/');
+    },
+  );
+
+  it('preserves vertical scrolling, long presses and protected controls inside Search', () => {
+    const { searchResult, navigate } = setup('/search');
+    expect(swipe(searchResult, 100, 180).defaultPrevented).toBe(false);
+    expect(swipe(searchResult, 100, 0, 300).defaultPrevented).toBe(false);
+    expect(swipe(screen.getByRole('textbox'), 100).defaultPrevented).toBe(false);
+    expect(swipe(screen.getByRole('button', { name: 'Menu item' }), 100).defaultPrevented).toBe(
+      false,
+    );
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('ignores short, vertical, held, cancelled and multi-touch gestures', () => {

@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 import type { MotionValue } from 'motion/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { pageSwipePosition } from '@/lib/dockState';
 import type { usePageSwipe } from '@/lib/pageSwipe';
 import { MainPagePager } from './MainPagePager';
 
@@ -50,6 +51,7 @@ beforeEach(() => {
   state.controls = null;
   state.complete = null;
   state.navigate.mockClear();
+  pageSwipePosition.set(null);
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
 
@@ -62,10 +64,14 @@ describe('MainPagePager', () => {
       state.controls?.onStart();
       state.controls?.onMove(-200);
     });
+    const progress = pageSwipePosition.get();
+    expect(progress?.get()).toBeCloseTo(1 + 200 / window.innerWidth);
     const incoming = await screen.findByText('Search view');
     act(() => state.controls?.onEnd(false, 0, -200));
     expect(state.navigate).not.toHaveBeenCalled();
     act(() => state.complete?.());
+    expect(pageSwipePosition.get()).toBe(progress);
+    expect(progress?.get()).toBe(2);
     expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
       to: '/search',
       replace: true,
@@ -74,6 +80,7 @@ describe('MainPagePager', () => {
     });
     state.path = '/search';
     view.rerender(<MainPagePager enabled>Other route</MainPagePager>);
+    expect(pageSwipePosition.get()).toBeNull();
     expect(screen.getByText('Search view')).toBe(incoming);
     expect(screen.queryByText('Gallery view')).not.toBeInTheDocument();
   });
@@ -94,5 +101,22 @@ describe('MainPagePager', () => {
     expect(screen.getByText('Other route')).toBeInTheDocument();
     expect(state.navigate).not.toHaveBeenCalled();
     expect(screen.queryByText('Search view')).not.toBeInTheDocument();
+    expect(pageSwipePosition.get()).toBeNull();
+  });
+
+  it('keeps the dock on the spring timeline until a cancelled swipe returns home', async () => {
+    render(<MainPagePager enabled>Other route</MainPagePager>);
+    await screen.findByText('Gallery view');
+    act(() => {
+      state.controls?.onStart();
+      state.controls?.onMove(-200);
+      state.controls?.onEnd(true, 0, -200);
+    });
+    const progress = pageSwipePosition.get();
+    expect(progress?.get()).toBeGreaterThan(1);
+    act(() => state.complete?.());
+    expect(progress?.get()).toBe(1);
+    expect(pageSwipePosition.get()).toBeNull();
+    expect(state.navigate).not.toHaveBeenCalled();
   });
 });

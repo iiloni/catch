@@ -20,7 +20,7 @@ export function swipeDestination(page: TabPath, delta: number, width: number, ve
   return TAB_PATHS[TAB_PATHS.indexOf(page) + (delta < 0 ? 1 : -1)] ?? null;
 }
 
-/** Page swipes yield to cards, controls, native scrolling and the browser's edge gestures. */
+/** Tap-only search controls can share a drag; editors and other gesture owners keep theirs. */
 export function usePageSwipe(
   surface: RefObject<HTMLElement | null>,
   page: TabPath | null,
@@ -72,8 +72,10 @@ export function usePageSwipe(
         blockedTouch.current ||
         event.defaultPrevented ||
         target.closest(
-          'button, a, input, textarea, select, [contenteditable], [role="slider"], [role="tab"], [role="dialog"], [role="menu"], [role="listbox"], [data-note-card], [data-swipe-archive]',
+          'input, textarea, select, [contenteditable], [role="slider"], [role="tab"], [role="dialog"], [role="menu"], [role="listbox"], [data-swipe-archive]',
         ) ||
+        (target.closest('button, a, [data-note-card]') &&
+          !target.closest('[data-page-swipe-controls]')) ||
         (selection && !selection.isCollapsed) ||
         touch.clientX < EDGE_SPACE ||
         touch.clientX > window.innerWidth - EDGE_SPACE

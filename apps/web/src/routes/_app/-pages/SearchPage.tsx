@@ -184,7 +184,11 @@ export default function SearchPage() {
         selection={selectionHeader(selection, place)}
         trailing={<VaultToggle />}
       />
-      <motion.div style={{ x: gutterShift }} className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6">
+      <motion.div
+        data-page-swipe-controls
+        style={{ x: gutterShift }}
+        className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6"
+      >
         <ActiveSearchFilters
           tags={tags}
           filter={filter}

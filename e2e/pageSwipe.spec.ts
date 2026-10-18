@@ -79,6 +79,30 @@ async function swipe(
   await gesture.end(cancel);
 }
 
+async function searchDockState(page: Page) {
+  return page.locator('[data-dock] search').evaluate((field) => {
+    const values = getComputedStyle(field)
+      .clipPath.match(/^inset\(([^r]+) round/)?.[1]
+      .trim()
+      .split(/\s+/)
+      .map(Number.parseFloat);
+    if (!values) throw new Error('Missing Search field clip');
+    const left = values[3] ?? values[1] ?? values[0];
+    const input = field.querySelector('input');
+    if (!input) throw new Error('Missing Search input');
+    const filterIcon = document.querySelector('[data-dock] .lucide-sliders-horizontal');
+    if (!filterIcon) throw new Error('Missing filter icon');
+    return {
+      progress: 1 - left / (4 + ((field.getBoundingClientRect().width - 8) * 2) / 3),
+      textOpacity: Number(getComputedStyle(input).opacity),
+      hidden: field.getAttribute('aria-hidden') === 'true',
+      focused: document.activeElement === input,
+      filterColor: getComputedStyle(filterIcon).color,
+      foreground: getComputedStyle(document.body).color,
+    };
+  });
+}
+
 test('swipes switch adjacent main pages without wrapping or adding history', async ({
   page,
   isMobile,
@@ -116,6 +140,90 @@ test('short, vertical, cancelled, and mouse gestures stay on the page', async ({
   await page.mouse.move(120, 140, { steps: 8 });
   await page.mouse.up();
   await expect(page).toHaveURL(/\/$/);
+});
+
+test('the Search dock follows a held swipe, reversal and spring in both directions', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' });
+  const width = await page.evaluate(() => innerWidth);
+  const entering = await beginSwipe(page, isMobile, width - 35);
+  await entering.move(-width * 0.65);
+  let dock = await searchDockState(page);
+  expect(dock.progress).toBeCloseTo(0.65, 2);
+  expect(dock.textOpacity).toBeCloseTo((0.65 - 0.35) / 0.45, 2);
+  expect(dock.hidden).toBe(true);
+  expect(dock.focused).toBe(false);
+  expect(dock.filterColor).toBe(dock.foreground);
+  await expect(page).toHaveURL(/\/$/);
+  await testInfo.attach('dock-during-swipe', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await entering.move(-width * 0.45);
+  dock = await searchDockState(page);
+  expect(dock.progress).toBeCloseTo(0.45, 2);
+  expect(dock.textOpacity).toBeCloseTo((0.45 - 0.35) / 0.45, 2);
+  await entering.end(true);
+  await expect.poll(async () => (await searchDockState(page)).progress).toBeCloseTo(0, 2);
+
+  await swipe(page, isMobile, -width * 0.65, { x: width - 35 });
+  await expect(page).toHaveURL(/\/search$/);
+  dock = await searchDockState(page);
+  expect(dock.progress).toBeCloseTo(1, 2);
+  expect(dock.textOpacity).toBe(1);
+  expect(dock.focused).toBe(false);
+  const leaving = await beginSwipe(page, isMobile, 55, 400);
+  await leaving.move(width * 0.65);
+  dock = await searchDockState(page);
+  expect(dock.progress).toBeCloseTo(0.35, 2);
+  expect(dock.textOpacity).toBeCloseTo(0, 2);
+  await expect(page).toHaveURL(/\/search$/);
+  await leaving.end(true);
+  await expect.poll(async () => (await searchDockState(page)).progress).toBeCloseTo(1, 2);
+  await swipe(page, isMobile, width * 0.65, { x: 55, y: 400 });
+  await expect(page).toHaveURL(/\/$/);
+  dock = await searchDockState(page);
+  expect(dock.progress).toBeCloseTo(0, 2);
+  expect(dock.textOpacity).toBe(0);
+});
+
+test('Search tags and results allow page swipes while keeping their tap actions', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await seedNotes(page, ['Swipeable search result']);
+  await swipe(page, isMobile, -140);
+  await expect(page).toHaveURL(/\/search$/);
+  const tag = page.getByRole('button', { name: 'Browse Untagged', exact: true });
+  let box = await settledBox(tag);
+  const tagSwipe = await beginSwipe(page, isMobile, box.x + 40, box.y + box.height / 2);
+  await tagSwipe.move(140);
+  expect(
+    await page
+      .locator('[data-pager-page="/search"] [data-page-content]')
+      .evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(140, 0);
+  await tagSwipe.end(true);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+  await tag.click();
+  const result = page.getByRole('button', { name: 'Open note', exact: true });
+  await expect(result).toHaveText('Swipeable search result');
+  box = await settledBox(result);
+  await swipe(page, isMobile, 140, { x: box.x + 40, y: box.y + box.height / 2 });
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await swipe(page, isMobile, -140);
+  await expect(page).toHaveURL(/\/search$/);
+  await tag.click();
+  await result.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toContainText(
+    'Swipeable search result',
+  );
 });
 
 test('swipes leave open notes and the composer on their current page', async ({

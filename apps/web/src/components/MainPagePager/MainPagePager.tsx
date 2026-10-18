@@ -18,7 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { TAB_PATHS, type TabPath } from '@/lib/dockState';
+import { pageSwipePosition, TAB_PATHS, type TabPath } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { PageSurface } from '@/lib/pageSurface';
@@ -76,6 +76,10 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
     setIncoming(null);
   }, []);
 
+  const releaseDock = useCallback(() => {
+    if (pageSwipePosition.get() === position) pageSwipePosition.set(null);
+  }, [position]);
+
   // Fetch and parse the small page chunks ahead of the first touch without mounting
   // hidden subscriptions, grids or headers. Only the incoming page mounts during a drag.
   useEffect(() => {
@@ -89,6 +93,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       generation.current++;
       animation.current?.stop();
       position.set(index);
+      releaseDock();
       viewport.set(window.innerWidth);
       clearIncoming();
     };
@@ -98,7 +103,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', resize);
     };
-  }, [index, position, viewport, scrollY, clearIncoming]);
+  }, [index, position, viewport, scrollY, clearIncoming, releaseDock]);
 
   useEffect(() => {
     const stopSaving = router.subscribe('onBeforeLoad', ({ fromLocation, pathChanged }) => {
@@ -124,27 +129,30 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
     generation.current++;
     animation.current?.stop();
     position.set(index);
+    releaseDock();
     clearIncoming();
     if (active) {
       window.scrollTo({ top: scrolls.current.get(active) ?? 0, behavior: 'instant' });
       scrollY.set(window.scrollY);
     }
-  }, [active, index, position, scrollY, clearIncoming]);
+  }, [active, index, position, scrollY, clearIncoming, releaseDock]);
 
   useLayoutEffect(() => {
     if (enabled) return;
     generation.current++;
     animation.current?.stop();
     position.set(index);
+    releaseDock();
     clearIncoming();
-  }, [enabled, index, position, clearIncoming]);
+  }, [enabled, index, position, clearIncoming, releaseDock]);
 
   useEffect(
     () => () => {
       generation.current++;
       animation.current?.stop();
+      releaseDock();
     },
-    [],
+    [releaseDock],
   );
 
   function move(delta: number) {
@@ -176,7 +184,10 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
         (document.activeElement as HTMLElement | null)?.blur();
         haptics.selection();
         void router.navigate({ to, replace: true, resetScroll: false, viewTransition: false });
-      } else clearIncoming();
+      } else {
+        clearIncoming();
+        releaseDock();
+      }
     };
     animation.current?.stop();
     if (reducedMotion) {
@@ -196,6 +207,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       generation.current++;
       animation.current?.stop();
       dragOrigin.current = position.get();
+      if (!reducedMotion) pageSwipePosition.set(position);
     },
     onMove: move,
     onEnd: settle,

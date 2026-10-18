@@ -58,12 +58,18 @@ Only page code is prefetched; the neighbour mounts on a horizontal drag and beco
 active page without remounting after a completed swipe. At rest one page is mounted. Each
 page retains its vertical scroll position for this browsing session. Headers portal into
 an untransformed host beside the page content and share its horizontal motion value,
-preserving fixed positioning and glass. The dock stays on the viewport. Incoming pages
+preserving fixed positioning and glass. The dock stays on the viewport; its Search field,
+text and compose/filter button morph from the same live page position through dragging,
+reversal and settling. Only visual motion is previewed: controls remain owned by the active
+route until the swipe commits. Incoming pages
 are inert and do not publish selection, search-filter or header state until activated.
 The page views live in ignored `routes/_app/-pages` helpers; the three file routes select
 their URLs while the pager owns the views. Other routes and dock taps keep their existing
 View Transitions.
-Cards and controls keep their gestures; horizontal scrollers take priority while they have
+Cards and controls keep their gestures, except Search's tap-only tags, recent searches and
+result rows, which also allow page swipes (and suppress their click after a horizontal drag).
+Their taps, vertical scrolling and result long presses still work. Text inputs, menus and
+other gesture owners remain excluded. Horizontal scrollers take priority while they have
 room in the swipe direction, and reaching their edge requires a fresh swipe to navigate.
 The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
 a note, composer or search filter panel is open. Swiping into Search leaves its field
