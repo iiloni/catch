@@ -83,11 +83,31 @@ test('search reverses unfinished dock morphs without replacing the side button',
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.clock.install();
   await signUp(page);
 
-  const result = await page
+  // Exercise reversal with the page code and first-paint pipelines already warm.
+  // A cold navigation can suppress every intermediate frame while it loads.
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toBeFocused();
+  await waitForPageTransition(page);
+  await page.getByRole('button', { name: 'Close search', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+  await waitForPageTransition(page);
+  await expect(page.locator('[data-dock] search')).toHaveCSS('clip-path', /^inset\(4px /);
+  // The other cases cover native snapshots and page slides. Keep this frame-driven
+  // interruption test out of snapshot capture, which pauses requestAnimationFrame.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'startViewTransition', {
+      value: undefined,
+      configurable: true,
+    });
+  });
+
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  const controls = await page
     .getByRole('link', { name: 'Search', exact: true })
-    .evaluate(async (link) => {
+    .evaluateHandle((link) => {
       const field = document.querySelector<HTMLElement>('[data-dock] search');
       const input = field?.querySelector('input');
       const side = document.querySelector('[data-dock] button[aria-label="New note"]');
@@ -98,49 +118,52 @@ test('search reverses unfinished dock morphs without replacing the side button',
         const values = insets[1].trim().split(/\s+/).map(Number.parseFloat);
         return values[3] ?? values[1] ?? values[0];
       };
-      const closed = left();
-      let interruptedAt: number | null = null;
-      let reopenedAt: number | null = null;
-      let sameSide = true;
-      (link as HTMLElement).click();
-      const end = performance.now() + 10_000;
-      while (performance.now() < end) {
-        await new Promise(requestAnimationFrame);
-        const inset = left();
-        sameSide &&= side.isConnected;
-        if (interruptedAt === null && inset > 10 && inset < closed - 10) {
-          interruptedAt = inset;
-          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        } else if (
-          interruptedAt !== null &&
-          reopenedAt === null &&
-          field.getAttribute('aria-hidden') === 'true' &&
-          inset > interruptedAt + 5 &&
-          inset < closed - 5
-        ) {
-          reopenedAt = inset;
-          (link as HTMLElement).click();
-        } else if (
-          reopenedAt !== null &&
-          inset === 0 &&
-          field.getAttribute('aria-hidden') === 'false'
-        ) {
-          return {
-            interruptedAt,
-            reopenedAt,
-            sameSide,
-            focused: document.activeElement === input,
-            sideLabel: side.getAttribute('aria-label'),
-          };
-        }
-      }
-      throw new Error(`Search did not reverse: ${JSON.stringify({ interruptedAt, reopenedAt })}`);
+      return { link: link as HTMLElement, field, input, side, left, closed: left() };
     });
-  expect(result.interruptedAt).toBeGreaterThan(0);
-  expect(result.reopenedAt).toBeGreaterThan(result.interruptedAt!);
-  expect(result.sameSide).toBe(true);
-  expect(result.focused).toBe(true);
-  expect(result.sideLabel).toBe('Filter notes');
+  let interruptedAt: number | null = null;
+  let reopenedAt: number | null = null;
+  let finished = false;
+  let sameSide = true;
+  await controls.evaluate(({ link }) => link.click());
+  // Advance each painted frame so a busy runner cannot skip the interruption window.
+  for (let frame = 0; frame < 120; frame++) {
+    await page.clock.runFor(16);
+    const state = await controls.evaluate(({ field, input, side, left, closed }) => ({
+      inset: left(),
+      closed,
+      hidden: field.getAttribute('aria-hidden') === 'true',
+      sameSide: side.isConnected,
+      focused: document.activeElement === input,
+      sideLabel: side.getAttribute('aria-label'),
+    }));
+    sameSide &&= state.sameSide;
+    if (interruptedAt === null && state.inset > 10 && state.inset < state.closed - 10) {
+      interruptedAt = state.inset;
+      await controls.evaluate(({ input }) =>
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+      );
+    } else if (
+      interruptedAt !== null &&
+      reopenedAt === null &&
+      state.hidden &&
+      state.inset > interruptedAt + 5 &&
+      state.inset < state.closed - 5
+    ) {
+      reopenedAt = state.inset;
+      await controls.evaluate(({ link }) => link.click());
+    } else if (reopenedAt !== null && state.inset === 0 && !state.hidden) {
+      expect(state.focused).toBe(true);
+      expect(state.sideLabel).toBe('Filter notes');
+      finished = true;
+      break;
+    }
+  }
+  await page.clock.resume();
+  await controls.dispose();
+  expect(finished, JSON.stringify({ interruptedAt, reopenedAt })).toBe(true);
+  expect(interruptedAt).toBeGreaterThan(0);
+  expect(reopenedAt).toBeGreaterThan(interruptedAt!);
+  expect(sameSide).toBe(true);
   await expect(page).toHaveURL(/\/search$/);
   await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveCSS('opacity', '1');
 });

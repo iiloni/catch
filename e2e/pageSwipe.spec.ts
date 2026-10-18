@@ -103,6 +103,81 @@ async function searchDockState(page: Page) {
   });
 }
 
+async function tabIndicatorState(page: Page) {
+  return page.locator('[data-dock-indicator]').evaluate((indicator) => {
+    const links = indicator.closest('nav')?.querySelectorAll('a');
+    const deck = links?.[0];
+    const gallery = links?.[1];
+    const deckIcon = deck?.querySelector('svg');
+    const galleryIcon = gallery?.querySelector('svg');
+    if (!deck || !deckIcon || !galleryIcon) throw new Error('Missing dock tabs');
+    const first = deck.getBoundingClientRect();
+    return {
+      position: (indicator.getBoundingClientRect().x - first.x) / first.width,
+      deckColor: getComputedStyle(deckIcon).color,
+      galleryColor: getComputedStyle(galleryIcon).color,
+    };
+  });
+}
+
+test('the dock tab indicator and icons track Deck and Gallery swipes without a second animation', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' });
+  const width = await page.evaluate(() => innerWidth);
+  const indicator = page.locator('[data-dock-indicator]');
+  await settledBox(indicator);
+  await indicator.evaluate((el) => el.setAttribute('data-original-indicator', ''));
+  expect((await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
+
+  const towardDeck = await beginSwipe(page, isMobile, 55);
+  await towardDeck.move(width / 2);
+  let state = await tabIndicatorState(page);
+  expect(state.position).toBeCloseTo(0.5, 2);
+  expect(state.deckColor).toBe(state.galleryColor);
+  await expect(page.getByRole('link', { name: 'Gallery', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await testInfo.attach('tab-indicator-mid-swipe', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await towardDeck.move(width / 4);
+  state = await tabIndicatorState(page);
+  expect(state.position).toBeCloseTo(0.75, 2);
+  expect(state.deckColor).not.toBe(state.galleryColor);
+  await towardDeck.end(true);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
+
+  await swipe(page, isMobile, width * 0.55, { x: 55 });
+  await expect(page).toHaveURL(/\/deck$/);
+  expect((await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
+  await expect(indicator).toHaveAttribute('data-original-indicator', '');
+
+  const towardGallery = await beginSwipe(page, isMobile, width - 35);
+  await towardGallery.move(-width / 2);
+  state = await tabIndicatorState(page);
+  expect(state.position).toBeCloseTo(0.5, 2);
+  expect(state.deckColor).toBe(state.galleryColor);
+  await towardGallery.end(true);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
+  await swipe(page, isMobile, -width * 0.55, { x: width - 35 });
+  await expect(page).toHaveURL(/\/$/);
+  expect((await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
+  await expect(indicator).toHaveAttribute('data-original-indicator', '');
+
+  await page.getByRole('link', { name: 'Deck', exact: true }).click();
+  await expect(page).toHaveURL(/\/deck$/);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
+  await waitForPageTransition(page);
+  await page.getByRole('link', { name: 'Gallery', exact: true }).press('Enter');
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
+});
+
 test('swipes switch adjacent main pages without wrapping or adding history', async ({
   page,
   isMobile,

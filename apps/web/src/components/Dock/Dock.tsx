@@ -338,6 +338,7 @@ export function Dock() {
                           <Tabs
                             key="tabs"
                             active={tab}
+                            swipePosition={swipePosition}
                             searchProgress={searchProgress}
                             searchActive={searchActive}
                             // Focusing inside the tap keeps Android willing to raise the keyboard.
@@ -477,6 +478,7 @@ function PaneDock({
 
 type TabsProps = {
   active: TabPath;
+  swipePosition: MotionValue<number> | null;
   searchProgress: MotionValue<number>;
   searchActive: boolean;
   onSearch: () => void;
@@ -488,6 +490,7 @@ type TabsProps = {
 
 function Tabs({
   active,
+  swipePosition,
   searchProgress,
   searchActive,
   onSearch,
@@ -506,6 +509,24 @@ function Tabs({
   const [pressed, setPressed] = useState<TabPath | null>(null);
   const [pending, setPending] = useState<TabPath | null>(null);
   const shown = pressed ?? pending ?? active;
+  const slot = TABS.findIndex((tab) => tab.path === shown);
+  const position = useMotionValue(slot);
+  const indicatorX = useTransform(position, (value) => `${value * 100}%`);
+  const reducedMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    if (swipePosition && !reducedMotion) {
+      const update = () => position.set(swipePosition.get());
+      update();
+      return swipePosition.on('change', update);
+    }
+    if (reducedMotion) {
+      position.set(slot);
+      return;
+    }
+    if (position.get() === slot) return;
+    const animation = animate(position, slot, springs.snappy);
+    return () => animation.stop();
+  }, [slot, position, swipePosition, reducedMotion]);
 
   // The tabs stay behind the field during the morph, ready for an interrupted close.
   useEffect(() => {
@@ -624,9 +645,16 @@ function Tabs({
         setPressed(null);
       }}
     >
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const current = shown === tab.path;
+      {/* One indicator keeps its painted position when the swipe commits to a new route. */}
+      <motion.span
+        data-dock-indicator
+        aria-hidden
+        className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc((100%_-_0.5rem)/3)] rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+        style={{ x: indicatorX }}
+        animate={{ scale: pressed ? 1.06 : 1 }}
+        transition={springs.snappy}
+      />
+      {TABS.map((tab, index) => {
         return (
           <Link
             key={tab.path}
@@ -637,41 +665,61 @@ function Tabs({
             // Native link dragging hijacks a hold-and-slide gesture (the URL preview
             // in the video) and swallows the pointer moves the switcher needs.
             onDragStart={(event) => event.preventDefault()}
-            // Pointer taps are handled by the nav's pointer events (so scrubbing works);
-            // this path is for keyboard activation.
+            // The nav handles pointer taps so scrubbing works; synthesized activation
+            // still works without a pointer or key event.
             onClick={(event) => {
               event.preventDefault();
               if (event.detail === 0) go(tab.path);
             }}
-            className={cn(
-              'relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-              current ? 'text-foreground' : 'text-muted-foreground',
-            )}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              // Firefox gives Enter's native click detail=1, like a pointer click.
+              event.preventDefault();
+              go(tab.path);
+            }}
+            className="relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           >
-            {current && (
-              <motion.span
-                layoutId="dock-indicator"
-                aria-hidden
-                className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                animate={{ scale: pressed ? 1.06 : 1 }}
-                transition={springs.snappy}
-              />
-            )}
             {tab.path === '/search' ? (
               // The field owns one icon throughout the morph, including while it is a tab.
               <span className="size-6" aria-hidden />
             ) : (
-              <motion.span
-                animate={{ scale: pressed === tab.path ? 1.12 : 1 }}
-                transition={springs.snappy}
-              >
-                <Icon className="size-6" aria-hidden />
-              </motion.span>
+              <TabIcon
+                icon={tab.icon}
+                index={index}
+                position={position}
+                pressed={pressed === tab.path}
+              />
             )}
           </Link>
         );
       })}
     </motion.nav>
+  );
+}
+
+function TabIcon({
+  icon: Icon,
+  index,
+  position,
+  pressed,
+}: {
+  icon: typeof Columns3;
+  index: number;
+  position: MotionValue<number>;
+  pressed: boolean;
+}) {
+  const color = useTransform(() => {
+    const weight = Math.max(0, 1 - Math.abs(index - position.get())) * 100;
+    return `color-mix(in oklab, var(--foreground) ${weight}%, var(--muted-foreground))`;
+  });
+  return (
+    <motion.span
+      style={{ color }}
+      animate={{ scale: pressed ? 1.12 : 1 }}
+      transition={springs.snappy}
+    >
+      <Icon className="size-6" aria-hidden />
+    </motion.span>
   );
 }
 
