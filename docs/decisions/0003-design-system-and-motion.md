@@ -48,6 +48,14 @@ a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
+Horizontal touch swipes also switch the three main pages in dock order (Deck, Gallery,
+Search), one page on release, without wrapping at either end. They use the same page
+transition and replace history. Short, vertical, held or cancelled gestures stay put.
+Cards and controls keep their gestures; horizontal scrollers take priority while they have
+room in the swipe direction, and reaching their edge requires a fresh swipe to navigate.
+The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
+a note, composer or search filter panel is open. Swiping into Search leaves its field
+unfocused, so browsing does not summon the keyboard.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
