@@ -1,14 +1,8 @@
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import {
-  createFileRoute,
-  Outlet,
-  redirect,
-  useNavigate,
-  useRouterState,
-} from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { AppUpdatePrompt } from '@/components/AppUpdatePrompt/AppUpdatePrompt';
@@ -16,6 +10,7 @@ import { Dock } from '@/components/Dock/Dock';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { LinkCapture } from '@/components/LinkCapture/LinkCapture';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
+import { MainPagePager } from '@/components/MainPagePager/MainPagePager';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
 import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
@@ -26,19 +21,11 @@ import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAuthToken, getSignedInUser } from '@/lib/auth';
 import { startNoteCollections } from '@/lib/collections';
-import {
-  editorNote,
-  quickNote,
-  searchFiltersOpen,
-  searchFocusRequest,
-  TAB_PATHS,
-  type TabPath,
-} from '@/lib/dockState';
+import { editorNote, quickNote, searchFiltersOpen, searchFocusRequest } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { watchNativeReminders } from '@/lib/nativeReminders';
 import { watchNativeWidgets } from '@/lib/nativeWidgets';
 import { useOpenNote } from '@/lib/openNote';
-import { usePageSwipe } from '@/lib/pageSwipe';
 import { onNotificationOpen, syncPush } from '@/lib/push';
 import { syncReminderSettings } from '@/lib/reminders';
 import { pageBounceY, watchScrollBounce } from '@/lib/scrollBounce';
@@ -138,17 +125,7 @@ function AppLayout() {
   const capture = linkCaptureControls.use();
   const widgetNote = widgetNoteOpening.use();
   const activeNote = editorNote.use();
-  const page = useRef<HTMLDivElement>(null);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const filtersOpen = searchFiltersOpen.use();
-  const swipeTo = useCallback((to: TabPath) => void navigate({ to, replace: true }), [navigate]);
-  usePageSwipe(
-    page,
-    !note && noteState !== 'open' && noteState !== 'capture' && !capture && !filtersOpen
-      ? (TAB_PATHS.find((path) => path === pathname) ?? null)
-      : null,
-    swipeTo,
-  );
   const directNote = Boolean(note && widgetNote === note);
   const waitingForWidgetNote = directNote && activeNote?.id !== note;
   const hideBrowsingPage =
@@ -165,7 +142,6 @@ function AppLayout() {
       */}
       {/* The edge bounce moves it by `top`, which leaves those headers on the viewport. */}
       <motion.div
-        ref={page}
         className="relative min-h-dvh overflow-x-clip pb-[var(--dock-space)]"
         style={{
           paddingRight: pane.shown ? pane.noteWidth : 0,
@@ -181,7 +157,13 @@ function AppLayout() {
           Boolean(capture)
         }
       >
-        <Outlet />
+        <MainPagePager
+          enabled={
+            !note && noteState !== 'open' && noteState !== 'capture' && !capture && !filtersOpen
+          }
+        >
+          <Outlet />
+        </MainPagePager>
       </motion.div>
       <QuickNote />
       <LinkCapture />

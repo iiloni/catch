@@ -1,18 +1,33 @@
 import { type RefObject, useEffect, useRef } from 'react';
 import { TAB_PATHS, type TabPath } from './dockState';
-import { haptics } from './haptics';
 import { LONG_PRESS_MS } from './longPress';
 
 const MOVE_TOLERANCE = 6;
-const RELEASE_DISTANCE = 64;
 const EDGE_SPACE = 24;
+
+type SwipeControls = {
+  onStart: () => void;
+  onMove: (delta: number) => void;
+  onEnd: (cancelled: boolean, velocity: number, delta: number) => void;
+};
+
+/** Settle by distance or a short flick, while keeping a reversed flick on its own side. */
+export function swipeDestination(page: TabPath, delta: number, width: number, velocity: number) {
+  const distance = Math.abs(delta);
+  const flung =
+    distance >= 48 && Math.abs(velocity) >= 0.5 && Math.sign(velocity) === Math.sign(delta);
+  if (distance + 0.5 < Math.min(120, width * 0.22) && !flung) return null;
+  return TAB_PATHS[TAB_PATHS.indexOf(page) + (delta < 0 ? 1 : -1)] ?? null;
+}
 
 /** Page swipes yield to cards, controls, native scrolling and the browser's edge gestures. */
 export function usePageSwipe(
   surface: RefObject<HTMLElement | null>,
   page: TabPath | null,
-  onNavigate: (to: TabPath) => void,
+  controls: SwipeControls,
 ) {
+  const actions = useRef(controls);
+  actions.current = controls;
   const availablePage = useRef(page);
   availablePage.current = page;
   const blockedTouch = useRef(false);
@@ -36,6 +51,8 @@ export function usePageSwipe(
       y: number;
       time: number;
       dx: number;
+      lastTime: number;
+      velocity: number;
       dragging: boolean;
       left: boolean;
       right: boolean;
@@ -78,10 +95,18 @@ export function usePageSwipe(
         y: touch.clientY,
         time: event.timeStamp,
         dx: 0,
+        lastTime: event.timeStamp,
+        velocity: 0,
         dragging: false,
         left,
         right,
       };
+    }
+
+    function cancel() {
+      const state = gesture;
+      gesture = null;
+      if (state?.dragging) actions.current.onEnd(true, 0, state.dx);
     }
 
     function onMove(event: TouchEvent) {
@@ -94,7 +119,7 @@ export function usePageSwipe(
         event.defaultPrevented ||
         !event.cancelable
       ) {
-        gesture = null;
+        cancel();
         return;
       }
       const dx = touch.clientX - gesture.x;
@@ -111,9 +136,13 @@ export function usePageSwipe(
         }
         gesture.dragging = true;
         suppressClick = true;
+        actions.current.onStart();
       }
       event.preventDefault();
+      gesture.velocity = (dx - gesture.dx) / Math.max(1, event.timeStamp - gesture.lastTime);
+      gesture.lastTime = event.timeStamp;
       gesture.dx = dx;
+      actions.current.onMove(dx);
     }
 
     function onEnd(event: TouchEvent) {
@@ -125,20 +154,14 @@ export function usePageSwipe(
           suppressClick = false;
         }, 400);
       }
-      if (
-        !finished?.dragging ||
+      if (!finished?.dragging) return;
+      const cancelled =
         event.type === 'touchcancel' ||
         event.defaultPrevented ||
         event.touches.length !== 0 ||
-        Math.abs(finished.dx) < RELEASE_DISTANCE ||
-        !(finished.dx < 0 ? finished.left : finished.right)
-      )
-        return;
-      const to = TAB_PATHS[index + (finished.dx < 0 ? 1 : -1)];
-      if (!to) return;
-      (document.activeElement as HTMLElement | null)?.blur();
-      haptics.selection();
-      onNavigate(to);
+        !(finished.dx < 0 ? finished.left : finished.right);
+      const velocity = event.timeStamp - finished.lastTime < 100 ? finished.velocity : 0;
+      actions.current.onEnd(cancelled, velocity, finished.dx);
     }
 
     function onClick(event: MouseEvent) {
@@ -154,6 +177,7 @@ export function usePageSwipe(
     element.addEventListener('touchend', onEnd);
     element.addEventListener('touchcancel', onEnd);
     element.addEventListener('click', onClick, true);
+    window.addEventListener('resize', cancel);
     return () => {
       clearTimeout(clickTimer);
       element.removeEventListener('touchstart', onStart);
@@ -161,6 +185,7 @@ export function usePageSwipe(
       element.removeEventListener('touchend', onEnd);
       element.removeEventListener('touchcancel', onEnd);
       element.removeEventListener('click', onClick, true);
+      window.removeEventListener('resize', cancel);
     };
-  }, [surface, page, onNavigate]);
+  }, [surface, page]);
 }

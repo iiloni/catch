@@ -1,6 +1,7 @@
 import type { Note } from '@catch/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useBackHandler } from './backButton';
+import { usePageSurface } from './pageSurface';
 import { isSharedNote } from './sharing';
 
 /**
@@ -8,6 +9,7 @@ import { isSharedNote } from './sharing';
  * device, say) leave the selection. Back and Escape end selecting.
  */
 export function useNoteSelection(notes: readonly Note[]) {
+  const active = usePageSurface()?.active ?? true;
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());
   const selectedNotes = notes.filter((note) => ids.has(note.id));
   if (selectedNotes.length !== ids.size) {
@@ -28,16 +30,16 @@ export function useNoteSelection(notes: readonly Note[]) {
   }, []);
   const clear = useCallback(() => setIds(new Set()), []);
 
-  useBackHandler(selecting, clear);
+  useBackHandler(active && selecting, clear);
   useEffect(() => {
-    if (!selecting) return;
+    if (!active || !selecting) return;
     const onKeyDown = (event: KeyboardEvent) => {
       // Menus and popovers handle (and prevent) the Escape that closes them.
       if (event.key === 'Escape' && !event.defaultPrevented) clear();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selecting, clear]);
+  }, [active, selecting, clear]);
 
   return { ids, notes: selectedNotes, selecting, select, clear };
 }

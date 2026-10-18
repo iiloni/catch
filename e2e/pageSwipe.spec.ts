@@ -1,7 +1,68 @@
 import { expect, type Page, test } from '@playwright/test';
 import { card, openDeck, seedNotes, settledBox, signUp, waitForPageTransition } from './helpers';
 
-/** Android uses real touch input; desktop Firefox exercises the same handler with touch events. */
+/** Android uses real touch input; desktop Firefox dispatches the same touch events. */
+async function beginSwipe(page: Page, isMobile: boolean, x = 260, y = 60) {
+  await waitForPageTransition(page);
+  const touch = isMobile ? await page.context().newCDPSession(page) : null;
+  const target = touch
+    ? null
+    : await page.evaluateHandle(({ x, y }) => document.elementFromPoint(x, y), { x, y });
+  let timestamp = Date.now() / 1000;
+  let offset = { x: 0, y: 0 };
+  async function send(type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel') {
+    const ended = type === 'touchEnd' || type === 'touchCancel';
+    const point = { x: x + offset.x, y: y + offset.y };
+    if (touch) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: ended ? [] : [{ ...point, id: 1 }],
+        timestamp,
+      });
+    } else if (target) {
+      await target.evaluate(
+        (element, { type, ended, point, time }) => {
+          if (!element) throw new Error('Missing swipe target');
+          const event = new Event(type.toLowerCase(), { bubbles: true, cancelable: true });
+          Object.defineProperties(event, {
+            touches: {
+              value: ended ? [] : [{ identifier: 0, clientX: point.x, clientY: point.y }],
+            },
+            timeStamp: { value: time },
+          });
+          element.dispatchEvent(event);
+        },
+        { type, ended, point, time: timestamp * 1000 },
+      );
+    }
+  }
+  await send('touchStart');
+  return {
+    async move(dx: number, dy = 0) {
+      const from = offset;
+      for (const fraction of [0.03, 0.06, 0.1, 0.2, 0.4, 0.6, 0.8, 1]) {
+        timestamp += 0.016;
+        offset = { x: from.x + (dx - from.x) * fraction, y: from.y + (dy - from.y) * fraction };
+        await send('touchMove');
+      }
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+    },
+    async end(cancel = false) {
+      // A touch lifted in motion is a fling to Chrome, which drops the next tap's click.
+      await page.waitForTimeout(110);
+      timestamp += 0.11;
+      await send(cancel ? 'touchCancel' : 'touchEnd');
+      await touch?.detach();
+      await target?.dispose();
+    },
+  };
+}
+
 async function swipe(
   page: Page,
   isMobile: boolean,
@@ -11,68 +72,11 @@ async function swipe(
     y = 60,
     dy = 0,
     cancel = false,
-  }: {
-    x?: number;
-    y?: number;
-    dy?: number;
-    cancel?: boolean;
-  } = {},
+  }: { x?: number; y?: number; dy?: number; cancel?: boolean } = {},
 ) {
-  await waitForPageTransition(page);
-  if (isMobile) {
-    const touch = await page.context().newCDPSession(page);
-    let timestamp = Date.now() / 1000;
-    await touch.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ x, y, id: 1 }],
-      timestamp,
-    });
-    for (const fraction of [0.03, 0.06, 0.1, 0.2, 0.4, 0.6, 0.8, 1]) {
-      timestamp += 0.016;
-      await touch.send('Input.dispatchTouchEvent', {
-        type: 'touchMove',
-        touchPoints: [{ x: x + dx * fraction, y: y + dy * fraction, id: 1 }],
-        timestamp,
-      });
-    }
-    await page.waitForTimeout(100);
-    await touch.send('Input.dispatchTouchEvent', {
-      type: cancel ? 'touchCancel' : 'touchEnd',
-      touchPoints: [],
-      timestamp: timestamp + 0.1,
-    });
-    await touch.detach();
-  } else {
-    await page.evaluate(
-      ({ x, y, dx, dy, cancel }) => {
-        const touched = document.elementFromPoint(x, y);
-        if (!touched) throw new Error('Missing swipe target');
-        const send = (type: string, fraction: number, time: number) => {
-          const event = new Event(type, { bubbles: true, cancelable: true });
-          Object.defineProperties(event, {
-            touches: {
-              value:
-                type === 'touchend' || type === 'touchcancel'
-                  ? []
-                  : [
-                      {
-                        identifier: 0,
-                        clientX: x + dx * fraction,
-                        clientY: y + dy * fraction,
-                      },
-                    ],
-            },
-            timeStamp: { value: time },
-          });
-          touched.dispatchEvent(event);
-        };
-        send('touchstart', 0, 0);
-        send('touchmove', 1, 100);
-        send(cancel ? 'touchcancel' : 'touchend', 1, 150);
-      },
-      { x, y, dx, dy, cancel },
-    );
-  }
+  const gesture = await beginSwipe(page, isMobile, x, y);
+  await gesture.move(dx, dy);
+  await gesture.end(cancel);
 }
 
 test('swipes switch adjacent main pages without wrapping or adding history', async ({
@@ -180,4 +184,118 @@ test('search filter panels retain their gestures and reduced motion still naviga
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await swipe(page, isMobile, 140);
   await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
+});
+
+test('pages and headers track the finger before release and retain the incoming DOM on commit', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const dock = await settledBox(page.locator('[data-dock]').first());
+  const gesture = await beginSwipe(page, isMobile);
+  await gesture.move(-120);
+  const current = page.locator('[data-pager-page="/"]');
+  const incoming = page.locator('[data-pager-page="/search"]');
+  await expect(incoming.locator('[data-page-header]')).toBeAttached();
+  await expect(page).toHaveURL(/\/$/);
+  expect(
+    await current.locator('[data-page-content]').evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(-120, 0);
+  expect(
+    await current.locator('[data-page-header]').evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(-120, 0);
+  const width = await page.evaluate(() => innerWidth);
+  expect(
+    await incoming.locator('[data-page-content]').evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(width - 120, 0);
+  expect(
+    await incoming.locator('[data-page-header]').evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(width - 120, 0);
+  await expect(incoming).toHaveAttribute('inert');
+  await expect(page.locator('[data-pager-page]')).toHaveCount(2);
+  await incoming.evaluate((el) => el.setAttribute('data-preview-instance', 'retained'));
+  const held = await page.locator('[data-dock]').first().boundingBox();
+  expect(held?.x).toBeCloseTo(dock.x, 0);
+  expect(held?.y).toBeCloseTo(dock.y, 0);
+  await testInfo.attach('partial-swipe', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  await gesture.move(-140);
+  await gesture.end();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(incoming).toHaveAttribute('data-preview-instance', 'retained');
+  await expect(incoming).not.toHaveAttribute('inert');
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+});
+
+test('a held swipe can reverse, cancel and spring home without navigating', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const gesture = await beginSwipe(page, isMobile);
+  await gesture.move(-140);
+  await expect(page.locator('[data-pager-page="/search"]')).toBeAttached();
+  await gesture.move(70);
+  await expect(page.locator('[data-pager-page="/deck"]')).toBeAttached();
+  await expect(page).toHaveURL(/\/$/);
+  expect(
+    await page
+      .locator('[data-pager-page="/"] [data-page-content]')
+      .evaluate((el) => el.getBoundingClientRect().x),
+  ).toBeCloseTo(70, 0);
+  await gesture.end(true);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+  await expect
+    .poll(() => page.locator('[data-page-content]').evaluate((el) => el.getBoundingClientRect().x))
+    .toBe(0);
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test('a scrolled gallery previews and returns at its own scroll position', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await seedNotes(page, [
+    { title: 'Tall note', body: 'Enough content to scroll this page. '.repeat(180) },
+    'Short note one',
+    'Short note two',
+  ]);
+  await expect(card(page, 'Tall note')).toBeVisible();
+  await page.evaluate(() => scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(400);
+  // Leave broad blank space beside the tall note. Android's touch targeting can
+  // redirect a touch in a thin gutter to a card, which owns swipe-to-archive.
+  const x = await page.evaluate(() => innerWidth - 100);
+  await swipe(page, isMobile, -140, { x, y: 180 });
+  await expect(page).toHaveURL(/\/search$/);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  const gesture = await beginSwipe(page, isMobile, 130);
+  await gesture.move(140);
+  const preview = page.locator('[data-pager-page="/"]');
+  await expect(preview.locator('[data-page-header]')).toBeAttached();
+  await expect(
+    preview.getByRole('button', { name: 'Scroll to top', includeHidden: true }),
+  ).toBeEnabled();
+  await gesture.end();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(400);
+});
+
+test('another touch can take over a settling swipe', async ({ page, isMobile }) => {
+  await signUp(page);
+  const first = await beginSwipe(page, isMobile);
+  await first.move(-60);
+  await first.end();
+  const second = await beginSwipe(page, isMobile, 100);
+  await second.move(200);
+  await expect(page).toHaveURL(/\/$/);
+  await second.end();
+  await expect(page).toHaveURL(/\/deck$/);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
 });

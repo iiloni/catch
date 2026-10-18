@@ -2,7 +2,7 @@ import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TabPath } from './dockState';
-import { usePageSwipe } from './pageSwipe';
+import { swipeDestination, usePageSwipe } from './pageSwipe';
 
 vi.mock('./haptics', () => ({ haptics: { selection: vi.fn() } }));
 
@@ -10,9 +10,20 @@ afterEach(() => window.getSelection()?.removeAllRanges());
 
 function setup(page: TabPath | null = '/') {
   const navigate = vi.fn();
+  const start = vi.fn();
+  const move = vi.fn();
+  const end = vi.fn();
   function Page({ path }: { path: TabPath | null }) {
     const surface = useRef<HTMLDivElement>(null);
-    usePageSwipe(surface, path, navigate);
+    usePageSwipe(surface, path, {
+      onStart: start,
+      onMove: move,
+      onEnd: (cancelled, velocity, delta) => {
+        end(cancelled, velocity, delta);
+        const to = !cancelled && path && swipeDestination(path, delta, 400, velocity);
+        if (to) navigate(to);
+      },
+    });
     return (
       <div ref={surface} data-testid="page">
         <div data-testid="blank">Page</div>
@@ -29,6 +40,9 @@ function setup(page: TabPath | null = '/') {
   const view = render(<Page path={page} />);
   return {
     navigate,
+    start,
+    move,
+    end,
     setPage: (path: TabPath | null) => view.rerender(<Page path={path} />),
     blank: screen.getByTestId('blank'),
     card: screen.getByTestId('card'),
@@ -188,5 +202,34 @@ describe('page swipes', () => {
     window.getSelection()?.addRange(range);
     expect(swipe(blank, 100).defaultPrevented).toBe(false);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('publishes drag progress before release and cancels the moving surface on multi-touch', () => {
+    const { blank, start, move, end, navigate } = setup();
+    touch(blank, 'start');
+    touch(blank, 'move', 180, 200, 20);
+    touch(blank, 'move', 100, 200, 80);
+    expect(start).toHaveBeenCalledOnce();
+    expect(move.mock.calls).toEqual([[-20], [-100]]);
+    expect(navigate).not.toHaveBeenCalled();
+    touch(blank, 'move', 100, 200, 100, 2);
+    expect(end).toHaveBeenCalledExactlyOnceWith(true, 0, -100);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('swipe release', () => {
+  it.each([
+    ['/', -80, 0, null],
+    ['/', -100, 0, '/search'],
+    ['/', 100, 0, '/deck'],
+    ['/', -50, -0.7, '/search'],
+    ['/', -50, 0.7, null],
+    ['/', 40, 1, null],
+    ['/deck', 150, 1, null],
+    ['/search', -150, -1, null],
+    ['/deck', -1000, -1, '/'],
+  ] as const)('settles %s at %i px and %i px/ms to %s', (page, delta, velocity, target) => {
+    expect(swipeDestination(page, delta, 400, velocity)).toBe(target);
   });
 });

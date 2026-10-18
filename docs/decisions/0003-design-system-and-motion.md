@@ -48,9 +48,21 @@ a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
-Horizontal touch swipes also switch the three main pages in dock order (Deck, Gallery,
-Search), one page on release, without wrapping at either end. They use the same page
-transition and replace history. Short, vertical, held or cancelled gestures stay put.
+Horizontal touch swipes move the three main pages in dock order (Deck, Gallery, Search)
+with the finger, without wrapping at either end (`MainPagePager`). The current page and
+its incoming neighbour are live while dragging; distance and release velocity choose
+whether a spring finishes the move or returns home. The URL is replaced only after the
+page arrives, without a second View Transition. Short, vertical, held or cancelled gestures
+stay on the current page. Reduced motion navigates on release without sliding.
+Only page code is prefetched; the neighbour mounts on a horizontal drag and becomes the
+active page without remounting after a completed swipe. At rest one page is mounted. Each
+page retains its vertical scroll position for this browsing session. Headers portal into
+an untransformed host beside the page content and share its horizontal motion value,
+preserving fixed positioning and glass. The dock stays on the viewport. Incoming pages
+are inert and do not publish selection, search-filter or header state until activated.
+The page views live in ignored `routes/_app/-pages` helpers; the three file routes select
+their URLs while the pager owns the views. Other routes and dock taps keep their existing
+View Transitions.
 Cards and controls keep their gestures; horizontal scrollers take priority while they have
 room in the swipe direction, and reaching their edge requires a fresh swipe to navigate.
 The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
