@@ -51,8 +51,13 @@ Tabs replace history entries, so the back gesture leaves the app instead of cycl
 Horizontal touch swipes move the three main pages in dock order (Deck, Gallery, Search)
 with the finger, without wrapping at either end (`MainPagePager`). The current page and
 its incoming neighbour are live while dragging; distance and release velocity choose
-whether a spring finishes the move or returns home. The URL is replaced only after the
-page arrives, without a second View Transition. Short, vertical, held or cancelled gestures
+whether a spring finishes the move or returns home. A swipe that will arrive replaces the
+URL as the finger lifts, without a second View Transition, and its spring finishes on the
+new route with the page it left mounted and inert. The next touch therefore lands on the
+arriving page and can take over the spring, rather than on a page about to unmount, whose
+touch events would stop reaching the pager. Each touch is judged by its own travel and
+velocity, so one that catches a settling page moves one page on from where it was heading,
+and one that barely moves lets it arrive. Short, vertical, held or cancelled gestures
 stay on the current page. Reduced motion navigates on release without sliding.
 Only page code is prefetched; the neighbour mounts on a horizontal drag and becomes the
 active page without remounting after a completed swipe. At rest one page is mounted. Each

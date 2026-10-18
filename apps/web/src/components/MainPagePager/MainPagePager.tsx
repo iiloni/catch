@@ -53,7 +53,15 @@ function mainPage(path: string): TabPath | null {
   return TAB_PATHS.find((page) => page === path) ?? null;
 }
 
-/** Live pages track the finger; only a completed swipe changes the URL. */
+/** The pages besides `active` that some part of the screen shows at this position. */
+function visiblePages(position: number, active: TabPath) {
+  return TAB_PATHS.filter((page, index) => page !== active && Math.abs(index - position) < 1);
+}
+
+/**
+ * Live pages track the finger. A released swipe changes the URL at once and the spring
+ * finishes on the new route, so the next touch already belongs to the page it is heading to.
+ */
 export function MainPagePager({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const router = useRouter();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -65,16 +73,20 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   const viewport = useMotionValue(window.innerWidth);
   const scrollY = useMotionValue(window.scrollY);
   const scrolls = useRef(new Map<TabPath, number>());
-  const [incoming, setIncoming] = useState<TabPath | null>(null);
-  const neighbour = useRef<TabPath | null>(null);
+  const [incoming, setIncoming] = useState<readonly TabPath[]>([]);
+  const neighbours = useRef<readonly TabPath[]>([]);
   const animation = useRef<ReturnType<typeof animate> | null>(null);
   const dragOrigin = useRef(index);
   const generation = useRef(0);
+  // The route a released swipe asked for, until the router renders it.
+  const committed = useRef<TabPath | null>(null);
+  const moving = useRef(false);
 
-  const clearIncoming = useCallback(() => {
-    neighbour.current = null;
-    setIncoming(null);
+  const showIncoming = useCallback((pages: readonly TabPath[]) => {
+    neighbours.current = pages;
+    setIncoming(pages);
   }, []);
+  const clearIncoming = useCallback(() => showIncoming([]), [showIncoming]);
 
   const releaseDock = useCallback(() => {
     if (pageSwipePosition.get() === position) pageSwipePosition.set(null);
@@ -91,6 +103,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
     const update = () => scrollY.set(window.scrollY);
     const resize = () => {
       generation.current++;
+      moving.current = false;
       animation.current?.stop();
       position.set(index);
       releaseDock();
@@ -126,20 +139,29 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   }, [router, scrollY]);
 
   useLayoutEffect(() => {
-    generation.current++;
-    animation.current?.stop();
-    position.set(index);
-    releaseDock();
-    clearIncoming();
+    const swiped = active !== null && committed.current === active;
+    committed.current = null;
+    if (swiped && moving.current) {
+      // The page left by the swipe stays mounted, inert, until the spring carries it away.
+      showIncoming(visiblePages(position.get(), active));
+    } else {
+      generation.current++;
+      moving.current = false;
+      animation.current?.stop();
+      position.set(index);
+      releaseDock();
+      clearIncoming();
+    }
     if (active) {
       window.scrollTo({ top: scrolls.current.get(active) ?? 0, behavior: 'instant' });
       scrollY.set(window.scrollY);
     }
-  }, [active, index, position, scrollY, clearIncoming, releaseDock]);
+  }, [active, index, position, scrollY, clearIncoming, showIncoming, releaseDock]);
 
   useLayoutEffect(() => {
     if (enabled) return;
     generation.current++;
+    moving.current = false;
     animation.current?.stop();
     position.set(index);
     releaseDock();
@@ -161,35 +183,38 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       Math.min(TAB_PATHS.length - 1, index + 1, dragOrigin.current - delta / viewport.get()),
     );
     position.set(reducedMotion ? index : next);
-    const target =
-      next === index
-        ? neighbour.current
-        : (TAB_PATHS[next < index ? index - 1 : index + 1] ?? null);
-    if (!reducedMotion && target !== neighbour.current) {
-      neighbour.current = target;
-      setIncoming(target);
-    }
+    if (reducedMotion || !active) return;
+    // Keep what is mounted while the finger rests over the current page alone.
+    const visible = visiblePages(next, active);
+    if (visible.length > 0 && visible.join() !== neighbours.current.join()) showIncoming(visible);
   }
 
   function settle(cancelled: boolean, velocity: number, delta: number) {
     if (!active) return;
     const width = viewport.get();
-    const displacement = reducedMotion ? delta : (index - position.get()) * width;
-    const to = cancelled ? null : swipeDestination(active, displacement, width, velocity);
+    // Judge this touch by its own travel: one that catches a settling page moves on from
+    // the page it was heading to, and one that barely moves lets it arrive.
+    const to = cancelled ? null : swipeDestination(active, delta, width, velocity);
     const target = to ? TAB_PATHS.indexOf(to) : index;
     const token = ++generation.current;
     const finish = () => {
       if (token !== generation.current) return;
-      if (to) {
-        (document.activeElement as HTMLElement | null)?.blur();
-        haptics.selection();
-        void router.navigate({ to, replace: true, resetScroll: false, viewTransition: false });
-      } else {
-        clearIncoming();
-        releaseDock();
-      }
+      moving.current = false;
+      // A route still on its way tidies up as it renders.
+      if (committed.current) return;
+      clearIncoming();
+      releaseDock();
     };
     animation.current?.stop();
+    moving.current = true;
+    if (to) {
+      (document.activeElement as HTMLElement | null)?.blur();
+      haptics.selection();
+      committed.current = to;
+      // Mount both pages across the route change, whichever one the router calls active.
+      showIncoming([to, ...visiblePages(position.get(), to)]);
+      void router.navigate({ to, replace: true, resetScroll: false, viewTransition: false });
+    }
     if (reducedMotion) {
       position.set(target);
       finish();
@@ -205,6 +230,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   usePageSwipe(surface, enabled ? active : null, {
     onStart: () => {
       generation.current++;
+      moving.current = true;
       animation.current?.stop();
       dragOrigin.current = position.get();
       if (!reducedMotion) pageSwipePosition.set(position);
@@ -216,7 +242,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   if (!active) return children;
   return (
     <div ref={surface} data-page-pager className="relative min-h-[calc(100dvh-var(--dock-space))]">
-      {TAB_PATHS.filter((page) => page === active || page === incoming).map((page) => (
+      {TAB_PATHS.filter((page) => page === active || incoming.includes(page)).map((page) => (
         <PagerPage
           key={page}
           page={page}

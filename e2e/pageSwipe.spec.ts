@@ -153,8 +153,9 @@ test('the dock tab indicator and icons track Deck and Gallery swipes without a s
   await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
 
   await swipe(page, isMobile, width * 0.55, { x: 55 });
+  // The route commits as the finger lifts; the indicator arrives with the page.
   await expect(page).toHaveURL(/\/deck$/);
-  expect((await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
   await expect(indicator).toHaveAttribute('data-original-indicator', '');
 
   const towardGallery = await beginSwipe(page, isMobile, width - 35);
@@ -166,7 +167,7 @@ test('the dock tab indicator and icons track Deck and Gallery swipes without a s
   await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(0, 2);
   await swipe(page, isMobile, -width * 0.55, { x: width - 35 });
   await expect(page).toHaveURL(/\/$/);
-  expect((await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
+  await expect.poll(async () => (await tabIndicatorState(page)).position).toBeCloseTo(1, 2);
   await expect(indicator).toHaveAttribute('data-original-indicator', '');
 
   await page.getByRole('link', { name: 'Deck', exact: true }).click();
@@ -246,8 +247,8 @@ test('the Search dock follows a held swipe, reversal and spring in both directio
 
   await swipe(page, isMobile, -width * 0.65, { x: width - 35 });
   await expect(page).toHaveURL(/\/search$/);
+  await expect.poll(async () => (await searchDockState(page)).progress).toBeCloseTo(1, 2);
   dock = await searchDockState(page);
-  expect(dock.progress).toBeCloseTo(1, 2);
   expect(dock.textOpacity).toBe(1);
   expect(dock.focused).toBe(false);
   const leaving = await beginSwipe(page, isMobile, 55, 400);
@@ -260,8 +261,8 @@ test('the Search dock follows a held swipe, reversal and spring in both directio
   await expect.poll(async () => (await searchDockState(page)).progress).toBeCloseTo(1, 2);
   await swipe(page, isMobile, width * 0.65, { x: 55, y: 400 });
   await expect(page).toHaveURL(/\/$/);
+  await expect.poll(async () => (await searchDockState(page)).progress).toBeCloseTo(0, 2);
   dock = await searchDockState(page);
-  expect(dock.progress).toBeCloseTo(0, 2);
   expect(dock.textOpacity).toBe(0);
 });
 
@@ -291,6 +292,8 @@ test('Search tags and results allow page swipes while keeping their tap actions'
   await swipe(page, isMobile, 140, { x: box.x + 40, y: box.y + box.height / 2 });
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('dialog')).toBeHidden();
+  // Search keeps its filter while it is still sliding away; let it unmount first.
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
   await swipe(page, isMobile, -140);
   await expect(page).toHaveURL(/\/search$/);
   await tag.click();
@@ -480,5 +483,24 @@ test('another touch can take over a settling swipe', async ({ page, isMobile }) 
   await expect(page).toHaveURL(/\/$/);
   await second.end();
   await expect(page).toHaveURL(/\/deck$/);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+});
+
+test('the next swipe starts on the arriving page while the last one settles', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await seedNotes(page, ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight']);
+  await expect(card(page, 'Eight')).toBeVisible();
+  const y = await page.evaluate(() => Math.round(innerHeight * 0.6));
+  await swipe(page, isMobile, -160);
+  // Search is short, so this lands on blank space where the Gallery's cards just were.
+  const second = await beginSwipe(page, isMobile, 130, y);
+  await expect(page).toHaveURL(/\/search$/);
+  await second.move(160);
+  await second.end();
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('[data-pager-page]')).toHaveCount(1);
 });

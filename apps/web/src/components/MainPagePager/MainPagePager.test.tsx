@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 
 describe('MainPagePager', () => {
-  it('mounts a neighbour only for a drag and keeps that instance when its route commits', async () => {
+  it('commits the route on release and keeps both pages until the spring arrives', async () => {
     const view = render(<MainPagePager enabled>Other route</MainPagePager>);
     await screen.findByText('Gallery view');
     expect(screen.queryByText('Search view')).not.toBeInTheDocument();
@@ -67,11 +67,8 @@ describe('MainPagePager', () => {
     const progress = pageSwipePosition.get();
     expect(progress?.get()).toBeCloseTo(1 + 200 / window.innerWidth);
     const incoming = await screen.findByText('Search view');
+    const outgoing = screen.getByText('Gallery view');
     act(() => state.controls?.onEnd(false, 0, -200));
-    expect(state.navigate).not.toHaveBeenCalled();
-    act(() => state.complete?.());
-    expect(pageSwipePosition.get()).toBe(progress);
-    expect(progress?.get()).toBe(2);
     expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
       to: '/search',
       replace: true,
@@ -80,12 +77,40 @@ describe('MainPagePager', () => {
     });
     state.path = '/search';
     view.rerender(<MainPagePager enabled>Other route</MainPagePager>);
+    expect(pageSwipePosition.get()).toBe(progress);
+    expect(progress?.get()).toBeCloseTo(1 + 200 / window.innerWidth);
+    expect(screen.getByText('Search view')).toBe(incoming);
+    expect(screen.getByText('Gallery view')).toBe(outgoing);
+    act(() => state.complete?.());
+    expect(progress?.get()).toBe(2);
     expect(pageSwipePosition.get()).toBeNull();
     expect(screen.getByText('Search view')).toBe(incoming);
     expect(screen.queryByText('Gallery view')).not.toBeInTheDocument();
   });
 
-  it('does not let an old settling animation navigate after another route opens', async () => {
+  it('lets another drag take over the spring from the committed page', async () => {
+    const view = render(<MainPagePager enabled>Other route</MainPagePager>);
+    await screen.findByText('Gallery view');
+    act(() => {
+      state.controls?.onStart();
+      state.controls?.onMove(-200);
+      state.controls?.onEnd(false, 0, -200);
+    });
+    state.path = '/search';
+    view.rerender(<MainPagePager enabled>Other route</MainPagePager>);
+    const progress = pageSwipePosition.get();
+    const from = progress?.get() ?? 0;
+    act(() => {
+      state.controls?.onStart();
+      state.controls?.onMove(100);
+    });
+    expect(progress?.get()).toBeCloseTo(from - 100 / window.innerWidth);
+    expect(screen.getByText('Gallery view')).toBeInTheDocument();
+    act(() => state.controls?.onEnd(false, 0, 100 + (from - 1) * window.innerWidth));
+    expect(state.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/' }));
+  });
+
+  it('drops a settling swipe when another route opens instead', async () => {
     const view = render(<MainPagePager enabled>Other route</MainPagePager>);
     await screen.findByText('Gallery view');
     act(() => {
@@ -99,7 +124,7 @@ describe('MainPagePager', () => {
     view.rerender(<MainPagePager enabled>Other route</MainPagePager>);
     act(() => finishOldAnimation?.());
     expect(screen.getByText('Other route')).toBeInTheDocument();
-    expect(state.navigate).not.toHaveBeenCalled();
+    expect(state.navigate).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Search view')).not.toBeInTheDocument();
     expect(pageSwipePosition.get()).toBeNull();
   });

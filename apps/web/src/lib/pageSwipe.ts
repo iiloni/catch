@@ -41,10 +41,12 @@ export function usePageSwipe(
     return () => document.removeEventListener('pointerdown', onPointerDown, true);
   }, []);
 
+  const enabled = page !== null;
+  // A route committed by the previous swipe must not reattach the listeners: that would
+  // drop a touch which already took over the settling page.
   useEffect(() => {
     const element = surface.current;
-    if (!element || !page) return;
-    const index = TAB_PATHS.indexOf(page);
+    if (!element || !enabled) return;
     let gesture: {
       id: number;
       x: number;
@@ -81,6 +83,9 @@ export function usePageSwipe(
         touch.clientX > window.innerWidth - EDGE_SPACE
       )
         return;
+      const page = availablePage.current;
+      if (!page) return;
+      const index = TAB_PATHS.indexOf(page);
 
       // Remember scroll room before the finger moves: a scroll reaching its edge must
       // finish as a scroll rather than turning into a navigation in the same gesture.
@@ -189,5 +194,5 @@ export function usePageSwipe(
       element.removeEventListener('click', onClick, true);
       window.removeEventListener('resize', cancel);
     };
-  }, [surface, page]);
+  }, [surface, enabled]);
 }
