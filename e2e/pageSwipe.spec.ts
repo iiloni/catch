@@ -504,3 +504,51 @@ test('the next swipe starts on the arriving page while the last one settles', as
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('[data-pager-page]')).toHaveCount(1);
 });
+
+test('dock tabs slide the main pages side by side, as a swipe does', async ({ page }) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await waitForPageTransition(page);
+  const watch = () =>
+    page.evaluate(() => {
+      const seen = { pages: new Set<string>(), viewTransition: false, moving: false };
+      const sample = () => {
+        seen.viewTransition ||= document.documentElement.matches(':active-view-transition');
+        for (const element of document.querySelectorAll<HTMLElement>('[data-pager-page]')) {
+          seen.pages.add(element.dataset.pagerPage ?? '');
+          const content = element.querySelector('[data-page-content]');
+          if (content && new DOMMatrix(getComputedStyle(content).transform).m41 !== 0) {
+            seen.moving = true;
+          }
+        }
+      };
+      (window as unknown as { pagerSeen: () => unknown }).pagerSeen = () => ({
+        ...seen,
+        pages: [...seen.pages].sort(),
+      });
+      const loop = () => {
+        sample();
+        requestAnimationFrame(loop);
+      };
+      loop();
+    });
+  const seen = () =>
+    page.evaluate(() => (window as unknown as { pagerSeen: () => unknown }).pagerSeen());
+
+  await watch();
+  await page.getByRole('link', { name: 'Deck' }).click();
+  await expect(page).toHaveURL(/\/deck$/);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+  expect(await seen()).toEqual({ pages: ['/', '/deck'], viewTransition: false, moving: true });
+
+  // Search is two pages over, so the Gallery passes between them.
+  await watch();
+  await page.getByRole('link', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.locator('[data-pager-page]')).toHaveCount(1);
+  expect(await seen()).toEqual({
+    pages: ['/', '/deck', '/search'],
+    viewTransition: false,
+    moving: true,
+  });
+});

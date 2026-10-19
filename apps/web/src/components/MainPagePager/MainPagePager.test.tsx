@@ -110,6 +110,25 @@ describe('MainPagePager', () => {
     expect(state.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/' }));
   });
 
+  it('slides a tapped tab in across the pages between, leaving the dock its own animation', async () => {
+    state.path = '/deck';
+    const view = render(<MainPagePager enabled>Other route</MainPagePager>);
+    const outgoing = await screen.findByText('Deck view');
+    state.path = '/search';
+    view.rerender(<MainPagePager enabled>Other route</MainPagePager>);
+    // The spring waits a frame for the pages it passes to mount.
+    expect(state.complete).toBeNull();
+    await screen.findByText('Search view');
+    expect(screen.getByText('Deck view')).toBe(outgoing);
+    expect(await screen.findByText('Gallery view')).toBeInTheDocument();
+    expect(pageSwipePosition.get()).toBeNull();
+    await act(() => new Promise(requestAnimationFrame));
+    act(() => state.complete?.());
+    expect(screen.getByText('Search view')).toBeInTheDocument();
+    expect(screen.queryByText('Deck view')).not.toBeInTheDocument();
+    expect(screen.queryByText('Gallery view')).not.toBeInTheDocument();
+  });
+
   it('drops a settling swipe when another route opens instead', async () => {
     const view = render(<MainPagePager enabled>Other route</MainPagePager>);
     await screen.findByText('Gallery view');

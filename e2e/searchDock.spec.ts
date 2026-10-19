@@ -4,7 +4,9 @@ import { openGalleryPage, settledBox, signUp, waitForPageTransition } from './he
 test('the dock stays visible while page navigation prepares its incoming snapshot', async ({
   page,
 }) => {
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // The main pages slide on the pager's own spring unless motion is reduced; then the
+  // dock's controls still change pages through a view transition.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await signUp(page);
   await waitForPageTransition(page);
 
@@ -243,47 +245,41 @@ test('a touch tap opens search instead of closing it with its trailing click', a
 test('search page slides while its dock transition follows the keyboard', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await signUp(page);
-  const directions = await page.evaluate(async () => {
+  // Archive is outside the pager, so opening Search from it is a view transition. Between
+  // the main pages the dock is never captured, so it follows the keyboard live.
+  await openGalleryPage(page, 'Archive');
+  await waitForPageTransition(page);
+  const opening = await page.evaluate(async () => {
     const { keyboardHeight } = await import('/src/lib/keyboard.ts');
     const root = document.documentElement;
     const dock = document.querySelector('[data-dock]');
-    if (!dock) throw new Error('Missing dock');
-    const directions: { samples: number; positionError: number; pageTravel: number }[] = [];
-    for (const opening of [true, false]) {
-      keyboardHeight.jump(opening ? 0 : 320);
-      const trigger = dock.querySelector<HTMLElement>(
-        opening ? 'a[aria-label="Search"]' : 'button[aria-label="Close search"]',
-      );
-      if (!trigger) throw new Error('Missing search control');
-      trigger.click();
-      let samples = 0;
-      let positionError = 0;
-      let pageTravel = 0;
-      for (let frame = 0; frame < 40; frame++) {
-        await new Promise(requestAnimationFrame);
-        const height = Math.min(320, (frame + 1) * 16);
-        keyboardHeight.set(opening ? height : 320 - height);
-        if (!root.matches(':active-view-transition')) continue;
-        const group = getComputedStyle(root, '::view-transition-group(dock)');
-        const top = Number.parseFloat(group.top);
-        const size = Number.parseFloat(group.height);
-        // The group acquires its measured bounds once both page snapshots exist.
-        if (!Number.isFinite(top) || !Number.isFinite(size)) continue;
-        const bottom = innerHeight - top - size;
-        const expected = Number.parseFloat(getComputedStyle(dock).bottom);
-        positionError = Math.max(positionError, Math.abs(bottom - expected));
-        const page = getComputedStyle(root, '::view-transition-new(root)');
-        pageTravel = Math.max(pageTravel, Math.abs(new DOMMatrix(page.transform).m41));
-        samples++;
-      }
-      directions.push({ samples, positionError, pageTravel });
+    const trigger = dock?.querySelector<HTMLElement>('a[aria-label="Search"]');
+    if (!dock || !trigger) throw new Error('Missing Search tab');
+    keyboardHeight.jump(0);
+    trigger.click();
+    let samples = 0;
+    let positionError = 0;
+    let pageTravel = 0;
+    for (let frame = 0; frame < 40; frame++) {
+      await new Promise(requestAnimationFrame);
+      keyboardHeight.set(Math.min(320, (frame + 1) * 16));
+      if (!root.matches(':active-view-transition')) continue;
+      const group = getComputedStyle(root, '::view-transition-group(dock)');
+      const top = Number.parseFloat(group.top);
+      const size = Number.parseFloat(group.height);
+      // The group acquires its measured bounds once both page snapshots exist.
+      if (!Number.isFinite(top) || !Number.isFinite(size)) continue;
+      const bottom = innerHeight - top - size;
+      const expected = Number.parseFloat(getComputedStyle(dock).bottom);
+      positionError = Math.max(positionError, Math.abs(bottom - expected));
+      const page = getComputedStyle(root, '::view-transition-new(root)');
+      pageTravel = Math.max(pageTravel, Math.abs(new DOMMatrix(page.transform).m41));
+      samples++;
     }
     keyboardHeight.jump(0);
-    return directions;
+    return { samples, positionError, pageTravel };
   });
-  for (const direction of directions) {
-    expect(direction.samples).toBeGreaterThan(3);
-    expect(direction.positionError).toBeLessThan(1);
-    expect(direction.pageTravel).toBeGreaterThan(5);
-  }
+  expect(opening.samples).toBeGreaterThan(3);
+  expect(opening.positionError).toBeLessThan(1);
+  expect(opening.pageTravel).toBeGreaterThan(5);
 });

@@ -58,9 +58,17 @@ function visiblePages(position: number, active: TabPath) {
   return TAB_PATHS.filter((page, index) => page !== active && Math.abs(index - position) < 1);
 }
 
+/** The pages besides `active` that the screen passes over on the way from `from` to `to`. */
+function pagesBetween(from: number, to: number, active: TabPath) {
+  const low = Math.min(from, to) - 1;
+  const high = Math.max(from, to) + 1;
+  return TAB_PATHS.filter((page, index) => page !== active && index > low && index < high);
+}
+
 /**
  * Live pages track the finger. A released swipe changes the URL at once and the spring
  * finishes on the new route, so the next touch already belongs to the page it is heading to.
+ * Other routes between these pages, such as the dock's tabs, slide on the same spring.
  */
 export function MainPagePager({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const router = useRouter();
@@ -81,6 +89,8 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   // The route a released swipe asked for, until the router renders it.
   const committed = useRef<TabPath | null>(null);
   const moving = useRef(false);
+  // The page shown before the route changed, kept mounted while the new one slides in.
+  const shown = useRef(active);
 
   const showIncoming = useCallback((pages: readonly TabPath[]) => {
     neighbours.current = pages;
@@ -140,10 +150,31 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
 
   useLayoutEffect(() => {
     const swiped = active !== null && committed.current === active;
+    const from = shown.current;
     committed.current = null;
+    shown.current = active;
     if (swiped && moving.current) {
       // The page left by the swipe stays mounted, inert, until the spring carries it away.
       showIncoming(visiblePages(position.get(), active));
+    } else if (!swiped && active && from && from !== active && !reducedMotion) {
+      // The dock keeps its own animation for a tap, which has already moved its indicator.
+      const token = ++generation.current;
+      moving.current = true;
+      animation.current?.stop();
+      releaseDock();
+      showIncoming(pagesBetween(position.get(), index, active));
+      // Start once the pages it passes have rendered, or mounting them eats the opening.
+      requestAnimationFrame(() => {
+        if (token !== generation.current) return;
+        animation.current = animate(position, index, {
+          ...springs.pane,
+          onComplete: () => {
+            if (token !== generation.current) return;
+            moving.current = false;
+            clearIncoming();
+          },
+        });
+      });
     } else {
       generation.current++;
       moving.current = false;
@@ -156,7 +187,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       window.scrollTo({ top: scrolls.current.get(active) ?? 0, behavior: 'instant' });
       scrollY.set(window.scrollY);
     }
-  }, [active, index, position, scrollY, clearIncoming, showIncoming, releaseDock]);
+  }, [active, index, position, reducedMotion, scrollY, clearIncoming, showIncoming, releaseDock]);
 
   useLayoutEffect(() => {
     if (enabled) return;
@@ -242,7 +273,9 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   if (!active) return children;
   return (
     <div ref={surface} data-page-pager className="relative min-h-[calc(100dvh-var(--dock-space))]">
-      {TAB_PATHS.filter((page) => page === active || incoming.includes(page)).map((page) => (
+      {TAB_PATHS.filter(
+        (page) => page === active || page === shown.current || incoming.includes(page),
+      ).map((page) => (
         <PagerPage
           key={page}
           page={page}

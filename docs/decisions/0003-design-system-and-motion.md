@@ -69,8 +69,12 @@ position through dragging, reversal and settling. Only visual motion is previewe
 remain owned by the active route until the swipe commits. Incoming pages are inert and do
 not publish selection, search-filter or header state until activated.
 The page views live in ignored `routes/_app/-pages` helpers; the three file routes select
-their URLs while the pager owns the views. Other routes and dock taps keep their existing
-View Transitions.
+their URLs while the pager owns the views. Any other route between these three pages, such as
+a dock tab, slides them side by side on the same spring instead of a View Transition, so a
+tap and a swipe move the same way. The spring starts the frame after the pages it passes have
+mounted, so their first render does not eat its opening; a jump from Deck to Search passes the
+Gallery. The dock keeps its own animation for a tap, whose indicator has already moved under
+the finger. Other routes keep their View Transitions, as do these pages under reduced motion.
 Cards and controls keep their gestures, except Search's tap-only tags, recent searches and
 result rows, which also allow page swipes (and suppress their click after a horizontal drag).
 Their taps, vertical scrolling and result long presses still work. Text inputs, menus and
@@ -307,7 +311,8 @@ cards or routes remount. They never block input or wait for other content, and r
 shows elements immediately. Fixed headers and the dock have no animated page ancestor.
 
 **Page transitions.** Moving between pages slides them a short way in the direction of
-travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
+travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API,
+except between the three main pages, which the pager slides (see Navigation),
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
 gets a `view-transition-name` only while a transition runs and shows live, so its own
