@@ -25,12 +25,12 @@ test.beforeEach(async ({ page }) => {
   await signUp(page);
   await seedNotes(
     page,
-    Array.from({ length: 50 }, (_, index) => ({
+    Array.from({ length: 30 }, (_, index) => ({
       title: `Scroll note ${index}`,
-      body: 'Enough content to browse beyond the dock. '.repeat(index === 49 ? 100 : 12),
+      body: 'Enough content to browse beyond the dock. '.repeat(index === 29 ? 100 : 12),
     })),
   );
-  await expect(card(page, 'Scroll note 49')).toBeVisible();
+  await expect(card(page, 'Scroll note 29')).toBeVisible();
   await waitForPageTransition(page);
 });
 
@@ -104,7 +104,7 @@ test('keyboard focus, navigation and an open note keep dock actions available', 
   await scrollTo(page, 300);
   await expectDock(page, true);
   await scrollTo(page, 0);
-  await openNote(page, 'Scroll note 49');
+  await openNote(page, 'Scroll note 29');
   await expectDock(page, false);
   const noteScroll = page.locator('[data-note-scroll]');
   await noteScroll.evaluate((scroller) => scroller.scrollTo(0, 200));
