@@ -44,6 +44,7 @@ import {
 } from '@/components/SettingsTabPicker/SettingsTabPicker';
 import { useAdminAccess } from '@/lib/admin';
 import { useBackHandler } from '@/lib/backButton';
+import { dockScrollProgress, useDockScroll } from '@/lib/dockScroll';
 import {
   editorControls,
   editorNote,
@@ -149,7 +150,13 @@ export function Dock() {
           ? 'search'
           : 'tabs';
   const settingsY = useSettingsSwipeY();
-  const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
+  const dockY = useTransform(() => {
+    const y = entry.y.get() + (mode === 'settings' ? settingsY.get() : 0);
+    const progress = dockScrollProgress.get();
+    return progress === 0
+      ? y
+      : `calc(${y}px + ${progress} * (var(--dock-height) + var(--dock-bottom) + 1.5rem))`;
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const requestedSearchFocus = searchFocusRequest.use();
   // The tap that opens search trails a compatibility click; by the time it arrives
@@ -221,6 +228,12 @@ export function Dock() {
   const [switcherHover, setSwitcherHover] = useState<GalleryPage | null>(null);
   const [settingsHover, setSettingsHover] = useState<SettingsPath | null>(null);
   const switcherOpen = switcherOn === pathname && (mode === 'tabs' || mode === 'settings');
+  const filtersOpen = searchFiltersOpen.use();
+  const scrollHidden = useDockScroll(
+    pathname,
+    !noteOpen && !quickNoteOpen && !keyboardOpen && !switcherOpen && !filtersOpen && !swipePosition,
+    dockRef,
+  );
   const goToGalleryPage = useGalleryPages();
   const setSwitcher = (open: boolean) => setSwitcherOn(open ? pathname : null);
 
@@ -266,6 +279,7 @@ export function Dock() {
       <motion.div
         ref={dockRef}
         data-dock
+        data-scroll-hidden={scrollHidden}
         // Translate the dock without fading its glass's ancestor.
         style={{ zIndex, y: dockY, visibility: galleryVisibility }}
         inert={pane.shown && pane.expanded && !quickNoteOpen}

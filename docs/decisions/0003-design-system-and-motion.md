@@ -30,6 +30,15 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 button. Tapping Gallery while on a gallery page shows a separate segmented control
 floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment.
+
+The browsing dock slides down out of view after 48 px of document scrolling in one
+direction and returns after 48 px upward; reversing direction starts that distance again.
+The top 48 px always shows it. The bottom edge blur slides offscreen on the same spring,
+so hidden controls leave no band of blur behind. Page padding stays constant to avoid
+changing the scroll range. Navigation reveals the dock, as do keyboard focus and opening a
+note, composer, picker or filter panel. Those interactions and horizontal page transitions
+keep it visible; nested scrollers do not drive it. Reduced motion switches immediately.
+
 Settings is a page of its own (`/settings/<page>`) behind the gear in the Gallery's header,
 split into User and admin-only Admin sections (ADR 0011), with pages listed in
 `SETTINGS_TABS` (`src/lib/settings.ts`), each a route file under
