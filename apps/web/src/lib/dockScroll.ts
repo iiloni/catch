@@ -29,6 +29,13 @@ export function useDockScroll(
       lastY = readY();
       travel = 0;
     };
+    // The router and pager restore scroll after layout effects. Their queued scroll
+    // events establish the new baseline rather than hiding a freshly revealed dock.
+    let ready = false;
+    const frame = requestAnimationFrame(() => {
+      reset();
+      ready = true;
+    });
     const reveal = () => {
       reset();
       setHidden(false);
@@ -37,6 +44,10 @@ export function useDockScroll(
       dockScrollProgress.set(0);
     };
     const onScroll = () => {
+      if (!ready) {
+        reset();
+        return;
+      }
       const y = readY();
       const delta = y - lastY;
       lastY = y;
@@ -68,6 +79,7 @@ export function useDockScroll(
     element?.addEventListener('focusin', reveal);
     element?.addEventListener('focusout', reset);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onScroll);
       element?.removeEventListener('focusin', reveal);
       element?.removeEventListener('focusout', reset);

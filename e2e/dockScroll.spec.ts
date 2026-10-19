@@ -95,6 +95,7 @@ test('keyboard focus, navigation and an open note keep dock actions available', 
   await waitForPageTransition(page);
   await page.getByRole('button', { name: 'Close search', exact: true }).click();
   await waitForPageTransition(page);
+  await expectDock(page, false);
   // Pointer focus left on a tab must still allow the browsing dock to hide.
   await page.getByRole('link', { name: 'Deck', exact: true }).click();
   await waitForPageTransition(page);
