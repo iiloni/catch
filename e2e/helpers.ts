@@ -174,10 +174,15 @@ export async function noteAction(page: Page, title: string, action: string) {
 
 /**
  * Waits for a page slide to finish. While it runs, the transition's snapshots cover the
- * page and take pointer input, which raw mouse gestures (unlike clicks) do not retry.
+ * page and take pointer input, or the main pages are still moving side by side; raw mouse
+ * gestures (unlike clicks) do not retry.
  */
 export async function waitForPageTransition(page: Page) {
-  await page.waitForFunction(() => !document.documentElement.matches(':active-view-transition'));
+  await page.waitForFunction(
+    () =>
+      !document.documentElement.matches(':active-view-transition') &&
+      document.querySelectorAll('[data-pager-page]').length <= 1,
+  );
 }
 
 /**

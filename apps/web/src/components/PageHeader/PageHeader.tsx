@@ -22,12 +22,14 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { BrandLockup } from '@/components/BrandLockup/BrandLockup';
 import { SyncIndicator, showsSyncIndicator } from '@/components/SyncIndicator/SyncIndicator';
 import { useGalleryPages } from '@/lib/galleryPages';
 import { headerPills } from '@/lib/headerState';
 import { springs } from '@/lib/motion';
 import { CARD_FACE_FADE_END, editorProgress } from '@/lib/noteTransition';
+import { usePageSurface } from '@/lib/pageSurface';
 import { pageBounceY } from '@/lib/scrollBounce';
 import { galleryOpacity, PAGE_MAX, useHeaderGutterShift, useNotePane } from '@/lib/splitView';
 import { useSyncStatus } from '@/lib/syncStatus';
@@ -163,7 +165,10 @@ export function TabPageHeader({
   offsetY,
 }: TabPageHeaderProps) {
   const transition = useHeaderTransition();
-  const { scrollY } = useScroll();
+  const pageSurface = usePageSurface();
+  const { scrollY: windowScrollY } = useScroll();
+  const scrollY = pageSurface?.scrollY ?? windowScrollY;
+  const active = pageSurface?.active ?? true;
   const reducedMotion = useReducedMotion();
   const scrollAnimation = useRef<ReturnType<typeof animate> | null>(null);
   const [trailingWidth, setTrailingWidth] = useState(0);
@@ -225,9 +230,10 @@ export function TabPageHeader({
 
   const pills = collapsed || Boolean(selection);
   useEffect(() => {
+    if (!active) return;
     headerPills.set(pills);
     return () => headerPills.set(false);
-  }, [pills]);
+  }, [pills, active]);
 
   useEffect(() => {
     const stop = () => scrollAnimation.current?.stop();
@@ -253,117 +259,122 @@ export function TabPageHeader({
     });
   }
 
+  const header = (
+    <motion.header
+      data-page-header
+      className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
+      style={{ ...transition, x: pageSurface?.x, y: offsetY }}
+    >
+      {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
+      <motion.div
+        aria-hidden
+        className="page-top-blur header-fade pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
+        initial={false}
+        animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
+        transition={{ duration: 0.2 }}
+      />
+      <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
+        {/* Fixed, not in the page: scrolling would carry it under the system status bar. */}
+        <motion.div
+          className="header-fade pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4"
+          style={{ x: cornerShift }}
+        >
+          <motion.div
+            className="origin-left"
+            initial={false}
+            animate={{ opacity: branded ? 1 : 0, scale: branded ? 1 : 0.85 }}
+            transition={branded ? slide : { duration: 0.16 }}
+            aria-hidden={!branded}
+            // The lockup's own clear space is what keeps it off the controls.
+            style={{ maxWidth: `calc(100% - ${trailingWidth}px)` }}
+          >
+            <BrandLockup orientation="horizontal" iconSize={28} />
+          </motion.div>
+        </motion.div>
+        <motion.div
+          ref={fittedTitle.area}
+          className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
+          style={{ x: titleShift, y: titleScrollY }}
+        >
+          <span
+            ref={fittedTitle.measure}
+            aria-hidden
+            className="invisible absolute w-max whitespace-nowrap font-display font-extrabold text-[42px] leading-none tracking-[-0.03em]"
+          >
+            {title}
+          </span>
+          <span
+            ref={fittedTitle.pillMeasure}
+            aria-hidden
+            className="invisible absolute w-max whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
+            style={{ fontSize: PILL_FONT_SIZE }}
+          >
+            {title}
+          </span>
+          <motion.div
+            className="absolute flex h-full max-w-[calc(100%-1.5rem)] items-center rounded-[var(--dock-radius)]"
+            initial={false}
+            animate={{
+              left: collapsed ? '0%' : '50%',
+              x: collapsed ? '0%' : '-50%',
+              marginLeft: collapsed ? pillLeft : 0,
+              y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
+              fontSize: collapsed ? PILL_FONT_SIZE : fittedTitle.fontSize,
+              paddingInline: collapsed ? PILL_PADDING : 0,
+              opacity: pillShown ? 1 : 0,
+            }}
+            transition={titleSlide}
+          >
+            <motion.span
+              aria-hidden
+              className="glass header-fade absolute inset-0 rounded-[var(--dock-radius)]"
+              initial={false}
+              animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
+              transition={slide}
+            />
+            <motion.h1
+              className={cn(
+                'header-fade min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]',
+                iconPill ? 'sr-only' : 'relative',
+              )}
+            >
+              {title}
+            </motion.h1>
+            {iconPill && (
+              <motion.span
+                className="header-fade relative"
+                initial={{ '--header-layer-opacity': 0 }}
+                animate={{ '--header-layer-opacity': 1 }}
+                transition={{ duration: 0.16 }}
+              >
+                <Icon className="size-[22px]" aria-hidden />
+              </motion.span>
+            )}
+            <button
+              type="button"
+              aria-label="Scroll to top"
+              disabled={!collapsed || !pillShown}
+              className="pointer-events-auto absolute inset-0 rounded-[var(--dock-radius)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
+              onClick={scrollToTop}
+            />
+          </motion.div>
+        </motion.div>
+        <HeaderToolbars
+          leading={leading}
+          trailing={trailing}
+          selection={selection}
+          flat={!collapsed}
+          onLeadingWidthChange={setLeadingWidth}
+          onTrailingWidthChange={setTrailingWidth}
+        />
+      </div>
+    </motion.header>
+  );
   return (
     <HeaderCollapsed value={collapsed}>
-      <motion.header
-        data-page-header
-        className="fixed top-0 right-[var(--note-pane)] left-0 z-30 pt-[var(--safe-top)]"
-        style={{ ...transition, y: offsetY }}
-      >
-        {/* The controls stay in the page pane; the blur spans the viewport so no split seam shows. */}
-        <motion.div
-          aria-hidden
-          className="page-top-blur header-fade pointer-events-none absolute top-0 right-[calc(-1*var(--note-pane))] left-0 h-[calc(var(--safe-top)+8rem)]"
-          initial={false}
-          animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
-          transition={{ duration: 0.2 }}
-        />
-        <div className="relative mx-auto h-[var(--header-height)] max-w-7xl px-2 sm:px-4">
-          {/* Fixed, not in the page: scrolling would carry it under the system status bar. */}
-          <motion.div
-            className="header-fade pointer-events-none absolute inset-x-3 top-1 sm:inset-x-4"
-            style={{ x: cornerShift }}
-          >
-            <motion.div
-              className="origin-left"
-              initial={false}
-              animate={{ opacity: branded ? 1 : 0, scale: branded ? 1 : 0.85 }}
-              transition={branded ? slide : { duration: 0.16 }}
-              aria-hidden={!branded}
-              // The lockup's own clear space is what keeps it off the controls.
-              style={{ maxWidth: `calc(100% - ${trailingWidth}px)` }}
-            >
-              <BrandLockup orientation="horizontal" iconSize={28} />
-            </motion.div>
-          </motion.div>
-          <motion.div
-            ref={fittedTitle.area}
-            className="pointer-events-none absolute inset-x-0 top-1 h-[50px]"
-            style={{ x: titleShift, y: titleScrollY }}
-          >
-            <span
-              ref={fittedTitle.measure}
-              aria-hidden
-              className="invisible absolute w-max whitespace-nowrap font-display font-extrabold text-[42px] leading-none tracking-[-0.03em]"
-            >
-              {title}
-            </span>
-            <span
-              ref={fittedTitle.pillMeasure}
-              aria-hidden
-              className="invisible absolute w-max whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]"
-              style={{ fontSize: PILL_FONT_SIZE }}
-            >
-              {title}
-            </span>
-            <motion.div
-              className="absolute flex h-full max-w-[calc(100%-1.5rem)] items-center rounded-[var(--dock-radius)]"
-              initial={false}
-              animate={{
-                left: collapsed ? '0%' : '50%',
-                x: collapsed ? '0%' : '-50%',
-                marginLeft: collapsed ? pillLeft : 0,
-                y: collapsed ? TITLE_COLLAPSE_AT - TITLE_REST_Y : 0,
-                fontSize: collapsed ? PILL_FONT_SIZE : fittedTitle.fontSize,
-                paddingInline: collapsed ? PILL_PADDING : 0,
-                opacity: pillShown ? 1 : 0,
-              }}
-              transition={titleSlide}
-            >
-              <motion.span
-                aria-hidden
-                className="glass header-fade absolute inset-0 rounded-[var(--dock-radius)]"
-                initial={false}
-                animate={{ '--header-layer-opacity': collapsed ? 1 : 0 }}
-                transition={slide}
-              />
-              <motion.h1
-                className={cn(
-                  'header-fade min-w-0 overflow-hidden whitespace-nowrap font-display font-extrabold leading-none tracking-[-0.03em]',
-                  iconPill ? 'sr-only' : 'relative',
-                )}
-              >
-                {title}
-              </motion.h1>
-              {iconPill && (
-                <motion.span
-                  className="header-fade relative"
-                  initial={{ '--header-layer-opacity': 0 }}
-                  animate={{ '--header-layer-opacity': 1 }}
-                  transition={{ duration: 0.16 }}
-                >
-                  <Icon className="size-[22px]" aria-hidden />
-                </motion.span>
-              )}
-              <button
-                type="button"
-                aria-label="Scroll to top"
-                disabled={!collapsed || !pillShown}
-                className="pointer-events-auto absolute inset-0 rounded-[var(--dock-radius)] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
-                onClick={scrollToTop}
-              />
-            </motion.div>
-          </motion.div>
-          <HeaderToolbars
-            leading={leading}
-            trailing={trailing}
-            selection={selection}
-            flat={!collapsed}
-            onLeadingWidthChange={setLeadingWidth}
-            onTrailingWidthChange={setTrailingWidth}
-          />
-        </div>
-      </motion.header>
+      {pageSurface
+        ? pageSurface.headerHost && createPortal(header, pageSurface.headerHost)
+        : header}
       <div className="h-[calc(var(--safe-top)+var(--header-height)+4rem)]" />
     </HeaderCollapsed>
   );

@@ -48,6 +48,41 @@ a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
+Horizontal touch swipes move the three main pages in dock order (Deck, Gallery, Search)
+with the finger, without wrapping at either end (`MainPagePager`). The current page and
+its incoming neighbour are live while dragging; distance and release velocity choose
+whether a spring finishes the move or returns home. A swipe that will arrive replaces the
+URL as the finger lifts, without a second View Transition, and its spring finishes on the
+new route with the page it left mounted and inert. The next touch therefore lands on the
+arriving page and can take over the spring, rather than on a page about to unmount, whose
+touch events would stop reaching the pager. Each touch is judged by its own travel and
+velocity, so one that catches a settling page moves one page on from where it was heading,
+and one that barely moves lets it arrive. Short, vertical, held or cancelled gestures
+stay on the current page. Reduced motion navigates on release without sliding.
+Only page code is prefetched; the neighbour mounts on a horizontal drag and becomes the
+active page without remounting after a completed swipe. At rest one page is mounted. Each
+page retains its vertical scroll position for this browsing session. Headers portal into
+an untransformed host beside the page content and share its horizontal motion value,
+preserving fixed positioning and glass. The dock stays on the viewport; its tab indicator
+and icon emphasis, Search field, text and compose/filter button follow the same live page
+position through dragging, reversal and settling. Only visual motion is previewed: controls
+remain owned by the active route until the swipe commits. Incoming pages are inert and do
+not publish selection, search-filter or header state until activated.
+The page views live in ignored `routes/_app/-pages` helpers; the three file routes select
+their URLs while the pager owns the views. Any other route between these three pages, such as
+a dock tab, slides them side by side on the same spring instead of a View Transition, so a
+tap and a swipe move the same way. The spring starts the frame after the pages it passes have
+mounted, so their first render does not eat its opening; a jump from Deck to Search passes the
+Gallery. The dock keeps its own animation for a tap, whose indicator has already moved under
+the finger. Other routes keep their View Transitions, as do these pages under reduced motion.
+Cards and controls keep their gestures, except Search's tap-only tags, recent searches and
+result rows, which also allow page swipes (and suppress their click after a horizontal drag).
+Their taps, vertical scrolling and result long presses still work. Text inputs, menus and
+other gesture owners remain excluded. Horizontal scrollers take priority while they have
+room in the swipe direction, and reaching their edge requires a fresh swipe to navigate.
+The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
+a note, composer or search filter panel is open. Swiping into Search leaves its field
+unfocused, so browsing does not summon the keyboard.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
@@ -276,7 +311,8 @@ cards or routes remount. They never block input or wait for other content, and r
 shows elements immediately. Fixed headers and the dock have no animated page ancestor.
 
 **Page transitions.** Moving between pages slides them a short way in the direction of
-travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
+travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API,
+except between the three main pages, which the pager slides (see Navigation),
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
 gets a `view-transition-name` only while a transition runs and shows live, so its own

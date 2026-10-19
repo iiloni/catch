@@ -1,4 +1,5 @@
 import type { Note } from '@catch/shared';
+import type { MotionValue } from 'motion/react';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { isSettingsPath, isWideSettings, SETTINGS_TABS } from './settings';
 import { createStore } from './store';
@@ -23,9 +24,22 @@ export const searchFocusRequest = createStore(0);
 export const searchQuery = createStore('');
 export const searchFiltersOpen = createStore(false);
 export const searchFilterCount = createStore(0);
+/** Present through a page drag and its spring, so the dock shares the same timeline. */
+export const pageSwipePosition = createStore<MotionValue<number> | null>(null);
 
 export const TAB_PATHS = ['/deck', '/', '/search'] as const;
 export type TabPath = (typeof TAB_PATHS)[number];
+
+function isTabPath(path: string | undefined): path is TabPath {
+  return TAB_PATHS.some((tab) => tab === path);
+}
+
+function reducedMotion() {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
 /** The tab a page belongs to. Reminders, Archive and Trash live under the Gallery. */
 export function tabFor(pathname: string): TabPath {
@@ -58,6 +72,8 @@ export function pageTransition(from: string | undefined, to: string): ['forward'
   const toOrder = PAGE_ORDER[to];
   if (fromOrder === undefined || toOrder === undefined || fromOrder === toOrder) return false;
   if (quickNote.get() === 'open') return false;
+  // The main pages slide side by side on their own spring (MainPagePager), as a swipe moves them.
+  if (isTabPath(from) && isTabPath(to) && !reducedMotion()) return false;
   // Side by side, Settings' page list stays put while the page beside it changes.
   if (from && isSettingsPath(from) && isSettingsPath(to) && isWideSettings(window.innerWidth)) {
     return false;
