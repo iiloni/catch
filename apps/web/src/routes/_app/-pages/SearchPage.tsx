@@ -16,6 +16,7 @@ import {
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
+import { currentPath } from '@/lib/auth';
 import {
   boardColumnsCollection,
   notesCollection,
@@ -135,7 +136,9 @@ export default function SearchPage() {
   useEffect(() => {
     if (!active) return;
     return () => {
-      searchFiltersOpen.set(false);
+      // The dock can open the filters before this lazy page mounts, and a remount (StrictMode
+      // replays one) must not close them; only leaving Search does.
+      if (currentPath() !== '/search') searchFiltersOpen.set(false);
       searchFilterCount.set(0);
     };
   }, [active]);
