@@ -42,7 +42,9 @@ export function noteDestinationAt(
 type Props = {
   /** In Deck order. */
   columns: readonly BoardColumn[];
-  current: string | null;
+  /** Undefined for a selection spanning multiple destinations. */
+  current: string | null | undefined;
+  label?: string;
   /** Undefined when the finger is outside all destinations. */
   hovered: string | null | undefined;
   onSelect: (status: string | null) => void;
@@ -52,10 +54,16 @@ const targetClass =
   'relative flex min-w-0 items-center gap-2 overflow-hidden rounded-[calc(var(--dock-radius)-0.25rem)] border-2 font-medium outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70';
 
 /** Deck destinations beside a full-height Gallery target. */
-export function NoteMovePicker({ columns, current, hovered, onSelect }: Props) {
+export function NoteMovePicker({
+  columns,
+  current,
+  hovered,
+  onSelect,
+  label = 'Move note',
+}: Props) {
   return (
     <fieldset
-      aria-label="Move note"
+      aria-label={label}
       className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-1.5 px-2 pt-2 pb-1"
     >
       <section
