@@ -302,17 +302,22 @@ export function setNoteArchived(id: string, isArchived: boolean) {
 export const moveNoteToDeck = (id: string, status = DEFAULT_BOARD_STATUS) =>
   updateNote(id, { status });
 
-export const sendNoteToGallery = (id: string) => updateNote(id, { status: null });
+export const sendNoteToGallery = (id: string) =>
+  updateNote(id, { status: null, position: firstPosition(isVaultNote(id)) });
 
-/** Takes deck notes out of the deck. Undo puts each back in its column. */
+/** Places deck notes first in the gallery, in the order given. Undo restores their places. */
 export function sendNotesToGallery(notes: readonly Note[]) {
   const now = new Date();
+  const vault = notes.some((note) => isVaultNote(note.id));
+  const keys = positionsBetween(null, firstExistingPosition(vault), notes.length);
+  const positions = new Map(notes.map((note, index) => [note.id, keys[index]!]));
   const transaction = write(() =>
     noteStore.update(
       notes.map((note) => note.id),
       (drafts) => {
         for (const draft of drafts) {
           draft.status = null;
+          draft.position = positions.get(draft.id)!;
           draft.updatedAt = now;
         }
       },
@@ -322,7 +327,8 @@ export function sendNotesToGallery(notes: readonly Note[]) {
     action: {
       label: 'Undo',
       onClick: () => {
-        for (const note of notes) updateNote(note.id, { status: note.status });
+        for (const note of notes)
+          updateNote(note.id, { status: note.status, position: note.position });
       },
     },
   });

@@ -29,6 +29,9 @@ group's neighbours. While dragging, empty groups keep a visible landing area.
 Unpinning with a note action in the gallery gives the note a position ahead of every other
 note, so it returns to the top of Custom order instead of its old place. Deck unpinning
 keeps its position. Date-based sorts still follow the selected date and direction.
+Sending notes from the Deck to the Gallery gives them positions ahead of every other note
+in their arrangement (ordinary or vault), preserving their pin states and the supplied
+order for a bulk move. Undo restores each note's previous deck column and position.
 
 **Grid.** `NoteGrid` lays cards out itself: each goes to the top of the shortest column (as
 in Keep), absolutely positioned from measured heights, and springs to new slots through
