@@ -1258,6 +1258,97 @@ test('search results are selected and archived together', async ({ page, isMobil
   await expect(result('Milk three').getByRole('button', { name: 'Open note' })).toBeVisible();
 });
 
+test('selected notes move between the gallery and deck columns through a picker', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 780 });
+  await signUp(page);
+  await seedNotes(page, ['One', 'Two', 'Three']);
+  if (isMobile) {
+    await longPress(page, card(page, 'One'));
+    await card(page, 'Two').tap();
+  } else {
+    await hoverSelect(page, 'One');
+    await hoverSelect(page, 'Two');
+  }
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  const move = toolbar.getByRole('button', { name: 'Move', exact: true });
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  const closeBox = await settledBox(page.getByRole('button', { name: 'Clear selection' }));
+  const toolbarBox = await settledBox(toolbar);
+  expect(toolbarBox.x).toBeGreaterThan(closeBox.x + closeBox.width);
+  await move.click();
+  const picker = page.getByRole('group', { name: 'Move selected notes' });
+  await expect(picker.getByRole('button', { name: 'Send to gallery' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  const popup = page.locator('[data-slot="popover-content"]').filter({ has: picker });
+  const box = await settledBox(popup);
+  if (isMobile) {
+    expect(box.x).toBeCloseTo(12, 0);
+    expect(box.width).toBeCloseTo((page.viewportSize()?.width ?? 0) - 24, 0);
+  }
+  await testInfo.attach('selection-move-picker', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  // Dismissing the picker keeps the selection; Escape closes the popup first.
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeHidden();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  await expect(move).toBeFocused();
+  await move.click();
+  await picker.getByRole('button', { name: 'In progress', exact: true }).click();
+  await expect(toolbar).toBeHidden();
+  await expect(card(page, 'One')).toBeHidden();
+  await expect(card(page, 'Two')).toBeHidden();
+  await expect(card(page, 'Three')).toBeVisible();
+
+  await openDeck(page);
+  const progress = page.getByRole('region', { name: 'In progress column' });
+  if (isMobile) await page.getByRole('tab', { name: 'In progress 2' }).click();
+  await expect(progress.getByText('One', { exact: true })).toBeVisible();
+  await expect(progress.getByText('Two', { exact: true })).toBeVisible();
+  if (isMobile) {
+    await longPress(page, boardCell(page, 'One'));
+    await boardCell(page, 'Two').tap();
+  } else {
+    await boardCell(page, 'One').hover();
+    await boardCell(page, 'One').getByRole('button', { name: 'Select note' }).click();
+    await boardCell(page, 'Two').getByRole('button', { name: 'Select note' }).click();
+  }
+  await move.click();
+  await expect(picker.getByRole('button', { name: 'In progress' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  await picker.getByRole('button', { name: 'New Default' }).click();
+  await expect(toolbar).toBeHidden();
+  if (isMobile) await page.getByRole('tab', { name: 'New 2' }).click();
+  const newColumn = page.getByRole('region', { name: 'New column' });
+  await expect(newColumn.getByText('One', { exact: true })).toBeVisible();
+  await expect(newColumn.getByText('Two', { exact: true })).toBeVisible();
+  if (isMobile) {
+    await longPress(page, boardCell(page, 'One'));
+    await boardCell(page, 'Two').tap();
+  } else {
+    await boardCell(page, 'One').hover();
+    await boardCell(page, 'One').getByRole('button', { name: 'Select note' }).click();
+    await boardCell(page, 'Two').getByRole('button', { name: 'Select note' }).click();
+  }
+  await move.click();
+  await picker.getByRole('button', { name: 'Send to gallery' }).click();
+  await expect(toolbar).toBeHidden();
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await expect(card(page, 'One')).toBeVisible();
+  await expect(card(page, 'Two')).toBeVisible();
+  await page.reload();
+  await expect(card(page, 'One')).toBeVisible();
+  await expect(card(page, 'Two')).toBeVisible();
+});
+
 test('selected notes are recolored, archived and trashed together', async ({ page, isMobile }) => {
   test.skip(isMobile, 'The check that starts selecting appears on hover.');
   await signUp(page);
@@ -1414,7 +1505,11 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
 
   await boardCell(page, 'Three').hover();
   await boardCell(page, 'Three').getByRole('button', { name: 'Select note' }).click();
-  await toolbar.getByRole('button', { name: 'Send to gallery' }).click();
+  await toolbar.getByRole('button', { name: 'Move', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Move selected notes' })
+    .getByRole('button', { name: 'Send to gallery' })
+    .click();
   await expect.poll(() => order(holdColumn)).toEqual(['One']);
   await page.getByRole('link', { name: 'Gallery' }).click();
   await expect(card(page, 'Three')).toBeVisible();

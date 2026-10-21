@@ -166,8 +166,10 @@ press that starts selecting deselects the card as soon as it moves beyond the ho
 tolerance; dragging an existing selection keeps it. With a mouse, a
 check at the card's corner appears on hover. A close button with the count takes the top
 left, and the selection's actions (`SelectionToolbar`) take the top right toolbar: color,
-archive, move to trash and copy, with Send to gallery in the Deck, Unarchive in the Archive,
-and Restore and Delete forever in the Trash. Back and Escape end selecting.
+tags, archive, move to trash and copy, with a Move picker in the Gallery and Deck, Unarchive
+in the Archive, and Restore and Delete forever in the Trash. Move offers Deck columns and
+Gallery, using the same full-width inset popover on phones as color and tags. Choosing a
+destination ends selecting. Back and Escape end selecting after closing any open picker.
 
 In the Deck, dragging a card while notes are selected gathers the whole selection: the other
 cards fold out of their columns and fly into a stack under the finger, with the count on it.
