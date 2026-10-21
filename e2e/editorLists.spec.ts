@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { openNote, settledBox, signUp } from './helpers';
+import { caretToEnd, openNote, settledBox, signUp } from './helpers';
 
 async function listNote(page: Page, kind = 'checkListItem', count = 3) {
   await signUp(page);
@@ -106,8 +106,7 @@ test('delete checked items removes nested lists in one undo step and persists', 
   await expect(remove).toBeHidden();
   await page.keyboard.press('Escape');
   const editor = dialog.locator('[contenteditable="true"]');
-  await dialog.locator('.bn-editor h3').click();
-  await page.keyboard.press('End');
+  await caretToEnd(dialog.locator('.bn-editor h3'));
   await page.keyboard.type('!');
   // Opening a block menu must not combine deletion with the preceding typing event.
   await checklistMenu(page, dialog);

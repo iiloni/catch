@@ -15,7 +15,15 @@ import {
 } from '../packages/shared/src/historyCodec';
 import { historyReading } from '../packages/shared/src/historyReading';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '../packages/shared/src/protocol';
-import { bearerToken, card, openNote, seedNotes, settledBox, signUp } from './helpers';
+import {
+  bearerToken,
+  card,
+  editorSelection,
+  openNote,
+  seedNotes,
+  settledBox,
+  signUp,
+} from './helpers';
 
 /** The dock's row while versions are reviewed: their list on a phone, and the actions. */
 const historyDock = (page: Page) => page.locator('[data-history-dock]');
@@ -366,6 +374,7 @@ test('the newest version is listed as the current note, and new formatting is ma
   await editor.getByText('Words made bold').click();
   await expect(editor).toBeFocused();
   await editor.getByText('Words made bold').selectText();
+  await expect.poll(() => editorSelection(editor)).toBe('Words made bold');
   await page.keyboard.press('Control+b');
   await expect(dialog.locator('strong').filter({ hasText: 'Words made bold' })).toBeVisible();
   await page.keyboard.press('ArrowRight');
