@@ -206,7 +206,16 @@ const shapeRows = z.array(
   z.object({
     key: z.string().optional(),
     value: z.record(z.string(), z.unknown()).optional(),
-    headers: z.object({ operation: z.string().optional() }).optional(),
+    headers: z
+      .object({
+        operation: z.string().optional(),
+        txids: z.array(z.number()).optional(),
+        control: z.string().optional(),
+        xmin: z.string().optional(),
+        xmax: z.string().optional(),
+        xip_list: z.array(z.string()).optional(),
+      })
+      .optional(),
   }),
 );
 
@@ -231,25 +240,43 @@ async function account(
 
 const noteId = () => crypto.randomUUID().replace(/^(.{14})./, '$17');
 
-/** The account's reminder for a note as its shape syncs it, or null when it has none. */
+/**
+ * The account's reminder for a note as its shape syncs it, or null when it has none.
+ *
+ * Electric answers up-to-date once it has sent what it has read from Postgres so far, which
+ * can stop short of a transaction that has already committed. Given a write's txid, this
+ * keeps listening until that transaction has reached the shape, as `awaitTxId` does.
+ */
 async function syncedReminder(
   context: APIRequestContext,
   headers: Record<string, string>,
   id: string,
+  txid?: number | null,
 ) {
   const rows: Record<string, unknown>[] = [];
   let offset = '-1';
   let handle = '';
+  let live = false;
+  let arrived = txid === undefined || txid === null;
   // The first request is the snapshot from when the shape was made; later ones its changes.
   for (let request = 0; request < 20; request += 1) {
     const shape = await context.get(
-      `/api/shapes/reminders?offset=${offset}${handle ? `&handle=${handle}` : ''}`,
+      `/api/shapes/reminders?offset=${offset}${handle ? `&handle=${handle}` : ''}${live ? '&live=true' : ''}`,
       { headers },
     );
     expect(shape.ok()).toBeTruthy();
-    const body = shapeRows.parse(await shape.json());
+    // A long poll that saw no change answers 204 with no body.
+    const body = shape.status() === 204 ? [] : shapeRows.parse(await shape.json());
     for (const row of body) {
       const operation = row.headers?.operation;
+      if (row.headers?.txids?.includes(txid ?? Number.NaN)) arrived = true;
+      // The snapshot holds every transaction committed before it was taken.
+      if (row.headers?.control === 'snapshot-end' && typeof txid === 'number') {
+        const { xmin, xmax, xip_list: running = [] } = row.headers;
+        if (txid < Number(xmin) || (txid < Number(xmax) && !running.includes(String(txid)))) {
+          arrived = true;
+        }
+      }
       const index = rows.findIndex((item) => item.key === row.key);
       // A delete carries its key and no value.
       if (operation === 'delete') {
@@ -265,9 +292,12 @@ async function syncedReminder(
     }
     offset = shape.headers()['electric-offset'] ?? offset;
     handle = shape.headers()['electric-handle'] ?? handle;
-    if (shape.headers()['electric-up-to-date'] !== undefined) break;
+    if (shape.headers()['electric-up-to-date'] !== undefined) {
+      if (arrived) return rows.find((row) => row.note_id === id) ?? null;
+      live = true;
+    }
   }
-  return rows.find((row) => row.note_id === id) ?? null;
+  throw new Error(`Transaction ${txid} never reached the reminders shape`);
 }
 
 const local = (date: Date) =>
@@ -306,9 +336,11 @@ test('reminders belong to their note’s owner and replay safely', { tag: '@api'
   expect(await syncedReminder(alice.context, alice.headers, id)).toBeNull();
 
   // The same queued write sent twice leaves one reminder, waiting for its next time.
-  expect((await save(alice, daily)).ok()).toBeTruthy();
-  expect((await save(alice, daily)).ok()).toBeTruthy();
-  const saved = await syncedReminder(alice.context, alice.headers, id);
+  const first = await save(alice, daily);
+  expect(first.ok()).toBeTruthy();
+  const { txid: savedTxid } = await first.json();
+  expect(await (await save(alice, daily)).json()).toEqual({ txid: null });
+  const saved = await syncedReminder(alice.context, alice.headers, id, savedTxid);
   expect(saved).toMatchObject({ starts_at: '2020-01-01T07:15', fired_at: null });
   expect(String(saved?.next_at) > local(new Date(Date.now() - 86_400_000))).toBe(true);
   expect(String(saved?.next_at)).toMatch(/T07:15$/);
@@ -317,8 +349,11 @@ test('reminders belong to their note’s owner and replay safely', { tag: '@api'
   expect(await syncedReminder(bob.context, bob.headers, id)).toBeNull();
 
   // A one-off whose time has passed has nothing to wait for.
-  expect((await save(alice, { ...daily, recurrence: null })).ok()).toBeTruthy();
-  expect(await syncedReminder(alice.context, alice.headers, id)).toMatchObject({ next_at: null });
+  const oneOff = await save(alice, { ...daily, recurrence: null });
+  expect(oneOff.ok()).toBeTruthy();
+  expect(
+    await syncedReminder(alice.context, alice.headers, id, (await oneOff.json()).txid),
+  ).toMatchObject({ next_at: null });
 
   expect(
     (await bob.context.delete(`/api/reminders/${id}`, { headers: bob.headers })).ok(),
@@ -329,11 +364,20 @@ test('reminders belong to their note’s owner and replay safely', { tag: '@api'
   expect(await (await remove()).json()).toEqual({ txid: null });
 
   // Deleting the note takes its reminder with it.
-  expect((await save(alice, daily)).ok()).toBeTruthy();
-  expect(
-    (await alice.context.delete(`/api/notes/${id}`, { headers: alice.headers })).ok(),
-  ).toBeTruthy();
-  expect(await syncedReminder(alice.context, alice.headers, id)).toBeNull();
+  const again = await save(alice, daily);
+  expect(again.ok()).toBeTruthy();
+  const restored = await syncedReminder(
+    alice.context,
+    alice.headers,
+    id,
+    (await again.json()).txid,
+  );
+  // Electric sends a jsonb column as its text.
+  expect(JSON.parse(String(restored?.recurrence))).toMatchObject({ frequency: 'daily' });
+  const deleted = await alice.context.delete(`/api/notes/${id}`, { headers: alice.headers });
+  const { txid: deletedTxid } = await deleted.json();
+  expect(deletedTxid).toEqual(expect.any(Number));
+  expect(await syncedReminder(alice.context, alice.headers, id, deletedTxid)).toBeNull();
 });
 
 test('the Android app is told what to ring, and only for its own user', { tag: '@api' }, async ({
