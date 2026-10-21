@@ -91,7 +91,12 @@ for (const vault of [false, true]) {
 
     test('bulk gallery moves preserve pin groups and input order, and Undo restores deck positions', async ({
       page,
+      isMobile,
     }) => {
+      test.skip(
+        isMobile,
+        'Bulk ordering has no layout changes; single-note moves cover both layouts.',
+      );
       await seed(page, vault);
       const before = await states(page);
       const deck = before.filter((note) => note.status !== null);
