@@ -248,6 +248,24 @@ export async function caretToEnd(text: Locator) {
 }
 
 /**
+ * The text ProseMirror holds as selected in the editor around `element`. A selection made on the
+ * page reaches it a moment later, and a shortcut pressed before then acts on the old one.
+ */
+export function editorSelection(element: Locator) {
+  return element.evaluate((node) => {
+    type View = {
+      state: {
+        selection: { from: number; to: number };
+        doc: { textBetween(from: number, to: number): string };
+      };
+    };
+    const root = node.closest<HTMLElement & { editor?: { view: View } }>('.ProseMirror');
+    const state = root?.editor?.view.state;
+    return state ? state.doc.textBetween(state.selection.from, state.selection.to) : null;
+  });
+}
+
+/**
  * Holds a touch on a card until it is selected (and picked up), then lifts it. Returns once
  * the page takes clicks again. Lifting sends a click of its own a moment later, which the app
  * swallows, and dnd-kit stops every click until a timer at least 50 ms after the lift, later
