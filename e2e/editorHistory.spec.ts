@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { noteToolbar, openNote, seedNotes, settledBox, signUp } from './helpers';
+import { caretToEnd, noteToolbar, openNote, seedNotes, settledBox, signUp } from './helpers';
 
 test('history buttons follow edits and shortcuts, preserve focus, and reset on reopen', async ({
   page,
@@ -14,8 +14,7 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
   const redo = toolbar.getByRole('button', { name: 'Redo', exact: true });
 
   await expect(toolbar).toBeHidden();
-  await body.click();
-  await page.keyboard.press('End');
+  await caretToEnd(body);
   await expect(toolbar).toBeHidden();
   const entrance = page.evaluate(
     () =>
@@ -46,6 +45,7 @@ test('history buttons follow edits and shortcuts, preserve focus, and reset on r
       }),
   );
   await page.keyboard.insertText(' changed');
+  await expect(body).toHaveText('Original body changed');
   const samples = await entrance;
   const floating = (page.viewportSize()?.width ?? 0) < 640;
   expect(samples.some(({ x, y }) => (floating ? x < -5 : y < -5))).toBe(true);

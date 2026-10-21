@@ -212,6 +212,42 @@ export async function settledBox(locator: Locator) {
 }
 
 /**
+ * Clicks an editor block's text and moves the caret to its end, returning once the editor has
+ * taken that caret. When a click focuses the editor, ProseMirror rewrites the page's selection
+ * from its own about 20 ms later unless it has read the newest one. On a busy machine that
+ * undoes an End sent at once, and typing lands where the click was; it happens once per focus,
+ * so End is sent again until ProseMirror reports the caret at the end.
+ */
+export async function caretToEnd(text: Locator) {
+  await text.click();
+  await expect(async () => {
+    await text.page().keyboard.press('End');
+    const atEnd = await text.evaluate((element) => {
+      type View = {
+        state: {
+          selection: {
+            empty: boolean;
+            head: number;
+            $head: { parentOffset: number; parent: { content: { size: number } } };
+          };
+        };
+        domAtPos(pos: number): { node: Node };
+      };
+      const root = element.closest<HTMLElement & { editor?: { view: View } }>('.ProseMirror');
+      const view = root?.editor?.view;
+      if (!view) return false;
+      const { empty, head, $head } = view.state.selection;
+      return (
+        empty &&
+        $head.parentOffset === $head.parent.content.size &&
+        element.contains(view.domAtPos(head).node)
+      );
+    });
+    expect(atEnd).toBe(true);
+  }).toPass();
+}
+
+/**
  * Holds a touch on a card until it is selected (and picked up), then lifts it. Returns once
  * the page takes clicks again. Lifting sends a click of its own a moment later, which the app
  * swallows, and dnd-kit stops every click until a timer at least 50 ms after the lift, later
