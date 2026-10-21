@@ -12,6 +12,8 @@ async function seed(page: Page, vault: boolean) {
       await createVault('gallery move test password', true);
       enterVault();
     }
+    const saved = [];
+    const pinned = [];
     for (const title of ['Old task', 'Task peer', 'Task pinned', 'Recent note', 'Recent pinned']) {
       const note = createNote({
         userId: getSignedInUser().id,
@@ -19,9 +21,11 @@ async function seed(page: Page, vault: boolean) {
         status: title.startsWith('Recent') ? null : 'new',
         content: [{ type: 'heading', props: { level: 3 }, content: title }],
       });
-      await note.transaction.isPersisted.promise;
-      if (title.endsWith('pinned')) await setNotePinned(note.id, true).isPersisted.promise;
+      saved.push(note.transaction.isPersisted.promise);
+      if (title.endsWith('pinned')) pinned.push(note.id);
     }
+    await Promise.all(saved);
+    await Promise.all(pinned.map((id) => setNotePinned(id, true).isPersisted.promise));
   }, vault);
 }
 
