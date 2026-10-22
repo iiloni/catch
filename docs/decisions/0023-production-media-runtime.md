@@ -23,10 +23,13 @@ the file protocol and the image2 output muxer are enabled; network protocols, de
 hardware acceleration are disabled. This preserves the attachment contract in ADR 0010.
 
 The production dependency graph excludes Better Auth's unused Next.js, Vitest and Drizzle
-Kit integrations through scoped removal overrides. Its Drizzle adapter and React client
-remain available. Use pnpm's fixed production-peer filtering and omit package managers
-from the final image. The server, migration entrypoint and backup CLI continue to run with
-Node directly; PostgreSQL 17 client tools remain installed for backups (ADR 0012).
+Kit integrations through the `better-auth>next`, `better-auth>vitest` and
+`better-auth>drizzle-kit` removal overrides in `pnpm-workspace.yaml`. Its Drizzle adapter
+and React client remain available. The Dockerfile assembles the runtime dependencies with
+`pnpm --filter @catch/server deploy --prod --legacy /out`, using pnpm 12.15.0 pinned in
+`package.json`. Omit package managers from the final image. The server, migration
+entrypoint and backup CLI continue to run with Node directly; PostgreSQL 17 client tools
+remain installed for backups (ADR 0012).
 
 Refresh installed OS packages from the distribution's security repositories when building
 the runtime layer. A cached layer does not pick up new security fixes: security rebuilds
