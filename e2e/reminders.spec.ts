@@ -188,6 +188,52 @@ for (const format of ['12 hour', '24 hour']) {
   });
 }
 
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`the clock hand crosses twelve on its way to minutes (${reducedMotion})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await signUp(page);
+    await seedNotes(page, ['Watch the clock hand']);
+    await openNote(page, 'Watch the clock hand');
+    await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+    await step(page, 'Time')
+      .getByRole('button', { name: /^Custom/ })
+      .click();
+    await panel(page).locator('[data-period="AM"]').click();
+    await panel(page).locator('[data-hour="11"]').click();
+    await panel(page).locator('[data-minute="5"]').click();
+    await panel(page).getByRole('button', { name: /^Hour/ }).click();
+    const hand = panel(page).getByRole('group', { name: 'Hours', exact: true }).locator('line');
+    await expect.poll(async () => Number(await hand.getAttribute('x2'))).toBeCloseTo(30.5, 1);
+
+    const frames = await panel(page).evaluate(async (element) => {
+      const hand = element.querySelector('fieldset line');
+      const minute = [...element.querySelectorAll('button')].find((button) =>
+        button.textContent?.startsWith('Minute'),
+      );
+      if (!hand || !minute) throw new Error('The clock face is missing');
+      minute.click();
+      const frames: { x: number; y: number }[] = [];
+      const start = performance.now();
+      while (performance.now() - start < 600) {
+        await new Promise(requestAnimationFrame);
+        frames.push({ x: Number(hand.getAttribute('x2')), y: Number(hand.getAttribute('y2')) });
+      }
+      return frames;
+    });
+    expect(frames.at(-1)?.x).toBeCloseTo(69.5, 1);
+    expect(frames.at(-1)?.y).toBeCloseTo(50 - 39 * Math.cos(Math.PI / 6), 1);
+    // The tip follows the perimeter through twelve, without shortening the hand.
+    for (const frame of frames) {
+      expect(Math.hypot(frame.x - 50, frame.y - 50)).toBeCloseTo(39, 1);
+      expect(frame.y).toBeLessThan(20);
+    }
+    if (reducedMotion === 'reduce') expect(frames[1]?.x).toBeCloseTo(69.5, 1);
+    else expect(frames.some(({ x }) => x > 35 && x < 65)).toBe(true);
+  });
+}
+
 test('times follow the clock chosen in Settings', async ({ page, isMobile }) => {
   test.skip(
     isMobile,

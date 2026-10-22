@@ -1,6 +1,8 @@
-import { type PointerEvent, useRef, useState } from 'react';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
+import { type PointerEvent, useEffect, useState } from 'react';
 import { useHour12 } from '@/lib/clock';
 import { haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -33,7 +35,8 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
   const hour12 = given ?? setting;
   const [hour = 0, minute = 0] = value.split(':').map(Number);
   const [mode, setMode] = useState<'hour' | 'minute'>('hour');
-  const dragging = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const reducedMotion = useReducedMotion();
   const afternoon = hour >= 12;
   const set = (nextHour: number, nextMinute: number) => {
     if (nextHour === hour && nextMinute === minute) return;
@@ -65,10 +68,29 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
     shown: pad(index * 5),
     ...place(index / 12, OUTER),
   }));
-  const hand =
-    mode === 'hour'
-      ? (hours.find((option) => option.hour === hour) ?? place(0, OUTER))
-      : place(minute / 60, OUTER);
+  const handTurn = mode === 'hour' ? (hour % 12) / 12 : minute / 60;
+  const handRadius = mode === 'hour' && !hour12 && (hour === 0 || hour > 12) ? INNER : OUTER;
+  const rotation = useMotionValue(handTurn * 360);
+  const radius = useMotionValue(handRadius);
+  const handX = useTransform(() => place(rotation.get() / 360, radius.get()).x);
+  const handY = useTransform(() => place(rotation.get() / 360, radius.get()).y);
+
+  useEffect(() => {
+    // Take the shortest arc, including across twelve, rather than cutting through the dial.
+    const from = rotation.get();
+    const to = from + ((((handTurn * 360 - from) % 360) + 540) % 360) - 180;
+    if (reducedMotion || dragging) {
+      rotation.jump(to);
+      radius.jump(handRadius);
+      return;
+    }
+    const turn = animate(rotation, to, springs.snappy);
+    const reach = animate(radius, handRadius, springs.snappy);
+    return () => {
+      turn.stop();
+      reach.stop();
+    };
+  }, [handTurn, handRadius, dragging, reducedMotion, rotation, radius]);
 
   function point(event: PointerEvent<HTMLDivElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -153,29 +175,29 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
           }}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
-            dragging.current = true;
+            setDragging(true);
             event.currentTarget.setPointerCapture?.(event.pointerId);
             point(event);
           }}
           onPointerMove={(event) => {
-            if (dragging.current) point(event);
+            if (dragging) point(event);
           }}
           onPointerUp={() => {
-            if (!dragging.current) return;
-            dragging.current = false;
+            if (!dragging) return;
+            setDragging(false);
             // With the hour chosen, the minute is next.
             if (mode === 'hour') setMode('minute');
           }}
           onPointerCancel={() => {
-            dragging.current = false;
+            setDragging(false);
           }}
         >
           <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 size-full">
-            <line
+            <motion.line
               x1="50"
               y1="50"
-              x2={hand.x}
-              y2={hand.y}
+              x2={handX}
+              y2={handY}
               strokeWidth="0.8"
               className="stroke-[var(--note-accent,var(--foreground))]"
             />
@@ -185,9 +207,9 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
               r="1.5"
               className="fill-[var(--note-accent,var(--foreground))]"
             />
-            <circle
-              cx={hand.x}
-              cy={hand.y}
+            <motion.circle
+              cx={handX}
+              cy={handY}
               r="7.5"
               className="fill-[var(--note-accent,var(--foreground))]"
             />
