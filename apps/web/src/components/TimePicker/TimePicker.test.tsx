@@ -60,4 +60,29 @@ describe('TimePicker', () => {
     fireEvent.pointerMove(face, { clientX: 100, clientY: 180 });
     expect(onChange).toHaveBeenLastCalledWith('09:17');
   });
+
+  it('ignores the trailing touch click on the minute that replaced an hour', () => {
+    const onChange = vi.fn();
+    const { container, rerender } = render(
+      <TimePicker value="11:35" hour12={false} onChange={onChange} />,
+    );
+    const face = screen.getByRole('group', { name: 'Hours' }).firstElementChild as HTMLElement;
+    face.getBoundingClientRect = () => new DOMRect(0, 0, 200, 200);
+    fireEvent.pointerDown(face, { button: 0, clientX: 168, clientY: 139 });
+    expect(onChange).toHaveBeenLastCalledWith('04:35');
+    rerender(<TimePicker value="04:35" hour12={false} onChange={onChange} />);
+    fireEvent.pointerUp(face);
+    expect(screen.getByRole('group', { name: 'Minutes' })).toBeInTheDocument();
+
+    // Touch hit-testing can deliver the compatibility click to the new minute button.
+    fireEvent.click(cell(container, '[data-minute="20"]'), { detail: 1 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    // A fresh gesture on the minute face still chooses the time.
+    fireEvent.pointerDown(face, { button: 0, clientX: 100, clientY: 178 });
+    expect(onChange).toHaveBeenLastCalledWith('04:30');
+    fireEvent.pointerUp(face);
+    // Keyboard and assistive activation carry no pointer click count.
+    fireEvent.click(cell(container, '[data-minute="45"]'), { detail: 0 });
+    expect(onChange).toHaveBeenLastCalledWith('04:45');
+  });
 });
