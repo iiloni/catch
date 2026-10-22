@@ -140,6 +140,54 @@ test('a reminder is set from the quick days and times', async ({ page }) => {
   await expect(editor.getByRole('button', { name: /^Reminder: Tomorrow/ })).toBeVisible();
 });
 
+for (const format of ['12 hour', '24 hour']) {
+  test(`choosing an hour preserves the minutes on a ${format} clock`, async ({
+    page,
+    isMobile,
+  }) => {
+    await signUp(page);
+    await seedNotes(page, ['Choose a reminder time']);
+    await page.goto('/settings/general');
+    await page.getByRole('button', { name: format, exact: true }).click();
+    await page.goto('/');
+    await openNote(page, 'Choose a reminder time');
+    await noteToolbar(page).getByRole('button', { name: 'Reminder' }).click();
+    await step(page, 'Time')
+      .getByRole('button', { name: /^Custom/ })
+      .click();
+    await panel(page)
+      .getByRole('button', { name: /^Minute/ })
+      .click();
+    await panel(page).locator('[data-minute="35"]').click();
+
+    const hours = format === '24 hour' ? [4, 5, 10, 12, 17, 0] : [4, 5, 10, 0];
+    if (format === '12 hour') await panel(page).locator('[data-period="AM"]').click();
+    for (const hour of hours) {
+      await panel(page).getByRole('button', { name: /^Hour/ }).click();
+      const number = panel(page).locator(`[data-hour="${hour}"]`);
+      // Touch releases generate their own click after the face changes to minutes.
+      if (isMobile) await number.tap();
+      else await number.click();
+      await expect(panel(page).getByRole('group', { name: 'Minutes', exact: true })).toBeVisible();
+      await expect(panel(page).getByRole('button', { name: /^Minute/ })).toHaveText('Minute 35');
+      await expect(panel(page).getByRole('button', { name: /^Hour/ })).toHaveText(
+        `Hour ${format === '24 hour' ? pad(hour) : hour || 12}`,
+      );
+    }
+
+    await panel(page).locator('[data-minute="20"]').click();
+    await expect(panel(page).getByRole('button', { name: /^Minute/ })).toHaveText('Minute 20');
+    await panel(page).getByRole('button', { name: /^Hour/ }).click();
+    await panel(page).locator('[data-hour="9"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(panel(page).getByRole('group', { name: 'Minutes', exact: true })).toBeVisible();
+    await expect(panel(page).getByRole('button', { name: /^Minute/ })).toHaveText('Minute 20');
+    await panel(page).locator('[data-minute="45"]').focus();
+    await page.keyboard.press('Space');
+    await expect(panel(page).getByRole('button', { name: /^Minute/ })).toHaveText('Minute 45');
+  });
+}
+
 test('times follow the clock chosen in Settings', async ({ page, isMobile }) => {
   test.skip(
     isMobile,

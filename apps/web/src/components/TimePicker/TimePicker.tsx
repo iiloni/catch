@@ -146,6 +146,11 @@ export function TimePicker({ value, onChange, hour12: given, className }: Props)
         <div
           // The face takes the drag itself, rather than scrolling the panel under it.
           className="relative aspect-square w-full touch-none select-none rounded-full bg-foreground/[0.06]"
+          onClickCapture={(event) => {
+            // Pointer handlers already chose the value. A touch's later click can hit
+            // a minute button that replaced the hour; keep clicks for keyboard/AT only.
+            if (event.detail > 0) event.stopPropagation();
+          }}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             dragging.current = true;
