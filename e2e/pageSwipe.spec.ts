@@ -552,3 +552,64 @@ test('dock tabs slide the main pages side by side, as a swipe does', async ({ pa
     moving: true,
   });
 });
+
+test('a scrolled gallery slides back in with its title pill and headings already in place', async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await seedNotes(
+    page,
+    Array.from({ length: 12 }, (_, index) => ({
+      title: `Note ${index}`,
+      body: 'Enough text to wrap over several lines of a card. '.repeat(4),
+    })),
+  );
+  await page.evaluate(async () => {
+    const { setNotePinned } = await import('/src/lib/notes.ts');
+    const { noteStore } = await import('/src/lib/noteStore.ts');
+    const [note] = noteStore.values(false);
+    if (!note) throw new Error('Missing note');
+    await setNotePinned(note.id, true).isPersisted.promise;
+  });
+  await expect(page.getByRole('heading', { name: 'Others' })).toBeVisible();
+  // Scrolling down hides the dock; scrolling back up a little brings it back.
+  await page.evaluate(() => scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(400);
+  await expect(page.getByRole('link', { name: 'Deck' })).not.toBeInViewport();
+  await page.evaluate(() => scrollTo(0, 200));
+  await expect(page.getByRole('link', { name: 'Deck' })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('button', { name: 'Scroll to top' })).toBeEnabled();
+  await openDeck(page);
+
+  await page.evaluate(() => {
+    const samples: { title: number; others: number }[] = [];
+    (window as unknown as { gallerySamples: typeof samples }).gallerySamples = samples;
+    const loop = () => {
+      const gallery = document.querySelector('[data-pager-page="/"]');
+      const headings = [...(gallery?.querySelectorAll('h1, h2') ?? [])];
+      const top = (text: string) =>
+        headings.find((heading) => heading.textContent === text)?.getBoundingClientRect().top;
+      const title = top('Gallery');
+      const pinned = top('Pinned');
+      const others = top('Others');
+      if (title !== undefined && pinned !== undefined && others !== undefined) {
+        samples.push({ title: Math.round(title), others: Math.round(others - pinned) });
+      }
+      if (samples.length < 40) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await waitForPageTransition(page);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(200);
+  const samples = await page.evaluate(
+    () =>
+      (window as unknown as { gallerySamples: { title: number; others: number }[] }).gallerySamples,
+  );
+  // The page mounts already scrolled and laid out: neither the pill nor Others moves into place.
+  expect(samples.length).toBeGreaterThan(5);
+  expect(new Set(samples.map((sample) => sample.title)).size).toBe(1);
+  expect(new Set(samples.map((sample) => sample.others)).size).toBe(1);
+});
