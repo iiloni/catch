@@ -161,11 +161,8 @@ test('Release names the image and APK without passing them between jobs', () => 
   );
   assert.doesNotMatch(workflow, /needs\.version\.outputs\.(image|apk)/);
   assert.match(workflow, /RELEASE_APK: catch-\$\{\{ needs\.version\.outputs\.version \}\}\.apk\n/);
-  assert.match(
-    workflow,
-    /tags: \$\{\{ env\.IMAGE \}\}:\$\{\{ needs\.version\.outputs\.version \}\}\n/,
-  );
-  assert.equal(workflow.split('- name: Name image\n').length - 1, 2);
+  assert.match(workflow, /outputs: type=image,name=\$\{\{ env\.IMAGE \}\},push-by-digest=true/);
+  assert.equal(workflow.split('- name: Name image\n').length - 1, 3);
 
   const directory = mkdtempSync(join(tmpdir(), 'catch-release-'));
   try {
@@ -180,6 +177,127 @@ test('Release names the image and APK without passing them between jobs', () => 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('APK builds retry transient downloads, preserve failure codes and stop after three attempts', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'catch-apk-retry-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeFileSync(join(directory, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  writeFileSync(
+    join(directory, 'gradlew'),
+    `#!/bin/bash
+attempt=$(cat "$RUNNER_TEMP/attempt" 2>/dev/null || echo 0)
+attempt=$((attempt + 1))
+echo "$attempt" > "$RUNNER_TEMP/attempt"
+printf '%s\\n' "$@" > "$RUNNER_TEMP/arguments"
+if [[ "$MODE" == recover && "$attempt" == 2 ]]; then exit 0; fi
+if [[ "$MODE" == permanent ]]; then echo 'Compilation failed'; else echo 'Read timed out'; fi
+exit 17
+`,
+    { mode: 0o755 },
+  );
+  assert.match(stepLines('release.yml', 'Build signed APK').join('\n'), /shell: bash/);
+  for (const [MODE, attempts, status] of [
+    ['recover', 2, 0],
+    ['timeout', 3, 17],
+    ['permanent', 1, 17],
+  ] as const) {
+    rmSync(join(directory, 'attempt'), { force: true });
+    const result = spawnSync(
+      'bash',
+      ['-e', '-o', 'pipefail', '-c', stepBody('release.yml', 'Build signed APK', 'run')],
+      {
+        cwd: directory,
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          RUNNER_TEMP: directory,
+          MODE,
+          RELEASE_TASK: 'assemblePreviewRelease',
+        },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, status, result.stdout + result.stderr);
+    assert.equal(readFileSync(join(directory, 'attempt'), 'utf8').trim(), String(attempts));
+    assert.equal(
+      readFileSync(join(directory, 'arguments'), 'utf8'),
+      'assemblePreviewRelease\n--no-daemon\n--no-configuration-cache\n',
+    );
+  }
+});
+
+test('native image builds use separate runners and caches and merge only after both succeed', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(workflow, /arch: amd64\n +runner: ubuntu-24.04\n/);
+  assert.match(workflow, /arch: arm64\n +runner: ubuntu-24.04-arm\n/);
+  assert.match(workflow, /runs-on: \$\{\{ matrix.runner \}\}/);
+  assert.doesNotMatch(workflow, /setup-qemu-action/);
+  assert.match(workflow, /platforms: linux\/\$\{\{ matrix.arch \}\}/);
+  assert.match(workflow, /cache-from: type=gha,scope=release-image-\$\{\{ matrix.arch \}\}/);
+  assert.match(workflow, /cache-to: type=gha,scope=release-image-\$\{\{ matrix.arch \}\},mode=max/);
+  assert.match(workflow, /image:\n +needs: \[version, image-build\]/);
+  assert.match(workflow, /digest: \$\{\{ steps.merge.outputs.digest \}\}/);
+  assert.match(workflow, /publish:\n +needs: \[version, android, image\]/);
+});
+
+test('image manifest combines both digests, returns its digest and refuses incomplete builds', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'catch-image-merge-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const digests = join(directory, 'image-digests');
+  mkdirSync(digests);
+  writeFileSync(
+    join(directory, 'docker'),
+    `#!/bin/bash
+if [[ "$3" == create ]]; then printf '%s\\n' "$@" > "$RUNNER_TEMP/docker-arguments"; fi
+if [[ "$3" == inspect ]]; then echo 'sha256:${'c'.repeat(64)}'; fi
+`,
+    { mode: 0o755 },
+  );
+  for (const count of [0, 1, 2]) {
+    if (count) writeFileSync(join(digests, (count === 1 ? 'a' : 'b').repeat(64)), '');
+    const result = spawnSync(
+      'bash',
+      [
+        '-e',
+        '-o',
+        'pipefail',
+        '-c',
+        stepBody('release.yml', 'Publish exact multi-platform image', 'run'),
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          RUNNER_TEMP: directory,
+          GITHUB_OUTPUT: join(directory, 'output'),
+          IMAGE: 'ghcr.io/iiloni/catch',
+          VERSION: '0.7.5-preview',
+        },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, count === 2 ? 0 : 1, result.stdout + result.stderr);
+    if (count < 2) {
+      assert.equal(existsSync(join(directory, 'docker-arguments')), false);
+    }
+  }
+  assert.deepEqual(readFileSync(join(directory, 'docker-arguments'), 'utf8').trim().split('\n'), [
+    'buildx',
+    'imagetools',
+    'create',
+    '--tag',
+    'ghcr.io/iiloni/catch:0.7.5-preview',
+    `ghcr.io/iiloni/catch@sha256:${'a'.repeat(64)}`,
+    `ghcr.io/iiloni/catch@sha256:${'b'.repeat(64)}`,
+  ]);
+  assert.equal(
+    readFileSync(join(directory, 'output'), 'utf8'),
+    `digest=sha256:${'c'.repeat(64)}\n`,
+  );
 });
 
 test('Release rejects branch refs even when their name looks like a release tag', () => {
