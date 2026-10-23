@@ -335,28 +335,23 @@ test('a language choice wins while automatic detection is loading', async ({ pag
   await expect(block.getByRole('button', { name: /^Code language/ })).toHaveText('Plain text');
 });
 
-test('pasted fences normalize code and preserve an explicit language', async ({ page }) => {
-  const dialog = await codeNote(page, 'text', 'default', 'Existing code', '');
-  await pasteSource(
-    dialog.locator('[data-content-type="paragraph"]').last(),
-    '```\n    def greet(name):\n        return True\n```',
-  );
-  const added = dialog.locator('[data-content-type="codeBlock"]').last();
-  await expect(added.getByRole('button', { name: /^Code language/ })).toHaveText('Python');
-  await expect(added.locator('pre > code')).toHaveJSProperty(
-    'textContent',
-    'def greet(name):\n    return True',
-  );
-  await added.locator('pre > code').click();
-  await page.keyboard.press('Shift+Enter');
-  await pasteSource(
-    dialog.locator('[data-content-type="paragraph"]').last(),
-    '```text\n    def greet(name):\n        return True\n```',
-  );
-  await expect(
-    dialog
-      .locator('[data-content-type="codeBlock"]')
-      .last()
-      .getByRole('button', { name: /^Code language/ }),
-  ).toHaveText('Plain text');
-});
+for (const [fence, language] of [
+  ['', 'Python'],
+  ['text', 'Plain text'],
+]) {
+  test(`pasted ${fence || 'unlabelled'} fences normalize code and select ${language}`, async ({
+    page,
+  }) => {
+    const dialog = await codeNote(page, 'text', 'default', 'Existing code', '');
+    await pasteSource(
+      dialog.locator('[data-content-type="paragraph"]').last(),
+      `\`\`\`${fence}\n    def greet(name):\n        return True\n\`\`\``,
+    );
+    const added = dialog.locator('[data-content-type="codeBlock"]').last();
+    await expect(added.getByRole('button', { name: /^Code language/ })).toHaveText(language);
+    await expect(added.locator('pre > code')).toHaveJSProperty(
+      'textContent',
+      'def greet(name):\n    return True',
+    );
+  });
+}
