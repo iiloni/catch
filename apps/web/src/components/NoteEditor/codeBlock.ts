@@ -127,10 +127,13 @@ export const codeBlock: typeof base = {
         const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (open) for (const element of revealed) element.style.visibility = 'visible';
         const contents = open
-          ? Array.from(toolbar.children).reduce(
-              (sum, child) => sum + child.getBoundingClientRect().width,
-              toolbar.offsetWidth - toolbar.clientWidth + chromeWidth(toolbar),
-            )
+          ? picker.getBoundingClientRect().width +
+            // Layout widths: the buttons may still be scaled down from their last exit.
+            copy.offsetWidth +
+            download.offsetWidth +
+            toolbar.offsetWidth -
+            toolbar.clientWidth +
+            chromeWidth(toolbar)
           : null;
         const fade = animate(
           revealed,
