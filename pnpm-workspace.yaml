@@ -19,3 +19,10 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   '@tanstack/db-sqlite-persistence-core@0.2.23': patches/@tanstack__db-sqlite-persistence-core@0.2.23.patch
+
+# Catch uses the Drizzle adapter and React client, not these optional integrations.
+# Keeping them out also prevents development tools from entering production deploys.
+overrides:
+  'better-auth>drizzle-kit': '-'
+  'better-auth>next': '-'
+  'better-auth>vitest': '-'
