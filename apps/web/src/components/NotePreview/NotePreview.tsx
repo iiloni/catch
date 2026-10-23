@@ -1,7 +1,8 @@
 import { REVIEW_DELETED, REVIEW_INSERTED } from '@catch/shared';
+import { Copy, Download } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
-import { codeLanguageName } from '@/lib/codeLanguages';
+import { codeLanguageIcon, codeLanguageName } from '@/lib/codeLanguages';
 import { cn } from '@/lib/utils';
 
 type Json = Record<string, unknown>;
@@ -177,8 +178,23 @@ function PreviewBlock({
       body =
         variant === 'editor' ? (
           <div data-content-type="codeBlock" className="note-code-block">
-            <div className="note-code-language">
-              <span>{codeLanguageName(props.language)}</span>
+            <div className="note-code-toolbar glass">
+              <div className="note-code-language">
+                <span>
+                  <span
+                    aria-hidden
+                    className="code-language-icon"
+                    style={{ maskImage: `url("${codeLanguageIcon(props.language)}")` }}
+                  />
+                  <span className="truncate">{codeLanguageName(props.language)}</span>
+                </span>
+              </div>
+              <span aria-hidden className="note-code-action">
+                <Copy />
+              </span>
+              <span aria-hidden className="note-code-action">
+                <Download />
+              </span>
             </div>
             <pre>
               <code>{text}</code>

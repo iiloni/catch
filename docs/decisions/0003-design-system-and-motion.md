@@ -397,15 +397,39 @@ when it is valid. Link capture never saves on outside dismissal or back. Bookmar
 standalone share windows have the same icon-only close/save control in their form footer.
 
 **Code blocks.** A code block's surface is a tint of the note's text color rather than a
-fill, so it sits on every note color in both themes. Each block names its language in a
-button at its top right that is always shown (BlockNote's own picker appears on hover only)
-and opens the searchable list below; a fence with a language or alias (` ```py `) sets it. Shiki highlights the code with a theme
+fill, so it sits on every note color in both themes. Each block has a glass pill in its top right corner. At rest it shows only the
+language's icon; hover or keyboard focus expands it leftward to reveal the language name,
+Copy and Download, keeping the icon under the pointer. On touch the first tap expands it
+and a second tap on the language opens the searchable picker; tapping outside or Escape
+collapses it. The pill uses 44 px targets and skips its expansion with reduced motion.
+The source starts at the top of the block with space on the right for the resting pill,
+rather than reserving a header row. Icons are bundled Devicon SVGs shown as monochrome masks
+so they follow the theme, with generic code/text fallbacks. A fence with a language or alias
+(` ```py `) sets it. Shiki highlights the code with a theme
 of CSS variables (`--code-token-*` in `styles.css`) instead of a fixed palette: like the
 note colors, the syntax colors share one lightness and chroma per theme and differ in hue.
 The highlighter and each grammar load on first use, and the languages offered are the short
 list in `lib/codeLanguages.ts`, because the service worker precaches every grammar so code
 is highlighted offline. A language outside the list (pasted or imported) keeps its name and
 shows as plain text. Cards and the opening preview show code in one color. Long lines wrap.
+
+Pasting into a code block removes the common indentation margin (tabs are measured at
+two-column stops and remaining tabs are retained), aligning continuation lines with the
+cursor’s indentation and preserving relative nesting, blank lines and trailing newlines;
+CRLF becomes LF. New code blocks pasted from external sources
+get the same normalization. Pasting ordinary note text keeps BlockNote's normal behavior.
+When an empty unlabelled code block receives a paste, or an unlabelled fenced block is
+pasted, a lazy Highlight.js detector guesses its language on the device. An empty language
+is unlabelled; `text` is an explicit Plain text choice, including after a reload. Existing
+plain-text blocks, explicit fence languages and picker choices are kept, weak guesses stay
+plain, and Detect language in the picker retries a guess. Async guesses are discarded if the block, its source or its
+language has changed, or the editor has closed. Detection grammars and icons are precached
+with the app; no note content leaves the device. Copy uses the current source without
+markup; Download saves it as a UTF-8 file with the selected language's filename/extension
+(`snippet.py`, `snippet.ts`, `Dockerfile`, `Makefile`), or `snippet.txt` for unknown languages.
+Android uses the existing native Save dialog. These are existing language/source values and
+need no protocol or collection schema change: older clients show an unlabelled block as
+plain text, and newer clients keep the languages on existing blocks.
 
 **Choosing from a list.** The app draws its own lists instead of native `<select>` menus
 and time inputs, which look different on every platform and, on Android, open a system

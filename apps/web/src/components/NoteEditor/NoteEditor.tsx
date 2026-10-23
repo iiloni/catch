@@ -24,18 +24,19 @@ import { BlockNoteView, useShadCNComponentsContext } from '@blocknote/shadcn';
 import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
 import { closeHistory } from '@tiptap/pm/history';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, ScanText } from 'lucide-react';
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { SearchSelectDialog, type SelectOption } from '@/components/SearchSelect/SearchSelect';
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
 import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
-import { CODE_LANGUAGES, codeLanguageId } from '@/lib/codeLanguages';
+import { CODE_LANGUAGES, codeLanguageIcon, codeLanguageId } from '@/lib/codeLanguages';
 import { haptics } from '@/lib/haptics';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { noteEditorSchema } from './checkListItem';
 import { syntaxHighlighting } from './codeBlock';
+import { cancelCodeDetection, detectBlockLanguage, pasteCode } from './codePaste';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
 import { useListItemDrag } from './useListItemDrag';
 
@@ -161,6 +162,7 @@ export function NoteEditor({
   const editor = useCreateBlockNote({
     schema: noteEditorSchema,
     extensions: [syntaxHighlighting],
+    pasteHandler: pasteCode,
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
@@ -278,6 +280,9 @@ export function NoteEditor({
         <CodeLanguagePicker
           editor={editor}
           blockId={languageBlock}
+          onChoose={() => {
+            cancelCodeDetection(editor, languageBlock);
+          }}
           onDone={() => setLanguageBlock(null)}
         />
       )}
@@ -290,6 +295,13 @@ const CODE_LANGUAGE_OPTIONS: SelectOption[] = Object.entries(CODE_LANGUAGES).map
     value,
     label: language.name,
     keywords: [value, ...('aliases' in language ? language.aliases : [])],
+    icon: (
+      <span
+        aria-hidden
+        className="code-language-icon"
+        style={{ maskImage: `url("${codeLanguageIcon(value)}")` }}
+      />
+    ),
   }),
 );
 
@@ -297,10 +309,12 @@ function CodeLanguagePicker({
   editor,
   blockId,
   onDone,
+  onChoose,
 }: {
   editor: AnyEditor;
   blockId: string;
   onDone: () => void;
+  onChoose: () => void;
 }) {
   const block = editor.getBlock(blockId);
   const language = block?.type === 'codeBlock' ? String(block.props.language ?? '') : '';
@@ -332,11 +346,23 @@ function CodeLanguagePicker({
       title="Code language"
       searchLabel="Search languages"
       emptyText="No language matches."
-      options={options}
-      value={id ?? language}
+      options={[
+        {
+          value: '__detect',
+          label: 'Detect language',
+          icon: <ScanText className="size-4 shrink-0" aria-hidden />,
+        },
+        ...options,
+      ]}
+      value={id ?? (language || 'text')}
       onChange={(value) => {
         if (!editor.isEditable || !editor.getBlock(blockId)) return;
         chosen.current = true;
+        onChoose();
+        if (value === '__detect') {
+          void detectBlockLanguage(editor, blockId, true);
+          return;
+        }
         editor.updateBlock(blockId, { props: { language: value } });
       }}
     />
