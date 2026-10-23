@@ -103,7 +103,8 @@ jobs:
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Image and stack preparation can take over seven minutes before a 23-minute shard.
+    timeout-minutes: 45
     strategy: &e2e-shards
       fail-fast: false
       matrix:
@@ -174,7 +175,7 @@ jobs:
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy: *e2e-shards
     env:
       PROJECT: android
