@@ -91,7 +91,7 @@ commit messages, but choose release versions explicitly.
   Node 24, JDK 21, SDK 36, and the Gradle wrapper. The Docker jobs build the production
   Dockerfile on native AMD64 and ARM64 runners, push each image by digest, then combine
   both into the exact version. Each architecture has its own build cache. Android builds
-  retry transient dependency download failures up to three times; other failures stop immediately.
+  allow up to three attempts for transient dependency download failures; other failures stop immediately.
   Once both artifacts are ready, the publishing job uploads the APK and
   checksum to a draft release, updates the appropriate image aliases, and publishes the
   release. Preview GitHub Releases are marked as prereleases.
