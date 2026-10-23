@@ -66,7 +66,13 @@ export function SearchFilterPanel({
         className="flex w-full max-w-md flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
         initial={{ height: 0 }}
         animate={{ height: 'auto' }}
-        exit={{ height: 0 }}
+        // A bounce would carry the height below zero, which the browser ignores, leaving a
+        // sliver of the panel's edge painted until the spring settled. Without one, it ends as
+        // soon as less than a pixel is left instead of creeping through the last few.
+        exit={{
+          height: 0,
+          transition: { ...springs.smooth, bounce: 0, restDelta: 1, restSpeed: Infinity },
+        }}
         transition={springs.smooth}
       >
         <section
