@@ -40,8 +40,10 @@ including findings without a fixed version, rather than only auditing the worksp
 
 - FFmpeg updates require changing both the version and checksum and testing video posters.
   Verify the archive against FFmpeg's release signature before recording a new checksum.
-- Building FFmpeg adds build time, especially when building arm64 under emulation. The
-  source stage is cached independently of application changes; compiler tools stay there.
+- Building FFmpeg adds build time. Release images build on native AMD64 and ARM64
+  runners, with separate caches, before their digests are combined into the exact version;
+  emulated ARM64 compilation exceeded the release job timeout. The source stage is cached
+  independently of application changes; compiler tools stay there.
 - Production installs must retain Sharp's architecture-specific optional binary packages.
 - Dependency security updates do not change the REST/shape contracts, stored note content,
   outbox format or protocol version (ADR 0013).
