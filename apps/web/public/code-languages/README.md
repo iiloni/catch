@@ -1,39 +1,39 @@
-Language logos are from Devicon v2.17.0, commit `54cfe13ac10eaa1ef817a343ab0a9437eb3c2e08`, https://github.com/devicons/devicon. See LICENSE. Plain variants are preferred for monochrome masks: their transparent cutouts keep letters visible. The generic code and text icons are drawn locally.
+Language logos are from Devicon v2.17.0, commit `54cfe13ac10eaa1ef817a343ab0a9437eb3c2e08`, https://github.com/devicons/devicon. See LICENSE. Original (colored) variants are preferred. Logos with no brand color are drawn as monochrome masks in the theme's text color, marked tinted in `src/lib/codeLanguages.ts`; plain variants suit those, because their transparent cutouts keep letters visible. The generic code and text icons are drawn locally.
 
-- azuresqldatabase: plain
-- bash: plain
+- azuresqldatabase: original
+- bash: plain (tinted)
 - c: original
-- cplusplus: plain
-- csharp: plain
-- css3: plain
-- dart: plain
-- docker: plain
-- elixir: plain
-- go: plain
+- cplusplus: original
+- csharp: original
+- css3: original
+- dart: original
+- docker: original
+- elixir: original
+- go: original
 - graphql: plain
-- haskell: plain
-- html5: plain
-- java: plain
-- javascript: plain
-- json: plain
-- kotlin: plain
-- latex: original
-- lua: plain
-- markdown: original
+- haskell: original
+- html5: original
+- java: original
+- javascript: original
+- json: plain (tinted)
+- kotlin: original
+- latex: original (tinted)
+- lua: original
+- markdown: original (tinted)
 - nginx: original
-- nixos: plain
-- php: plain
-- powershell: plain
-- python: plain
-- r: plain
+- nixos: original
+- php: original
+- powershell: original
+- python: original
+- r: original
 - react: original
-- ruby: plain
-- rust: original
+- ruby: original
+- rust: original (tinted)
 - sass: original
-- scala: plain
-- swift: plain
-- terraform: plain
-- typescript: plain
-- xml: plain
-- yaml: plain
+- scala: original
+- swift: original
+- terraform: original
+- typescript: original
+- xml: original
+- yaml: plain (tinted)
 - zig: original

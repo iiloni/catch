@@ -466,7 +466,7 @@
 .bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre {
   width: 100%;
   margin: 0;
-  padding: 0.875rem 3.75rem 0.875rem 1rem;
+  padding: 0.875rem 3.25rem 0.875rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.55;
@@ -488,13 +488,20 @@
   z-index: 1;
   display: flex;
   width: max-content;
-  max-width: 2.75rem;
+  /* One inset button plus the rim and the glass border. */
+  max-width: calc(var(--code-pill-button) + 2 * var(--code-pill-inset) + 2px);
   flex-direction: row-reverse;
   align-items: center;
+  padding: var(--code-pill-inset);
   overflow: clip;
-  border-radius: 999px;
-  transition: max-width 240ms cubic-bezier(0.16, 1, 0.3, 1);
-  --code-pill-width: 22rem;
+  /* The header toolbar's glass, with its round buttons inset the same way. */
+  border-radius: var(--dock-radius);
+  --code-pill-button: 1.75rem;
+  --code-pill-inset: 2px;
+  @media (pointer: coarse) {
+    /* Larger for a finger, still well short of a header button. */
+    --code-pill-button: 2.25rem;
+  }
   color: var(--muted-foreground);
   font-family: var(--font-sans);
   font-size: 0.75rem;
@@ -505,10 +512,7 @@
   min-width: 0;
   flex-shrink: 0;
 }
-.note-code-toolbar[data-expanded] {
-  max-width: min(calc(100% - 0.75rem), var(--code-pill-width));
-}
-.note-code-language .truncate {
+.note-code-label {
   max-width: min(8rem, calc(100cqw - 11rem));
 }
 .note-code-language > button,
@@ -516,38 +520,43 @@
 .note-code-action {
   position: static;
   display: flex;
-  min-width: 2.75rem;
-  height: 2.75rem;
+  min-width: var(--code-pill-button);
+  height: var(--code-pill-button);
   flex-direction: row-reverse;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  padding-inline: 0.875rem;
+  padding-inline: 0.375rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background: transparent;
   color: inherit;
   font: inherit;
-  opacity: 1;
-  transition: none;
 }
 .note-code-action {
-  width: 2.75rem;
+  width: var(--code-pill-button);
   flex-shrink: 0;
 }
-.note-code-language .truncate,
+/* Revealed and hidden by codeBlock.ts, which animates them in and out. */
+.note-code-label,
+.note-code-chevron,
 .note-code-action {
   visibility: hidden;
   opacity: 0;
-  transition:
-    opacity 140ms ease-out,
-    visibility 140ms;
 }
-.note-code-toolbar[data-expanded] .truncate,
-.note-code-toolbar[data-expanded] .note-code-action {
-  visibility: visible;
-  opacity: 1;
-  transition-delay: 40ms;
+.note-code-chevron {
+  display: flex;
+  width: 0.875rem;
+  flex-shrink: 0;
+  justify-content: center;
+}
+.note-code-chevron::before {
+  width: 0.375rem;
+  height: 0.375rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  content: "";
+  transform: translateY(-25%) rotate(45deg);
 }
 
 .note-code-action > svg {
@@ -564,10 +573,11 @@
   width: 1rem;
   height: 1rem;
   flex-shrink: 0;
+  background: var(--code-language-icon) center / contain no-repeat;
+}
+.code-language-icon[data-tinted] {
   background: currentColor;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  mask-size: contain;
+  mask: var(--code-language-icon) center / contain no-repeat;
 }
 .note-code-toolbar button:enabled {
   cursor: pointer;
@@ -582,28 +592,6 @@
   box-shadow: inset 0 0 0 2px var(--ring);
   color: var(--foreground);
   outline: none;
-}
-/* A read-only note shows the language name without the picker arrow. */
-.note-code-language > button[aria-haspopup]::after {
-  width: 0.375rem;
-  height: 0.375rem;
-  flex-shrink: 0;
-  margin-inline: 0.25rem;
-  border: solid currentColor;
-  border-width: 0 1.5px 1.5px 0;
-  content: "";
-  transform: translateY(-25%) rotate(45deg);
-  visibility: hidden;
-}
-.note-code-toolbar[data-expanded] .note-code-language > button[aria-haspopup]::after {
-  visibility: visible;
-}
-@media (prefers-reduced-motion: reduce) {
-  .note-code-toolbar,
-  .note-code-toolbar .truncate,
-  .note-code-action {
-    transition: none;
-  }
 }
 
 /* Cards keep a compact scale; the transition preview uses the editor's full geometry. */

@@ -237,7 +237,9 @@ test('a code pill expands from its icon and keeps keyboard and touch actions ava
   const expanded = (await icon.boundingBox())!;
   expect(Math.abs(initial.x - expanded.x)).toBeLessThan(2);
   await expect.poll(async () => (await pill.boundingBox())!.width).toBeGreaterThan(120);
-  await expect(icon).toHaveCSS('mask-image', /python\.svg/);
+  // Python keeps its brand colors; a logo without any takes the text color.
+  await expect(icon).toHaveCSS('background-image', /python\.svg/);
+  await expect(icon).toHaveCSS('mask-image', 'none');
 
   await dialog.getByText('After the code').click();
   await page.mouse.move(0, 0);
@@ -249,9 +251,15 @@ test('a code pill expands from its icon and keeps keyboard and touch actions ava
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
   await expect(block.getByRole('button', { name: 'Copy snippet' })).toBeHidden();
+  await page.mouse.move(0, 0);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await language.focus();
-  await expect(pill).toHaveCSS('transition-duration', '0s');
+  // Without motion the pill is at its full width a frame later, not springing there.
+  const widthAfterAFrame = await pill.evaluate(async (element) => {
+    element.querySelector('button')?.focus();
+    await new Promise(requestAnimationFrame);
+    return element.getBoundingClientRect().width;
+  });
+  expect(widthAfterAFrame).toBeGreaterThan(140);
 });
 
 test('pasting code normalizes its margin and detects an unlabelled language', async ({ page }) => {

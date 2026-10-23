@@ -1,14 +1,17 @@
 import { createCodeBlockSpec, SyntaxHighlightingExtension } from '@blocknote/core';
+import { type AnimationPlaybackControls, animate } from 'motion/react';
 import { toast } from 'sonner';
 import {
   CODE_LANGUAGES,
   codeLanguageFileName,
   codeLanguageIcon,
+  codeLanguageIconProps,
   codeLanguageId,
   codeLanguageName,
 } from '@/lib/codeLanguages';
 import { codeSnippetText, downloadCodeSnippet } from '@/lib/codeSnippet';
 import { haptics } from '@/lib/haptics';
+import { springs } from '@/lib/motion';
 
 // An empty language is unlabelled; `text` is an explicit choice that survives reloads.
 const base = createCodeBlockSpec({ defaultLanguage: '', supportedLanguages: CODE_LANGUAGES });
@@ -42,11 +45,17 @@ export const codeBlock: typeof base = {
       const icon = document.createElement('span');
       icon.className = 'code-language-icon';
       icon.setAttribute('aria-hidden', 'true');
-      icon.style.maskImage = `url("${codeLanguageIcon(language)}")`;
+      icon.toggleAttribute('data-tinted', codeLanguageIconProps(language)['data-tinted'] === '');
+      icon.style.setProperty('--code-language-icon', `url("${codeLanguageIcon(language)}")`);
       const label = document.createElement('span');
-      label.className = 'truncate';
+      label.className = 'note-code-label truncate';
       label.textContent = name;
       button.append(icon, label);
+      // A read-only note shows the language name without the picker arrow.
+      const chevron = document.createElement('span');
+      chevron.className = 'note-code-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      if (editor.isEditable) button.append(chevron);
       button.title = `Code language: ${name}`;
 
       const picker = document.createElement('div');
@@ -106,7 +115,44 @@ export const codeBlock: typeof base = {
       toolbar.append(copy, download);
       rendered.dom.prepend(toolbar);
       let pinned = false;
-      const expand = (open: boolean) => toolbar.toggleAttribute('data-expanded', open);
+      // Moves like the page header's toolbar: the glass springs to the new width while the
+      // controls arrive from a slight blur and scale, and leave quicker than they came.
+      const revealed = [label, chevron, copy, download];
+      animate(revealed, HIDDEN, { duration: 0 });
+      let running: AnimationPlaybackControls[] = [];
+      const expand = (open: boolean) => {
+        if (open === toolbar.hasAttribute('data-expanded')) return;
+        toolbar.toggleAttribute('data-expanded', open);
+        for (const animation of running) animation.stop();
+        const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (open) for (const element of revealed) element.style.visibility = 'visible';
+        const contents = open
+          ? Array.from(toolbar.children).reduce(
+              (sum, child) => sum + child.getBoundingClientRect().width,
+              toolbar.offsetWidth - toolbar.clientWidth + chromeWidth(toolbar),
+            )
+          : null;
+        const fade = animate(
+          revealed,
+          open ? SHOWN : HIDDEN,
+          still ? { duration: 0 } : open ? springs.smooth : { duration: 0.14 },
+        );
+        running = [
+          animate(
+            toolbar,
+            { maxWidth: contents === null ? collapsedWidth(toolbar) : `${contents}px` },
+            still ? { duration: 0 } : springs.smooth,
+          ),
+          fade,
+        ];
+        // Hidden controls leave the tab order once they have faded.
+        if (!open) {
+          void fade.then(() => {
+            if (toolbar.hasAttribute('data-expanded')) return;
+            for (const element of revealed) element.style.visibility = 'hidden';
+          });
+        }
+      };
       toolbar.addEventListener('pointerenter', (event) => {
         if (event.pointerType !== 'touch') expand(true);
       });
@@ -142,13 +188,6 @@ export const codeBlock: typeof base = {
         editor.focus();
       });
       document.addEventListener('pointerdown', outside);
-      const frame = requestAnimationFrame(() => {
-        const width = Array.from(toolbar.children).reduce(
-          (sum, child) => sum + child.getBoundingClientRect().width,
-          2,
-        );
-        toolbar.style.setProperty('--code-pill-width', `${width}px`);
-      });
       return {
         ...rendered,
         // Pill state is editor chrome, not a change to the document. Letting ProseMirror
@@ -157,7 +196,7 @@ export const codeBlock: typeof base = {
           toolbar.contains(mutation.target) || (rendered.ignoreMutation?.(mutation) ?? false),
         destroy() {
           clearTimeout(copiedTimer);
-          cancelAnimationFrame(frame);
+          for (const animation of running) animation.stop();
           document.removeEventListener('pointerdown', outside);
           rendered.destroy?.();
         },
@@ -165,6 +204,23 @@ export const codeBlock: typeof base = {
     },
   },
 };
+
+const HIDDEN = { opacity: 0, scale: 0.85, filter: 'blur(4px)' };
+const SHOWN = { opacity: 1, scale: 1, filter: 'blur(0px)' };
+
+function chromeWidth(toolbar: HTMLElement) {
+  const style = getComputedStyle(toolbar);
+  return Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+}
+
+/** The resting pill: one button inside the rim, as the stylesheet sizes it. */
+function collapsedWidth(toolbar: HTMLElement) {
+  const inline = toolbar.style.maxWidth;
+  toolbar.style.maxWidth = '';
+  const width = getComputedStyle(toolbar).maxWidth;
+  toolbar.style.maxWidth = inline;
+  return width;
+}
 
 function actionButton(name: string, path: string) {
   const button = document.createElement('button');

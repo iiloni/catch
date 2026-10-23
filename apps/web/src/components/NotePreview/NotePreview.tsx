@@ -2,7 +2,7 @@ import { REVIEW_DELETED, REVIEW_INSERTED } from '@catch/shared';
 import { Copy, Download } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
-import { codeLanguageIcon, codeLanguageName } from '@/lib/codeLanguages';
+import { codeLanguageIconProps, codeLanguageName } from '@/lib/codeLanguages';
 import { cn } from '@/lib/utils';
 
 type Json = Record<string, unknown>;
@@ -184,9 +184,11 @@ function PreviewBlock({
                   <span
                     aria-hidden
                     className="code-language-icon"
-                    style={{ maskImage: `url("${codeLanguageIcon(props.language)}")` }}
+                    {...codeLanguageIconProps(props.language)}
                   />
-                  <span className="truncate">{codeLanguageName(props.language)}</span>
+                  <span className="note-code-label truncate">
+                    {codeLanguageName(props.language)}
+                  </span>
                 </span>
               </div>
               <span aria-hidden className="note-code-action">

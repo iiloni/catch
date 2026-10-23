@@ -401,10 +401,14 @@ fill, so it sits on every note color in both themes. Each block has a glass pill
 language's icon; hover or keyboard focus expands it leftward to reveal the language name,
 Copy and Download, keeping the icon under the pointer. On touch the first tap expands it
 and a second tap on the language opens the searchable picker; tapping outside or Escape
-collapses it. The pill uses 44 px targets and skips its expansion with reduced motion.
+collapses it. The pill is compact: round 28 px buttons (36 px on touch screens) inset in a
+thin glass rim, like the header toolbar's. It moves like that toolbar too, the glass springing
+to its new width while the controls arrive from a slight blur and scale, and it changes at once
+with reduced motion.
 The source starts at the top of the block with space on the right for the resting pill,
-rather than reserving a header row. Icons are bundled Devicon SVGs shown as monochrome masks
-so they follow the theme, with generic code/text fallbacks. A fence with a language or alias
+rather than reserving a header row. Icons are bundled Devicon SVGs in their brand colors;
+logos with no color of their own (black or white ones such as Rust or Markdown) and the generic
+code/text fallbacks are monochrome masks in the text color so they show in both themes. A fence with a language or alias
 (` ```py `) sets it. Shiki highlights the code with a theme
 of CSS variables (`--code-token-*` in `styles.css`) instead of a fixed palette: like the
 note colors, the syntax colors share one lightness and chroma per theme and differ in hue.

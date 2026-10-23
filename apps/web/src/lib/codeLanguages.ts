@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 type CodeLanguage = {
   name: string;
   fileName: string;
@@ -332,7 +334,24 @@ export function codeLanguageFileName(language: unknown): string {
   return CODE_LANGUAGES[codeLanguageId(language) ?? 'text'].fileName;
 }
 
-export function codeLanguageIcon(language: unknown): string {
+// Logos without a brand color of their own, black or white ones that would vanish against one
+// theme, take the text color instead.
+const TINTED_ICONS = new Set(['bash', 'code', 'json', 'latex', 'markdown', 'rust', 'text', 'yaml']);
+
+function iconName(language: unknown): string {
   const id = codeLanguageId(language);
-  return `/code-languages/${id ? CODE_LANGUAGES[id].icon : typeof language === 'string' && language.trim() ? 'code' : 'text'}.svg`;
+  if (id) return CODE_LANGUAGES[id].icon;
+  return typeof language === 'string' && language.trim() ? 'code' : 'text';
+}
+
+export function codeLanguageIcon(language: unknown): string {
+  return `/code-languages/${iconName(language)}.svg`;
+}
+
+/** Props for a `.code-language-icon` element showing the language's logo. */
+export function codeLanguageIconProps(language: unknown) {
+  return {
+    'data-tinted': TINTED_ICONS.has(iconName(language)) ? '' : undefined,
+    style: { '--code-language-icon': `url("${codeLanguageIcon(language)}")` } as CSSProperties,
+  };
 }

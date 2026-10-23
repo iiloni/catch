@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CODE_LANGUAGES,
   codeLanguageIcon,
+  codeLanguageIconProps,
   codeLanguageId,
   codeLanguageName,
 } from './codeLanguages';
@@ -35,5 +36,14 @@ describe('codeLanguages', () => {
       const path = codeLanguageIcon(language);
       expect(existsSync(`public${path}`), path).toBe(true);
     }
+  });
+
+  it('keeps brand colors and tints logos that have none', () => {
+    expect(codeLanguageIconProps('python')['data-tinted']).toBeUndefined();
+    expect(codeLanguageIconProps('rust')['data-tinted']).toBe('');
+    expect(codeLanguageIconProps('brainfuck')).toEqual({
+      'data-tinted': '',
+      style: { '--code-language-icon': 'url("/code-languages/code.svg")' },
+    });
   });
 });
