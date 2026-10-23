@@ -127,8 +127,8 @@ Or from inside the worktree itself, as an agent's final command:
 Removal refuses the primary checkout, the checkout running the command, and worktrees with
 uncommitted changes, untracked files or unexpected ignored files. Dependencies, build output,
 test reports and Android build products are treated as disposable; pass `--strict` to
-refuse those too. It then deletes that worktree's Compose volumes (asking first unless `-y`)
-and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
+refuse those too. It then deletes that worktree's Compose volumes and the app image Compose
+built for it (asking first unless `-y`) and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
 non-forced `git branch -d`, so unmerged work is never deleted.
 
 To remove every non-main worktree, run this from the primary checkout while it is on `main`:
@@ -137,7 +137,7 @@ To remove every non-main worktree, run this from the primary checkout while it i
 ./scripts/worktree.sh remove-all [-y] [--delete-branch]
 ```
 
-It uses the same safety checks and volume cleanup for each worktree. Without `-y`, it asks
+It uses the same safety checks and volume and image cleanup for each worktree. Without `-y`, it asks
 before deleting each initialized worktree's volumes. `--delete-branch` also deletes each
 merged branch with `git branch -d`; an unmerged branch is preserved.
 
