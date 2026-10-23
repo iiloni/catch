@@ -36,6 +36,8 @@ export default defineConfig({
   // the run in CI, where no other work competes for the machine.
   retries: 1,
   failOnFlakyTests: !!process.env.CI,
+  // Keep each test's result and duration visible if CI stops before the suite summary.
+  reporter: 'list',
   use: {
     baseURL,
     // A click on something that never appears should fail well before the test's own limit.

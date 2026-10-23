@@ -8,6 +8,11 @@ merge once all required checks pass. Either label requests the Docker-backed tes
 shards, two mobile shards, API tests and the unit tests that require FFmpeg and Postgres tools. Mobile E2E
 emulates Android in Chromium; it does not test a native APK.
 
+Each E2E job has a 45-minute budget for image preparation, stack startup and tests.
+The slowest shard takes about 23 minutes of tests, and preparation with a cold image
+cache can add more than seven minutes. Individual tests retain their 60-second timeout. Playwright logs
+each test's result and duration so interrupted runs still show their progress.
+
 The required check is **`validation`**. For a PR, it fails until `merge on pass` is present
 and checks and both E2E projects succeed in the same run. A PR with only `run e2e` still
 has a failing `validation` check after successful E2E, with a message that approval is
