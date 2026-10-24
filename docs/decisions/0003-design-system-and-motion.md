@@ -401,8 +401,8 @@ fill, so it sits on every note color in both themes. Each block has a glass pill
 language's icon; hover or keyboard focus expands it leftward to reveal the language name,
 Copy and Download, keeping the icon under the pointer. On touch the first tap expands it
 and a second tap on the language opens the searchable picker; tapping outside or Escape
-collapses it. The pill is compact: round 28 px buttons inset in a
-thin glass rim, like the header toolbar's. It moves like that toolbar too, the glass springing
+collapses it. The pill is compact: 28 px buttons inset in a thin glass rim, a rounded
+rectangle like the dock with its radius scaled to the smaller height and the buttons concentric. It moves like that toolbar too, the glass springing
 to its new width while the controls arrive from a slight blur and scale, and it changes at once
 with reduced motion.
 The source starts at the top of the block with space on the right for the resting pill,

@@ -494,10 +494,12 @@
   align-items: center;
   padding: var(--code-pill-inset);
   overflow: clip;
-  /* The header toolbar's glass, with its round buttons inset the same way. */
-  border-radius: var(--dock-radius);
+  /* A rounded rectangle like the dock, its radius scaled down with the height, and the
+     buttons inset to stay concentric. */
+  border-radius: var(--code-pill-radius);
   --code-pill-button: 1.75rem;
   --code-pill-inset: 2px;
+  --code-pill-radius: 0.75rem;
   color: var(--muted-foreground);
   font-family: var(--font-sans);
   font-size: 0.75rem;
@@ -524,7 +526,7 @@
   gap: 0.375rem;
   padding-inline: 0.375rem;
   border: 0;
-  border-radius: 999px;
+  border-radius: calc(var(--code-pill-radius) - var(--code-pill-inset) - 1px);
   background: transparent;
   color: inherit;
   font: inherit;
