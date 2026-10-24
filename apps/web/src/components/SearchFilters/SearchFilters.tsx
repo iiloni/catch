@@ -26,7 +26,7 @@ import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { usePersistentState } from '@/lib/storage';
 import type { TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
@@ -66,7 +66,7 @@ export function SearchFilterPanel({
         className="flex w-full max-w-md flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
         initial={{ height: 0 }}
         animate={{ height: 'auto' }}
-        exit={{ height: 0 }}
+        exit={{ height: 0, transition: curves.fold }}
         transition={springs.smooth}
       >
         <section

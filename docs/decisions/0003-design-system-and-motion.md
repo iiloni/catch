@@ -240,7 +240,11 @@ the centered panel.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel
-native; CSS `linear()` springs can mimic the curve but not the interruption.
+native; CSS `linear()` springs can mimic the curve but not the interruption. A surface that
+folds shut to nothing, like the Search filter panel, uses an eased curve (`curves.fold`)
+instead: a bounce carries its height below zero, which the browser ignores, so a sliver stays
+drawn until the spring settles, and a spring without one slows into a long tail that reads as
+something left behind.
 
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor's surface is translated onto the

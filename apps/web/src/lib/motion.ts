@@ -30,7 +30,8 @@ export const EASE_EMPHASIZED = [0.2, 0, 0, 1] as const;
 
 /**
  * Eased curves for full-screen transitions, where a spring's overshoot would push the
- * surface past the screen edge. CSS uses the same curve as `--ease-emphasized`.
+ * surface past the screen edge, and for surfaces folding shut, where it would go below zero.
+ * CSS uses the transitions' curve as `--ease-emphasized`.
  */
 export const curves = {
   /** Content arriving during startup, with a gentle fade and no overshoot. */
@@ -39,6 +40,12 @@ export const curves = {
   expand: { duration: 0.55, ease: EASE_EMPHASIZED },
   /** The editor settling back into its card. */
   collapse: { duration: 0.5, ease: EASE_EMPHASIZED },
+  /**
+   * A surface folding away to nothing. A spring's bounce carries the height below zero, which
+   * the browser ignores, so a sliver stayed drawn until it settled; without a bounce, its slow
+   * settle reads as something left behind. This keeps some speed until the surface is gone.
+   */
+  fold: { duration: 0.35, ease: [0.3, 0, 0.6, 0.85] as const },
 } satisfies Record<string, Transition>;
 
 const steady = new WeakMap<MotionValue<number>, () => void>();
