@@ -80,6 +80,9 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
   const position = useMotionValue(index);
   const viewport = useMotionValue(window.innerWidth);
   const scrollY = useMotionValue(window.scrollY);
+  // The page whose scroll the window holds. A page that has just become active reports its
+  // saved scroll until then, or its header would start from the previous page's.
+  const scrolled = useMotionValue<TabPath | null>(active);
   const scrolls = useRef(new Map<TabPath, number>());
   const [incoming, setIncoming] = useState<readonly TabPath[]>([]);
   const neighbours = useRef<readonly TabPath[]>([]);
@@ -140,13 +143,14 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       queueMicrotask(() => {
         window.scrollTo({ top: scrolls.current.get(to) ?? 0, behavior: 'instant' });
         scrollY.set(window.scrollY);
+        scrolled.set(to);
       });
     });
     return () => {
       stopSaving();
       stopRestoring();
     };
-  }, [router, scrollY]);
+  }, [router, scrollY, scrolled]);
 
   useLayoutEffect(() => {
     const swiped = active !== null && committed.current === active;
@@ -184,10 +188,25 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
       clearIncoming();
     }
     if (active) {
-      window.scrollTo({ top: scrolls.current.get(active) ?? 0, behavior: 'instant' });
+      const top = scrolls.current.get(active) ?? 0;
+      window.scrollTo({ top, behavior: 'instant' });
       scrollY.set(window.scrollY);
+      // A page mounting now has no content yet to scroll; the router's render restores it.
+      if (Math.abs(window.scrollY - top) < 1) scrolled.set(active);
+    } else {
+      scrolled.set(null);
     }
-  }, [active, index, position, reducedMotion, scrollY, clearIncoming, showIncoming, releaseDock]);
+  }, [
+    active,
+    index,
+    position,
+    reducedMotion,
+    scrollY,
+    scrolled,
+    clearIncoming,
+    showIncoming,
+    releaseDock,
+  ]);
 
   useLayoutEffect(() => {
     if (enabled) return;
@@ -283,6 +302,7 @@ export function MainPagePager({ enabled, children }: { enabled: boolean; childre
           position={position}
           viewport={viewport}
           liveScroll={scrollY}
+          scrolled={scrolled}
           savedScroll={scrolls.current.get(page) ?? 0}
         />
       ))}
@@ -296,6 +316,7 @@ function PagerPage({
   position,
   viewport,
   liveScroll,
+  scrolled,
   savedScroll,
 }: {
   page: TabPath;
@@ -303,13 +324,16 @@ function PagerPage({
   position: MotionValue<number>;
   viewport: MotionValue<number>;
   liveScroll: MotionValue<number>;
+  scrolled: MotionValue<TabPath | null>;
   savedScroll: number;
 }) {
   const [headerHost, setHeaderHost] = useState<HTMLDivElement | null>(null);
   const index = TAB_PATHS.indexOf(page);
   const x = useTransform(() => (index - position.get()) * viewport.get());
   const y = useTransform(() => (active ? 0 : liveScroll.get() - savedScroll));
-  const scrollY = useTransform(() => (active ? liveScroll.get() : savedScroll));
+  const scrollY = useTransform(() =>
+    active && scrolled.get() === page ? liveScroll.get() : savedScroll,
+  );
   // A prefetched module renders synchronously on the first drag. Keep the chosen
   // component identity when a preview becomes active, preserving its DOM and state.
   const Page = useRef(loaded[page] ?? pages[page]).current;

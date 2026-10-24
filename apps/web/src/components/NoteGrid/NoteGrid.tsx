@@ -249,9 +249,11 @@ export function NoteGrid({
         : [...others.slice(0, drag.index), dragged, ...others.slice(drag.index)]
       : grouped;
   const heights = shown.map((note) => heightOf(note, columnWidth));
-  const sections = groupPinned
-    ? galleryMasonry(heights, grid, shown.filter(isPinned).length, Boolean(drag))
-    : null;
+  // Unmeasured, the grid has no width to lay out: headings placed then would spring from there.
+  const sections =
+    groupPinned && width > 0
+      ? galleryMasonry(heights, grid, shown.filter(isPinned).length, Boolean(drag))
+      : null;
   const layout = width > 0 ? (sections ?? masonry(heights, grid)) : null;
 
   const rendered = new Set<string>();
