@@ -37,7 +37,8 @@ export async function stopNativeRecording(cancel = false) {
 export async function saveNativeFile(blob: Blob, name: string, mimeType: string) {
   await NativeAttachments.beginExport();
   try {
-    for (let offset = 0; offset < blob.size; offset += 256 * 1024) {
+    // An empty snippet still needs one append to create the native temporary file.
+    for (let offset = 0; offset < blob.size || offset === 0; offset += 256 * 1024) {
       const bytes = new Uint8Array(await blob.slice(offset, offset + 256 * 1024).arrayBuffer());
       const parts: string[] = [];
       for (let start = 0; start < bytes.length; start += 8192)

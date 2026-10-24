@@ -1,8 +1,10 @@
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { type ReactNode, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { useBackHandler } from '@/lib/backButton';
 import { haptics } from '@/lib/haptics';
+import { useKeyboardHeight } from '@/lib/keyboard';
 import { cn } from '@/lib/utils';
 
 export type SelectOption = {
@@ -105,6 +107,59 @@ export function SearchSelectDialog({
         />
       </DialogContent>
     </Dialog>
+  );
+}
+
+type PopoverProps = Omit<DialogProps, 'open'> & {
+  /** What the list hangs from. It may be drawn outside React, such as by the editor. */
+  anchor: Element;
+};
+
+/** The searchable list beside what opened it, for a choice made in place. */
+export function SearchSelectPopover({
+  anchor,
+  onOpenChange,
+  title,
+  onCloseAutoFocus,
+  ...list
+}: PopoverProps) {
+  useBackHandler(true, () => onOpenChange(false));
+  const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
+  const keyboard = useKeyboardHeight();
+  return (
+    <Popover open onOpenChange={onOpenChange}>
+      <PopoverAnchor virtualRef={anchorRef} />
+      <PopoverContent
+        data-search-select
+        aria-label={title}
+        align="end"
+        sideOffset={6}
+        // The keyboard covers the page instead of resizing it, so the list keeps above it.
+        collisionPadding={{ top: 12, right: 12, left: 12, bottom: keyboard + 12 }}
+        className="z-[90] flex max-h-[min(26rem,var(--radix-popover-content-available-height))] w-72 max-w-[calc(100vw-1.5rem)] flex-col gap-2 rounded-3xl p-2"
+        onOpenAutoFocus={(event) => {
+          // As in the dialog: touch keeps the keyboard down until the search is tapped.
+          if (!coarsePointer()) return;
+          event.preventDefault();
+          if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+        }}
+        onCloseAutoFocus={onCloseAutoFocus}
+        // The anchor toggles the list itself; dismissing on its press would reopen it.
+        onPointerDownOutside={(event) => {
+          if (event.target instanceof Node && anchor.contains(event.target)) event.preventDefault();
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <Options
+          title={title}
+          {...list}
+          onChange={(value) => {
+            list.onChange(value);
+            onOpenChange(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

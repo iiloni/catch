@@ -455,6 +455,7 @@
 .note-code-block,
 .bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] {
   position: relative;
+  container-type: inline-size;
   /* Keeps blocks that follow each other apart. */
   margin-block: 3px;
   border-radius: var(--radius-md);
@@ -465,8 +466,7 @@
 .bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre {
   width: 100%;
   margin: 0;
-  /* Room for the language above the first line. */
-  padding: 2.25rem 1rem 0.875rem;
+  padding: 0.875rem 3rem 0.875rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.55;
@@ -474,70 +474,122 @@
 }
 .note-code-block > pre > code,
 .bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre > code {
+  display: block;
+  min-height: 1.55em;
   font-family: inherit;
   /* Long lines wrap: a sideways scroll would fight the page's swipes on a phone. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.note-code-block > .note-code-language,
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language {
+.note-code-toolbar {
   position: absolute;
-  top: 0.25rem;
+  top: 0.375rem;
   right: 0.375rem;
+  z-index: 1;
   display: flex;
+  width: max-content;
+  /* One inset button plus the rim and the glass border. */
+  max-width: calc(var(--code-pill-button) + 2 * var(--code-pill-inset) + 2px);
+  flex-direction: row-reverse;
   align-items: center;
-}
-.note-code-block > .note-code-language > span,
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > button {
-  position: static;
-  height: 1.75rem;
-  padding-inline: 0.5rem 1.375rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  padding: var(--code-pill-inset);
+  overflow: clip;
+  /* A rounded rectangle like the dock, its radius scaled down with the height, and the
+     buttons inset to stay concentric. */
+  border-radius: var(--code-pill-radius);
+  --code-pill-button: 1.75rem;
+  --code-pill-inset: 2px;
+  --code-pill-radius: 0.75rem;
   color: var(--muted-foreground);
   font-family: var(--font-sans);
   font-size: 0.75rem;
   font-weight: 500;
-  line-height: 1.75rem;
-  opacity: 1;
-  transition: none;
 }
-.bn-container.note-editor [data-content-type="codeBlock"] > .note-code-language > button:enabled {
+.note-code-language {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.note-code-label {
+  max-width: min(8rem, calc(100cqw - 11rem));
+}
+.note-code-language > button,
+.note-code-language > span,
+.note-code-action {
+  position: static;
+  display: flex;
+  min-width: var(--code-pill-button);
+  height: var(--code-pill-button);
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding-inline: 0.375rem;
+  border: 0;
+  border-radius: calc(var(--code-pill-radius) - var(--code-pill-inset) - 1px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.note-code-action {
+  width: var(--code-pill-button);
+  flex-shrink: 0;
+}
+/* Revealed and hidden by codeBlock.ts, which animates them in and out. */
+.note-code-label,
+.note-code-chevron,
+.note-code-action {
+  visibility: hidden;
+  opacity: 0;
+}
+.note-code-chevron {
+  display: flex;
+  width: 0.875rem;
+  flex-shrink: 0;
+  justify-content: center;
+}
+.note-code-chevron::before {
+  width: 0.375rem;
+  height: 0.375rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  content: "";
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.note-code-action > svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.code-language-icon {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  background: var(--code-language-icon) center / contain no-repeat;
+}
+.code-language-icon[data-tinted] {
+  background: currentColor;
+  mask: var(--code-language-icon) center / contain no-repeat;
+}
+.note-code-toolbar button:enabled {
   cursor: pointer;
 }
 @media (hover: hover) {
-  .bn-container.note-editor
-    [data-content-type="codeBlock"]
-    > .note-code-language
-    > button:enabled:hover {
+  .note-code-toolbar button:enabled:hover {
     background: var(--code-background);
     color: var(--foreground);
   }
 }
-.bn-container.note-editor
-  [data-content-type="codeBlock"]
-  > .note-code-language
-  > button:focus-visible {
-  box-shadow: 0 0 0 2px var(--ring);
+.note-code-toolbar button:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
   color: var(--foreground);
   outline: none;
-}
-/* The arrow that marks the language as a choice. A read-only note shows the name alone. */
-.note-code-language::after {
-  position: absolute;
-  top: 50%;
-  right: 0.5rem;
-  width: 0.375rem;
-  height: 0.375rem;
-  border: solid var(--muted-foreground);
-  border-width: 0 1.5px 1.5px 0;
-  content: "";
-  pointer-events: none;
-  transform: translateY(-70%) rotate(45deg);
-}
-.note-code-language:has(> button:disabled)::after {
-  display: none;
 }
 
 /* Cards keep a compact scale; the transition preview uses the editor's full geometry. */

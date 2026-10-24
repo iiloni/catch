@@ -142,3 +142,8 @@ function subscribe(listener: () => void) {
 export function useKeyboardOpen() {
   return useSyncExternalStore(subscribe, () => keyboardHeight.get() > 40);
 }
+
+/** The keyboard's height, for layout that cannot read `--keyboard`, such as a popover's bounds. */
+export function useKeyboardHeight() {
+  return useSyncExternalStore(subscribe, () => keyboardHeight.get());
+}
