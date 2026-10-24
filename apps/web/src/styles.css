@@ -466,7 +466,7 @@
 .bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] > pre {
   width: 100%;
   margin: 0;
-  padding: 0.875rem 3.25rem 0.875rem 1rem;
+  padding: 0.875rem 3rem 0.875rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.55;
@@ -498,10 +498,6 @@
   border-radius: var(--dock-radius);
   --code-pill-button: 1.75rem;
   --code-pill-inset: 2px;
-  @media (pointer: coarse) {
-    /* Larger for a finger, still well short of a header button. */
-    --code-pill-button: 2.25rem;
-  }
   color: var(--muted-foreground);
   font-family: var(--font-sans);
   font-size: 0.75rem;
