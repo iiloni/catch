@@ -167,6 +167,7 @@ export function NoteCard({
     <motion.article
       data-note-card={note.id}
       data-note-color={color}
+      tabIndex={0}
       onClick={(event) => {
         const control = (event.target as Element).closest('button, input, a, [role="button"]');
         // The draggable wrapper also has a button role; only card controls consume clicks.
@@ -287,6 +288,8 @@ export function NoteCard({
     // Press the whole silhouette so even a tall card stays tucked over its underlay.
     <motion.div
       className="isolate flex flex-col"
+      // Keep focus on the face or its buttons, including while the face is hidden.
+      tabIndex={-1}
       // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
       whileTap={{ scale: pressable ? 0.97 : 1 }}
       transition={springs.snappy}
