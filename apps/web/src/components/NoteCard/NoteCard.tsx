@@ -167,6 +167,7 @@ export function NoteCard({
     <motion.article
       data-note-card={note.id}
       data-note-color={color}
+      tabIndex={0}
       onClick={(event) => {
         const control = (event.target as Element).closest('button, input, a, [role="button"]');
         // The draggable wrapper also has a button role; only card controls consume clicks.
@@ -175,15 +176,8 @@ export function NoteCard({
         else onOpen?.(note, event.currentTarget);
       }}
       aria-label={note.deletedAt ? 'Trashed note' : 'Note'}
-      // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
-      whileTap={{ scale: pressable ? 0.97 : 1 }}
-      transition={springs.snappy}
       onPointerEnter={(event) => {
         if (event.pointerType !== 'touch') arm();
-      }}
-      // A tap focuses the card as it opens the note, which is no time to build hidden actions.
-      onFocus={() => {
-        if (!hidesActions()) arm();
       }}
       className={cn(
         'group relative flex cursor-pointer flex-col rounded-2xl border border-transparent bg-note text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06)] transition-shadow hover:shadow-md data-[note-color=default]:border-border',
@@ -290,26 +284,38 @@ export function NoteCard({
     </motion.article>
   );
 
-  if (!underlay) return card;
   return (
-    // Isolated so the underlay can sit behind the card without going behind the page.
-    <div className="isolate flex flex-col">
+    // Press the whole silhouette so even a tall card stays tucked over its underlay.
+    <motion.div
+      className="isolate flex flex-col"
+      // Keep focus on the face or its buttons, including while the face is hidden.
+      tabIndex={-1}
+      // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
+      whileTap={{ scale: pressable ? 0.97 : 1 }}
+      transition={springs.snappy}
+      // A tap focuses the card as it opens the note, which is no time to build hidden actions.
+      onFocus={() => {
+        if (!hidesActions()) arm();
+      }}
+    >
       {card}
-      <motion.div
-        ref={underlayRef}
-        className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
-        style={{ y: underlayY }}
-      >
-        <LinkUnderlay
-          variant="card"
-          links={links}
-          color={color}
-          onOpen={() => {
-            if (selecting) onSelect?.(note);
-            else openLinkOverlay(note.id);
-          }}
-        />
-      </motion.div>
-    </div>
+      {underlay && (
+        <motion.div
+          ref={underlayRef}
+          className={cn('-z-10 relative flex flex-col', underlayHidden && 'invisible')}
+          style={{ y: underlayY }}
+        >
+          <LinkUnderlay
+            variant="card"
+            links={links}
+            color={color}
+            onOpen={() => {
+              if (selecting) onSelect?.(note);
+              else openLinkOverlay(note.id);
+            }}
+          />
+        </motion.div>
+      )}
+    </motion.div>
   );
 }

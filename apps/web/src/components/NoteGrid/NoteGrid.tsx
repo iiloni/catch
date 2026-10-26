@@ -680,9 +680,10 @@ const GridCard = memo(function GridCard({
       animate={{ scale: lifted ? 1.04 : 1 }}
       transition={springs.snappy}
       className={cn(
-        'group/cell absolute top-0 left-0 rounded-2xl outline-none transition-shadow focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'group/cell absolute top-0 left-0 rounded-2xl outline-none transition-[filter] focus-visible:ring-[3px] focus-visible:ring-ring/50',
         (movable || onSelect) && 'touch-manipulation select-none [-webkit-touch-callout:none]',
-        lifted && 'shadow-xl',
+        // Follow the card and its narrower underlay instead of shadowing their bounding box.
+        lifted && 'drop-shadow-xl',
       )}
     >
       <motion.div style={entry}>{card}</motion.div>
