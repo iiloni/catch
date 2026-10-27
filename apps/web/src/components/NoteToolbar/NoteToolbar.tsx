@@ -44,15 +44,18 @@ type Props = {
   className?: string;
 };
 
+type Panel = 'color' | 'tags' | 'move' | 'reminder' | 'share';
+
 /**
  * Actions for one note. Trashed notes can only be restored or deleted, and a note someone
  * else shared (ADR 0021) only archived or removed.
  */
 export function NoteToolbar({ note, onDone, className }: Props) {
-  const [moving, setMoving] = useState(false);
-  const [tagging, setTagging] = useState(false);
-  const [reminding, setReminding] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  function setPanelOpen(next: Panel, open: boolean) {
+    // A closing menu must not dismiss the one that just replaced it.
+    setPanel((current) => (open ? next : current === next ? null : current));
+  }
   const isShared = useNoteShares().has(note.id);
   const reminder = useReminders().get(note.id);
   const color = useNoteColor(note);
@@ -96,19 +99,17 @@ export function NoteToolbar({ note, onDone, className }: Props) {
   return (
     <div
       data-card-actions
-      className={cn(
-        'flex flex-col',
-        className,
-        (moving || tagging || reminding || sharing) && 'opacity-100',
-      )}
+      className={cn('flex flex-col', className, panel !== null && 'visible opacity-100')}
     >
       <div className="flex min-w-0 items-center gap-0.5 [&>button]:min-w-0 [&>button]:shrink">
         <NoteColorPicker
           note={note}
           onChange={(color) => setNoteColor(note.id, color)}
           onTagChange={(id) => setPrimaryTag(note.id, id)}
+          open={panel === 'color'}
+          onOpenChange={(open) => setPanelOpen('color', open)}
         />
-        <Popover open={tagging} onOpenChange={setTagging}>
+        <Popover open={panel === 'tags'} onOpenChange={(open) => setPanelOpen('tags', open)}>
           <PopoverTrigger asChild>
             <IconButton label="Tags" onClick={haptics.toggle}>
               <Tags />
@@ -124,7 +125,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             <TagPicker noteId={note.id} />
           </PopoverContent>
         </Popover>
-        <Popover open={moving} onOpenChange={setMoving}>
+        <Popover open={panel === 'move'} onOpenChange={(open) => setPanelOpen('move', open)}>
           <PopoverTrigger asChild>
             <IconButton label="Move note" onClick={() => haptics.toggle()}>
               {note.status === null ? <LayoutDashboard /> : <CardMoveIcon status={note.status} />}
@@ -138,7 +139,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             <CardMovePicker
               current={note.status}
               onSelect={(status) => {
-                setMoving(false);
+                setPanelOpen('move', false);
                 if (status === note.status) return;
                 haptics.success();
                 if (status === null) sendNoteToGallery(note.id);
@@ -147,7 +148,10 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             />
           </PopoverContent>
         </Popover>
-        <Popover open={reminding} onOpenChange={setReminding}>
+        <Popover
+          open={panel === 'reminder'}
+          onOpenChange={(open) => setPanelOpen('reminder', open)}
+        >
           <PopoverTrigger asChild>
             <IconButton label="Reminder" onClick={() => haptics.toggle()}>
               <Bell className={cn(reminder && 'fill-current')} />
@@ -163,7 +167,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
               note={note}
               color={color}
               reminder={reminder}
-              onDone={() => setReminding(false)}
+              onDone={() => setPanelOpen('reminder', false)}
               // Less the panel's action row, which sits under this.
               className="max-h-[min(30rem,calc(var(--radix-popover-content-available-height)-5.25rem))]"
             />
@@ -171,7 +175,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
         </Popover>
         {/* A link would hand the server a vault note to read, which it must never have. */}
         {!isVaultNote(note.id) && (
-          <Popover open={sharing} onOpenChange={setSharing}>
+          <Popover open={panel === 'share'} onOpenChange={(open) => setPanelOpen('share', open)}>
             <PopoverTrigger asChild>
               <IconButton label="Share" onClick={() => haptics.toggle()}>
                 <Share2 className={cn(isShared && 'fill-current')} />

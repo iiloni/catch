@@ -83,6 +83,32 @@ for (const preview of [false, true]) {
     expect((await settledBox(card)).width).toBeCloseTo(before.width, 1);
     await expect(page.getByRole('dialog')).toBeHidden();
 
+    // Switch directly between menus, without dismissing the previous one first.
+    const menus = ['Background color', 'Tags', 'Move note', 'Reminder', 'Share'];
+    const openMenus = page.locator('[data-slot="popover-content"][data-state="open"]');
+    await card.hover({ position: { x: 40, y: 6 } });
+    for (const label of [...menus, ...menus.toReversed()]) {
+      const button = card.getByRole('button', { name: label, exact: true });
+      // The repeated Share closes on the second press; every other press switches menus.
+      const wasOpen = (await button.getAttribute('aria-expanded')) === 'true';
+      await button.click();
+      await expect(openMenus).toHaveCount(wasOpen ? 0 : 1);
+      for (const sibling of menus) {
+        await expect(card.getByRole('button', { name: sibling, exact: true })).toHaveAttribute(
+          'aria-expanded',
+          String(!wasOpen && sibling === label),
+        );
+      }
+    }
+    await page.keyboard.press('Escape');
+    await expect(openMenus).toHaveCount(0);
+    const color = card.getByRole('button', { name: 'Background color', exact: true });
+    await expect(color).toBeFocused();
+    await color.press('Enter');
+    await expect(openMenus).toHaveCount(1);
+    await page.mouse.click(before.x + before.width + 40, before.y - 24);
+    await expect(openMenus).toHaveCount(0);
+
     await card.hover({ position: { x: 40, y: 6 } });
     await card.getByRole('button', { name: 'Archive', exact: true }).click();
     await expect(card).toBeHidden();
