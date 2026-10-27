@@ -107,6 +107,9 @@ for (const preview of [false, true]) {
     await expect(color).toBeFocused();
     await color.press('Enter');
     await expect(openMenus).toHaveCount(1);
+    // The picker mounts before its outside-pointer listener is installed. Let it settle
+    // before the raw mouse gesture, which has no actionability checks or retries.
+    await settledBox(openMenus);
     await page.mouse.click(before.x + before.width + 40, before.y - 24);
     await expect(openMenus).toHaveCount(0);
 
