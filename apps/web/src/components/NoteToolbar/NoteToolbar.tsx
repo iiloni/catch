@@ -63,7 +63,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   if (note.deletedAt) {
     return (
-      <div className={cn('flex items-center gap-0.5', className)}>
+      <div data-card-actions className={cn('flex items-center gap-0.5', className)}>
         <IconButton label="Restore" onClick={then(() => restoreNote(note.id))}>
           <RotateCcw />
         </IconButton>
@@ -76,7 +76,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   if (isSharedNote(note)) {
     return (
-      <div className={cn('flex items-center gap-0.5', className)}>
+      <div data-card-actions className={cn('flex items-center gap-0.5', className)}>
         {note.isArchived ? (
           <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
             <ArchiveRestore />
@@ -95,6 +95,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   return (
     <div
+      data-card-actions
       className={cn(
         'flex flex-col',
         className,
