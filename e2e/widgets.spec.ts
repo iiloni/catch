@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { card, seedNotes, signUp } from './helpers';
+import { card, caretToEnd, seedNotes, signUp } from './helpers';
 
 // Exercise the real routing, editor, autosave and outbox with the native bridge boundary mocked.
 async function widgetBridge(page: Page) {
@@ -205,8 +205,7 @@ test('a widget replaces an edited note and retains its last keystrokes', async (
   const editor = page.getByRole('dialog', { name: 'Edit note' });
   const text = editor.getByRole('textbox');
   await expect(text).toBeVisible();
-  await text.click();
-  await page.keyboard.press('ControlOrMeta+End');
+  await caretToEnd(text.locator('h3'));
   await page.keyboard.type(' with unsaved changes');
   await stageTap(page, 'note', second);
   await expect(editor.filter({ hasText: 'Second widget note' })).toBeVisible();
@@ -243,13 +242,13 @@ test('a widget saves the composer and capture can replace an open note', async (
   await expect(card(page, 'Draft saved by widget')).toBeVisible();
 });
 
-for (const source of ['card', 'widget'] as const) {
+for (const source of ['card', 'widget', 'card with a restored caret'] as const) {
   test(`widget search saves and leaves a note opened from a ${source}`, async ({ page }, info) => {
     await widgetBridge(page);
     await signUp(page);
     await seedNotes(page, ['Search handoff note']);
     const id = await noteId(page, 'Search handoff note');
-    if (source === 'card') {
+    if (source !== 'widget') {
       await card(page, 'Search handoff note').click();
     } else {
       await stageTap(page, 'note', id, false);
@@ -257,10 +256,23 @@ for (const source of ['card', 'widget'] as const) {
     }
     const editor = page.getByRole('dialog', { name: 'Edit note' });
     await expect(editor.getByRole('textbox')).toBeVisible();
-    await editor.getByRole('textbox').click();
-    await page.keyboard.press('ControlOrMeta+End');
+    if (source === 'card with a restored caret') {
+      await editor.getByRole('textbox').evaluate((element) => {
+        // Reproduce the focus selection restore undoing the first End, without a timer race.
+        const restore = (event: Event) => {
+          if (!(event instanceof KeyboardEvent) || event.key !== 'End') return;
+          element.removeEventListener('keyup', restore);
+          const text = element.querySelector('.bn-inline-content')?.firstChild;
+          if (!text) throw new Error('Missing note text');
+          window.getSelection()?.collapse(text, 'Search handoff n'.length);
+          document.dispatchEvent(new Event('selectionchange'));
+        };
+        element.addEventListener('keyup', restore);
+      });
+    }
+    await caretToEnd(editor.getByRole('textbox').locator('h3'));
     await page.keyboard.type(' saved before search');
-    if (source === 'card') {
+    if (source !== 'widget') {
       await page.evaluate(() => {
         // Native WebViews can deliver the Back traversal after another bridge reply.
         const back = history.back.bind(history);
