@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { card, openNote, seedNotes, signUp, waitForPageTransition } from './helpers';
+import { card, openNote, seedNotes, settledBox, signUp, waitForPageTransition } from './helpers';
 
 async function scrollTo(page: Page, y: number) {
   await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), y);
@@ -111,6 +111,42 @@ test('keyboard focus, navigation and an open note keep dock actions available', 
   await noteScroll.evaluate((scroller) => scroller.scrollTo(0, 200));
   await expect.poll(() => noteScroll.evaluate((scroller) => scroller.scrollTop)).toBeGreaterThan(0);
   await expectDock(page, false);
+});
+
+test('opening previews reveals the dock and closing them allows it to hide again', async ({
+  page,
+}, testInfo) => {
+  await testInfo.attach('browser-version', {
+    body: page.context().browser()?.version() ?? 'unknown',
+    contentType: 'text/plain',
+  });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await seedNotes(page, [{ title: 'Scroll previews', body: 'https://example.com' }]);
+  const underlay = page.getByRole('button', { name: /^Link: / });
+  await expect(underlay).toBeVisible();
+  await scrollTo(page, 72);
+  await expectDock(page, true);
+  await underlay.click();
+  const overlay = page.locator('[data-link-overlay]');
+  await expect(overlay).toBeVisible();
+  await expectDock(page, false);
+  await expect(page.locator('[data-dock]')).toBeInViewport({ ratio: 1 });
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-page-bottom-blur]')
+        .evaluate((element) => element.getBoundingClientRect().bottom),
+    )
+    .toBeCloseTo(await page.evaluate(() => innerHeight), 0);
+  await settledBox(overlay);
+  await page.screenshot({ path: testInfo.outputPath('previews-with-dock.png') });
+
+  await overlay.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(overlay).toBeHidden();
+  await expectDock(page, false);
+  const y = await page.evaluate(() => window.scrollY);
+  await scrollTo(page, y + 72);
+  await expectDock(page, true);
 });
 
 test('reduced motion switches the dock and blur without sliding', async ({ page }) => {
