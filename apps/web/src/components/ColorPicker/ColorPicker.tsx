@@ -43,6 +43,9 @@ type Props = {
   onTagChange?: (id: string) => void;
 };
 
+type PopoverControls = Pick<ComponentProps<typeof Popover>, 'open' | 'onOpenChange'> &
+  Pick<ComponentProps<typeof PopoverContent>, 'onCloseAutoFocus'>;
+
 /**
  * Every note color as a swatch, in a wrapping grid or one scrolling row. A null value
  * (notes of different colors) checks no swatch.
@@ -115,9 +118,17 @@ export function ColorSwatches({
 }
 
 /** A palette button that opens the swatches in a popover. */
-export function ColorPicker({ value, onChange, primaryTagId, onTagChange }: Props) {
+export function ColorPicker({
+  value,
+  onChange,
+  primaryTagId,
+  onTagChange,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: Props & PopoverControls) {
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <IconButton label="Background color">
           <Palette />
@@ -126,6 +137,7 @@ export function ColorPicker({ value, onChange, primaryTagId, onTagChange }: Prop
       <PopoverContent
         className="w-auto rounded-3xl p-3"
         onClick={(event) => event.stopPropagation()}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <ColorTagSelector
           value={value}
@@ -305,11 +317,14 @@ export function NoteColorPicker({
   note,
   onChange,
   onTagChange,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
 }: {
   note: Note;
   onChange: (color: NoteColor) => void;
   onTagChange: (id: string) => void;
-}) {
+} & PopoverControls) {
   const value = useNoteColor(note);
   const primaryTagId = useNoteTagAssignments().get(note.id)?.primaryTagId;
   return (
@@ -318,6 +333,9 @@ export function NoteColorPicker({
       primaryTagId={primaryTagId}
       onChange={onChange}
       onTagChange={onTagChange}
+      open={open}
+      onOpenChange={onOpenChange}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

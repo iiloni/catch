@@ -171,6 +171,40 @@ describe('NoteCard', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it('replaces the open toolbar menu, including the color picker', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const onOpen = vi.fn();
+    renderCard({ onOpen });
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    const labels = ['Background color', 'Tags', 'Move note'];
+    // Click without an outside pointer event: exclusivity belongs to the toolbar itself.
+    for (const label of [...labels, 'Background color']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      for (const sibling of labels) {
+        expect(screen.getByRole('button', { name: sibling })).toHaveAttribute(
+          'aria-expanded',
+          String(sibling === label),
+        );
+      }
+      expect(
+        document.querySelectorAll('[data-slot="popover-content"][data-state="open"]'),
+      ).toHaveLength(1);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
+    expect(
+      document.querySelectorAll('[data-slot="popover-content"][data-state="open"]'),
+    ).toHaveLength(0);
+    expect(onOpen).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it('assigns tags from the card toolbar without opening the note', () => {
     vi.stubGlobal(
       'ResizeObserver',
