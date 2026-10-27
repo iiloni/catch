@@ -12,7 +12,7 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
@@ -44,15 +44,24 @@ type Props = {
   className?: string;
 };
 
+type Panel = 'color' | 'tags' | 'move' | 'reminder' | 'share';
+
 /**
  * Actions for one note. Trashed notes can only be restored or deleted, and a note someone
  * else shared (ADR 0021) only archived or removed.
  */
 export function NoteToolbar({ note, onDone, className }: Props) {
-  const [moving, setMoving] = useState(false);
-  const [tagging, setTagging] = useState(false);
-  const [reminding, setReminding] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const lastPanel = useRef<Panel | null>(null);
+  function setPanelOpen(next: Panel, open: boolean) {
+    if (open) lastPanel.current = next;
+    // A closing menu must not dismiss the one that just replaced it.
+    setPanel((current) => (open ? next : current === next ? null : current));
+  }
+  function onCloseAutoFocus(closing: Panel, event: Event) {
+    // A departing menu leaves focus with its replacement instead of stealing it back.
+    if (panel !== null || lastPanel.current !== closing) event.preventDefault();
+  }
   const isShared = useNoteShares().has(note.id);
   const reminder = useReminders().get(note.id);
   const color = useNoteColor(note);
@@ -63,7 +72,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   if (note.deletedAt) {
     return (
-      <div className={cn('flex items-center gap-0.5', className)}>
+      <div data-card-actions className={cn('flex items-center gap-0.5', className)}>
         <IconButton label="Restore" onClick={then(() => restoreNote(note.id))}>
           <RotateCcw />
         </IconButton>
@@ -76,7 +85,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   if (isSharedNote(note)) {
     return (
-      <div className={cn('flex items-center gap-0.5', className)}>
+      <div data-card-actions className={cn('flex items-center gap-0.5', className)}>
         {note.isArchived ? (
           <IconButton label="Unarchive" onClick={() => setNoteArchived(note.id, false)}>
             <ArchiveRestore />
@@ -95,19 +104,19 @@ export function NoteToolbar({ note, onDone, className }: Props) {
 
   return (
     <div
-      className={cn(
-        'flex flex-col',
-        className,
-        (moving || tagging || reminding || sharing) && 'opacity-100',
-      )}
+      data-card-actions
+      className={cn('flex flex-col', className, panel !== null && 'visible opacity-100')}
     >
       <div className="flex min-w-0 items-center gap-0.5 [&>button]:min-w-0 [&>button]:shrink">
         <NoteColorPicker
           note={note}
           onChange={(color) => setNoteColor(note.id, color)}
           onTagChange={(id) => setPrimaryTag(note.id, id)}
+          open={panel === 'color'}
+          onOpenChange={(open) => setPanelOpen('color', open)}
+          onCloseAutoFocus={(event) => onCloseAutoFocus('color', event)}
         />
-        <Popover open={tagging} onOpenChange={setTagging}>
+        <Popover open={panel === 'tags'} onOpenChange={(open) => setPanelOpen('tags', open)}>
           <PopoverTrigger asChild>
             <IconButton label="Tags" onClick={haptics.toggle}>
               <Tags />
@@ -115,6 +124,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             align="start"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('tags', event)}
             collisionPadding={16}
             sticky="always"
             className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
@@ -123,7 +133,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             <TagPicker noteId={note.id} />
           </PopoverContent>
         </Popover>
-        <Popover open={moving} onOpenChange={setMoving}>
+        <Popover open={panel === 'move'} onOpenChange={(open) => setPanelOpen('move', open)}>
           <PopoverTrigger asChild>
             <IconButton label="Move note" onClick={() => haptics.toggle()}>
               {note.status === null ? <LayoutDashboard /> : <CardMoveIcon status={note.status} />}
@@ -131,13 +141,14 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             aria-label="Move note"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('move', event)}
             className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
           >
             <CardMovePicker
               current={note.status}
               onSelect={(status) => {
-                setMoving(false);
+                setPanelOpen('move', false);
                 if (status === note.status) return;
                 haptics.success();
                 if (status === null) sendNoteToGallery(note.id);
@@ -146,7 +157,10 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             />
           </PopoverContent>
         </Popover>
-        <Popover open={reminding} onOpenChange={setReminding}>
+        <Popover
+          open={panel === 'reminder'}
+          onOpenChange={(open) => setPanelOpen('reminder', open)}
+        >
           <PopoverTrigger asChild>
             <IconButton label="Reminder" onClick={() => haptics.toggle()}>
               <Bell className={cn(reminder && 'fill-current')} />
@@ -154,6 +168,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             aria-label="Reminder"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('reminder', event)}
             // Beside an open note the page is only as wide as the pane leaves it.
             className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
@@ -162,7 +177,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
               note={note}
               color={color}
               reminder={reminder}
-              onDone={() => setReminding(false)}
+              onDone={() => setPanelOpen('reminder', false)}
               // Less the panel's action row, which sits under this.
               className="max-h-[min(30rem,calc(var(--radix-popover-content-available-height)-5.25rem))]"
             />
@@ -170,7 +185,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
         </Popover>
         {/* A link would hand the server a vault note to read, which it must never have. */}
         {!isVaultNote(note.id) && (
-          <Popover open={sharing} onOpenChange={setSharing}>
+          <Popover open={panel === 'share'} onOpenChange={(open) => setPanelOpen('share', open)}>
             <PopoverTrigger asChild>
               <IconButton label="Share" onClick={() => haptics.toggle()}>
                 <Share2 className={cn(isShared && 'fill-current')} />
@@ -178,6 +193,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             </PopoverTrigger>
             <PopoverContent
               aria-label="Share"
+              onCloseAutoFocus={(event) => onCloseAutoFocus('share', event)}
               className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
               onClick={(event) => event.stopPropagation()}
             >

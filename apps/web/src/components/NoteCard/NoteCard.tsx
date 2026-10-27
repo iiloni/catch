@@ -1,7 +1,7 @@
 import { attachmentUrl, type Note } from '@catch/shared';
 import { Pin } from 'lucide-react';
 import { animate, motion, useMotionValue } from 'motion/react';
-import { type MouseEvent, useLayoutEffect, useReducer, useRef } from 'react';
+import { type MouseEvent, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { LinkNoteFace } from '@/components/LinkPreviewCard/LinkPreviewCard';
 import { LinkUnderlay } from '@/components/LinkUnderlay/LinkUnderlay';
@@ -124,6 +124,7 @@ export function NoteCard({
   // The actions stay hidden until a pointer hovers the card or focus enters it, so they
   // (and their tooltips) are only built then; a grid of thousands of cards need not.
   const [armed, arm] = useReducer(() => true, false);
+  const [pressed, setPressed] = useState(false);
   // A card dropped from a drag is still under the pointer once it stops forcing hover.
   if (forceHover && !armed) arm();
   const revealed = armed || forceHover;
@@ -213,7 +214,7 @@ export function NoteCard({
         transition={{ duration: 0.15 }}
       />
       {canPin && (note.isPinned || revealed) && (
-        <span className="absolute top-1.5 right-1.5 size-7">
+        <span data-card-actions className="absolute top-1.5 right-1.5 size-7">
           {linkFace && (
             // The pin's own glass backing. It holds constant glass and fades as a
             // unit with opacity, like the dock below it: toggling the glass itself
@@ -290,8 +291,16 @@ export function NoteCard({
       className="isolate flex flex-col"
       // Keep focus on the face or its buttons, including while the face is hidden.
       tabIndex={-1}
-      // Keep the gesture mounted: removing it mid-press would leave the card shrunk.
-      whileTap={{ scale: pressable ? 0.97 : 1 }}
+      initial={false}
+      animate={{ scale: pressable && pressed ? 0.97 : 1 }}
+      onTapStart={(event) => {
+        // Toolbar controls keep their hit targets still and handle their own pointer events.
+        const action =
+          event.target instanceof Element && event.target.closest('[data-card-actions]');
+        setPressed(!action);
+      }}
+      onTap={() => setPressed(false)}
+      onTapCancel={() => setPressed(false)}
       transition={springs.snappy}
       // A tap focuses the card as it opens the note, which is no time to build hidden actions.
       onFocus={() => {

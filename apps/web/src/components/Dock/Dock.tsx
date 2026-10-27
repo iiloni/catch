@@ -229,9 +229,16 @@ export function Dock() {
   const [settingsHover, setSettingsHover] = useState<SettingsPath | null>(null);
   const switcherOpen = switcherOn === pathname && (mode === 'tabs' || mode === 'settings');
   const filtersOpen = searchFiltersOpen.use();
+  const previewsOpen = linkOverlay.use() !== null;
   const scrollHidden = useDockScroll(
     pathname,
-    !noteOpen && !quickNoteOpen && !keyboardOpen && !switcherOpen && !filtersOpen && !swipePosition,
+    !noteOpen &&
+      !quickNoteOpen &&
+      !keyboardOpen &&
+      !switcherOpen &&
+      !filtersOpen &&
+      !previewsOpen &&
+      !swipePosition,
     dockRef,
   );
   const goToGalleryPage = useGalleryPages();
