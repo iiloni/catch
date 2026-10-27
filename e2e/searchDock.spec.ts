@@ -122,24 +122,40 @@ test('search reverses unfinished dock morphs without replacing the side button',
       };
       return { link: link as HTMLElement, field, input, side, left, closed: left() };
     });
+  const samples: { inset: number; hidden: boolean }[] = [];
   let interruptedAt: number | null = null;
   let reopenedAt: number | null = null;
   let finished = false;
   let sameSide = true;
   await controls.evaluate(({ link }) => link.click());
-  // Advance each painted frame so a busy runner cannot skip the interruption window.
+  // Advance Motion's frame clock; these are style samples, not a guarantee of a paint.
   for (let frame = 0; frame < 120; frame++) {
     await page.clock.runFor(16);
     const state = await controls.evaluate(({ field, input, side, left, closed }) => ({
       inset: left(),
       closed,
       hidden: field.getAttribute('aria-hidden') === 'true',
-      sameSide: side.isConnected,
+      sameSide:
+        side.isConnected &&
+        side ===
+          document.querySelector(
+            '[data-dock] button[aria-label="New note"], [data-dock] button[aria-label="Filter notes"]',
+          ),
       focused: document.activeElement === input,
       sideLabel: side.getAttribute('aria-label'),
     }));
+    samples.push({ inset: state.inset, hidden: state.hidden });
     sameSide &&= state.sameSide;
-    if (interruptedAt === null && state.inset > 10 && state.inset < state.closed - 10) {
+    // Interrupt well into opening. At closed - 10px, the old +/-5px closing
+    // conditions could leave a subpixel reopen window that no frame ever samples.
+    if (
+      interruptedAt === null &&
+      state.inset > state.closed * 0.3 &&
+      state.inset < state.closed * 0.6
+    ) {
+      expect(state.hidden).toBe(false);
+      expect(state.focused).toBe(true);
+      expect(state.sideLabel).toBe('Filter notes');
       interruptedAt = state.inset;
       await controls.evaluate(({ input }) =>
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
@@ -148,9 +164,12 @@ test('search reverses unfinished dock morphs without replacing the side button',
       interruptedAt !== null &&
       reopenedAt === null &&
       state.hidden &&
-      state.inset > interruptedAt + 5 &&
-      state.inset < state.closed - 5
+      // Observe real closing travel, with room left to reverse before it finishes.
+      state.inset > interruptedAt + (state.closed - interruptedAt) * 0.25 &&
+      state.inset < state.closed - (state.closed - interruptedAt) * 0.25
     ) {
+      expect(state.focused).toBe(false);
+      expect(state.sideLabel).toBe('New note');
       reopenedAt = state.inset;
       await controls.evaluate(({ link }) => link.click());
     } else if (reopenedAt !== null && state.inset === 0 && !state.hidden) {
@@ -162,7 +181,7 @@ test('search reverses unfinished dock morphs without replacing the side button',
   }
   await page.clock.resume();
   await controls.dispose();
-  expect(finished, JSON.stringify({ interruptedAt, reopenedAt })).toBe(true);
+  expect(finished, JSON.stringify({ interruptedAt, reopenedAt, samples })).toBe(true);
   expect(interruptedAt).toBeGreaterThan(0);
   expect(reopenedAt).toBeGreaterThan(interruptedAt!);
   expect(sameSide).toBe(true);
