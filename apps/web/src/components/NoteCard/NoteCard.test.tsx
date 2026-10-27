@@ -186,9 +186,9 @@ describe('NoteCard', () => {
     const labels = ['Background color', 'Tags', 'Move note'];
     // Click without an outside pointer event: exclusivity belongs to the toolbar itself.
     for (const label of [...labels, 'Background color']) {
-      fireEvent.click(screen.getByRole('button', { name: label, exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: label }));
       for (const sibling of labels) {
-        expect(screen.getByRole('button', { name: sibling, exact: true })).toHaveAttribute(
+        expect(screen.getByRole('button', { name: sibling })).toHaveAttribute(
           'aria-expanded',
           String(sibling === label),
         );

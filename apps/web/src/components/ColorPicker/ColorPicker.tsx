@@ -43,7 +43,8 @@ type Props = {
   onTagChange?: (id: string) => void;
 };
 
-type PopoverControls = Pick<ComponentProps<typeof Popover>, 'open' | 'onOpenChange'>;
+type PopoverControls = Pick<ComponentProps<typeof Popover>, 'open' | 'onOpenChange'> &
+  Pick<ComponentProps<typeof PopoverContent>, 'onCloseAutoFocus'>;
 
 /**
  * Every note color as a swatch, in a wrapping grid or one scrolling row. A null value
@@ -124,6 +125,7 @@ export function ColorPicker({
   onTagChange,
   open,
   onOpenChange,
+  onCloseAutoFocus,
 }: Props & PopoverControls) {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -135,6 +137,7 @@ export function ColorPicker({
       <PopoverContent
         className="w-auto rounded-3xl p-3"
         onClick={(event) => event.stopPropagation()}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <ColorTagSelector
           value={value}
@@ -316,6 +319,7 @@ export function NoteColorPicker({
   onTagChange,
   open,
   onOpenChange,
+  onCloseAutoFocus,
 }: {
   note: Note;
   onChange: (color: NoteColor) => void;
@@ -331,6 +335,7 @@ export function NoteColorPicker({
       onTagChange={onTagChange}
       open={open}
       onOpenChange={onOpenChange}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

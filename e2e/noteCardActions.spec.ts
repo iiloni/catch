@@ -73,12 +73,13 @@ for (const preview of [false, true]) {
 
     // Pressing the face still gives feedback; cancelling restores the whole silhouette.
     const face = await settledBox(card.getByRole('button', { name: 'Open note', exact: true }));
-    await page.mouse.move(face.x + 20, face.y + 8);
+    await page.mouse.move(face.x + 3, face.y + face.height / 2);
     await page.mouse.down();
     await expect
       .poll(async () => (await card.boundingBox())?.width ?? 0)
       .toBeLessThan(before.width * 0.98);
-    await page.mouse.move(before.x + before.width + 30, before.y);
+    // Leave the card without travelling far enough to pick it up for dragging.
+    await page.mouse.move(face.x - 3, face.y + face.height / 2);
     await page.mouse.up();
     expect((await settledBox(card)).width).toBeCloseTo(before.width, 1);
     await expect(page.getByRole('dialog')).toBeHidden();

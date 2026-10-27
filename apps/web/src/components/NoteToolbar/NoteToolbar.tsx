@@ -12,7 +12,7 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { NoteColorPicker } from '@/components/ColorPicker/ColorPicker';
 import { IconButton } from '@/components/IconButton/IconButton';
 import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
@@ -52,9 +52,15 @@ type Panel = 'color' | 'tags' | 'move' | 'reminder' | 'share';
  */
 export function NoteToolbar({ note, onDone, className }: Props) {
   const [panel, setPanel] = useState<Panel | null>(null);
+  const lastPanel = useRef<Panel | null>(null);
   function setPanelOpen(next: Panel, open: boolean) {
+    if (open) lastPanel.current = next;
     // A closing menu must not dismiss the one that just replaced it.
     setPanel((current) => (open ? next : current === next ? null : current));
+  }
+  function onCloseAutoFocus(closing: Panel, event: Event) {
+    // A departing menu leaves focus with its replacement instead of stealing it back.
+    if (panel !== null || lastPanel.current !== closing) event.preventDefault();
   }
   const isShared = useNoteShares().has(note.id);
   const reminder = useReminders().get(note.id);
@@ -108,6 +114,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           onTagChange={(id) => setPrimaryTag(note.id, id)}
           open={panel === 'color'}
           onOpenChange={(open) => setPanelOpen('color', open)}
+          onCloseAutoFocus={(event) => onCloseAutoFocus('color', event)}
         />
         <Popover open={panel === 'tags'} onOpenChange={(open) => setPanelOpen('tags', open)}>
           <PopoverTrigger asChild>
@@ -117,6 +124,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             align="start"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('tags', event)}
             collisionPadding={16}
             sticky="always"
             className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
@@ -133,6 +141,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             aria-label="Move note"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('move', event)}
             className="w-80 max-w-[calc(100vw-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
           >
@@ -159,6 +168,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
           </PopoverTrigger>
           <PopoverContent
             aria-label="Reminder"
+            onCloseAutoFocus={(event) => onCloseAutoFocus('reminder', event)}
             // Beside an open note the page is only as wide as the pane leaves it.
             className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
             onClick={(event) => event.stopPropagation()}
@@ -183,6 +193,7 @@ export function NoteToolbar({ note, onDone, className }: Props) {
             </PopoverTrigger>
             <PopoverContent
               aria-label="Share"
+              onCloseAutoFocus={(event) => onCloseAutoFocus('share', event)}
               className="w-96 max-w-[calc(100vw-var(--note-pane)-2rem)] rounded-3xl p-1 pb-2"
               onClick={(event) => event.stopPropagation()}
             >
