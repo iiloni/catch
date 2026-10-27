@@ -90,7 +90,9 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   alone. Neither choosing a face nor hiding a preview changes the note's Last edited time.
 - *Overlay.* Tapping an underlay opens every link as a list (`LinkPreviewOverlay`) that slides
   up from behind the dock it belongs to (the page's, or the open note's) and rests just above
-  it, in reach of the thumb, on every screen size. Notes with attachments show their Media
+  it, in reach of the thumb, on every screen size. When scrolling has hidden the page's dock,
+  opening previews brings it back; the panel and its clipping edge follow the dock's scroll
+  spring so the cards emerge from its moving position. Notes with attachments show their Media
   card above the Links card in the same scroll area, with thumbnail viewing and attachment
   management (ADR 0010). Closing normally slides it back down;
   swiping the card up or down dismisses it in that direction, once the link list reaches its

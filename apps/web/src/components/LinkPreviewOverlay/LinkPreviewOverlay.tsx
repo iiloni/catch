@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { useNoteAttachments } from '@/lib/attachments';
 import { useBackHandler } from '@/lib/backButton';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
+import { dockScrollProgress } from '@/lib/dockScroll';
 import { haptics } from '@/lib/haptics';
 import { linkOverlay, showLinkInNote, useNoteLinks } from '@/lib/linkPreviews';
 import { springs } from '@/lib/motion';
@@ -83,6 +84,10 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
   const hiddenAbove = useRef(0);
   const exitDirection = useRef(1);
   const y = useMotionValue(0);
+  const dockY = useTransform(() => {
+    const progress = dockScrollProgress.get();
+    return fromEditor ? 0 : `calc(${progress} * var(--dock-space))`;
+  });
   // Reads `y` unconditionally: the transform follows only the values its first run reads.
   const backdropOpacity = useTransform(() => {
     const offset = y.get();
@@ -244,10 +249,11 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
         </DialogPrimitive.Overlay>
         {/*
           Clipped halfway down the dock and stacked under it, so the panel slides out from
-          behind the dock. `overflow: clip` rather than a clip path, which would stop the
-          panel's glass from blurring; it also leaves the shadow its sides.
+          behind the dock. Follow its scroll offset while it returns, including the clip.
+          `overflow: clip` rather than a clip path, which would stop the panel's glass from
+          blurring; it also leaves the shadow its sides.
         */}
-        <div
+        <motion.div
           className={cn(
             'pointer-events-none fixed top-0 bottom-[calc(var(--dock-bottom)+var(--dock-height)/2)] flex items-end justify-center overflow-x-visible overflow-y-clip pt-[calc(var(--safe-top)+0.75rem)]',
             layer(fromEditor),
@@ -255,7 +261,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
               ? 'right-0 left-[calc(100%-var(--expanded-note-pane))] pr-3'
               : 'right-[var(--note-pane)] left-0 px-3',
           )}
-          style={inPane ? { paddingLeft: GUTTER + 12 } : undefined}
+          style={{ y: dockY, paddingLeft: inPane ? GUTTER + 12 : undefined }}
         >
           <DialogPrimitive.Content
             asChild
@@ -339,7 +345,7 @@ function OverlayPanel({ note, fromEditor }: { note: Note; fromEditor: boolean })
               </div>
             </motion.div>
           </DialogPrimitive.Content>
-        </div>
+        </motion.div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
