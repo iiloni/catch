@@ -25,6 +25,134 @@ async function upload(page: Parameters<typeof openNote>[0], file = picture) {
   await chooser.setFiles(file);
 }
 
+test('inline images keep their space when the opening preview becomes the editor', async ({
+  page,
+}, testInfo) => {
+  await signUp(page);
+  await seedNotes(page, ['Stable inline image']);
+  await openNote(page, 'Stable inline image');
+  const buffer = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#ecb630';
+    context.fillRect(0, 0, 800, 600);
+    context.fillStyle = '#17202a';
+    context.fillRect(80, 80, 640, 440);
+    return canvas.toDataURL().split(',')[1];
+  });
+  await upload(page, {
+    name: 'stable.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(buffer, 'base64'),
+  });
+  await expect(page.locator('.note-editor [data-content-type="image"] img')).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Media' }).getByText('Waiting to upload'),
+  ).toBeHidden();
+  const attachmentId = await page
+    .getByRole('region', { name: 'Media' })
+    .locator('[data-attachment]')
+    .getAttribute('data-attachment');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  // Model another device: only its downloaded thumbnail is available at opening time.
+  await page.evaluate(async (id) => {
+    const { forgetAttachmentBlob } = await import('/src/lib/attachmentFiles.ts');
+    await forgetAttachmentBlob(id!);
+  }, attachmentId);
+  await page.reload();
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const { attachmentsCollection } = await import('/src/lib/collections.ts');
+        return [...attachmentsCollection.values()].length;
+      }),
+    )
+    .toBe(1);
+  const thumbnail = card(page, 'Stable inline image').getByRole('img');
+  await expect
+    .poll(() => thumbnail.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBe(720);
+  let releaseOriginal = () => {};
+  const originalReady = new Promise<void>((resolve) => {
+    releaseOriginal = resolve;
+  });
+  page.on('close', releaseOriginal);
+  await page.route('**/api/attachments/*/access', async (route) => {
+    await originalReady;
+    await route.continue();
+  });
+
+  // Exercise the natural size and a user-resized image, including subsequent mounts.
+  for (const width of [undefined, 240]) {
+    if (width) {
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
+      await page.evaluate(async (previewWidth) => {
+        const { notesCollection } = await import('/src/lib/collections.ts');
+        const { updateNote } = await import('/src/lib/notes.ts');
+        const note = [...notesCollection.values()][0]!;
+        const content = structuredClone(note.content);
+        const image = content.find((block) => block.type === 'image')!;
+        image.props = { ...image.props, previewWidth };
+        await updateNote(note.id, { content }).isPersisted.promise;
+      }, width);
+    }
+    await expect(card(page, 'Stable inline image').getByRole('img')).toBeVisible();
+
+    const samples = page.evaluate(async () => {
+      const frames: { height: number; width: number; editor: boolean; loaded: boolean }[] = [];
+      const end = performance.now() + 3000;
+      while (performance.now() < end) {
+        const image = document.querySelector<HTMLImageElement>(
+          '[role="dialog"] .note-preview-editor img, .note-editor [data-content-type="image"] img',
+        );
+        if (image) {
+          const bounds = image.getBoundingClientRect();
+          frames.push({
+            height: bounds.height,
+            width: bounds.width,
+            editor: Boolean(image.closest('.note-editor')),
+            loaded: image.complete && image.naturalWidth > 0,
+          });
+        }
+        await new Promise(requestAnimationFrame);
+      }
+      return frames;
+    });
+    await card(page, 'Stable inline image').getByRole('button', { name: 'Open note' }).click();
+    await expect(page.locator('[role="dialog"] .note-preview-editor img')).toBeVisible();
+    await testInfo.attach(`opening-inline-image-${width ?? 'natural'}`, {
+      body: await page.screenshot({
+        path: testInfo.outputPath(`opening-inline-image-${width ?? 'natural'}.png`),
+      }),
+      contentType: 'image/png',
+    });
+    await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+    const frames = await samples;
+    releaseOriginal();
+    expect(frames.some((frame) => !frame.editor)).toBe(true);
+    expect(frames.some((frame) => frame.editor)).toBe(true);
+    for (const frame of frames) {
+      expect(frame.height).toBeGreaterThan(0);
+      expect(frame.height / frame.width).toBeCloseTo(0.75, 2);
+    }
+    const editorFrames = frames.filter((frame) => frame.editor);
+    const previewFrames = frames.filter((frame) => !frame.editor);
+    expect(Math.abs(previewFrames.at(-1)!.width - editorFrames[0].width)).toBeLessThan(2);
+    expect(editorFrames.every((frame) => frame.loaded)).toBe(true);
+    if (width) expect(editorFrames.at(-1)!.width).toBeCloseTo(width, 0);
+    await testInfo.attach(`inline-image-${width ?? 'natural'}`, {
+      body: await page.screenshot({
+        path: testInfo.outputPath(`inline-image-${width ?? 'natural'}.png`),
+      }),
+      contentType: 'image/png',
+    });
+  }
+});
+
 test('attachments open immediately and insert when a delayed editor loads', async ({ page }) => {
   let releaseEditor = () => {};
   const editorReady = new Promise<void>((resolve) => {

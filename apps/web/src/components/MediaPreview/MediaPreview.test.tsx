@@ -33,3 +33,20 @@ describe('video previews', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 });
+
+it('reserves a previously displayed image while its source resolves on a new mount', () => {
+  render(<MediaPreview url={url} name="photo.png" kind="image" />);
+  const image = screen.getByRole('img');
+  Object.defineProperties(image, {
+    naturalWidth: { value: 800 },
+    naturalHeight: { value: 600 },
+  });
+  fireEvent.load(image);
+  cleanup();
+
+  vi.mocked(useAttachmentUrl).mockReturnValueOnce({ source: null, error: false });
+  const { container } = render(
+    <MediaPreview url={url} name="photo.png" kind="image" editorImage />,
+  );
+  expect(container.firstChild).toHaveStyle({ aspectRatio: '800 / 600' });
+});

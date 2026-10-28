@@ -2,6 +2,7 @@ import { attachmentId } from '@catch/shared';
 import { File, Image, Mic, Video } from 'lucide-react';
 import { useState } from 'react';
 import { useAttachmentUrl } from '@/lib/attachmentFiles';
+import { imageDimensions, rememberImageDimensions } from '@/lib/imageDimensions';
 import { cn } from '@/lib/utils';
 
 export function MediaPreview({
@@ -10,12 +11,14 @@ export function MediaPreview({
   kind,
   compact = false,
   thumbnail = false,
+  editorImage = false,
 }: {
   url: string;
   name: string;
   kind: string;
   compact?: boolean;
   thumbnail?: boolean;
+  editorImage?: boolean;
 }) {
   const poster = kind === 'video' && (thumbnail || compact);
   const { source, error } = useAttachmentUrl(
@@ -23,15 +26,23 @@ export function MediaPreview({
     (kind === 'image' || poster) && Boolean(attachmentId(url)),
   );
   const [failedSource, setFailedSource] = useState<string | null>(null);
+  const dimensions = kind === 'image' ? imageDimensions(url) : undefined;
+  const aspectRatio = dimensions ? `${dimensions.width} / ${dimensions.height}` : undefined;
   const Icon = kind === 'image' ? Image : kind === 'video' ? Video : kind === 'audio' ? Mic : File;
   if (source && failedSource !== source && (kind === 'image' || poster))
     return (
       <img
         src={source}
         alt={name}
-        loading="lazy"
+        loading={editorImage ? 'eager' : 'lazy'}
+        onLoad={(event) => rememberImageDimensions(url, event.currentTarget)}
         onError={() => setFailedSource(source)}
-        className={cn('rounded-xl object-contain', thumbnail ? 'size-full' : 'max-h-80 w-full')}
+        style={{ aspectRatio: aspectRatio ? `auto ${aspectRatio}` : undefined }}
+        className={cn(
+          'object-contain',
+          editorImage ? 'h-auto w-full rounded-[4px]' : 'rounded-xl',
+          thumbnail ? 'size-full' : !editorImage && 'max-h-80 w-full',
+        )}
       />
     );
   if (source && !compact && !thumbnail && kind === 'video')
@@ -59,6 +70,7 @@ export function MediaPreview({
     );
   return (
     <div
+      style={editorImage && dimensions ? { aspectRatio } : undefined}
       className={cn(
         'flex items-center justify-center gap-2 rounded-xl bg-foreground/5 text-sm text-muted-foreground',
         thumbnail ? 'size-full' : 'px-3 py-3',
