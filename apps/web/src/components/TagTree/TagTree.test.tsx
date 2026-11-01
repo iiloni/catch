@@ -1,10 +1,66 @@
 import type { Tag } from '@catch/shared';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createPortal } from 'react-dom';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TagTree } from './TagTree';
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
 afterEach(() => vi.unstubAllGlobals());
+
+const tag = (id: string, name: string): Tag => ({
+  id,
+  userId: 'ada',
+  name,
+  parentId: null,
+  color: null,
+  icon: null,
+});
+
+it('offers to clear the search only while there is one', async () => {
+  render(
+    <TagTree
+      tags={[tag('1', 'Home'), tag('2', 'Work')]}
+      renderTag={(tag) => <span>{tag.name}</span>}
+    />,
+  );
+  const search = screen.getByRole('textbox', { name: 'Find tags' });
+  const clear = () => screen.getByRole('button', { name: 'Clear tag search' });
+  expect(screen.queryByRole('button', { name: 'Clear tag search' })).not.toBeInTheDocument();
+
+  fireEvent.change(search, { target: { value: 'Wor' } });
+  await waitFor(() => expect(screen.queryByText('Home')).not.toBeInTheDocument());
+  fireEvent.click(clear());
+  expect(search).toHaveValue('');
+  expect(screen.getByText('Home')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Clear tag search' })).not.toBeInTheDocument();
+});
+
+it('keeps focus in the search when clearing it by pointer or keyboard', () => {
+  render(<TagTree tags={[tag('1', 'Home')]} renderTag={(tag) => <span>{tag.name}</span>} />);
+  const search = screen.getByRole('textbox', { name: 'Find tags' });
+  const clear = () => screen.getByRole('button', { name: 'Clear tag search' });
+
+  act(() => search.focus());
+  fireEvent.change(search, { target: { value: 'Ho' } });
+  // fireEvent answers false when the press's default, moving focus, was prevented.
+  expect(fireEvent.pointerDown(clear())).toBe(false);
+  fireEvent.click(clear());
+  expect(search).toHaveFocus();
+
+  fireEvent.change(search, { target: { value: 'Ho' } });
+  act(() => clear().focus());
+  fireEvent.click(clear());
+  expect(search).toHaveFocus();
+});
 
 // Allow the 5000-row jsdom stress case to finish on shared worktree hosts.
 it('defers offscreen controls in a 5000-level tree and renders deep matches without a cutoff', async () => {
@@ -19,14 +75,6 @@ it('defers offscreen controls in a 5000-level tree and renders deep matches with
       observe(element: Element) {
         observed.push(element);
       }
-      unobserve() {}
-      disconnect() {}
-    },
-  );
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
       unobserve() {}
       disconnect() {}
     },
