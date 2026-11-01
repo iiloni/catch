@@ -43,7 +43,8 @@ notes are included unless the panel's "Show archived notes" switch is off; the s
 below both tabs, is remembered on the device, and is a view preference rather than a filter:
 it does not count toward the dock's filter badge and Clear filters leaves it alone. Tag
 counts follow it. Trashed notes are excluded, and result badges show the assigned tags.
-Recent text searches remain available. See ADR 0016 for tag semantics.
+The search text survives leaving the tab by swiping, Escape or back; the dock's close button
+clears it. Recent text searches remain available. See ADR 0016 for tag semantics.
 
 ## Why not a separate vector store
 

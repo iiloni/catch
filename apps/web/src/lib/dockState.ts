@@ -18,7 +18,7 @@ export const quickNoteFocusRequest = createStore(0);
 export const quickNoteMounted = createStore(false);
 export const quickNoteCanSave = createStore(false);
 
-/** The search text, kept when leaving the Search tab so returning restores it. */
+/** The search text. Leaving the Search tab keeps it to restore on return; Close clears it. */
 /** Native widget launches ask the mounted dock to focus after navigation. */
 export const searchFocusRequest = createStore(0);
 export const searchQuery = createStore('');
