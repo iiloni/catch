@@ -5,7 +5,7 @@ import {
   EyeOff,
   Globe,
   Image,
-  MoreHorizontal,
+  MoreVertical,
   RefreshCw,
   Share2,
   Text,
@@ -128,7 +128,7 @@ export function LinkPreviewCard({
         target="_blank"
         rel="noopener noreferrer"
         draggable={false}
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 pr-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 pr-11 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <Thumbnail link={link} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -177,11 +177,11 @@ function LinkMenu({
           variant="ghost"
           size="icon"
           aria-label="Link options"
-          className="absolute top-1 right-1 size-8 rounded-full text-muted-foreground"
+          className="absolute top-1/2 right-1 size-9 -translate-y-1/2 rounded-full text-muted-foreground"
           // Keeps focus (and the keyboard) in the editor when the card sits under the note.
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <MoreHorizontal />
+          <MoreVertical className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       {/* Above the link overlay and the open note. */}
