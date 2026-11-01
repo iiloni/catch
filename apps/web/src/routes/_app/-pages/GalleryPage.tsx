@@ -8,7 +8,7 @@ import {
   Rows3,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { z } from 'zod';
 import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
@@ -27,13 +27,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
+import { useGalleryLayout } from '@/lib/galleryLayout';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
-import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
+import { isFolded, PAGE_MAX, useNotePane, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
@@ -44,26 +45,16 @@ const sortSchema = z.object({
 });
 
 type Sort = z.infer<typeof sortSchema>;
-const layoutSchema = z.enum(['masonry', 'single-column']);
-const SINGLE_COLUMN_BREAKPOINT = 640;
 
 /** Every note that is not in the deck, archived or trashed. */
 export default function GalleryPage() {
   const { open } = useOpenNote();
-  const [layout, setLayout] = usePersistentState('catch-gallery-layout', layoutSchema, 'masonry');
-  const [narrow, setNarrow] = useState(false);
+  const pane = useNotePane();
+  const [layout, setLayout] = useGalleryLayout({
+    folded: isFolded(pane.viewport),
+    split: pane.shown,
+  });
   const gutterShift = usePageGutterShift(PAGE_MAX);
-  const measureGallery = useCallback((element: HTMLElement | null) => {
-    if (!element) return;
-    // The page can be phone-sized even on desktop when a note pane is open.
-    const update = () => setNarrow(element.clientWidth < SINGLE_COLUMN_BREAKPOINT);
-    update();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-  const activeLayout = narrow ? layout : 'masonry';
   const layoutAction =
     layout === 'masonry' ? 'Switch to single column view' : 'Switch to masonry view';
   // A new key, so galleries saved with the old "last edited" default start arranged by hand.
@@ -107,26 +98,24 @@ export default function GalleryPage() {
         trailing={
           <>
             <VaultToggle />
-            {narrow && (
-              <motion.button
-                type="button"
-                aria-label={layoutAction}
-                title={layoutAction}
-                onClick={() => {
-                  haptics.toggle();
-                  setLayout(layout === 'masonry' ? 'single-column' : 'masonry');
-                }}
-                whileTap={{ scale: 0.9 }}
-                transition={springs.snappy}
-                className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                {layout === 'masonry' ? (
-                  <Rows3 className="size-5" aria-hidden />
-                ) : (
-                  <LayoutGrid className="size-5" aria-hidden />
-                )}
-              </motion.button>
-            )}
+            <motion.button
+              type="button"
+              aria-label={layoutAction}
+              title={layoutAction}
+              onClick={() => {
+                haptics.toggle();
+                setLayout(layout === 'masonry' ? 'single-column' : 'masonry');
+              }}
+              whileTap={{ scale: 0.9 }}
+              transition={springs.snappy}
+              className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {layout === 'masonry' ? (
+                <Rows3 className="size-5" aria-hidden />
+              ) : (
+                <LayoutGrid className="size-5" aria-hidden />
+              )}
+            </motion.button>
             <ViewOptions sort={sort} onChange={setSort} />
             <SettingsButton />
             <AccountSwitcher />
@@ -134,7 +123,6 @@ export default function GalleryPage() {
         }
       />
       <motion.section
-        ref={measureGallery}
         aria-label="Gallery"
         style={{ x: gutterShift }}
         className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
@@ -144,7 +132,7 @@ export default function GalleryPage() {
             <NoteGrid
               notes={sorted}
               groupPinned
-              layout={activeLayout}
+              layout={layout}
               onOpen={(note, card) => open(note.id, card)}
               onArchive={(note) => setNoteArchived(note.id, true)}
               onMove={onMove}

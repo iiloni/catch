@@ -204,6 +204,12 @@ header's left corner (brand, title pill, back button) is offset to stay over the
 (`useHeaderGutterShift`); its centered title and right toolbar keep following the pane. The page's wrapper spans the screen and clips
 there, so cards still on their way to a narrower page reach under the pane, not past it.
 
+**Gallery layout.** The Gallery's choice of masonry or a single column is kept per screen state
+(`src/lib/galleryLayout.ts`), a matrix of folded by split, because the page is a different size
+in each and a choice made in one says nothing about the others. A page cannot see a hinge, so
+"folded" means the screen is below the split limits (`isFolded`). No such screen can split, so
+the folded-and-split cell stays unused unless those limits diverge.
+
 **Grid resizes.** When a grid's columns change width (switching the Gallery between masonry
 and a single column, or a note pane opening or closing), cards on screen spring to their new
 width along with their new slots; the rest jump. The width itself is animated rather than

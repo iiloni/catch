@@ -54,8 +54,16 @@ export type Viewport = { width: number; height: number };
  */
 const UNSPLIT_PAGES = new Set(['/deck']);
 
-export function canSplit({ width, height }: Viewport, pathname: string) {
-  return width >= MIN_WIDTH && height >= MIN_HEIGHT && !UNSPLIT_PAGES.has(pathname);
+/**
+ * A screen too small for two panes, as a folded foldable's is. The size decides because a
+ * page cannot see a hinge, and a phone on its side or a narrow window suits the same layout.
+ */
+export function isFolded({ width, height }: Viewport) {
+  return width < MIN_WIDTH || height < MIN_HEIGHT;
+}
+
+export function canSplit(viewport: Viewport, pathname: string) {
+  return !isFolded(viewport) && !UNSPLIT_PAGES.has(pathname);
 }
 
 /** How wide the page may be beside a note, in CSS pixels. */

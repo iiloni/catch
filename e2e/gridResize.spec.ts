@@ -82,6 +82,41 @@ test.describe('on a phone', () => {
   });
 });
 
+test.describe('across screen states', () => {
+  test.use({ viewport: { width: 390, height: 800 } });
+
+  test('the Gallery keeps a layout for each', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'The choice is kept the same way on both layouts.');
+    await signUp(page);
+    await seedNotes(page, [
+      { title: 'Alpha', body: 'First' },
+      { title: 'Beta', body: 'Second' },
+    ]);
+    const toSingle = page.getByRole('button', { name: 'Switch to single column view' });
+    const toMasonry = page.getByRole('button', { name: 'Switch to masonry view' });
+    await expect(toSingle).toBeVisible();
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await openNote(page, 'Alpha');
+    await toSingle.click();
+    await expect(toMasonry).toBeVisible();
+
+    // Closing the note returns to the whole screen, which has its own choice.
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(toSingle).toBeVisible();
+    await toSingle.click();
+    await expect(toMasonry).toBeVisible();
+    await expect
+      .poll(async () => (await card(page, 'Alpha').boundingBox())?.width)
+      .toBeGreaterThan(900);
+
+    // Neither of those reached the folded screen.
+    await page.setViewportSize({ width: 390, height: 800 });
+    await expect(toSingle).toBeVisible();
+  });
+});
+
 test.describe('on a wide screen', () => {
   // Wider than the page gets, so it sits between gutters until a note takes part of the screen.
   const SCREEN = 1800;
