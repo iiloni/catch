@@ -1,6 +1,8 @@
 import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
-import { closeHistory } from '@tiptap/pm/history';
+import { blockDeleteButton } from './blockDeleteButton';
 import { codeBlock } from './codeBlock';
+import { imageBlock } from './imageBlock';
+import { divider } from './previewCutoff';
 
 const checklist = defaultBlockSpecs.checkListItem;
 
@@ -12,30 +14,7 @@ const checkListItem: typeof checklist = {
     render(block, editor) {
       const rendered = checklist.implementation.render.call(this, block, editor);
       if (this.renderType !== 'nodeView' || !editor.isEditable) return rendered;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'note-checklist-delete';
-      button.contentEditable = 'false';
-      button.setAttribute('aria-label', 'Delete checklist item');
-      button.title = 'Delete checklist item';
-      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      icon.setAttribute('viewBox', '0 0 24 24');
-      icon.setAttribute('aria-hidden', 'true');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', 'M18 6 6 18M6 6l12 12');
-      icon.append(path);
-      button.append(icon);
-      button.addEventListener('pointerdown', (event) => event.preventDefault());
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        if (!editor.isEditable || !editor.getBlock(block.id)) return;
-        editor.transact((tr) => {
-          closeHistory(tr);
-          editor.removeBlocks([block.id]);
-        });
-        editor.transact((tr) => closeHistory(tr));
-        editor.focus();
-      });
+      const button = blockDeleteButton(editor, block.id, 'Delete checklist item');
       rendered.dom.appendChild(button);
       return rendered;
     },
@@ -43,5 +22,5 @@ const checkListItem: typeof checklist = {
 };
 
 export const noteEditorSchema = BlockNoteSchema.create({
-  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock },
+  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock, divider, image: imageBlock },
 });

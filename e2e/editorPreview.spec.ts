@@ -46,6 +46,9 @@ for (const theme of ['light', 'dark'] as const) {
             content:
               'def greet(name):\n    return f"A line long enough to wrap on a phone, {name}, and then some more of it"',
           },
+          { id: 'divider', type: 'divider' },
+          { id: 'cutoff', type: 'divider', props: { previewEnd: true } },
+          { id: 'below', type: 'paragraph', content: 'Below the card' },
         ],
       });
       await transaction.isPersisted.promise;

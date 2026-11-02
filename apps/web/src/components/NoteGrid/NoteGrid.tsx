@@ -1,4 +1,4 @@
-import { blocksToPlainText, type Note } from '@catch/shared';
+import { blocksToPlainText, cardBlocks, type Note } from '@catch/shared';
 import {
   DndContext,
   type DragMoveEvent,
@@ -31,12 +31,10 @@ import {
   swallowNextClick,
   useLongPress,
 } from '@/lib/longPress';
-import { dropIndex, galleryMasonry, masonry, type Point } from '@/lib/masonry';
+import { columnsFor, dropIndex, GAP, galleryMasonry, masonry, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-const MIN_COLUMN_WIDTH = 220;
-const GAP = 12;
 /** A held card rides above the page header (30) and the dock (40), below sheets (50). */
 const LIFTED_Z = 45;
 /**
@@ -65,12 +63,6 @@ type Props = {
   onSelect?: (note: Note, selected: boolean) => void;
 };
 
-/** Two columns on phones (as in Keep), more as space allows. */
-export function columnsFor(width: number) {
-  if (width < 280) return 1;
-  return Math.max(2, Math.floor((width + GAP) / (MIN_COLUMN_WIDTH + GAP)));
-}
-
 // A card's parts (see NoteCard and NotePreview), for guessing heights.
 const CARD_PADDING_X = 28;
 const CARD_PADDING_Y = 26;
@@ -81,7 +73,6 @@ const TOOLBAR_HEIGHT = 36;
 const LINE_HEIGHT = 19.25;
 const CHAR_WIDTH = 7;
 const BLOCK_GAP = 4;
-const PREVIEW_BLOCKS = 10;
 
 const hasToolbar = () =>
   typeof window.matchMedia !== 'function' || !window.matchMedia('(pointer: coarse)').matches;
@@ -92,12 +83,13 @@ const hasToolbar = () =>
  */
 export function estimateCardHeight(content: Note['content'], width: number, toolbar: boolean) {
   const perLine = Math.max(1, (width - CARD_PADDING_X) / CHAR_WIDTH);
-  const lines = blocksToPlainText(content).split('\n').slice(0, PREVIEW_BLOCKS);
+  const { shown } = cardBlocks(content);
+  const lines = blocksToPlainText(shown).split('\n');
   let height = CARD_PADDING_Y;
   for (const line of lines) {
     if (line) height += Math.ceil(line.length / perLine) * LINE_HEIGHT + BLOCK_GAP;
   }
-  for (const block of content.slice(0, PREVIEW_BLOCKS)) {
+  for (const block of shown) {
     if (block.type === 'image') height += width * 0.75;
   }
   return Math.max(CARD_MIN_HEIGHT, height) + (toolbar ? TOOLBAR_HEIGHT : 0);

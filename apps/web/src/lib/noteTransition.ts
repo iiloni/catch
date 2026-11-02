@@ -15,6 +15,22 @@ export const editorProgress = motionValue(0);
 /** The card face fades out by this progress; the page header yields over the same interval. */
 export const CARD_FACE_FADE_END = 0.35;
 
+const clamp = (value: number) => Math.min(1, Math.max(0, value));
+
+/**
+ * The card's face and the note's content during the morph. Text fades through the note's
+ * color, since two layers of it read as a double exposure. An image is large enough that
+ * the same dip reads as a blink, so a note with one overlaps them instead.
+ */
+export function morphOpacity(progress: number, hasImage: boolean) {
+  return hasImage
+    ? { face: clamp(1 - (progress - 0.2) / 0.4), content: clamp(progress / 0.4) }
+    : {
+        face: clamp(1 - progress / CARD_FACE_FADE_END),
+        content: clamp((progress - 0.25) / 0.45),
+      };
+}
+
 const origins = new Map<string, Rect>();
 
 function rectOf(element: Element): Rect {

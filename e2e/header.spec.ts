@@ -195,8 +195,8 @@ test('a page too narrow for the wordmark and the title pill shows their icons in
   isMobile,
 }) => {
   test.skip(isMobile, 'A phone has no split view.');
-  // A small tablet: beside a note, the page is about as wide as a small phone.
-  await page.setViewportSize({ width: 720, height: 800 });
+  // The narrowest screen that splits: beside a note, the page is narrower than a small phone.
+  await page.setViewportSize({ width: 672, height: 800 });
   await signUp(page);
   await seedNotes(
     page,

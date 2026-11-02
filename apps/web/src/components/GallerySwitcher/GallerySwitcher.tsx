@@ -1,11 +1,11 @@
-import { Archive, Bell, LayoutGrid, Trash2 } from 'lucide-react';
+import { Archive, Bell, LayoutDashboard, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { GalleryPage } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 const PAGES = [
-  { path: '/', label: 'Gallery', icon: LayoutGrid },
+  { path: '/', label: 'Gallery', icon: LayoutDashboard },
   { path: '/reminders', label: 'Reminders', icon: Bell },
   { path: '/archive', label: 'Archive', icon: Archive },
   { path: '/trash', label: 'Trash', icon: Trash2 },

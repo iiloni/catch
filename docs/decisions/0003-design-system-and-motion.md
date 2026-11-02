@@ -93,6 +93,14 @@ room in the swipe direction, and reaching their edge requires a fresh swipe to n
 The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
 a note, composer or search filter panel is open. Swiping into Search leaves its field
 unfocused, so browsing does not summon the keyboard.
+With a query or filters active, a downward touch pull at the top of Search clears both
+(`ClearFiltersPull`). It starts anywhere a page swipe can, plus result rows and filter chips,
+and leaves text fields, inner scrollers mid-scroll, held presses and selection mode alone.
+Search has no undo for this, so only distance past the threshold commits, never a fling;
+the page stays still while a glass pill is drawn down from above the screen, arriving as
+letting go starts to clear. Unlike the sync pill it may cross the status bar, because it only
+comes when the finger draws it and it rests below the safe area. Its words then change as a header toolbar's controls do: they
+crossfade while the measured width animates. With reduced motion it fades in at rest instead.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
@@ -203,6 +211,15 @@ the move into the fastest stretch of an opening slide and the slowest of a closi
 header's left corner (brand, title pill, back button) is offset to stay over the page's edge
 (`useHeaderGutterShift`); its centered title and right toolbar keep following the pane. The page's wrapper spans the screen and clips
 there, so cards still on their way to a narrower page reach under the pane, not past it.
+
+**Gallery layout.** Masonry or a single column is a choice only on a narrow page, one whose
+grid fits two columns and is under 592 px (`src/lib/galleryLayout.ts`). Narrower, masonry is one
+column anyway; wider, the Gallery stays in masonry and the toggle is hidden, since one column
+would only stretch its cards. The choice is kept per screen state, a matrix of folded by split,
+because a foldable can want masonry on its outer display but one column beside a note. A page
+cannot see a hinge, so "folded" means the screen is below the split limits (`isFolded`). Two
+cells never apply: no such screen can split, and a whole page on a screen that can split is
+always past the width limit.
 
 **Grid resizes.** When a grid's columns change width (switching the Gallery between masonry
 and a single column, or a note pane opening or closing), cards on screen spring to their new

@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { columnsFor, estimateCardHeight } from './NoteGrid';
+import { estimateCardHeight } from './NoteGrid';
 
 const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] });
-
-describe('columnsFor', () => {
-  it('uses two columns on phones and more as space allows', () => {
-    expect(columnsFor(260)).toBe(1);
-    expect(columnsFor(366)).toBe(2);
-    expect(columnsFor(768)).toBe(3);
-    expect(columnsFor(1232)).toBe(5);
-  });
-});
 
 describe('estimateCardHeight', () => {
   it('grows with the text a card wraps and the blocks it shows', () => {
@@ -30,6 +21,15 @@ describe('estimateCardHeight', () => {
         220,
         false,
       ),
+    );
+  });
+
+  it('measures only what is above a preview cutoff', () => {
+    const above = [paragraph('Milk')];
+    const below = Array.from({ length: 8 }, () => paragraph('Milk'));
+    const cutoff = { type: 'divider', props: { previewEnd: true } };
+    expect(estimateCardHeight([...above, cutoff, ...below], 220, false)).toBe(
+      estimateCardHeight(above, 220, false),
     );
   });
 

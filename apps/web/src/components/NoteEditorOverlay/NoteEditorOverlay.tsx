@@ -76,12 +76,12 @@ import {
   trashNote,
 } from '@/lib/notes';
 import {
-  CARD_FACE_FADE_END,
   editorProgress,
   findCard,
   hideCard,
   landCard,
   measureCard,
+  morphOpacity,
   type Rect,
   showCard,
   takeOrigin,
@@ -476,11 +476,15 @@ function EditorSurface({
     if (!card) return t.radius;
     return lerp(card.radius, t.radius || 28 * Math.min(1, Math.abs(drag) / 80), p);
   });
+  const hasImage = useRef(false);
+  hasImage.current = note.content.some((block) => block.type === 'image');
   const ghostOpacity = useTransform(() =>
-    cardRect.current ? 1 - progress.get() / CARD_FACE_FADE_END : 0,
+    cardRect.current ? morphOpacity(progress.get(), hasImage.current).face : 0,
   );
   const contentOpacity = useTransform(
-    () => (cardRect.current ? (progress.get() - 0.25) / 0.45 : fade.get()) * textFade.get(),
+    () =>
+      (cardRect.current ? morphOpacity(progress.get(), hasImage.current).content : fade.get()) *
+      textFade.get(),
   );
   const contentY = useTransform(() => (1 - swap.get()) * 12);
   const backdropOpacity = useTransform(() => progress.get() * 0.35);

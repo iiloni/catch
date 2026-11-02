@@ -1,6 +1,11 @@
 import '@blocknote/shadcn/style.css';
 import type { BlockNoteEditor, PartialBlock } from '@blocknote/core';
-import { HistoryExtension, SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions';
+import {
+  filterSuggestionItems,
+  HistoryExtension,
+  SideMenuExtension,
+  SuggestionMenu,
+} from '@blocknote/core/extensions';
 import { en } from '@blocknote/core/locales';
 import {
   BlockColorsItem,
@@ -38,6 +43,7 @@ import { noteEditorSchema } from './checkListItem';
 import { syntaxHighlighting } from './codeBlock';
 import { cancelCodeDetection, detectBlockLanguage, pasteCode } from './codePaste';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
+import { slashMenuItems } from './previewCutoff';
 import { useListItemDrag } from './useListItemDrag';
 
 /** New notes start with an empty heading that acts as the title. */
@@ -272,6 +278,7 @@ export function NoteEditor({
       <EndHiddenEmojiSuggestions />
       <SuggestionMenuController
         triggerCharacter="/"
+        getItems={async (query) => filterSuggestionItems(slashMenuItems(editor), query)}
         shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
         portalElement={typeof document === 'undefined' ? undefined : document.body}
         floatingUIOptions={slashMenuFloatingOptions}

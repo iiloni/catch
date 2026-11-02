@@ -1,7 +1,14 @@
-import { REVIEW_DELETED, REVIEW_INSERTED } from '@catch/shared';
-import { Copy, Download } from 'lucide-react';
+import {
+  CARD_BLOCKS,
+  cardBlocks,
+  isPreviewCutoff,
+  REVIEW_DELETED,
+  REVIEW_INSERTED,
+} from '@catch/shared';
+import { Copy, Download, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
+import { PREVIEW_CUTOFF_LABEL } from '@/components/NoteEditor/previewCutoffLabel';
 import { codeLanguageIconProps, codeLanguageName } from '@/lib/codeLanguages';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +18,7 @@ type Variant = 'card' | 'editor';
 
 type Props = {
   content: readonly Json[];
-  /** Blocks shown before the preview is cut off. */
+  /** Blocks shown before the preview is cut off. A card's own cutoff replaces this limit. */
   maxBlocks?: number;
   /**
    * `editor` matches BlockNote's typography, so the editor can show this while it
@@ -209,6 +216,39 @@ function PreviewBlock({
         );
       break;
     case 'image':
+      if (variant === 'editor' && typeof props.url === 'string' && props.url) {
+        body = (
+          <div
+            style={{
+              width: typeof props.previewWidth === 'number' ? props.previewWidth : '100%',
+              maxWidth: '100%',
+              marginInlineStart: ['center', 'right'].includes(String(props.textAlignment))
+                ? 'auto'
+                : undefined,
+              marginInlineEnd: props.textAlignment === 'center' ? 'auto' : undefined,
+            }}
+          >
+            <MediaPreview
+              url={props.url}
+              name={String(props.name || '')}
+              kind="image"
+              editorImage
+            />
+            {Boolean(props.caption) && <p className="py-1 text-[0.8em]">{String(props.caption)}</p>}
+          </div>
+        );
+        break;
+      }
+      body =
+        typeof props.url === 'string' && props.url ? (
+          <MediaPreview
+            url={props.url}
+            name={String(props.caption || props.name || 'Attachment')}
+            kind="image"
+            compact
+          />
+        ) : null;
+      break;
     case 'video':
     case 'audio':
     case 'file':
@@ -221,6 +261,27 @@ function PreviewBlock({
             compact={variant === 'card'}
           />
         ) : null;
+      break;
+    case 'divider':
+      // A card's gaps already part its blocks.
+      body =
+        variant === 'card' ? null : (
+          <div data-content-type="divider">
+            {isPreviewCutoff(block) ? (
+              <div className="note-preview-cutoff">
+                <span>{PREVIEW_CUTOFF_LABEL}</span>
+                <span className="note-preview-cutoff-line" />
+                {!reading && (
+                  <span aria-hidden className="note-checklist-delete">
+                    <X />
+                  </span>
+                )}
+              </div>
+            ) : (
+              <hr />
+            )}
+          </div>
+        );
       break;
     case 'table': {
       const rows =
@@ -303,26 +364,18 @@ function renderBlocks(
   });
 }
 
-function isEmptyBlock(block: Json) {
-  const children = Array.isArray(block.children) ? block.children : [];
-  const empty = Array.isArray(block.content) ? block.content.length === 0 : !block.content;
-  return (
-    empty &&
-    children.length === 0 &&
-    !['image', 'video', 'audio', 'file'].includes(String(block.type))
-  );
-}
-
 /** Read-only rendering of a BlockNote document, light enough for a grid of cards. */
 export function NotePreview({
   content,
-  maxBlocks = 10,
+  maxBlocks = CARD_BLOCKS,
   variant = 'card',
   reading = false,
   className,
 }: Props) {
-  const blocks = variant === 'editor' ? content : content.filter((block) => !isEmptyBlock(block));
-  const shown = blocks.slice(0, maxBlocks);
+  const { shown, more } =
+    variant === 'card'
+      ? cardBlocks(content, maxBlocks)
+      : { shown: content.slice(0, maxBlocks), more: content.length > maxBlocks };
 
   return (
     <div
@@ -335,7 +388,7 @@ export function NotePreview({
       )}
     >
       {renderBlocks(shown, variant, true, reading)}
-      {blocks.length > shown.length && <p className="text-muted-foreground">…</p>}
+      {more && <p className="text-muted-foreground">…</p>}
     </div>
   );
 }

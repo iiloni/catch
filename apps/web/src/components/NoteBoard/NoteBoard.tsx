@@ -21,7 +21,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { LayoutGrid, type LucideIcon, X } from 'lucide-react';
+import { LayoutDashboard, type LucideIcon, X } from 'lucide-react';
 import { AnimatePresence, motion, type TargetAndTransition } from 'motion/react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
@@ -549,7 +549,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
               key="gallery"
               id={GALLERY_DROP_ID}
               label="Send to gallery"
-              icon={LayoutGrid}
+              icon={LayoutDashboard}
               overClassName="bg-brand/25"
             />
           )}

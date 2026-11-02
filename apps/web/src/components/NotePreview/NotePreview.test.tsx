@@ -31,6 +31,45 @@ describe('NotePreview', () => {
     expect(screen.getByText('Done').closest('p')).toHaveClass('line-through');
   });
 
+  it('ends a card at its preview cutoff', () => {
+    render(
+      <NotePreview
+        content={[
+          { type: 'paragraph', content: [text('Shown')] },
+          { type: 'divider', props: { previewEnd: true } },
+          { type: 'paragraph', content: [text('Hidden')] },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Shown')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden')).not.toBeInTheDocument();
+    expect(screen.queryByText('Card preview ends here')).not.toBeInTheDocument();
+    expect(screen.getByText('…')).toBeInTheDocument();
+  });
+
+  it('shows the whole note and its cutoff while the editor opens', () => {
+    render(
+      <NotePreview
+        variant="editor"
+        content={[
+          { type: 'paragraph', content: [text('Shown')] },
+          { type: 'divider', props: { previewEnd: true } },
+          { type: 'paragraph', content: [text('Below')] },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Below')).toBeInTheDocument();
+    expect(screen.getByText('Card preview ends here')).toBeInTheDocument();
+  });
+
+  it('draws an ordinary divider outside a card', () => {
+    const content = [{ type: 'divider', props: {} }];
+    const { container, rerender } = render(<NotePreview variant="editor" content={content} />);
+    expect(container.querySelector('hr')).toBeInTheDocument();
+    rerender(<NotePreview content={content} />);
+    expect(container.querySelector('hr')).not.toBeInTheDocument();
+  });
+
   it('renders links and truncates long notes', () => {
     render(
       <NotePreview

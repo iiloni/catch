@@ -82,6 +82,61 @@ test.describe('on a phone', () => {
   });
 });
 
+test.describe('across screen states', () => {
+  // A foldable's inner display: a page too wide for one column, and a pane leaving two.
+  const UNFOLDED = { width: 840, height: 800 };
+  const FOLDED = { width: 390, height: 800 };
+  test.use({ viewport: FOLDED });
+
+  test('the Gallery keeps a layout for each', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'The choice is kept the same way on both layouts.');
+    await signUp(page);
+    await seedNotes(page, [
+      { title: 'Alpha', body: 'First' },
+      { title: 'Beta', body: 'Second' },
+    ]);
+    const toSingle = page.getByRole('button', { name: 'Switch to single column view' });
+    const toMasonry = page.getByRole('button', { name: 'Switch to masonry view' });
+    await expect(toSingle).toBeVisible();
+
+    await page.setViewportSize(UNFOLDED);
+    await openNote(page, 'Alpha');
+    await toSingle.click();
+    await expect(toMasonry).toBeVisible();
+
+    // The choice beside a note did not reach the folded screen, and waits for the next note.
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await page.setViewportSize(FOLDED);
+    await expect(toSingle).toBeVisible();
+    await page.setViewportSize(UNFOLDED);
+    await openNote(page, 'Alpha');
+    await expect(toMasonry).toBeVisible();
+  });
+
+  test('the toggle leaves when the width decides', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'The widths are the same on both layouts.');
+    await signUp(page);
+    await seedNotes(page, ['Alpha', 'Beta']);
+    const toggle = page.getByRole('button', { name: /^Switch to / });
+    await page.getByRole('button', { name: 'Switch to single column view' }).click();
+    await expect(page.getByRole('button', { name: 'Switch to masonry view' })).toBeVisible();
+
+    // A whole unfolded screen is too wide for one column, whatever the phone's choice was.
+    await page.setViewportSize(UNFOLDED);
+    await expect(toggle).toHaveCount(0);
+    await expect
+      .poll(async () => (await card(page, 'Alpha').boundingBox())?.width)
+      .toBeLessThan(400);
+
+    // Beside a note, a small unfolded screen leaves room for one column only.
+    await page.setViewportSize({ width: 690, height: 830 });
+    await openNote(page, 'Alpha');
+    await expect(page.getByRole('heading', { name: 'Alpha' }).first()).toBeVisible();
+    await expect(toggle).toHaveCount(0);
+  });
+});
+
 test.describe('on a wide screen', () => {
   // Wider than the page gets, so it sits between gutters until a note takes part of the screen.
   const SCREEN = 1800;
