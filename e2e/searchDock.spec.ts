@@ -261,6 +261,29 @@ test('a touch tap opens search instead of closing it with its trailing click', a
   await expect(page).not.toHaveURL(/\/search$/);
 });
 
+test('the close button clears the search text, while Escape keeps it', async ({ page }) => {
+  await signUp(page);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  const field = page.getByRole('textbox', { name: 'Search notes' });
+  await expect(field).toBeFocused();
+  await waitForPageTransition(page);
+
+  await field.fill('groceries');
+  await field.press('Escape');
+  await expect(page).not.toHaveURL(/\/search$/);
+  await waitForPageTransition(page);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await expect(field).toHaveValue('groceries');
+  await waitForPageTransition(page);
+
+  await page.getByRole('button', { name: 'Close search', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/search$/);
+  await waitForPageTransition(page);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue('');
+});
+
 test('search page slides while its dock transition follows the keyboard', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await signUp(page);

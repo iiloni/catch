@@ -1,7 +1,8 @@
 import { attachmentId } from '@catch/shared';
 import { File, Image, Mic, Video } from 'lucide-react';
 import { useState } from 'react';
-import { useAttachmentUrl } from '@/lib/attachmentFiles';
+import { cachedAttachmentUrl, useAttachmentUrl } from '@/lib/attachmentFiles';
+import { imageDimensions, rememberImageDimensions } from '@/lib/imageDimensions';
 import { cn } from '@/lib/utils';
 
 export function MediaPreview({
@@ -10,28 +11,42 @@ export function MediaPreview({
   kind,
   compact = false,
   thumbnail = false,
+  editorImage = false,
 }: {
   url: string;
   name: string;
   kind: string;
   compact?: boolean;
   thumbnail?: boolean;
+  editorImage?: boolean;
 }) {
   const poster = kind === 'video' && (thumbnail || compact);
-  const { source, error } = useAttachmentUrl(
+  const { source: resolved, error } = useAttachmentUrl(
     url,
     (kind === 'image' || poster) && Boolean(attachmentId(url)),
   );
+  // Starting from a thumbnail the editor is about to replace would show a jump in sharpness.
+  const source = (editorImage ? cachedAttachmentUrl(url) : null) ?? resolved;
   const [failedSource, setFailedSource] = useState<string | null>(null);
+  const dimensions = kind === 'image' ? imageDimensions(url) : undefined;
+  const aspectRatio = dimensions ? `${dimensions.width} / ${dimensions.height}` : undefined;
   const Icon = kind === 'image' ? Image : kind === 'video' ? Video : kind === 'audio' ? Mic : File;
   if (source && failedSource !== source && (kind === 'image' || poster))
     return (
       <img
         src={source}
         alt={name}
-        loading="lazy"
+        loading={editorImage ? 'eager' : 'lazy'}
+        // Paint with the swap that replaced this image, not an empty box a frame later.
+        decoding={editorImage ? 'sync' : undefined}
+        onLoad={(event) => rememberImageDimensions(url, event.currentTarget)}
         onError={() => setFailedSource(source)}
-        className={cn('rounded-xl object-contain', thumbnail ? 'size-full' : 'max-h-80 w-full')}
+        style={{ aspectRatio: aspectRatio ? `auto ${aspectRatio}` : undefined }}
+        className={cn(
+          'rounded-sm object-contain',
+          editorImage && 'h-auto w-full',
+          thumbnail ? 'size-full' : !editorImage && 'max-h-80 w-full',
+        )}
       />
     );
   if (source && !compact && !thumbnail && kind === 'video')
@@ -43,7 +58,7 @@ export function MediaPreview({
         playsInline
         preload="metadata"
         aria-label={name}
-        className="max-h-80 w-full rounded-xl"
+        className="max-h-80 w-full rounded-sm"
       />
     );
   if (source && !compact && !thumbnail && kind === 'audio')
@@ -59,8 +74,9 @@ export function MediaPreview({
     );
   return (
     <div
+      style={editorImage && dimensions ? { aspectRatio } : undefined}
       className={cn(
-        'flex items-center justify-center gap-2 rounded-xl bg-foreground/5 text-sm text-muted-foreground',
+        'flex items-center justify-center gap-2 rounded-sm bg-foreground/5 text-sm text-muted-foreground',
         thumbnail ? 'size-full' : 'px-3 py-3',
       )}
     >

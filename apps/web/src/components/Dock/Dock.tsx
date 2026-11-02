@@ -848,6 +848,7 @@ function SearchField({
         onClick={() => {
           // Discard the compatibility click trailed by the tap that opened search.
           if (performance.now() - openedAt.current < GHOST_CLICK_MS) return;
+          searchQuery.set('');
           exit(false);
         }}
         aria-hidden={!active}

@@ -390,6 +390,12 @@ test('secondary tag search keeps focus and selection usable above the keyboard',
   await page.keyboard.type('Projects');
   await expect(search).toHaveValue('Projects');
   await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Clear tag search' }).click();
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toBeVisible();
+  await page.keyboard.type('Projects');
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toHaveCount(0);
   const projects = picker.getByRole('checkbox', { name: 'Work / Projects', exact: true });
   await projects.check();
   await expect(projects).toBeChecked();

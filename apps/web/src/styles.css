@@ -442,6 +442,11 @@
   font-family: var(--font-sans);
 }
 
+/* Images and videos in the editor share MediaPreview's corners, so they hold through the swap. */
+.bn-container.note-editor [data-file-block] .bn-visual-media {
+  border-radius: var(--radius-sm);
+}
+
 /* The leading heading is the note's title, set like the cards' titles. */
 .bn-container.note-editor [data-content-type="heading"] {
   font-family: var(--font-display);

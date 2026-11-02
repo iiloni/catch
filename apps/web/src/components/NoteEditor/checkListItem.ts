@@ -1,6 +1,7 @@
 import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
 import { blockDeleteButton } from './blockDeleteButton';
 import { codeBlock } from './codeBlock';
+import { imageBlock } from './imageBlock';
 import { divider } from './previewCutoff';
 
 const checklist = defaultBlockSpecs.checkListItem;
@@ -21,5 +22,5 @@ const checkListItem: typeof checklist = {
 };
 
 export const noteEditorSchema = BlockNoteSchema.create({
-  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock, divider },
+  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock, divider, image: imageBlock },
 });

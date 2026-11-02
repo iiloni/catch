@@ -4,6 +4,7 @@ import { Clock, Search, SearchX } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { ClearFiltersPull } from '@/components/ClearFiltersPull/ClearFiltersPull';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
@@ -147,6 +148,11 @@ export default function SearchPage() {
     searchFiltersOpen.set(false);
   }
 
+  function clearFilters() {
+    setFilter({ ids: [], match: 'any', untagged: false });
+    setColor(null);
+  }
+
   function openResult(result: SearchResult, card: HTMLElement) {
     const trimmed = query.trim();
     if (trimmed) setRecent([trimmed, ...recent.filter((item) => item !== trimmed)].slice(0, 8));
@@ -161,10 +167,7 @@ export default function SearchPage() {
           <SearchFilterPanel
             filtered={filterCount > 0}
             onClose={closeFilters}
-            onClear={() => {
-              setFilter({ ids: [], match: 'any', untagged: false });
-              setColor(null);
-            }}
+            onClear={clearFilters}
           >
             <SearchFilters
               tags={tags}
@@ -192,108 +195,121 @@ export default function SearchPage() {
         style={{ x: gutterShift }}
         className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6"
       >
-        <ActiveSearchFilters
-          tags={tags}
-          filter={filter}
-          color={color}
-          onFilterChange={setFilter}
-          onColorChange={setColor}
-        />
-        <div className="relative">
-          <AnimatePresence initial={false}>
-            <SearchView key={view} view={view}>
-              {awaitingTagData && (
-                <p role="status" className="px-1 text-sm text-muted-foreground">
-                  Loading tags…
-                </p>
-              )}
-              {!awaitingTagData && !searching && (
-                <BrowseTags
-                  tags={tags}
-                  counts={counts}
-                  untaggedCount={untaggedCount}
-                  onSelect={(id) => setFilter({ ...filter, ids: [id], untagged: false })}
-                  onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
-                />
-              )}
-              {awaitingTagData ? null : !searching ? (
-                recent.length > 0 ? (
-                  <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between px-1">
-                      <h2 id="recent-heading" className="font-medium text-muted-foreground text-sm">
-                        Recent
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => setRecent([])}
-                        className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <ul className="flex flex-col">
-                      {recent.map((item) => (
-                        <li key={item}>
-                          <button
-                            type="button"
-                            onClick={() => searchQuery.set(item)}
-                            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
+        <ClearFiltersPull
+          enabled={
+            active && (filterCount > 0 || query !== '') && !filtersOpen && !selection.selecting
+          }
+          onClear={() => {
+            clearFilters();
+            searchQuery.set('');
+          }}
+        >
+          <ActiveSearchFilters
+            tags={tags}
+            filter={filter}
+            color={color}
+            onFilterChange={setFilter}
+            onColorChange={setColor}
+          />
+          <div className="relative">
+            <AnimatePresence initial={false}>
+              <SearchView key={view} view={view}>
+                {awaitingTagData && (
+                  <p role="status" className="px-1 text-sm text-muted-foreground">
+                    Loading tags…
+                  </p>
+                )}
+                {!awaitingTagData && !searching && (
+                  <BrowseTags
+                    tags={tags}
+                    counts={counts}
+                    untaggedCount={untaggedCount}
+                    onSelect={(id) => setFilter({ ...filter, ids: [id], untagged: false })}
+                    onUntagged={() => setFilter({ ...filter, ids: [], untagged: true })}
+                  />
+                )}
+                {awaitingTagData ? null : !searching ? (
+                  recent.length > 0 ? (
+                    <section aria-labelledby="recent-heading" className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between px-1">
+                        <h2
+                          id="recent-heading"
+                          className="font-medium text-muted-foreground text-sm"
+                        >
+                          Recent
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={() => setRecent([])}
+                          className="rounded-full px-2 py-1 font-medium text-muted-foreground text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <ul className="flex flex-col">
+                        {recent.map((item) => (
+                          <li key={item}>
+                            <button
+                              type="button"
+                              onClick={() => searchQuery.set(item)}
+                              className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left outline-none active:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-ring/70"
+                            >
+                              <Clock className="size-4 text-muted-foreground" aria-hidden />
+                              <span className="truncate">{item}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  ) : (
+                    <p className="px-1 text-sm text-muted-foreground">
+                      Search words, browse a tag, or filter by color. Archived notes are{' '}
+                      {showArchived ? 'included' : 'hidden'}.
+                    </p>
+                  )
+                ) : results.length > 0 ? (
+                  <section aria-label="Results">
+                    <p className="px-1 pb-2 text-muted-foreground text-xs">
+                      {results.length === MAX_RESULTS
+                        ? `First ${MAX_RESULTS} notes`
+                        : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
+                    </p>
+                    <ul className="flex flex-col gap-2">
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {results.map((result) => (
+                          <motion.li
+                            key={result.note.id}
+                            layout
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.97 }}
+                            transition={springs.smooth}
                           >
-                            <Clock className="size-4 text-muted-foreground" aria-hidden />
-                            <span className="truncate">{item}</span>
-                          </button>
-                        </li>
-                      ))}
+                            <ResultCard
+                              result={result}
+                              columns={columns}
+                              onOpen={openResult}
+                              selected={
+                                selection.selecting ? selection.ids.has(result.note.id) : undefined
+                              }
+                              onSelect={selection.select}
+                            />
+                          </motion.li>
+                        ))}
+                      </AnimatePresence>
                     </ul>
                   </section>
                 ) : (
-                  <p className="px-1 text-sm text-muted-foreground">
-                    Search words, browse a tag, or filter by color. Archived notes are{' '}
-                    {showArchived ? 'included' : 'hidden'}.
-                  </p>
-                )
-              ) : results.length > 0 ? (
-                <section aria-label="Results">
-                  <p className="px-1 pb-2 text-muted-foreground text-xs">
-                    {results.length === MAX_RESULTS
-                      ? `First ${MAX_RESULTS} notes`
-                      : `${results.length} ${results.length === 1 ? 'note' : 'notes'}`}
-                  </p>
-                  <ul className="flex flex-col gap-2">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {results.map((result) => (
-                        <motion.li
-                          key={result.note.id}
-                          layout
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.97 }}
-                          transition={springs.smooth}
-                        >
-                          <ResultCard
-                            result={result}
-                            columns={columns}
-                            onOpen={openResult}
-                            selected={
-                              selection.selecting ? selection.ids.has(result.note.id) : undefined
-                            }
-                            onSelect={selection.select}
-                          />
-                        </motion.li>
-                      ))}
-                    </AnimatePresence>
-                  </ul>
-                </section>
-              ) : (
-                <EmptyState icon={SearchX} title="No matching notes">
-                  {showArchived
-                    ? 'Try fewer words or remove a filter.'
-                    : 'Try fewer words, remove a filter or show archived notes.'}
-                </EmptyState>
-              )}
-            </SearchView>
-          </AnimatePresence>
-        </div>
+                  <EmptyState icon={SearchX} title="No matching notes">
+                    {showArchived
+                      ? 'Try fewer words or remove a filter.'
+                      : 'Try fewer words, remove a filter or show archived notes.'}
+                  </EmptyState>
+                )}
+              </SearchView>
+            </AnimatePresence>
+          </div>
+        </ClearFiltersPull>
       </motion.div>
     </>
   );

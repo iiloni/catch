@@ -27,13 +27,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
+import { useGalleryLayout } from '@/lib/galleryLayout';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
-import { PAGE_MAX, usePageGutterShift } from '@/lib/splitView';
+import { isFolded, PAGE_MAX, useNotePane, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
 import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
@@ -44,26 +45,27 @@ const sortSchema = z.object({
 });
 
 type Sort = z.infer<typeof sortSchema>;
-const layoutSchema = z.enum(['masonry', 'single-column']);
-const SINGLE_COLUMN_BREAKPOINT = 640;
 
 /** Every note that is not in the deck, archived or trashed. */
 export default function GalleryPage() {
   const { open } = useOpenNote();
-  const [layout, setLayout] = usePersistentState('catch-gallery-layout', layoutSchema, 'masonry');
-  const [narrow, setNarrow] = useState(false);
-  const gutterShift = usePageGutterShift(PAGE_MAX);
-  const measureGallery = useCallback((element: HTMLElement | null) => {
+  const pane = useNotePane();
+  const [gridWidth, setGridWidth] = useState(0);
+  const measureGrid = useCallback((element: HTMLElement | null) => {
     if (!element) return;
     // The page can be phone-sized even on desktop when a note pane is open.
-    const update = () => setNarrow(element.clientWidth < SINGLE_COLUMN_BREAKPOINT);
+    const update = () => setGridWidth(element.clientWidth);
     update();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(update);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const activeLayout = narrow ? layout : 'masonry';
+  const [layout, setLayout] = useGalleryLayout(
+    { folded: isFolded(pane.viewport), split: pane.shown },
+    gridWidth,
+  );
+  const gutterShift = usePageGutterShift(PAGE_MAX);
   const layoutAction =
     layout === 'masonry' ? 'Switch to single column view' : 'Switch to masonry view';
   // A new key, so galleries saved with the old "last edited" default start arranged by hand.
@@ -107,7 +109,7 @@ export default function GalleryPage() {
         trailing={
           <>
             <VaultToggle />
-            {narrow && (
+            {setLayout && (
               <motion.button
                 type="button"
                 aria-label={layoutAction}
@@ -134,35 +136,36 @@ export default function GalleryPage() {
         }
       />
       <motion.section
-        ref={measureGallery}
         aria-label="Gallery"
         style={{ x: gutterShift }}
         className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        {awaitingSync ? null : (
-          <div>
-            <NoteGrid
-              notes={sorted}
-              groupPinned
-              layout={activeLayout}
-              onOpen={(note, card) => open(note.id, card)}
-              onArchive={(note) => setNoteArchived(note.id, true)}
-              onMove={onMove}
-              selected={selection.ids}
-              onSelect={selection.select}
-            />
-            {shown.length === 0 &&
-              (vault ? (
-                <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
-                  Tap + to write a note only your devices can read.
-                </EmptyState>
-              ) : (
-                <EmptyState icon={Lightbulb} title="Catch your first note">
-                  Tap + to write something down. It lands here.
-                </EmptyState>
-              ))}
-          </div>
-        )}
+        <div ref={measureGrid}>
+          {awaitingSync ? null : (
+            <>
+              <NoteGrid
+                notes={sorted}
+                groupPinned
+                layout={layout}
+                onOpen={(note, card) => open(note.id, card)}
+                onArchive={(note) => setNoteArchived(note.id, true)}
+                onMove={onMove}
+                selected={selection.ids}
+                onSelect={selection.select}
+              />
+              {shown.length === 0 &&
+                (vault ? (
+                  <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+                    Tap + to write a note only your devices can read.
+                  </EmptyState>
+                ) : (
+                  <EmptyState icon={Lightbulb} title="Catch your first note">
+                    Tap + to write something down. It lands here.
+                  </EmptyState>
+                ))}
+            </>
+          )}
+        </div>
       </motion.section>
     </>
   );
