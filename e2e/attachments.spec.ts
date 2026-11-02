@@ -101,6 +101,10 @@ test('inline images keep their space when the opening preview becomes the editor
       }, width);
     }
     await expect(card(page, 'Stable inline image').getByRole('img')).toBeVisible();
+    await expect(card(page, 'Stable inline image').getByRole('img')).toHaveCSS(
+      'border-top-left-radius',
+      '8px',
+    );
 
     const samples = page.evaluate(async () => {
       const frames: {
@@ -110,6 +114,7 @@ test('inline images keep their space when the opening preview becomes the editor
         loaded: boolean;
         decoding: string;
         naturalWidth: number;
+        radius: string;
       }[] = [];
       const end = performance.now() + 3000;
       while (performance.now() < end) {
@@ -125,6 +130,7 @@ test('inline images keep their space when the opening preview becomes the editor
             loaded: image.complete && image.naturalWidth > 0,
             decoding: image.decoding,
             naturalWidth: image.naturalWidth,
+            radius: getComputedStyle(image).borderTopLeftRadius,
           });
         }
         await new Promise(requestAnimationFrame);
@@ -146,6 +152,7 @@ test('inline images keep their space when the opening preview becomes the editor
     expect(frames.some((frame) => frame.editor)).toBe(true);
     for (const frame of frames) {
       expect(frame.decoding).toBe('sync');
+      expect(frame.radius).toBe('8px');
       expect(frame.height).toBeGreaterThan(0);
       expect(frame.height / frame.width).toBeCloseTo(0.75, 2);
     }

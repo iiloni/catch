@@ -43,8 +43,8 @@ export function MediaPreview({
         onError={() => setFailedSource(source)}
         style={{ aspectRatio: aspectRatio ? `auto ${aspectRatio}` : undefined }}
         className={cn(
-          'object-contain',
-          editorImage ? 'h-auto w-full rounded-[4px]' : 'rounded-xl',
+          'rounded-sm object-contain',
+          editorImage && 'h-auto w-full',
           thumbnail ? 'size-full' : !editorImage && 'max-h-80 w-full',
         )}
       />
@@ -58,7 +58,7 @@ export function MediaPreview({
         playsInline
         preload="metadata"
         aria-label={name}
-        className="max-h-80 w-full rounded-xl"
+        className="max-h-80 w-full rounded-sm"
       />
     );
   if (source && !compact && !thumbnail && kind === 'audio')
@@ -76,7 +76,7 @@ export function MediaPreview({
     <div
       style={editorImage && dimensions ? { aspectRatio } : undefined}
       className={cn(
-        'flex items-center justify-center gap-2 rounded-xl bg-foreground/5 text-sm text-muted-foreground',
+        'flex items-center justify-center gap-2 rounded-sm bg-foreground/5 text-sm text-muted-foreground',
         thumbnail ? 'size-full' : 'px-3 py-3',
       )}
     >
