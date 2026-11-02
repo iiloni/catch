@@ -23,7 +23,8 @@ export const imageBlock: typeof base = {
       image.decoding = 'sync';
       const dimensions = imageDimensions(block.props.url);
       if (dimensions) image.style.aspectRatio = `auto ${dimensions.width} / ${dimensions.height}`;
-      const source = cachedAttachmentUrl(block.props.url, true);
+      const source =
+        cachedAttachmentUrl(block.props.url) ?? cachedAttachmentUrl(block.props.url, true);
       if (source) image.src = source;
       image.addEventListener('load', () => rememberImageDimensions(block.props.url, image));
       return rendered;

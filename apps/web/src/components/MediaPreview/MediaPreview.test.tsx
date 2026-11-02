@@ -4,6 +4,7 @@ import { useAttachmentUrl } from '@/lib/attachmentFiles';
 import { MediaPreview } from './MediaPreview';
 
 vi.mock('@/lib/attachmentFiles', () => ({
+  cachedAttachmentUrl: vi.fn(() => null),
   useAttachmentUrl: vi.fn(() => ({ source: 'blob:poster', error: false })),
 }));
 afterEach(() => {

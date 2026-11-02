@@ -109,6 +109,7 @@ test('inline images keep their space when the opening preview becomes the editor
         editor: boolean;
         loaded: boolean;
         decoding: string;
+        naturalWidth: number;
       }[] = [];
       const end = performance.now() + 3000;
       while (performance.now() < end) {
@@ -123,6 +124,7 @@ test('inline images keep their space when the opening preview becomes the editor
             editor: Boolean(image.closest('.note-editor')),
             loaded: image.complete && image.naturalWidth > 0,
             decoding: image.decoding,
+            naturalWidth: image.naturalWidth,
           });
         }
         await new Promise(requestAnimationFrame);
@@ -152,6 +154,19 @@ test('inline images keep their space when the opening preview becomes the editor
     expect(Math.abs(previewFrames.at(-1)!.width - editorFrames[0].width)).toBeLessThan(2);
     expect(editorFrames.every((frame) => frame.loaded)).toBe(true);
     if (width) expect(editorFrames.at(-1)!.width).toBeCloseTo(width, 0);
+    // Once the original has been shown, opening the note again must not start from the thumbnail.
+    if (width) {
+      expect(frames.filter((frame) => frame.loaded).map((frame) => frame.naturalWidth)).toEqual(
+        frames.filter((frame) => frame.loaded).map(() => 800),
+      );
+    }
+    await expect
+      .poll(() =>
+        page
+          .locator('.note-editor [data-content-type="image"] img')
+          .evaluate((image: HTMLImageElement) => image.naturalWidth),
+      )
+      .toBe(800);
     await testInfo.attach(`inline-image-${width ?? 'natural'}`, {
       body: await page.screenshot({
         path: testInfo.outputPath(`inline-image-${width ?? 'natural'}.png`),

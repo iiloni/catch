@@ -1,7 +1,7 @@
 import { attachmentId } from '@catch/shared';
 import { File, Image, Mic, Video } from 'lucide-react';
 import { useState } from 'react';
-import { useAttachmentUrl } from '@/lib/attachmentFiles';
+import { cachedAttachmentUrl, useAttachmentUrl } from '@/lib/attachmentFiles';
 import { imageDimensions, rememberImageDimensions } from '@/lib/imageDimensions';
 import { cn } from '@/lib/utils';
 
@@ -21,10 +21,12 @@ export function MediaPreview({
   editorImage?: boolean;
 }) {
   const poster = kind === 'video' && (thumbnail || compact);
-  const { source, error } = useAttachmentUrl(
+  const { source: resolved, error } = useAttachmentUrl(
     url,
     (kind === 'image' || poster) && Boolean(attachmentId(url)),
   );
+  // Starting from a thumbnail the editor is about to replace would show a jump in sharpness.
+  const source = (editorImage ? cachedAttachmentUrl(url) : null) ?? resolved;
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const dimensions = kind === 'image' ? imageDimensions(url) : undefined;
   const aspectRatio = dimensions ? `${dimensions.width} / ${dimensions.height}` : undefined;
