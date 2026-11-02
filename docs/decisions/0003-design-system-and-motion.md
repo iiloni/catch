@@ -366,7 +366,11 @@ Android it slides in from the top of the screen). `FormattingBar` takes its plac
 quick note's footer, and in the dock (in place of the note's actions) while the keyboard is
 up in the editor. It formats through
 a small `EditorControls` handle, so it does not import BlockNote, and its buttons never take
-focus, so the keyboard stays up.
+focus, so the keyboard stays up. The row scrolls when it does not fit. Each end fades only
+while it has more tools, by no more than the distance left, so the last tool is reached fully
+visible. A mouse wheel scrolls it sideways with no Shift key, and where there is a fine
+pointer, arrows appear at the ends with more tools. A finger drags the row and Tab scrolls to
+the tool it lands on, so the arrows stay out of the tab order and the accessibility tree.
 
 **Quick-note gestures.** A vertical touch swipe can start anywhere on the quick-note window:
 down saves, up expands. Its editor scrolls first when there is content left in that direction;
@@ -379,6 +383,14 @@ over native scrolling and makes later moves non-cancelable. The longer release d
 decides whether a pull saves or expands.
 Touch listeners follow the original touched element for the whole gesture: Android caret
 changes can replace an editor node, and subsequent events no longer bubble through the window.
+
+**Quick-note color.** The palette opens the same color and tag chooser as every other note,
+so a new note can take a child tag, in a popover above the window instead of swapping out the
+formatting row. It floats because the window has no height to spare with the keyboard up.
+Focus stays in the editor throughout: typing or tapping the note puts it away, and Escape or
+back closes it before the window. The chosen tag shows as a badge above the toolbar, since a
+child tag's color does not tell it from its parent. The attachment picker does take space
+from the window, so while it is open the editor gives up its height first.
 
 The quick-note toolbar puts an icon-only link action immediately after attachments. Choosing
 it replaces the popup's content with the capture form: the same width and bottom edge stay
