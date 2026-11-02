@@ -172,6 +172,10 @@ export function NoteEditor({
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
+    // Each block takes its direction from its own text, so a Hebrew or Arabic line reads
+    // right to left beside English ones. A nested block has its own `dir`, so it decides
+    // for itself rather than following its parent.
+    domAttributes: { block: { dir: 'auto' } },
     uploadFile: async (file) => {
       const id = noteOwner.current.noteId ?? noteOwner.current.ensureNote?.();
       if (!id) throw new Error('Open a note to attach a file');

@@ -196,7 +196,7 @@ export function NoteCard({
           onClick={openFromButton}
           // The face swaps elements as previews load (a placeholder for its thumbnail), and a
           // press on one that is gone by the release makes no click. The button takes the press.
-          className="min-h-12 cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>*]:pointer-events-none"
+          className="min-h-12 cursor-pointer rounded-2xl text-start outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>*]:pointer-events-none"
           aria-label={selecting ? 'Select note' : 'Open note'}
           aria-pressed={selecting ? selected : undefined}
         >

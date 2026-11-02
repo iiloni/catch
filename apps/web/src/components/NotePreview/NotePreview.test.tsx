@@ -101,4 +101,22 @@ describe('NotePreview', () => {
     expect(screen.queryByText('Python')).not.toBeInTheDocument();
     expect(screen.getByText('print(1)')).toBeInTheDocument();
   });
+
+  it('lets each block take its direction from its own text', () => {
+    render(
+      <NotePreview
+        content={[
+          { type: 'heading', content: [text('קניות')] },
+          { type: 'bulletListItem', content: [text('حليب')] },
+          { type: 'paragraph', content: [text('Oat milk')] },
+          { type: 'codeBlock', content: [text('// הערה')] },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'קניות' })).toHaveAttribute('dir', 'auto');
+    expect(screen.getByText('حليب').closest('p')).toHaveAttribute('dir', 'auto');
+    expect(screen.getByText('Oat milk').closest('p')).toHaveAttribute('dir', 'auto');
+    // Code stays left to right whatever language its comments are in.
+    expect(screen.getByText('// הערה').closest('pre')).toHaveAttribute('dir', 'ltr');
+  });
 });
