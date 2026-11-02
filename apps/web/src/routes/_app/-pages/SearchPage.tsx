@@ -196,8 +196,13 @@ export default function SearchPage() {
         className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6"
       >
         <ClearFiltersPull
-          enabled={active && filterCount > 0 && !filtersOpen && !selection.selecting}
-          onClear={clearFilters}
+          enabled={
+            active && (filterCount > 0 || query !== '') && !filtersOpen && !selection.selecting
+          }
+          onClear={() => {
+            clearFilters();
+            searchQuery.set('');
+          }}
         >
           <ActiveSearchFilters
             tags={tags}

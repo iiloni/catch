@@ -372,7 +372,7 @@ test('search filter panels retain their gestures and reduced motion still naviga
   await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
 });
 
-test('pulling down at the top of Search clears its filters and keeps the query', async ({
+test('pulling down at the top of Search clears its filters and query', async ({
   page,
   isMobile,
 }) => {
@@ -388,10 +388,12 @@ test('pulling down at the top of Search clears its filters and keeps the query',
 
   const short = await beginSwipe(page, isMobile, 195, 240);
   await short.move(0, 85);
-  const indicator = page.getByText('Pull to clear filters').locator('..');
+  const indicator = page.locator('[data-clear-filters-pill]');
   await expect(indicator).toHaveCSS('opacity', '1');
+  await expect(page.getByText('Pull to clear filters')).toBeInViewport();
   await short.end();
   await expect(indicator).toHaveCSS('opacity', '0');
+  await expect(page.getByText('Pull to clear filters')).not.toBeInViewport();
   await expect(filters).toBeVisible();
 
   const box = await settledBox(result);
@@ -400,11 +402,20 @@ test('pulling down at the top of Search clears its filters and keeps the query',
   await expect(page.getByText('Release to clear filters')).toBeVisible();
   await pull.end();
   await expect(filters).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('Loose');
-  await expect(result).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Browse Untagged' })).toBeVisible();
   // The press that began the pull did not open the note under it.
   await expect(page).toHaveURL(/\/search$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // A query alone is enough to pull.
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('Loose');
+  await expect(result).toBeVisible();
+  const queryPull = await beginSwipe(page, isMobile, 195, 240);
+  await queryPull.move(0, 130);
+  await expect(page.getByText('Release to clear filters')).toBeVisible();
+  await queryPull.end();
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('');
 });
 
 test('pages and headers track the finger before release and retain the incoming DOM on commit', async ({

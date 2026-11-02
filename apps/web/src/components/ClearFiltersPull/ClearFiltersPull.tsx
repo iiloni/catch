@@ -1,18 +1,29 @@
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { SearchX } from 'lucide-react';
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 
 /** Finger travel past this distance clears the filters on release. */
 const RELEASE_DISTANCE = 90;
+/** How far the pill has been drawn by then: it arrives exactly as letting go starts to clear. */
+const ARRIVED = RELEASE_DISTANCE * 0.5;
 const MAX_PULL = 64;
 /** Android's first touchmove can already be this far along; a later claim is not cancelable. */
 const MOVE_TOLERANCE = 4;
 
 /**
- * Pulling down at the top of the page clears the filters. Anywhere on the pager counts, as
- * page swipes do, including the tap-only rows and chips the filtered results are made of.
+ * Pulling down at the top of the page clears the search and its filters. Anywhere on the pager
+ * counts, as page swipes do, including the tap-only rows and chips the results are made of.
  * There is no undo, so unlike the edge pulls that close a surface a fling does not commit.
  */
 export function ClearFiltersPull({
@@ -27,8 +38,39 @@ export function ClearFiltersPull({
   const root = useRef<HTMLDivElement>(null);
   const pull = useMotionValue(0);
   const reducedMotion = useReducedMotion() ?? false;
-  const y = useTransform(() => (reducedMotion ? 0 : pull.get()));
-  const indicatorOpacity = useTransform(pull, [12, 40], [0, 1]);
+  const pill = useRef<HTMLDivElement>(null);
+  // From just above the screen, so it passes over the status bar: unlike the sync pill it comes
+  // only because the finger is drawing it. Measured as a pull starts: pixels, as the sync pill
+  // uses, since a percentage would resolve against Android's changing insets.
+  const hiddenY = useRef(0);
+  const y = useTransform(() => {
+    if (reducedMotion) return 0;
+    const travel = pull.get();
+    return (
+      hiddenY.current * (1 - Math.min(travel, ARRIVED) / ARRIVED) + Math.max(0, travel - ARRIVED)
+    );
+  });
+  // Fading keeps its shadow out of view at rest; it is all reduced motion gets. On the pill
+  // itself, because opacity on an ancestor would stop the glass from blurring the page.
+  const opacity = useTransform(pull, reducedMotion ? [12, 40] : [0, 12], [0, 1]);
+  const width = useMotionValue<number | 'auto'>('auto');
+  // Animate the measured width, like the header toolbars, so the glass and text never stretch.
+  const measure = useCallback(
+    (element: HTMLSpanElement | null) => {
+      if (!element) return;
+      const update = () => {
+        const next = element.offsetWidth + 2;
+        if (width.get() === 'auto' || reducedMotion) width.jump(next);
+        else animate(width, next, springs.smooth);
+      };
+      update();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(update);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+    [width, reducedMotion],
+  );
   const [armed, setArmed] = useState(false);
   const clear = useRef(onClear);
   clear.current = onClear;
@@ -61,7 +103,11 @@ export function ClearFiltersPull({
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
 
     function springBack() {
-      animate(pull, 0, reducedMotion ? { duration: 0 } : springs.snappy);
+      // Its words change back out of sight, not at the start of the next pull.
+      animate(pull, 0, {
+        ...(reducedMotion ? { duration: 0 } : springs.snappy),
+        onComplete: () => setArmed(false),
+      });
     }
 
     function cancel() {
@@ -130,6 +176,8 @@ export function ClearFiltersPull({
         gesture.dragging = true;
         suppressClick = true;
         pull.stop();
+        const shape = pill.current;
+        if (shape) hiddenY.current = -(shape.offsetTop + shape.offsetHeight + 8);
         setArmed(false);
       }
       move.preventDefault();
@@ -180,18 +228,45 @@ export function ClearFiltersPull({
     };
   }, [enabled, pull, reducedMotion]);
 
+  const label = armed ? 'Release to clear filters' : 'Pull to clear filters';
   return (
-    <div ref={root} className="relative">
-      <motion.div
-        aria-hidden
-        style={{ opacity: indicatorOpacity }}
-        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center"
-      >
-        <span className="glass-badge flex h-8 items-center rounded-full px-3 text-xs font-medium">
-          {armed ? 'Release to clear filters' : 'Pull to clear filters'}
-        </span>
-      </motion.div>
-      <motion.div style={{ y }}>{children}</motion.div>
-    </div>
+    <>
+      {createPortal(
+        <div
+          aria-hidden
+          className="pointer-events-none fixed top-0 right-[var(--note-pane)] left-0 z-40 flex justify-center pt-[calc(var(--safe-top)+0.5rem)]"
+        >
+          <motion.div
+            ref={pill}
+            data-clear-filters-pill
+            style={{ width, y, opacity }}
+            className="glass relative h-10 overflow-hidden rounded-full text-sm font-medium"
+          >
+            <AnimatePresence initial={false}>
+              <motion.span
+                key={label}
+                ref={measure}
+                className="absolute inset-y-0 left-1/2 flex w-max items-center gap-2 whitespace-nowrap px-4"
+                style={{ x: '-50%' }}
+                initial={{ opacity: 0, scale: 0.85, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.85,
+                  filter: 'blur(4px)',
+                  transition: { duration: reducedMotion ? 0 : 0.14 },
+                }}
+                transition={reducedMotion ? { duration: 0 } : springs.smooth}
+              >
+                <SearchX className="size-4 text-muted-foreground" aria-hidden />
+                {label}
+              </motion.span>
+            </AnimatePresence>
+          </motion.div>
+        </div>,
+        document.body,
+      )}
+      <div ref={root}>{children}</div>
+    </>
   );
 }
