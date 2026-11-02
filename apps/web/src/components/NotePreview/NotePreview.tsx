@@ -209,6 +209,39 @@ function PreviewBlock({
         );
       break;
     case 'image':
+      if (variant === 'editor' && typeof props.url === 'string' && props.url) {
+        body = (
+          <div
+            style={{
+              width: typeof props.previewWidth === 'number' ? props.previewWidth : '100%',
+              maxWidth: '100%',
+              marginInlineStart: ['center', 'right'].includes(String(props.textAlignment))
+                ? 'auto'
+                : undefined,
+              marginInlineEnd: props.textAlignment === 'center' ? 'auto' : undefined,
+            }}
+          >
+            <MediaPreview
+              url={props.url}
+              name={String(props.name || '')}
+              kind="image"
+              editorImage
+            />
+            {Boolean(props.caption) && <p className="py-1 text-[0.8em]">{String(props.caption)}</p>}
+          </div>
+        );
+        break;
+      }
+      body =
+        typeof props.url === 'string' && props.url ? (
+          <MediaPreview
+            url={props.url}
+            name={String(props.caption || props.name || 'Attachment')}
+            kind="image"
+            compact
+          />
+        ) : null;
+      break;
     case 'video':
     case 'audio':
     case 'file':

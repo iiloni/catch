@@ -6,7 +6,7 @@ import { getServerUrl } from './serverUrl';
 
 type StoredFile = { id: string; blob: Blob; pending: boolean; preview: boolean; savedAt: number };
 let database: Promise<IDBDatabase> | null = null;
-const objectUrls = new Map<string, string>();
+const objectUrls = new Map<string, { url: string; image: boolean }>();
 const listeners = new Set<() => void>();
 export function watchAttachmentFiles(listener: () => void) {
   listeners.add(listener);
@@ -146,8 +146,8 @@ export async function storeAttachmentBlob(
   await transact('readwrite', (store) =>
     store.put({ id: key, blob, pending, preview, savedAt: Date.now() } satisfies StoredFile),
   );
-  if (objectUrls.has(key)) URL.revokeObjectURL(objectUrls.get(key)!);
-  objectUrls.set(key, URL.createObjectURL(blob));
+  if (objectUrls.has(key)) URL.revokeObjectURL(objectUrls.get(key)!.url);
+  objectUrls.set(key, { url: URL.createObjectURL(blob), image: blob.type.startsWith('image/') });
   for (const listener of listeners) listener();
   // Ask the browser to retain notes and files under storage pressure. Refusal is harmless.
   void navigator.storage?.persist?.().catch(() => {});
@@ -172,7 +172,7 @@ export async function forgetAttachmentBlob(id: string) {
     const key = keyFor(id, preview);
     await transact('readwrite', (store) => store.delete(key));
     const url = objectUrls.get(key);
-    if (url) URL.revokeObjectURL(url);
+    if (url) URL.revokeObjectURL(url.url);
     objectUrls.delete(key);
     accessUrls.delete(key);
     const opened = openedUrls.get(key);
@@ -185,7 +185,7 @@ export async function forgetAttachmentBlob(id: string) {
 export async function clearAttachmentFiles() {
   if (database) (await database).close();
   database = null;
-  for (const url of objectUrls.values()) URL.revokeObjectURL(url);
+  for (const { url } of objectUrls.values()) URL.revokeObjectURL(url);
   objectUrls.clear();
   accessUrls.clear();
   const user = getSignedInUser();
@@ -215,11 +215,11 @@ async function authorizedFetch(path: string) {
 async function resolveUrl(id: string, preview: boolean) {
   if (sealedFiles(id, preview) !== undefined) return resolveSealedUrl(id, preview);
   const key = keyFor(id, preview);
-  if (objectUrls.has(key)) return objectUrls.get(key)!;
+  if (objectUrls.has(key)) return objectUrls.get(key)!.url;
   const local = await getAttachmentBlob(id, preview);
   if (local) {
     const url = URL.createObjectURL(local);
-    objectUrls.set(key, url);
+    objectUrls.set(key, { url, image: local.type.startsWith('image/') });
     return url;
   }
   // Newly picked images have their original on the device before a thumbnail exists.
@@ -228,7 +228,7 @@ async function resolveUrl(id: string, preview: boolean) {
     if (original?.type.startsWith('image/')) return resolveUrl(id, false);
     const response = await authorizedFetch(`${id}/content?preview=true`);
     await storeAttachmentBlob(id, await response.blob(), false, true);
-    return objectUrls.get(key)!;
+    return objectUrls.get(key)!.url;
   }
   const cached = accessUrls.get(key);
   if (cached && cached.expires > Date.now()) return cached.url;
@@ -259,8 +259,21 @@ export function resolveAttachmentUrl(url: string, preview = false): Promise<stri
   return request;
 }
 
+/** Reuse already available bytes while an asynchronous resolution refreshes them. */
+export function cachedAttachmentUrl(url: string, preview = false): string | null {
+  const id = attachmentId(url);
+  if (!id) return url;
+  const key = keyFor(id, preview);
+  if (sealedFiles(id, preview) !== undefined) return openedUrls.get(key) ?? null;
+  const original = objectUrls.get(id);
+  const local = objectUrls.get(key) ?? (preview && original?.image ? original : undefined);
+  if (local) return local.url;
+  const access = accessUrls.get(key);
+  return access && access.expires > Date.now() ? access.url : null;
+}
+
 export function useAttachmentUrl(url: string, preview = false) {
-  const [source, setSource] = useState<string | null>(() => (attachmentId(url) ? null : url));
+  const [source, setSource] = useState<string | null>(() => cachedAttachmentUrl(url, preview));
   const [error, setError] = useState(false);
   useEffect(() => {
     let current = true;
@@ -277,7 +290,7 @@ export function useAttachmentUrl(url: string, preview = false) {
         },
       );
     }
-    setSource(attachmentId(url) ? null : url);
+    setSource(cachedAttachmentUrl(url, preview));
     refresh();
     listeners.add(refresh);
     window.addEventListener('online', refresh);

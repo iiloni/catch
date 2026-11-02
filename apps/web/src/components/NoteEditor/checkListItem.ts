@@ -1,6 +1,7 @@
 import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
 import { closeHistory } from '@tiptap/pm/history';
 import { codeBlock } from './codeBlock';
+import { imageBlock } from './imageBlock';
 
 const checklist = defaultBlockSpecs.checkListItem;
 
@@ -43,5 +44,5 @@ const checkListItem: typeof checklist = {
 };
 
 export const noteEditorSchema = BlockNoteSchema.create({
-  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock },
+  blockSpecs: { ...defaultBlockSpecs, checkListItem, codeBlock, image: imageBlock },
 });
