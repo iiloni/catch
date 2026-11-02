@@ -69,8 +69,10 @@ describe('cardBlocks', () => {
     ).toBe(false);
   });
 
-  it('counts media after the cutoff as more', () => {
-    expect(cardBlocks([paragraph('a'), cutoff, { type: 'image', props: {} }]).more).toBe(true);
+  it('counts media after the cutoff as more only when it has a file', () => {
+    const image = (url: string) => ({ type: 'image', props: { url } });
+    expect(cardBlocks([paragraph('a'), cutoff, image('attachment:photo')]).more).toBe(true);
+    expect(cardBlocks([paragraph('a'), cutoff, image('')]).more).toBe(false);
   });
 
   it('ignores a cutoff with nothing above it, so the card is not blank', () => {
@@ -81,6 +83,11 @@ describe('cardBlocks', () => {
     ]);
     expect(names(shown)).toEqual(['kept']);
     expect(more).toBe(false);
+  });
+
+  it('ignores a cutoff with only blank text above it', () => {
+    const { shown } = cardBlocks([paragraph('   '), cutoff, paragraph('kept')]);
+    expect(names(shown)).toEqual(['   ', 'kept']);
   });
 
   it('leaves an ordinary divider alone', () => {

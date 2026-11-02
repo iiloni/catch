@@ -79,6 +79,7 @@ test('a share link shows the whole note without the cutoff', async ({ page, brow
       ],
     }).transaction.isPersisted.promise;
   });
+  await expect(card(page, 'Shared list')).toBeVisible();
   await expect(card(page, 'Shared list').getByText('Past the cutoff')).toBeHidden();
 
   await noteAction(page, 'Shared list', 'Share');

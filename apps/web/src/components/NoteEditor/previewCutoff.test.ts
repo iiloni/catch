@@ -29,5 +29,7 @@ describe('the preview cutoff block', () => {
       'divider',
       'paragraph',
     ]);
+    // It reads the marker as an ordinary divider, dropping the prop it does not know.
+    expect(editor.document[1]?.props).toEqual({});
   });
 });

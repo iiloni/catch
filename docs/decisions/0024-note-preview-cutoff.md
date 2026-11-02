@@ -35,7 +35,8 @@ opaque to the server, so vault notes work the same way.
 - The first cutoff in reading order wins, at any depth. Choosing it again moves it; a pasted
   second one does nothing.
 - A cutoff replaces the ten-block limit, because the author chose the length.
-- A cutoff with nothing above it is ignored, so a card is never blank.
+- A cutoff with nothing worth showing above it (blank text, media with no file) is ignored,
+  so a card is never blank.
 
 ## Where it shows
 

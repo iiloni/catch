@@ -87,16 +87,19 @@ function isEmptyBlock(block: Json) {
 
 /**
  * What a note's card shows, and whether the note holds more. A cutoff replaces the block
- * limit, unless nothing is above it: a card is never blank because of its marker.
+ * limit, unless nothing worth showing is above it: a card is never blank because of its
+ * marker. Blank text and media with no file count as nothing.
  */
 export function cardBlocks(
   blocks: readonly Json[],
   limit = CARD_BLOCKS,
 ): { shown: Json[]; more: boolean } {
   const split = splitAtCutoff(blocks);
-  const shown = split?.before.filter((block) => !isEmptyBlock(block));
-  if (split && shown?.length) {
-    return { shown, more: split.after.some((block) => !isEmptyBlock(block)) };
+  if (split && blocksHaveContent(split.before)) {
+    return {
+      shown: split.before.filter((block) => !isEmptyBlock(block)),
+      more: blocksHaveContent(split.after),
+    };
   }
   const present = blocks.filter((block) => !isEmptyBlock(block));
   return { shown: present.slice(0, limit), more: present.length > limit };

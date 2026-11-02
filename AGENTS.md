@@ -367,8 +367,8 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   `comparePositions` (code units); `localeCompare` and Postgres collations order them wrongly.
 - A note's preview cutoff (ADR 0024) is a `divider` with `previewEnd: true`, not a block of its
   own: a new block type would stop older clients opening the note. Anything that shows a note
-  as a card reads it through `cardBlocks`; anything shown to someone without a card drops the
-  marker with `withoutPreviewCutoff`. `NotePreview` must not import `previewCutoff.tsx`, which
+  as a card reads it through `cardBlocks`. The editor and version history show the marker;
+  only the public share page and text copies drop it, with `withoutPreviewCutoff`. `NotePreview` must not import `previewCutoff.tsx`, which
   would pull BlockNote into the gallery's bundle.
 - Link previews are derived from a note's links, not stored in it (ADR 0006). Read a note's
   previews with `useNoteLinks` (`lib/linkPreviews.ts`), which shares one subscription across
