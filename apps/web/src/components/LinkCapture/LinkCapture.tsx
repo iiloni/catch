@@ -132,6 +132,8 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
     for (const [property, start, end] of tracks)
       surface.style.setProperty(property, `${start + (end - start) * amount}px`);
   });
+  // Settles within about a pixel, as each size did when animated on its own.
+  const distance = Math.max(1, ...tracks.map(([, start, end]) => Math.abs(end - start)));
   let animation: ReturnType<typeof animate> | null = null;
   let stopped = false;
   let finish!: () => void;
@@ -142,7 +144,11 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
   // long frame would count it as time already run and open most of the way there.
   const start = requestAnimationFrame(() => {
     if (stopped) return;
-    animation = animate(progress, 1, { ...springs.smooth, restDelta: 0.002, restSpeed: 0.05 });
+    animation = animate(progress, 1, {
+      ...springs.smooth,
+      restDelta: 1 / distance,
+      restSpeed: 20 / distance,
+    });
     void animation.then(finish);
   });
   return {
@@ -711,8 +717,19 @@ export function LinkCapture() {
         if (body) body.style.opacity = '';
       };
       stopReturnAnimation.current = stop;
+      // The morph holds the window at a fixed size. Opening a picker or typing changes the
+      // size it should have, so either hands the window back to its CSS at once.
+      const interrupt = () => {
+        if (stopReturnAnimation.current !== stop) return;
+        stop();
+        stopReturnAnimation.current = null;
+      };
+      popup.addEventListener('pointerdown', interrupt, true);
+      popup.addEventListener('keydown', interrupt, true);
       linkCaptureOpen.set(false);
       await shrink.finished;
+      popup.removeEventListener('pointerdown', interrupt, true);
+      popup.removeEventListener('keydown', interrupt, true);
       if (stopReturnAnimation.current === stop) {
         shrink.restore();
         if (body) body.style.opacity = '';

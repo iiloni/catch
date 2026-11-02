@@ -301,6 +301,49 @@ test('the window still grows for the attachment picker after link capture', asyn
   await expect.poll(async () => (await popup.boundingBox())!.height).toBeLessThan(grown);
 });
 
+test('a picker opened while the window morphs back from link capture grows smoothly', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The window sizing is the same on both layouts.');
+  await signUp(page);
+  const { popup } = await openQuickNote(page);
+  await settledBox(popup);
+  await popup.getByRole('button', { name: 'Save link', exact: true }).click();
+  const capture = page.getByRole('dialog', { name: 'Add Rich Link', exact: true });
+  await expect(capture.getByLabel('URL', { exact: true })).toBeFocused();
+  await settledBox(capture);
+  const heights = await page.evaluate(async () => {
+    const window = document.querySelector<HTMLElement>('[aria-label="New note"]');
+    const close = document.querySelector<HTMLElement>(
+      '[data-dock] button[aria-label="Close link capture"]',
+    );
+    const attach = window?.querySelector<HTMLElement>('[aria-label="Attach files"]');
+    if (!window || !close || !attach) throw new Error('Missing controls');
+    close.click();
+    for (let frame = 0; frame < 6; frame++) await new Promise(requestAnimationFrame);
+    // A tap while the morph still holds the window's size.
+    attach.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }),
+    );
+    attach.click();
+    const seen: number[] = [];
+    for (let frame = 0; frame < 60; frame++) {
+      await new Promise(requestAnimationFrame);
+      seen.push(window.getBoundingClientRect().height);
+    }
+    return seen;
+  });
+  const steps = heights.slice(1).map((height, index) => height - heights[index]!);
+  // Held at its old size, the window stood still and then jumped by most of the picker.
+  expect(Math.max(...steps.map(Math.abs))).toBeLessThan(30);
+  const picker = page.getByRole('region', { name: 'Add attachment' });
+  await expect(picker).toBeVisible();
+  const [box, pickerBox] = await Promise.all([popup.boundingBox(), picker.boundingBox()]);
+  expect(Math.abs(heights.at(-1)! - box!.height)).toBeLessThanOrEqual(1);
+  expect(box!.height).toBeGreaterThan(pickerBox!.height + 100);
+});
+
 test('every attachment option fits above the keyboard on a small phone', async ({
   page,
   isMobile,
