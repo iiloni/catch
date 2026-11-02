@@ -1,6 +1,7 @@
 import {
   type BoardColumn,
   blocksToPlainText,
+  cardBlocks,
   comparePositions,
   type Note,
   type NoteTags,
@@ -33,7 +34,7 @@ export function widgetText(content: Note['content']) {
       }
     }
   };
-  visit(content);
+  visit(cardBlocks(content, Number.POSITIVE_INFINITY).shown);
   // A checklist without a heading keeps its first item in the body.
   const heading = lines[0] && !/^[☐☑]/u.test(lines[0]) ? lines.shift() : undefined;
   let titleEnd = 160;

@@ -90,6 +90,13 @@ describe('widget projection', () => {
       `${'A'.repeat(340)}\n${'B'.repeat(5000)}\nFinal paragraph`,
     );
     expect(text.sections?.every((section) => section.length <= 1600)).toBe(true);
+    expect(
+      widgetText([
+        { type: 'heading', content: 'Links' },
+        { type: 'divider', props: { previewEnd: true } },
+        { type: 'paragraph', content: 'https://example.com/hidden' },
+      ]).body,
+    ).toBe('');
     expect(widgetText([{ type: 'image', props: { url: 'secret-url' } }])).toEqual({
       title: 'Untitled note',
       body: '',

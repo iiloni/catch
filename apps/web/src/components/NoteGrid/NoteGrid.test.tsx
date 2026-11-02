@@ -33,6 +33,15 @@ describe('estimateCardHeight', () => {
     );
   });
 
+  it('measures only what is above a preview cutoff', () => {
+    const above = [paragraph('Milk')];
+    const below = Array.from({ length: 8 }, () => paragraph('Milk'));
+    const cutoff = { type: 'divider', props: { previewEnd: true } };
+    expect(estimateCardHeight([...above, cutoff, ...below], 220, false)).toBe(
+      estimateCardHeight(above, 220, false),
+    );
+  });
+
   it('leaves room for the actions only where they show', () => {
     const content = [paragraph('Milk')];
     expect(estimateCardHeight(content, 220, true)).toBeGreaterThan(

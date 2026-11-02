@@ -1,9 +1,9 @@
-import type { BlockNoteEditor } from '@blocknote/core';
 import { SideMenuExtension } from '@blocknote/core/extensions';
 import { closeHistory } from '@tiptap/pm/history';
 import { useEffect, useState } from 'react';
 import { haptics } from '@/lib/haptics';
 import { keyboardHeight } from '@/lib/keyboard';
+import type { noteEditorSchema } from './checkListItem';
 
 const LIST_ITEM =
   '[data-content-type="checkListItem"], [data-content-type="bulletListItem"], [data-content-type="numberedListItem"]';
@@ -12,7 +12,10 @@ const MOVE_TOLERANCE = 8;
 const INDENT_DISTANCE = 32;
 
 /** Lists share a projected drop destination for touch holds and mouse drag handles. */
-export function useListItemDrag(editor: BlockNoteEditor, editable: boolean) {
+export function useListItemDrag(
+  editor: typeof noteEditorSchema.BlockNoteEditor,
+  editable: boolean,
+) {
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!root || !editable) return;
