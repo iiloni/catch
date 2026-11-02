@@ -31,12 +31,10 @@ import {
   swallowNextClick,
   useLongPress,
 } from '@/lib/longPress';
-import { dropIndex, galleryMasonry, masonry, type Point } from '@/lib/masonry';
+import { columnsFor, dropIndex, GAP, galleryMasonry, masonry, type Point } from '@/lib/masonry';
 import { afterPaint, springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
-const MIN_COLUMN_WIDTH = 220;
-const GAP = 12;
 /** A held card rides above the page header (30) and the dock (40), below sheets (50). */
 const LIFTED_Z = 45;
 /**
@@ -64,12 +62,6 @@ type Props = {
   selected?: ReadonlySet<string>;
   onSelect?: (note: Note, selected: boolean) => void;
 };
-
-/** Two columns on phones (as in Keep), more as space allows. */
-export function columnsFor(width: number) {
-  if (width < 280) return 1;
-  return Math.max(2, Math.floor((width + GAP) / (MIN_COLUMN_WIDTH + GAP)));
-}
 
 // A card's parts (see NoteCard and NotePreview), for guessing heights.
 const CARD_PADDING_X = 28;

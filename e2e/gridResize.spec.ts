@@ -83,7 +83,10 @@ test.describe('on a phone', () => {
 });
 
 test.describe('across screen states', () => {
-  test.use({ viewport: { width: 390, height: 800 } });
+  // A foldable's inner display: a whole page of three columns, and a pane leaving two.
+  const UNFOLDED = { width: 840, height: 800 };
+  const FOLDED = { width: 390, height: 800 };
+  test.use({ viewport: FOLDED });
 
   test('the Gallery keeps a layout for each', async ({ page, isMobile }) => {
     test.skip(isMobile, 'The choice is kept the same way on both layouts.');
@@ -96,7 +99,7 @@ test.describe('across screen states', () => {
     const toMasonry = page.getByRole('button', { name: 'Switch to masonry view' });
     await expect(toSingle).toBeVisible();
 
-    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.setViewportSize(UNFOLDED);
     await openNote(page, 'Alpha');
     await toSingle.click();
     await expect(toMasonry).toBeVisible();
@@ -105,15 +108,38 @@ test.describe('across screen states', () => {
     await page.goBack();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(toSingle).toBeVisible();
-    await toSingle.click();
-    await expect(toMasonry).toBeVisible();
     await expect
       .poll(async () => (await card(page, 'Alpha').boundingBox())?.width)
-      .toBeGreaterThan(900);
+      .toBeLessThan(400);
 
-    // Neither of those reached the folded screen.
-    await page.setViewportSize({ width: 390, height: 800 });
+    // Neither reached the folded screen, and the pane's choice is waiting when a note opens.
+    await page.setViewportSize(FOLDED);
     await expect(toSingle).toBeVisible();
+    await page.setViewportSize(UNFOLDED);
+    await openNote(page, 'Alpha');
+    await expect(toMasonry).toBeVisible();
+  });
+
+  test('the toggle leaves when the width decides', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'The widths are the same on both layouts.');
+    await signUp(page);
+    await seedNotes(page, ['Alpha', 'Beta']);
+    const toSingle = page.getByRole('button', { name: 'Switch to single column view' });
+    await toSingle.click();
+    await expect(page.getByRole('button', { name: 'Switch to masonry view' })).toBeVisible();
+
+    // A large screen fits four columns, whatever the phone's choice was.
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect(page.getByRole('button', { name: /^Switch to / })).toHaveCount(0);
+    await expect
+      .poll(async () => (await card(page, 'Alpha').boundingBox())?.width)
+      .toBeLessThan(400);
+
+    // Beside a note, a small unfolded screen leaves room for one column only.
+    await page.setViewportSize({ width: 690, height: 830 });
+    await expect(toSingle).toBeVisible();
+    await openNote(page, 'Alpha');
+    await expect(page.getByRole('button', { name: /^Switch to / })).toHaveCount(0);
   });
 });
 

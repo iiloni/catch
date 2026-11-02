@@ -2,6 +2,15 @@ export type Point = { x: number; y: number };
 
 type Grid = { columns: number; columnWidth: number; gap: number };
 
+const MIN_COLUMN_WIDTH = 220;
+export const GAP = 12;
+
+/** Two columns on phones (as in Keep), more as space allows. */
+export function columnsFor(width: number) {
+  if (width < 280) return 1;
+  return Math.max(2, Math.floor((width + GAP) / (MIN_COLUMN_WIDTH + GAP)));
+}
+
 /** Places each card at the top of the shortest column (leftmost on a tie), as Keep does. */
 class Columns {
   private readonly tops: number[];

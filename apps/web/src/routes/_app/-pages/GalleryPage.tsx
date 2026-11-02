@@ -8,7 +8,7 @@ import {
   Rows3,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { AccountSwitcher } from '@/components/AccountSwitcher/AccountSwitcher';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
@@ -50,10 +50,21 @@ type Sort = z.infer<typeof sortSchema>;
 export default function GalleryPage() {
   const { open } = useOpenNote();
   const pane = useNotePane();
-  const [layout, setLayout] = useGalleryLayout({
-    folded: isFolded(pane.viewport),
-    split: pane.shown,
-  });
+  const [gridWidth, setGridWidth] = useState(0);
+  const measureGrid = useCallback((element: HTMLElement | null) => {
+    if (!element) return;
+    // The page can be phone-sized even on desktop when a note pane is open.
+    const update = () => setGridWidth(element.clientWidth);
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const [layout, setLayout] = useGalleryLayout(
+    { folded: isFolded(pane.viewport), split: pane.shown },
+    gridWidth,
+  );
   const gutterShift = usePageGutterShift(PAGE_MAX);
   const layoutAction =
     layout === 'masonry' ? 'Switch to single column view' : 'Switch to masonry view';
@@ -98,24 +109,26 @@ export default function GalleryPage() {
         trailing={
           <>
             <VaultToggle />
-            <motion.button
-              type="button"
-              aria-label={layoutAction}
-              title={layoutAction}
-              onClick={() => {
-                haptics.toggle();
-                setLayout(layout === 'masonry' ? 'single-column' : 'masonry');
-              }}
-              whileTap={{ scale: 0.9 }}
-              transition={springs.snappy}
-              className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {layout === 'masonry' ? (
-                <Rows3 className="size-5" aria-hidden />
-              ) : (
-                <LayoutGrid className="size-5" aria-hidden />
-              )}
-            </motion.button>
+            {setLayout && (
+              <motion.button
+                type="button"
+                aria-label={layoutAction}
+                title={layoutAction}
+                onClick={() => {
+                  haptics.toggle();
+                  setLayout(layout === 'masonry' ? 'single-column' : 'masonry');
+                }}
+                whileTap={{ scale: 0.9 }}
+                transition={springs.snappy}
+                className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {layout === 'masonry' ? (
+                  <Rows3 className="size-5" aria-hidden />
+                ) : (
+                  <LayoutGrid className="size-5" aria-hidden />
+                )}
+              </motion.button>
+            )}
             <ViewOptions sort={sort} onChange={setSort} />
             <SettingsButton />
             <AccountSwitcher />
@@ -127,30 +140,32 @@ export default function GalleryPage() {
         style={{ x: gutterShift }}
         className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        {awaitingSync ? null : (
-          <div>
-            <NoteGrid
-              notes={sorted}
-              groupPinned
-              layout={layout}
-              onOpen={(note, card) => open(note.id, card)}
-              onArchive={(note) => setNoteArchived(note.id, true)}
-              onMove={onMove}
-              selected={selection.ids}
-              onSelect={selection.select}
-            />
-            {shown.length === 0 &&
-              (vault ? (
-                <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
-                  Tap + to write a note only your devices can read.
-                </EmptyState>
-              ) : (
-                <EmptyState icon={Lightbulb} title="Catch your first note">
-                  Tap + to write something down. It lands here.
-                </EmptyState>
-              ))}
-          </div>
-        )}
+        <div ref={measureGrid}>
+          {awaitingSync ? null : (
+            <>
+              <NoteGrid
+                notes={sorted}
+                groupPinned
+                layout={layout}
+                onOpen={(note, card) => open(note.id, card)}
+                onArchive={(note) => setNoteArchived(note.id, true)}
+                onMove={onMove}
+                selected={selection.ids}
+                onSelect={selection.select}
+              />
+              {shown.length === 0 &&
+                (vault ? (
+                  <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+                    Tap + to write a note only your devices can read.
+                  </EmptyState>
+                ) : (
+                  <EmptyState icon={Lightbulb} title="Catch your first note">
+                    Tap + to write something down. It lands here.
+                  </EmptyState>
+                ))}
+            </>
+          )}
+        </div>
       </motion.section>
     </>
   );
