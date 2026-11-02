@@ -27,9 +27,9 @@ test('the new-note window grows into link capture and preserves its draft', asyn
   await expect(popup.getByRole('textbox')).toBeFocused();
   await page.keyboard.type('Saved before changing modes');
   await popup.getByRole('button', { name: 'Save to Gallery', exact: true }).click();
-  await popup.getByRole('button', { name: 'Colors', exact: true }).click();
-  await popup.getByRole('button', { name: 'Red', exact: true }).click();
-  await popup.getByRole('button', { name: 'Formatting', exact: true }).click();
+  await popup.getByRole('button', { name: 'Background color', exact: true }).click();
+  await page.getByRole('button', { name: 'Red', exact: true }).click();
+  await page.keyboard.press('Escape');
   await settledBox(popup);
   const movement = await page.evaluate(async () => {
     const popup = document.querySelector('[aria-label="New note"]');

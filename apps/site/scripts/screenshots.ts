@@ -501,8 +501,6 @@ async function captureDocs(context: BrowserContext, theme: string, only?: string
         await page.keyboard.type('Call the plumber');
         await page.keyboard.press('Enter');
         await page.keyboard.type('Kitchen tap, before Friday');
-        const formatting = page.getByRole('button', { name: 'Formatting', exact: true });
-        if (await formatting.isVisible()) await formatting.click();
       },
     },
     ...(
@@ -530,9 +528,6 @@ async function captureDocs(context: BrowserContext, theme: string, only?: string
       prepare: async (page) => {
         await card(page, 'Groceries').waitFor({ timeout: 60_000 });
         await page.getByRole('button', { name: 'New note', exact: true }).click();
-        // Save link lives in the quick note's formatting toolbar.
-        const formatting = page.getByRole('button', { name: 'Formatting', exact: true });
-        if (await formatting.isVisible()) await formatting.click();
         await page.getByRole('button', { name: 'Save link', exact: true }).click();
         await page.getByRole('heading', { name: 'Add Rich Link' }).waitFor();
         await page.getByLabel('URL', { exact: true }).fill('https://en.wikipedia.org/wiki/Lisbon');

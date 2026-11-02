@@ -121,13 +121,84 @@ describe('FormattingBar', () => {
     expect(screen.getByRole('button', { name: 'Outdent' })).toBeDisabled();
   });
 
-  it('waits for the editor', () => {
+  it('waits for the editor to format, but not to attach a file or save a link', () => {
+    const onAttachments = vi.fn();
+    const onLink = vi.fn();
     render(
       <TooltipProvider>
-        <FormattingBar controls={null} />
+        <FormattingBar controls={null} onAttachments={onAttachments} onLink={onLink} />
       </TooltipProvider>,
     );
     expect(screen.getByRole('button', { name: 'Bold' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }));
+    expect(onAttachments).toHaveBeenCalledOnce();
+    expect(onLink).toHaveBeenCalledOnce();
+  });
+
+  describe('scrolling', () => {
+    function renderOverflowing({ scrollLeft = 0, clientWidth = 300, scrollWidth = 500 } = {}) {
+      render(
+        <TooltipProvider>
+          <FormattingBar controls={fakeControls()} />
+        </TooltipProvider>,
+      );
+      const row = screen.getByRole('toolbar', { name: 'Formatting' });
+      Object.defineProperty(row, 'clientWidth', { configurable: true, value: clientWidth });
+      Object.defineProperty(row, 'scrollWidth', { configurable: true, value: scrollWidth });
+      row.scrollLeft = scrollLeft;
+      fireEvent.scroll(row);
+      return row;
+    }
+    const wheel = (row: HTMLElement, init: WheelEventInit) => {
+      const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init });
+      row.dispatchEvent(event);
+      return event;
+    };
+
+    it('fades only the ends with more tools', () => {
+      const row = renderOverflowing({ scrollLeft: 0 });
+      expect(row.style.getPropertyValue('--fade-before')).toBe('0px');
+      expect(row.style.getPropertyValue('--fade-after')).toBe('28px');
+
+      row.scrollLeft = 200;
+      fireEvent.scroll(row);
+      expect(row.style.getPropertyValue('--fade-before')).toBe('28px');
+      expect(row.style.getPropertyValue('--fade-after')).toBe('0px');
+    });
+
+    it('grows a fade with the distance left, so the last tool is reached unfaded', () => {
+      const row = renderOverflowing({ scrollLeft: 190 });
+      expect(row.style.getPropertyValue('--fade-after')).toBe('10px');
+    });
+
+    it('scrolls sideways with a vertical wheel', () => {
+      const row = renderOverflowing();
+      const event = wheel(row, { deltaY: 120 });
+      expect(row.scrollLeft).toBe(120);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('reads a wheel that counts in lines', () => {
+      const row = renderOverflowing();
+      wheel(row, { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE });
+      expect(row.scrollLeft).toBe(48);
+    });
+
+    it('leaves a wheel it cannot use to the page', () => {
+      const row = renderOverflowing({ scrollLeft: 200 });
+      expect(wheel(row, { deltaY: 120 }).defaultPrevented).toBe(false);
+      expect(wheel(row, { deltaX: 40, deltaY: 10 }).defaultPrevented).toBe(false);
+      expect(wheel(row, { deltaY: -120, ctrlKey: true }).defaultPrevented).toBe(false);
+    });
+
+    it('keeps its arrows away from screen readers and the tab order', () => {
+      const row = renderOverflowing();
+      const arrow = row.parentElement?.querySelector('[data-scroll-arrow="after"]');
+      expect(arrow).toHaveAttribute('aria-hidden', 'true');
+      expect(arrow).toHaveAttribute('tabindex', '-1');
+      expect(screen.getAllByRole('button').some((button) => button === arrow)).toBe(false);
+    });
   });
 
   it('shows the label on touch hold without applying formatting', () => {

@@ -14,10 +14,13 @@ import { pickNativeFiles, startNativeRecording, stopNativeRecording } from '@/li
 const native = Capacitor.isNativePlatform();
 export function AttachmentPicker({
   noteId,
+  ensureNote,
   onDone,
   controls,
 }: {
-  noteId: string;
+  noteId?: string;
+  /** For a note that is not saved yet: gives it an id once there is a file to attach to it. */
+  ensureNote?: () => string | null;
   onDone: () => void;
   controls?: EditorControls | null;
 }) {
@@ -28,6 +31,8 @@ export function AttachmentPicker({
   const [direction, setDirection] = useState(1);
   const reducedMotion = useReducedMotion();
   const insert = useRef<Promise<((files: Attachment[]) => void) | null> | null>(null);
+  const latestControls = useRef(controls);
+  latestControls.current = controls;
 
   const active = useRef(true);
   useEffect(() => {
@@ -43,19 +48,26 @@ export function AttachmentPicker({
   }
 
   function rememberPosition() {
-    insert.current = controls
-      ? Promise.resolve(controls.attachmentInserter())
-      : captureAttachmentInsertion(noteId);
+    if (controls) insert.current = Promise.resolve(controls.attachmentInserter());
+    else insert.current = noteId ? captureAttachmentInsertion(noteId) : null;
   }
   async function receive(files: readonly File[]) {
     const insertion = insert.current;
+    const id = noteId ?? ensureNote?.();
+    if (!id) {
+      toast.error('Could not attach to this note');
+      setBusy(false);
+      return;
+    }
     setBusy(true);
     showCapture(null);
     try {
-      await attachFiles(noteId, files, (added) => {
+      await attachFiles(id, files, (added) => {
         // A system picker can outlive the dock panel. Its captured insertion point still
         // belongs to the mounted editor; that editor ignores it after switching notes.
-        void insertion?.then((insert) => insert?.(added));
+        if (insertion) void insertion.then((insert) => insert?.(added));
+        // Picked while a new note's editor was loading: it has one by now, or never will.
+        else latestControls.current?.attachmentInserter()(added);
       });
     } finally {
       if (active.current) {
