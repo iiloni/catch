@@ -1,6 +1,6 @@
 import { blocksHaveContent, DEFAULT_BOARD_STATUS, type Note, type NoteColor } from '@catch/shared';
 import { useRouterState } from '@tanstack/react-router';
-import { Columns3, LayoutGrid, Maximize2, Palette, Type } from 'lucide-react';
+import { Columns3, LayoutDashboard, Maximize2, Palette, Type } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -540,7 +540,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
             }}
             className="size-9 shrink-0 rounded-xl bg-foreground/[0.07]"
           >
-            {destination === 'gallery' ? <LayoutGrid /> : <Columns3 />}
+            {destination === 'gallery' ? <LayoutDashboard /> : <Columns3 />}
           </IconButton>
           <IconButton label="Expand" onClick={expand} className="size-9 shrink-0 rounded-xl">
             <Maximize2 />
