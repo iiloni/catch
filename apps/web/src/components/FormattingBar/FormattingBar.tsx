@@ -1,5 +1,7 @@
 import {
   Bold,
+  ChevronLeft,
+  ChevronRight,
   Heading,
   Italic,
   Link2,
@@ -25,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { useToolRowScroll } from './useToolRowScroll';
 
 type Tool =
   | { label: string; action: 'slash' }
@@ -60,11 +63,16 @@ function isActive(tool: Tool, state: FormattingState | null) {
   return undefined;
 }
 
+/** Files and links are saved to the note, so they need no editor to have loaded yet. */
+function worksWithoutEditor(tool: Tool) {
+  return 'action' in tool && (tool.action === 'attachments' || tool.action === 'link');
+}
+
 function isEnabled(tool: Tool, state: FormattingState | null) {
+  if (worksWithoutEditor(tool)) return true;
   if (!state) return false;
   if ('action' in tool) {
-    if (tool.action === 'slash' || tool.action === 'attachments' || tool.action === 'link')
-      return true;
+    if (tool.action === 'slash') return true;
     return tool.action === 'indent' ? state.canIndent : state.canOutdent;
   }
   return true;
@@ -72,7 +80,8 @@ function isEnabled(tool: Tool, state: FormattingState | null) {
 
 /**
  * A scrolling row of text formatting buttons for the editor that `controls` belongs to.
- * The buttons never take focus, so the keyboard stays up while formatting.
+ * The buttons never take focus, so the keyboard stays up while formatting. With a mouse the
+ * wheel scrolls it and arrows appear at whichever ends have more tools.
  */
 export function FormattingBar({
   controls,
@@ -92,47 +101,100 @@ export function FormattingBar({
     controls?.getState ?? noState,
   );
 
+  const frame = useRef<HTMLDivElement>(null);
+  const row = useRef<HTMLDivElement>(null);
+  const { more, page } = useToolRowScroll(frame, row);
+
   function run(tool: Tool) {
+    if ('action' in tool && tool.action === 'attachments') {
+      haptics.selection();
+      onAttachments?.();
+      return;
+    }
+    if ('action' in tool && tool.action === 'link') {
+      haptics.selection();
+      onLink?.();
+      return;
+    }
     if (!controls) return;
     haptics.selection();
     if ('style' in tool) controls.toggleStyle(tool.style);
     else if ('block' in tool) controls.toggleBlock(tool.block);
     else if (tool.action === 'slash') controls.insertSlash();
-    else if (tool.action === 'attachments') onAttachments?.();
-    else if (tool.action === 'link') onLink?.();
     else if (tool.action === 'indent') controls.indent();
     else controls.outdent();
   }
 
   return (
-    <div
-      role="toolbar"
-      aria-label="Formatting"
+    <div ref={frame} className="relative flex min-w-0 flex-1 items-center">
+      <div
+        ref={row}
+        role="toolbar"
+        aria-label="Formatting"
+        className={cn(
+          // The fades hint that the row scrolls, and only where it does: see useToolRowScroll.
+          // With arrows, `--arrow-share` clears a strip of each fade for an arrow to sit in.
+          '-mx-1 -my-1 flex min-w-0 scroll-px-7 items-center gap-0.5 overflow-x-auto px-1 py-1 [--arrow-share:0] [mask-image:linear-gradient(to_right,transparent_calc(var(--fade-before,0px)*var(--arrow-share)),black_calc(var(--fade-before,0px)*(1+var(--arrow-share))),black_calc(100%-var(--fade-after,0px)*(1+var(--arrow-share))),transparent_calc(100%-var(--fade-after,0px)*var(--arrow-share)))] [scrollbar-width:none] any-pointer-fine:scroll-px-14 any-pointer-fine:[--arrow-share:0.85]',
+          className,
+        )}
+      >
+        {TOOLS.flatMap((tool) =>
+          onLink && 'action' in tool && tool.action === 'attachments'
+            ? [tool, { label: 'Save link', icon: Link2, action: 'link' } satisfies Tool]
+            : [tool],
+        ).map((tool) => (
+          <FormattingButton
+            key={tool.label}
+            tool={tool}
+            active={
+              'action' in tool && tool.action === 'attachments'
+                ? attachmentsOpen
+                : isActive(tool, state)
+            }
+            expanded={
+              'action' in tool && tool.action === 'attachments' ? attachmentsOpen : undefined
+            }
+            enabled={isEnabled(tool, state)}
+            onPress={() => run(tool)}
+          />
+        ))}
+      </div>
+      <ScrollArrow direction={-1} visible={more.before} onPress={page} />
+      <ScrollArrow direction={1} visible={more.after} onPress={page} />
+    </div>
+  );
+}
+
+/**
+ * For a mouse only: a finger drags the row, and Tab scrolls to the tool it lands on, which
+ * is why the arrows stay out of the tab order and the accessibility tree.
+ */
+function ScrollArrow({
+  direction,
+  visible,
+  onPress,
+}: {
+  direction: -1 | 1;
+  visible: boolean;
+  onPress: (direction: -1 | 1) => void;
+}) {
+  const Icon = direction < 0 ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      aria-hidden
+      tabIndex={-1}
+      data-scroll-arrow={direction < 0 ? 'before' : 'after'}
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={() => onPress(direction)}
       className={cn(
-        // The fade hints that the row scrolls when it does not fit.
-        '-mx-1 flex min-w-0 items-center gap-0.5 overflow-x-auto px-1 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [scrollbar-width:none]',
-        className,
+        'absolute inset-y-0 hidden w-6 items-center justify-center text-foreground/60 transition-opacity duration-150 hover:text-foreground any-pointer-fine:flex',
+        direction < 0 ? '-left-1' : '-right-1',
+        visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
     >
-      {TOOLS.flatMap((tool) =>
-        onLink && 'action' in tool && tool.action === 'attachments'
-          ? [tool, { label: 'Save link', icon: Link2, action: 'link' } satisfies Tool]
-          : [tool],
-      ).map((tool) => (
-        <FormattingButton
-          key={tool.label}
-          tool={tool}
-          active={
-            'action' in tool && tool.action === 'attachments'
-              ? attachmentsOpen
-              : isActive(tool, state)
-          }
-          expanded={'action' in tool && tool.action === 'attachments' ? attachmentsOpen : undefined}
-          enabled={isEnabled(tool, state)}
-          onPress={() => run(tool)}
-        />
-      ))}
-    </div>
+      <Icon className="size-4" aria-hidden />
+    </button>
   );
 }
 

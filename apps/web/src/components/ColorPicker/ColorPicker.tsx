@@ -46,36 +46,20 @@ type Props = {
 type PopoverControls = Pick<ComponentProps<typeof Popover>, 'open' | 'onOpenChange'> &
   Pick<ComponentProps<typeof PopoverContent>, 'onCloseAutoFocus'>;
 
-/**
- * Every note color as a swatch, in a wrapping grid or one scrolling row. A null value
- * (notes of different colors) checks no swatch.
- */
+/** Every note color as a swatch. A null value (notes of different colors) checks no swatch. */
 export function ColorSwatches({
   value,
   onChange,
-  layout = 'grid',
   className,
   tags = [],
-  disabled = false,
 }: {
   value: NoteColor | null;
   onChange: (color: NoteColor) => void;
-  layout?: 'grid' | 'row';
   className?: string;
   tags?: readonly Tag[];
-  disabled?: boolean;
 }) {
   return (
-    <fieldset
-      disabled={disabled}
-      className={cn(
-        'min-w-0',
-        layout === 'grid'
-          ? 'grid grid-cols-6 gap-2'
-          : '-mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 py-1 [scrollbar-width:none]',
-        className,
-      )}
-    >
+    <fieldset className={cn('grid min-w-0 grid-cols-6 gap-2', className)}>
       <legend className="sr-only">Background color</legend>
       {NOTE_COLORS.map((color) => (
         <motion.button
@@ -97,8 +81,7 @@ export function ColorSwatches({
             onChange(color);
           }}
           className={cn(
-            'flex shrink-0 snap-start items-center justify-center rounded-full border bg-note outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            layout === 'grid' ? 'size-9' : 'size-8',
+            'flex size-9 shrink-0 items-center justify-center rounded-full border bg-note outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
             value === color
               ? 'border-foreground/70 ring-2 ring-foreground/15'
               : 'border-foreground/10',

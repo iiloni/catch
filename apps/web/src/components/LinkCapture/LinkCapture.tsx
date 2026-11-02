@@ -7,7 +7,7 @@ import {
 } from '@catch/shared';
 import { useRouterState } from '@tanstack/react-router';
 import { Download, Link2, LoaderCircle, SquarePen, X } from 'lucide-react';
-import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, animate, motion, motionValue, useReducedMotion } from 'motion/react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import {
   type FormEvent,
@@ -116,28 +116,48 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
   surface.style.width = `${from.width}px`;
   surface.style.height = `${from.height}px`;
   surface.style.borderRadius = `${from.radius}px`;
-  const animation = animate(
-    surface,
-    {
-      left: [from.x + (centered ? from.width / 2 : 0), to.x + (centered ? to.width / 2 : 0)],
-      top: [from.y, to.y],
-      width: [from.width, to.width],
-      height: [from.height, to.height],
-      borderRadius: [from.radius, to.radius],
-    },
-    { ...springs.smooth, restDelta: 1, restSpeed: 20 },
-  );
+  const tracks = [
+    ['left', from.x + (centered ? from.width / 2 : 0), to.x + (centered ? to.width / 2 : 0)],
+    ['top', from.y, to.y],
+    ['width', from.width, to.width],
+    ['height', from.height, to.height],
+    ['border-radius', from.radius, to.radius],
+  ] as const;
+  // One free-standing progress value rather than `animate(surface)`: the quick note's window is
+  // a Motion component, which would keep the sizes it was animated to and write them back over
+  // the restored CSS on its next render, so the window could no longer grow. A single spring
+  // also lasts as long however short the distance, so a small change still morphs.
+  const progress = motionValue(0);
+  progress.on('change', (amount) => {
+    for (const [property, start, end] of tracks)
+      surface.style.setProperty(property, `${start + (end - start) * amount}px`);
+  });
+  // Settles within about a pixel, as each size did when animated on its own.
+  const distance = Math.max(1, ...tracks.map(([, start, end]) => Math.abs(end - start)));
+  let animation: ReturnType<typeof animate> | null = null;
+  let stopped = false;
   let finish!: () => void;
   const finished = new Promise<void>((resolve) => {
     finish = resolve;
-    void animation.then(resolve);
+  });
+  // Started a frame later: the handoff renders a lot first, and a spring started inside that
+  // long frame would count it as time already run and open most of the way there.
+  const start = requestAnimationFrame(() => {
+    if (stopped) return;
+    animation = animate(progress, 1, {
+      ...springs.smooth,
+      restDelta: 1 / distance,
+      restSpeed: 20 / distance,
+    });
+    void animation.then(finish);
   });
   return {
-    animation,
     finished,
     restore,
     stop: () => {
-      animation.stop();
+      stopped = true;
+      cancelAnimationFrame(start);
+      animation?.stop();
       restore();
       finish();
     },
@@ -644,7 +664,7 @@ export function LinkCapture() {
     if (body) body.style.opacity = '0';
     const reveal = body ? animate(body, { opacity: [0, 1] }, { duration: 0.2, delay: 0.12 }) : null;
     let cancelled = false;
-    void growth.animation.then(() => {
+    void growth.finished.then(() => {
       if (!cancelled) growth.restore();
     });
     const stop = () => {
@@ -697,8 +717,19 @@ export function LinkCapture() {
         if (body) body.style.opacity = '';
       };
       stopReturnAnimation.current = stop;
+      // The morph holds the window at a fixed size. Opening a picker or typing changes the
+      // size it should have, so either hands the window back to its CSS at once.
+      const interrupt = () => {
+        if (stopReturnAnimation.current !== stop) return;
+        stop();
+        stopReturnAnimation.current = null;
+      };
+      popup.addEventListener('pointerdown', interrupt, true);
+      popup.addEventListener('keydown', interrupt, true);
       linkCaptureOpen.set(false);
       await shrink.finished;
+      popup.removeEventListener('pointerdown', interrupt, true);
+      popup.removeEventListener('keydown', interrupt, true);
       if (stopReturnAnimation.current === stop) {
         shrink.restore();
         if (body) body.style.opacity = '';
