@@ -103,7 +103,13 @@ test('inline images keep their space when the opening preview becomes the editor
     await expect(card(page, 'Stable inline image').getByRole('img')).toBeVisible();
 
     const samples = page.evaluate(async () => {
-      const frames: { height: number; width: number; editor: boolean; loaded: boolean }[] = [];
+      const frames: {
+        height: number;
+        width: number;
+        editor: boolean;
+        loaded: boolean;
+        decoding: string;
+      }[] = [];
       const end = performance.now() + 3000;
       while (performance.now() < end) {
         const image = document.querySelector<HTMLImageElement>(
@@ -116,6 +122,7 @@ test('inline images keep their space when the opening preview becomes the editor
             width: bounds.width,
             editor: Boolean(image.closest('.note-editor')),
             loaded: image.complete && image.naturalWidth > 0,
+            decoding: image.decoding,
           });
         }
         await new Promise(requestAnimationFrame);
@@ -136,6 +143,7 @@ test('inline images keep their space when the opening preview becomes the editor
     expect(frames.some((frame) => !frame.editor)).toBe(true);
     expect(frames.some((frame) => frame.editor)).toBe(true);
     for (const frame of frames) {
+      expect(frame.decoding).toBe('sync');
       expect(frame.height).toBeGreaterThan(0);
       expect(frame.height / frame.width).toBeCloseTo(0.75, 2);
     }

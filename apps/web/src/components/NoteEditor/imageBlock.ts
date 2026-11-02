@@ -18,6 +18,9 @@ export const imageBlock: typeof base = {
       if (!block.props.previewWidth && rendered.dom instanceof HTMLElement) {
         rendered.dom.style.width = '100%';
       }
+      // The editor replaces its preview's image, and a thumbnail becomes the original: paint
+      // each in the frame it arrives, or the reserved space shows empty for a moment.
+      image.decoding = 'sync';
       const dimensions = imageDimensions(block.props.url);
       if (dimensions) image.style.aspectRatio = `auto ${dimensions.width} / ${dimensions.height}`;
       const source = cachedAttachmentUrl(block.props.url, true);

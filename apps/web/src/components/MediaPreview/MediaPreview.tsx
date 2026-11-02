@@ -35,6 +35,8 @@ export function MediaPreview({
         src={source}
         alt={name}
         loading={editorImage ? 'eager' : 'lazy'}
+        // Paint with the swap that replaced this image, not an empty box a frame later.
+        decoding={editorImage ? 'sync' : undefined}
         onLoad={(event) => rememberImageDimensions(url, event.currentTarget)}
         onError={() => setFailedSource(source)}
         style={{ aspectRatio: aspectRatio ? `auto ${aspectRatio}` : undefined }}
