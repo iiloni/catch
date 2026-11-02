@@ -1,12 +1,5 @@
 import { and, eq, isNull, useLiveQuery } from '@tanstack/react-db';
-import {
-  ArrowDownUp,
-  LayoutDashboard,
-  LayoutGrid,
-  Lightbulb,
-  LockKeyholeOpen,
-  Rows3,
-} from 'lucide-react';
+import { ArrowDownUp, LayoutDashboard, Lightbulb, LockKeyholeOpen, Rows3 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
@@ -123,7 +116,7 @@ export default function GalleryPage() {
                 {layout === 'masonry' ? (
                   <Rows3 className="size-5" aria-hidden />
                 ) : (
-                  <LayoutGrid className="size-5" aria-hidden />
+                  <LayoutDashboard className="size-5" aria-hidden />
                 )}
               </motion.button>
             )}
