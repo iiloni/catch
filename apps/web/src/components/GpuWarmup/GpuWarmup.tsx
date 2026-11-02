@@ -119,6 +119,8 @@ const SAMPLE_NOTE = [
   block('checkListItem', [text('Aa Bb')], { checked: true }),
   block('quote', [text('Aa Bb')]),
   block('codeBlock', [text('const a = 1;')], { language: 'javascript' }),
+  block('divider', []),
+  block('divider', [], { previewEnd: true }),
 ];
 
 /** A picture to draw: one transparent pixel, stretched by its box. */

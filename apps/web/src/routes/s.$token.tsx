@@ -6,6 +6,7 @@ import {
   sharedNoteViewSchema,
   shareLink,
   shareTokenSchema,
+  withoutPreviewCutoff,
 } from '@catch/shared';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Download, FileText } from 'lucide-react';
@@ -69,7 +70,7 @@ function SharedNotePage() {
   const note = state.status === 'ready' ? state.note : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `fileUrl` follows the token
   const content = useMemo(
-    () => (note ? resolveAttachmentBlocks(note.content, fileUrl) : []),
+    () => (note ? resolveAttachmentBlocks(withoutPreviewCutoff(note.content), fileUrl) : []),
     [note, token],
   );
 

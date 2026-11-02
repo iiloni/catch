@@ -1,5 +1,5 @@
 import { BlockNoteEditor, type PartialBlock } from '@blocknote/core';
-import { attachmentId, type Note } from '@catch/shared';
+import { attachmentId, type Note, withoutPreviewCutoff } from '@catch/shared';
 
 // This module loads only when the share panel offers note content.
 const exporter = BlockNoteEditor.create();
@@ -24,5 +24,7 @@ function textContent(blocks: Note['content']): Note['content'] {
 }
 
 export function noteMarkdown(content: Note['content']) {
-  return exporter.blocksToMarkdownLossy(textContent(content) as PartialBlock[]).trim();
+  return exporter
+    .blocksToMarkdownLossy(textContent(withoutPreviewCutoff(content)) as PartialBlock[])
+    .trim();
 }

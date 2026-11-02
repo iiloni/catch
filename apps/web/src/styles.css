@@ -722,6 +722,25 @@
   stroke-width: 2;
   stroke-linecap: round;
 }
+.note-preview-cutoff {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 44px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.note-preview-cutoff-line {
+  flex: 1;
+  min-width: 1rem;
+  border-block-start: 1px dashed currentColor;
+  opacity: 0.5;
+}
 .note-editor[data-list-holding] {
   -webkit-user-select: none;
   user-select: none;

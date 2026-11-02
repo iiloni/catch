@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { noteMarkdown } from './noteMarkdown';
 
 describe('noteMarkdown', () => {
+  it('leaves a preview cutoff out of the text', () => {
+    expect(
+      noteMarkdown([
+        { type: 'paragraph', content: 'Above' },
+        { type: 'divider', props: { previewEnd: true } },
+        { type: 'paragraph', content: 'Below' },
+      ]),
+    ).toBe('Above\n\nBelow');
+  });
+
   it('exports headings, formatting, links, checked tasks and nested lists', () => {
     const markdown = noteMarkdown([
       { type: 'heading', props: { level: 3 }, content: 'Trip plan' },
