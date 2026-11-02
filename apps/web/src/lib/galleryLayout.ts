@@ -2,8 +2,11 @@ import { z } from 'zod';
 import { columnsFor } from './masonry';
 import { usePersistentState } from './storage';
 
-/** A grid this wide fills a large screen, where one column would only stretch its cards. */
-const LARGE_GRID_COLUMNS = 4;
+/**
+ * From here one column would only stretch its cards. A 640 px page less its gutters, which is
+ * under what any screen that can split gives a whole page, so unfolded pages stay in masonry.
+ */
+const LARGE_GRID_WIDTH = 592;
 
 const layoutSchema = z.enum(['masonry', 'single-column']);
 export type GalleryLayout = z.infer<typeof layoutSchema>;
@@ -22,9 +25,8 @@ export type GalleryScreen = {
 
 /** The layout a grid of this width has to use, if it leaves any choice at all. */
 export function forcedGalleryLayout(gridWidth: number): GalleryLayout | null {
-  const columns = columnsFor(gridWidth);
-  if (columns === 1) return 'single-column';
-  return columns >= LARGE_GRID_COLUMNS ? 'masonry' : null;
+  if (gridWidth >= LARGE_GRID_WIDTH) return 'masonry';
+  return columnsFor(gridWidth) === 1 ? 'single-column' : null;
 }
 
 /**
@@ -36,10 +38,7 @@ export function useGalleryLayout({ folded, split }: GalleryScreen, gridWidth: nu
   const [previous] = usePersistentState('catch-gallery-layout', layoutSchema, 'masonry');
   const [matrix, setMatrix] = usePersistentState('catch-gallery-layouts', matrixSchema, {});
   const cell = `${folded ? 'folded' : 'unfolded'}-${split ? 'split' : 'page'}` as const;
-  // The one choice this replaced was offered only on narrow pages, so a whole unfolded
-  // screen never showed it.
-  const fallback = folded || split ? previous : 'masonry';
   const forced = forcedGalleryLayout(gridWidth);
   const setLayout = (layout: GalleryLayout) => setMatrix({ ...matrix, [cell]: layout });
-  return [forced ?? matrix[cell] ?? fallback, forced ? null : setLayout] as const;
+  return [forced ?? matrix[cell] ?? previous, forced ? null : setLayout] as const;
 }

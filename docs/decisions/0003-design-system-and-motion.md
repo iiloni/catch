@@ -204,14 +204,14 @@ header's left corner (brand, title pill, back button) is offset to stay over the
 (`useHeaderGutterShift`); its centered title and right toolbar keep following the pane. The page's wrapper spans the screen and clips
 there, so cards still on their way to a narrower page reach under the pane, not past it.
 
-**Gallery layout.** Masonry or a single column is a choice only while the grid fits two or
-three columns (`src/lib/galleryLayout.ts`). Narrower, masonry is one column anyway; at four or
-more, as on large tablets and desktops, the Gallery stays in masonry and the toggle is hidden.
-The choice is kept per screen state, a matrix of folded by split, because the page is a
-different size in each: a foldable can want masonry on its outer display and its whole inner
-display but one column beside a note. A page cannot see a hinge, so "folded" means the screen is
-below the split limits (`isFolded`). No such screen can split, so the folded-and-split cell
-stays unused unless those limits diverge.
+**Gallery layout.** Masonry or a single column is a choice only on a narrow page, one whose
+grid fits two columns and is under 592 px (`src/lib/galleryLayout.ts`). Narrower, masonry is one
+column anyway; wider, the Gallery stays in masonry and the toggle is hidden, since one column
+would only stretch its cards. The choice is kept per screen state, a matrix of folded by split,
+because a foldable can want masonry on its outer display but one column beside a note. A page
+cannot see a hinge, so "folded" means the screen is below the split limits (`isFolded`). Two
+cells never apply: no such screen can split, and a whole page on a screen that can split is
+always past the width limit.
 
 **Grid resizes.** When a grid's columns change width (switching the Gallery between masonry
 and a single column, or a note pane opening or closing), cards on screen spring to their new

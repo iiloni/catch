@@ -25,15 +25,15 @@ describe('forcedGalleryLayout', () => {
     expect(forcedGalleryLayout(279)).toBe('single-column');
   });
 
-  it('leaves the choice to grids of two or three columns', () => {
+  it('leaves the choice to widths between', () => {
     expect(forcedGalleryLayout(280)).toBeNull();
-    // A foldable's inner display, on its side.
-    expect(forcedGalleryLayout(784)).toBeNull();
-    expect(forcedGalleryLayout(915)).toBeNull();
+    expect(forcedGalleryLayout(591)).toBeNull();
   });
 
-  it('keeps grids of four or more columns in masonry', () => {
-    expect(forcedGalleryLayout(916)).toBe('masonry');
+  it('keeps wider grids in masonry', () => {
+    expect(forcedGalleryLayout(592)).toBe('masonry');
+    // The narrowest whole page on a screen that can split: 672 px less its gutters.
+    expect(forcedGalleryLayout(624)).toBe('masonry');
     expect(forcedGalleryLayout(1232)).toBe('masonry');
   });
 });
@@ -78,11 +78,10 @@ describe('useGalleryLayout', () => {
     expect(layoutOn(screen)).toBe('single-column');
   });
 
-  it('carries the old single choice to the states that could show it', () => {
+  it('carries the old single choice over', () => {
     localStorage.setItem('catch-gallery-layout', JSON.stringify('single-column'));
     expect(layoutOn({ folded: true, split: false })).toBe('single-column');
     expect(layoutOn({ folded: false, split: true })).toBe('single-column');
-    expect(layoutOn({ folded: false, split: false })).toBe('masonry');
   });
 
   it('lets a new choice override the old one', () => {
