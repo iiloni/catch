@@ -127,13 +127,17 @@ test('a new note takes a child tag from the same chooser as any other note', asy
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await page.getByRole('button', { name: 'Release', exact: true }).click();
   await expect(popup).toHaveAttribute('data-note-color', 'blue');
-  await expect(popup.getByText('Release', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Release', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(editor).toBeFocused();
 
-  // Escape puts the picker away and leaves the note open; the next one saves it.
+  // Escape puts the picker away and leaves the note open, showing the tag; the next saves it.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Back to parent tags' })).toBeHidden();
   await expect(popup).toBeVisible();
+  await expect(popup.getByText('Release', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   const saved = card(page, 'Filed under a child');
   await expect(saved).toHaveAttribute('data-note-color', 'blue');
@@ -163,29 +167,63 @@ test('a tag made from the quick note is assigned and leaves the note open', asyn
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toBeHidden();
   await expect(popup).toHaveAttribute('data-note-color', 'green');
+  // Typing carries on after the form.
+  await expect(popup.locator('[contenteditable="true"]')).toBeFocused();
+  // The panel shows the chosen tag itself; once it closes, the window's badge does.
+  await page.keyboard.press('Escape');
+  await expect(popup.getByRole('button', { name: 'Green: Travel' })).toBeHidden();
+  await expect(popup).toBeVisible();
   await expect(popup.getByText('Travel', { exact: true })).toBeVisible();
 });
 
-test('choosing a color keeps the formatting row, the focus and the words', async ({ page }) => {
+test('the color panel opens inside the window and keeps the row, focus and words', async ({
+  page,
+}) => {
   await signUp(page);
   const { popup, editor, toolbar } = await openQuickNote(page);
   await page.keyboard.type('Kept in focus');
-  await popup.getByRole('button', { name: 'Background color', exact: true }).click();
-  await page.getByRole('button', { name: 'Red', exact: true }).click();
+  const palette = popup.getByRole('button', { name: 'Background color', exact: true });
+  await palette.click();
+  await expect(palette).toHaveAttribute('aria-expanded', 'true');
+  const red = popup.getByRole('button', { name: 'Red', exact: true });
+  await red.click();
   await expect(popup).toHaveAttribute('data-note-color', 'red');
   await expect(toolbar).toBeVisible();
   await expect(editor).toBeFocused();
 
-  // Typing goes on without a stop to put the picker away.
+  // Like the attachment panel, it stays open while typing; Escape closes it before the window.
   await page.keyboard.type(' and typing');
-  await expect(page.getByRole('button', { name: 'Red', exact: true })).toBeHidden();
+  await expect(red).toBeVisible();
   await expect(editor).toContainText('Kept in focus and typing');
+  await page.keyboard.press('Escape');
+  await expect(red).toBeHidden();
+  await expect(popup).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(popup).toBeHidden();
   await expect(card(page, 'Kept in focus and typing')).toHaveAttribute('data-note-color', 'red');
 });
 
-test('the color picker stays above the keyboard on a small phone', async ({ page, isMobile }) => {
+test('the color and attachment panels replace each other', async ({ page }) => {
+  await signUp(page);
+  const { popup } = await openQuickNote(page);
+  const palette = popup.getByRole('button', { name: 'Background color', exact: true });
+  const attach = popup.getByRole('button', { name: 'Attach files', exact: true });
+  const colors = popup.getByRole('group', { name: 'Primary tag' });
+  const files = popup.getByRole('region', { name: 'Add attachment' });
+  await palette.click();
+  await expect(colors).toBeVisible();
+  await attach.click();
+  await expect(files).toBeVisible();
+  await expect(colors).toBeHidden();
+  await expect(palette).toHaveAttribute('aria-expanded', 'false');
+  await palette.click();
+  await expect(colors).toBeVisible();
+  await expect(files).toBeHidden();
+  await palette.click();
+  await expect(colors).toBeHidden();
+});
+
+test('the color panel fits above the keyboard on a small phone', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Checks the on-screen keyboard.');
   await page.setViewportSize({ width: 360, height: 640 });
   await signUp(page);
@@ -196,12 +234,24 @@ test('the color picker stays above the keyboard on a small phone', async ({ page
   });
   await page.keyboard.type('One\nTwo\nThree\nFour\nFive\nSix');
   await popup.getByRole('button', { name: 'Background color', exact: true }).click();
-  const gray = page.getByRole('button', { name: 'Gray', exact: true });
-  await settledBox(gray);
-  await expect(gray).toBeVisible();
-  const box = await gray.boundingBox();
-  expect(box!.y + box!.height).toBeLessThanOrEqual(640 - 280);
-  expect(box!.y).toBeGreaterThanOrEqual(0);
+  const first = popup.getByRole('button', { name: 'No color', exact: true });
+  await settledBox(first);
+  const [window, swatch, tools] = await Promise.all([
+    popup.boundingBox(),
+    first.boundingBox(),
+    popup.getByRole('toolbar', { name: 'Formatting' }).boundingBox(),
+  ]);
+  // The editor gives up its height first, and the window stays above the keyboard.
+  expect(swatch!.y).toBeGreaterThanOrEqual(window!.y);
+  expect(swatch!.y + swatch!.height).toBeLessThanOrEqual(tools!.y);
+  expect(window!.y + window!.height).toBeLessThanOrEqual(640 - 280);
+  // Every swatch can be reached, by scrolling the panel if the window is too short for it.
+  const gray = popup.getByRole('button', { name: 'Gray', exact: true });
+  await gray.scrollIntoViewIfNeeded();
+  const grayBox = await gray.boundingBox();
+  expect(grayBox!.y + grayBox!.height).toBeLessThanOrEqual(tools!.y + 1);
+  await gray.tap();
+  await expect(popup).toHaveAttribute('data-note-color', 'gray');
 });
 
 test('opening the attachment picker saves nothing until a file is chosen', async ({ page }) => {
@@ -231,34 +281,39 @@ test('opening the attachment picker saves nothing until a file is chosen', async
   await expect(page.locator('[data-note-card]')).toHaveCount(1);
 });
 
-/** Presses the attachment button and records the window's height on every frame after. */
-async function openPickerWatchingHeight(popup: Locator) {
-  const heights = popup.evaluate(async (element) => {
+/** Presses a panel's button and records the window's height on every frame after. */
+async function openPickerWatchingHeight(popup: Locator, label = 'Attach files') {
+  const heights = popup.evaluate(async (element, label) => {
     const seen: number[] = [element.getBoundingClientRect().height];
-    const button = element.querySelector<HTMLButtonElement>('[aria-label="Attach files"]');
+    const button = element.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
     button?.click();
     for (let frame = 0; frame < 50; frame++) {
       await new Promise(requestAnimationFrame);
       seen.push(element.getBoundingClientRect().height);
     }
     return seen;
-  });
+  }, label);
   const seen = await heights;
-  const picker = popup.getByRole('region', { name: 'Add attachment' });
+  const picker =
+    label === 'Attach files'
+      ? popup.getByRole('region', { name: 'Add attachment' })
+      : popup.getByRole('group', { name: 'Primary tag' });
   await expect(picker).toBeVisible();
   return { seen, picker };
 }
 
-test('the window grows into the attachment picker without first shrinking', async ({ page }) => {
-  await signUp(page);
-  const { popup } = await openQuickNote(page);
-  await settledBox(popup);
-  const { seen, picker } = await openPickerWatchingHeight(popup);
-  const [start] = seen;
-  expect(Math.min(...seen)).toBeGreaterThanOrEqual(start! - 1);
-  const pickerHeight = (await picker.boundingBox())!.height;
-  expect(seen.at(-1)!).toBeGreaterThanOrEqual(start! + pickerHeight - 2);
-});
+for (const label of ['Attach files', 'Background color']) {
+  test(`the window grows into its panel without first shrinking (${label})`, async ({ page }) => {
+    await signUp(page);
+    const { popup } = await openQuickNote(page);
+    await settledBox(popup);
+    const { seen, picker } = await openPickerWatchingHeight(popup, label);
+    const [start] = seen;
+    expect(Math.min(...seen)).toBeGreaterThanOrEqual(start! - 1);
+    const pickerHeight = (await picker.boundingBox())!.height;
+    expect(seen.at(-1)!).toBeGreaterThanOrEqual(start! + pickerHeight - 2);
+  });
+}
 
 test('the window still grows for the attachment picker after link capture', async ({
   page,
@@ -364,8 +419,9 @@ test('every attachment option fits above the keyboard on a small phone', async (
   await form.getByRole('textbox', { name: 'Name' }).fill('Errands');
   await form.getByRole('button', { name: 'Save tag', exact: true }).click();
   await expect(form).toBeHidden();
-  await expect(popup.getByText('Errands', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(popup.getByRole('group', { name: 'Primary tag' })).toBeHidden();
+  await expect(popup.getByText('Errands', { exact: true })).toBeVisible();
   await popup.getByRole('button', { name: 'Attach files', exact: true }).click();
   const files = popup.getByRole('button', { name: 'Files', exact: true });
   await settledBox(files);

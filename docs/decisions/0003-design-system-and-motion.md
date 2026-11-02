@@ -384,13 +384,14 @@ decides whether a pull saves or expands.
 Touch listeners follow the original touched element for the whole gesture: Android caret
 changes can replace an editor node, and subsequent events no longer bubble through the window.
 
-**Quick-note color.** The palette opens the same color and tag chooser as every other note,
-so a new note can take a child tag, in a popover above the window instead of swapping out the
-formatting row. It floats because the window has no height to spare with the keyboard up.
-Focus stays in the editor throughout: typing or tapping the note puts it away, and Escape or
-back closes it before the window. The chosen tag shows as a badge above the toolbar, since a
-child tag's color does not tell it from its parent. The attachment picker does take space
-from the window, so while it is open the editor gives up its height first.
+**Quick-note color.** The palette grows the same color and tag chooser as every other note
+inside the window, as the paperclip grows the attachment picker, so a new note can take a
+child tag and the formatting row stays in place. Focus stays in the editor; Escape or back
+closes the panel before the window. The chosen tag shows as a badge above the toolbar while
+the panel is closed, since a child tag's color does not tell it from its parent. A panel takes
+space from the window: the editor starts from the height it had, so the window grows from where
+it is, and gives that height up first when the window runs out of room, with the keyboard up.
+A panel scrolls only when even the whole window is shorter than it.
 
 The quick-note toolbar puts an icon-only link action immediately after attachments. Choosing
 it replaces the popup's content with the capture form: the same width and bottom edge stay

@@ -24,7 +24,6 @@ import { NoteCardFace } from '@/components/NoteCard/NoteCard';
 import type { EditorControls } from '@/components/NoteEditor/editorControls';
 import { LazyNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { TagBadge } from '@/components/TagBadge/TagBadge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useNoteAttachments } from '@/lib/attachments';
 import { getSignedInUser } from '@/lib/auth';
 import { useBackHandler } from '@/lib/backButton';
@@ -38,7 +37,6 @@ import {
   tabFor,
 } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
-import { useKeyboardHeight } from '@/lib/keyboard';
 import { linkCaptureOpen, linkCaptureOrigin, linkCaptureReturnFocus } from '@/lib/linkCapture';
 import { animateSteady, curves, springs } from '@/lib/motion';
 import { createNote, discardIfEmpty, getNote, setNoteColor, updateNote } from '@/lib/notes';
@@ -102,65 +100,6 @@ export function QuickNote() {
   );
 }
 
-/** Radix would move focus into and out of the color picker, closing the keyboard. */
-function keepEditorFocus(event: Event) {
-  const focused = document.activeElement;
-  if (focused instanceof HTMLElement && focused.isContentEditable) event.preventDefault();
-}
-
-/**
- * The chooser every other note color picker uses, so a new note can take a child tag too. It
- * floats over the window: with the keyboard up the window has no room to grow around it.
- */
-function QuickNoteColors({
-  open,
-  onOpenChange,
-  ...selector
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  value: NoteColor;
-  primaryTagId: string | null;
-  onChange: (color: NoteColor) => void;
-  onTagChange: (id: string) => void;
-}) {
-  const keyboard = useKeyboardHeight();
-  return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <IconButton
-          label="Background color"
-          // Keeps the keyboard up, like the formatting buttons.
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={haptics.toggle}
-          className="size-9 shrink-0 rounded-xl bg-foreground/[0.07]"
-        >
-          <Palette />
-        </IconButton>
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={12}
-        collisionPadding={{ top: 12, right: 12, left: 12, bottom: keyboard + 12 }}
-        className="z-[80] max-h-[var(--radix-popover-content-available-height)] w-auto max-w-[calc(100vw-1.5rem)] overflow-y-auto overscroll-contain rounded-3xl p-1"
-        onOpenAutoFocus={keepEditorFocus}
-        onCloseAutoFocus={keepEditorFocus}
-        // Focus stays in the editor, so without this the window would close along with it.
-        onEscapeKeyDown={(event) => event.stopPropagation()}
-        // Picking a color keeps the keyboard up too. The new tag form renders through this
-        // element, and needs its presses to reach its fields.
-        onPointerDown={(event) => {
-          if (event.currentTarget.contains(event.target as Node)) event.preventDefault();
-        }}
-      >
-        {/* A new note owns its assignment and can use cached tags offline. */}
-        <ColorTagSelector disabled={false} {...selector} />
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /** Where the window sits once its opening spring has settled, whether or not it has yet. */
 function restingBox(element: HTMLElement) {
   const { transform } = element.style;
@@ -207,10 +146,11 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
   const [panel, setPanel] = useState<Panel | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editorHeight, setEditorHeight] = useState<number | null>(null);
-  function toggleAttachments() {
-    if (panel === 'attachments') return setPanel(null);
-    setEditorHeight(scrollRef.current?.offsetHeight ?? null);
-    setPanel('attachments');
+  function togglePanel(next: Panel) {
+    if (panel === next) return setPanel(null);
+    // Switching straight from one panel to the other keeps the height the editor had first.
+    if (!panel) setEditorHeight(scrollRef.current?.offsetHeight ?? null);
+    setPanel(next);
   }
   const [draftId, setDraftId] = useState<string | null>(null);
   const attachments = useNoteAttachments(draftId ?? '');
@@ -473,8 +413,10 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
         // Keys pressed in the tag form bubble here through its portal.
         if (!event.currentTarget.contains(event.target as Node)) return;
         if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) {
-          if (panel) setPanel(null);
-          else quickNote.set('closed');
+          if (!panel) return quickNote.set('closed');
+          setPanel(null);
+          // BlockNote blurs itself on Escape, which would leave the next Escape nowhere to go.
+          controls?.focus();
         }
       }}
       className={cn(
@@ -513,12 +455,12 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           ref={scrollRef}
           data-quick-note-scroll
           className="min-h-28 flex-1 overflow-y-auto overscroll-contain"
-          // With the keyboard up the window has little height, and the picker needs it more.
+          // With the keyboard up the window has little height, and a panel needs it more.
           // The editor starts from the height it has, so the window grows from where it is,
           // and gives that height up first: the window's height is not definite, so a flex
           // basis alone would not.
           style={
-            panel === 'attachments' && editorHeight !== null
+            panel && editorHeight !== null
               ? { flexBasis: editorHeight, flexShrink: 1000, minHeight: 0 }
               : undefined
           }
@@ -532,21 +474,17 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
             onChange={(next) => {
               setContent(next);
               if (draft.current) updateNote(draft.current, { content: next });
-              // The picker covers the words being typed, so typing puts it away.
-              setPanel((current) => (current === 'colors' ? null : current));
             }}
             onControls={setControls}
             autoFocus={isPresent && !suspended}
           />
         </motion.div>
         <AnimatePresence initial={false}>
-          {primaryTag && (
+          {/* The color panel shows the chosen tag itself. */}
+          {primaryTag && panel !== 'colors' && (
             <motion.div
               key="tag"
-              className={cn(
-                'flex overflow-hidden px-4',
-                panel === 'attachments' ? 'shrink-[1000]' : 'shrink-0',
-              )}
+              className={cn('flex overflow-hidden px-4', panel ? 'shrink-[1000]' : 'shrink-0')}
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -559,22 +497,45 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           )}
         </AnimatePresence>
         <AnimatePresence initial={false}>
-          {panel === 'attachments' && (
+          {panel && (
             <motion.div
-              key="attachments"
-              // Scrolls only if even the whole window is shorter than the picker.
+              key={panel}
+              // Scrolls only if even the whole window is shorter than the panel.
               className="overflow-y-auto [scrollbar-width:none]"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={springs.smooth}
+              // Keeps the keyboard up while choosing. The new tag form renders through this
+              // element, and needs its presses to reach its fields.
+              onPointerDown={(event) => {
+                if (event.currentTarget.contains(event.target as Node)) event.preventDefault();
+              }}
             >
-              <AttachmentPicker
-                noteId={draftId ?? undefined}
-                ensureNote={ensureNote}
-                controls={controls}
-                onDone={() => setPanel(null)}
-              />
+              {panel === 'attachments' ? (
+                <AttachmentPicker
+                  noteId={draftId ?? undefined}
+                  ensureNote={ensureNote}
+                  controls={controls}
+                  onDone={() => setPanel(null)}
+                />
+              ) : (
+                <ColorTagSelector
+                  // A new note owns its assignment and can use cached tags offline.
+                  disabled={false}
+                  value={shownColor}
+                  primaryTagId={primaryTagId}
+                  onChange={(next) => {
+                    setColor(next);
+                    setChosenTagId(null);
+                  }}
+                  onTagChange={(id) => {
+                    setColor('default');
+                    setChosenTagId(id);
+                  }}
+                  className="w-full pt-1"
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -584,27 +545,29 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...springs.smooth, delay: 0.12 }}
         >
-          <QuickNoteColors
-            open={panel === 'colors'}
-            onOpenChange={(next) => setPanel(next ? 'colors' : null)}
-            value={shownColor}
-            primaryTagId={primaryTagId}
-            onChange={(next) => {
-              setColor(next);
-              setChosenTagId(null);
+          <IconButton
+            label="Background color"
+            aria-expanded={panel === 'colors'}
+            // Keeps the keyboard up, like the formatting buttons.
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => {
+              haptics.toggle();
+              togglePanel('colors');
             }}
-            onTagChange={(id) => {
-              setColor('default');
-              setChosenTagId(id);
-            }}
-          />
+            className={cn(
+              'size-9 shrink-0 rounded-xl',
+              panel === 'colors' ? 'bg-foreground/[0.14]' : 'bg-foreground/[0.07]',
+            )}
+          >
+            <Palette />
+          </IconButton>
           <FormattingBar
             controls={controls}
             // Capturing a link has the server read its page, which a vault note's links are
             // kept from (ADR 0020).
             onLink={inVault.current ? undefined : captureLink}
             attachmentsOpen={panel === 'attachments'}
-            onAttachments={toggleAttachments}
+            onAttachments={() => togglePanel('attachments')}
             className="flex-1"
           />
           <IconButton

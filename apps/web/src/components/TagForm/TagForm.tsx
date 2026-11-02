@@ -31,6 +31,8 @@ export function TagForm({
 }) {
   const nameId = useId();
   const parentLabelId = useId();
+  // The dialog has no trigger to return focus to, so it would otherwise fall to the page.
+  const [returnFocus] = useState(() => document.activeElement);
   useBackHandler(true, onDone);
   useEffect(() => {
     tagFormOpen.set(true);
@@ -112,6 +114,12 @@ export function TagForm({
       <DialogContent
         onOpenAutoFocus={(event) => {
           if (initial.tag) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!(returnFocus instanceof HTMLElement) || !returnFocus.isConnected) return;
+          event.preventDefault();
+          // A note's editor keeps its caret, so typing carries on where it left off.
+          returnFocus.focus({ preventScroll: true });
         }}
         // Above the dock, whose pickers open this form.
         overlayClassName="z-[80]"
