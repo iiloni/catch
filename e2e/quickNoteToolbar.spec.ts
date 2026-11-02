@@ -231,8 +231,40 @@ test('opening the attachment picker saves nothing until a file is chosen', async
   await expect(page.locator('[data-note-card]')).toHaveCount(1);
 });
 
-test('the attachment picker survives a trip to link capture', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'The panel state is the same on both layouts.');
+/** Presses the attachment button and records the window's height on every frame after. */
+async function openPickerWatchingHeight(popup: Locator) {
+  const heights = popup.evaluate(async (element) => {
+    const seen: number[] = [element.getBoundingClientRect().height];
+    const button = element.querySelector<HTMLButtonElement>('[aria-label="Attach files"]');
+    button?.click();
+    for (let frame = 0; frame < 50; frame++) {
+      await new Promise(requestAnimationFrame);
+      seen.push(element.getBoundingClientRect().height);
+    }
+    return seen;
+  });
+  const seen = await heights;
+  const picker = popup.getByRole('region', { name: 'Add attachment' });
+  await expect(picker).toBeVisible();
+  return { seen, picker };
+}
+
+test('the window grows into the attachment picker without first shrinking', async ({ page }) => {
+  await signUp(page);
+  const { popup } = await openQuickNote(page);
+  await settledBox(popup);
+  const { seen, picker } = await openPickerWatchingHeight(popup);
+  const [start] = seen;
+  expect(Math.min(...seen)).toBeGreaterThanOrEqual(start! - 1);
+  const pickerHeight = (await picker.boundingBox())!.height;
+  expect(seen.at(-1)!).toBeGreaterThanOrEqual(start! + pickerHeight - 2);
+});
+
+test('the window still grows for the attachment picker after link capture', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'The window sizing is the same on both layouts.');
   await signUp(page);
   const { popup, editor } = await openQuickNote(page);
   const attach = popup.getByRole('button', { name: 'Attach files', exact: true });
@@ -243,12 +275,30 @@ test('the attachment picker survives a trip to link capture', async ({ page, isM
   await expect(page.getByRole('dialog', { name: 'Add Rich Link' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(editor).toBeFocused();
+  // The picker stays as it was left.
   await expect(picker).toBeVisible();
   await expect(attach).toHaveAttribute('aria-expanded', 'true');
   await attach.click();
   await expect(picker).toBeHidden();
+  await settledBox(popup);
+
+  // The morph back must leave no fixed size behind, here or on the next render.
+  const { seen } = await openPickerWatchingHeight(popup);
+  const [start] = seen;
+  expect(seen.at(-1)!).toBeGreaterThanOrEqual(start! + (await picker.boundingBox())!.height - 2);
+  const inline = await popup.evaluate((element) =>
+    ['top', 'left', 'width', 'height'].filter((property) =>
+      element.style.getPropertyValue(property),
+    ),
+  );
+  expect(inline).toEqual([]);
+
+  await editor.click();
+  const grown = (await popup.boundingBox())!.height;
+  await page.keyboard.type('One\nTwo\nThree\nFour');
   await attach.click();
-  await expect(picker).toBeVisible();
+  await expect(picker).toBeHidden();
+  await expect.poll(async () => (await popup.boundingBox())!.height).toBeLessThan(grown);
 });
 
 test('every attachment option fits above the keyboard on a small phone', async ({

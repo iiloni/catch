@@ -205,6 +205,13 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     );
   }, [requestedFocus, controls, isPresent, suspended]);
   const [panel, setPanel] = useState<Panel | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [editorHeight, setEditorHeight] = useState<number | null>(null);
+  function toggleAttachments() {
+    if (panel === 'attachments') return setPanel(null);
+    setEditorHeight(scrollRef.current?.offsetHeight ?? null);
+    setPanel('attachments');
+  }
   const [draftId, setDraftId] = useState<string | null>(null);
   const attachments = useNoteAttachments(draftId ?? '');
   const draft = useRef<string | null>(null);
@@ -503,13 +510,18 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
         style={{ opacity: contentOpacity }}
       >
         <motion.div
+          ref={scrollRef}
           data-quick-note-scroll
-          // With the keyboard up the window has little height, and the picker needs it more:
-          // the window's height is not definite, so a flex basis alone would not give way.
-          className={cn(
-            'flex-1 overflow-y-auto overscroll-contain',
-            panel === 'attachments' ? 'min-h-0 shrink-[1000]' : 'min-h-28',
-          )}
+          className="min-h-28 flex-1 overflow-y-auto overscroll-contain"
+          // With the keyboard up the window has little height, and the picker needs it more.
+          // The editor starts from the height it has, so the window grows from where it is,
+          // and gives that height up first: the window's height is not definite, so a flex
+          // basis alone would not.
+          style={
+            panel === 'attachments' && editorHeight !== null
+              ? { flexBasis: editorHeight, flexShrink: 1000, minHeight: 0 }
+              : undefined
+          }
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...springs.smooth, delay: 0.06 }}
@@ -592,7 +604,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
             // kept from (ADR 0020).
             onLink={inVault.current ? undefined : captureLink}
             attachmentsOpen={panel === 'attachments'}
-            onAttachments={() => setPanel(panel === 'attachments' ? null : 'attachments')}
+            onAttachments={toggleAttachments}
             className="flex-1"
           />
           <IconButton
