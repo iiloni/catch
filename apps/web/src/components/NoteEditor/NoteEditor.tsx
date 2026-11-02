@@ -16,23 +16,27 @@ import {
   useComponentsContext,
   useCreateBlockNote,
   useDictionary,
+  useEditorState,
   useExtension,
   useExtensionState,
 } from '@blocknote/react';
 import { BlockNoteView, useShadCNComponentsContext } from '@blocknote/shadcn';
 import { attachmentId, attachmentUrl, type Note } from '@catch/shared';
 import { type Middleware, offset, shift, size } from '@floating-ui/react';
-import { GripVertical } from 'lucide-react';
+import { closeHistory } from '@tiptap/pm/history';
+import { GripVertical, ScanText } from 'lucide-react';
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { SearchSelectDialog, type SelectOption } from '@/components/SearchSelect/SearchSelect';
+import { SearchSelectPopover, type SelectOption } from '@/components/SearchSelect/SearchSelect';
 import { resolveAttachmentUrl } from '@/lib/attachmentFiles';
 import { addAttachment, fileBlock, useRemovedAttachmentIds } from '@/lib/attachments';
-import { CODE_LANGUAGES, codeLanguageId } from '@/lib/codeLanguages';
+import { CODE_LANGUAGES, codeLanguageIconProps, codeLanguageId } from '@/lib/codeLanguages';
+import { haptics } from '@/lib/haptics';
 import { keyboardHeight } from '@/lib/keyboard';
 import { useResolvedTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { noteEditorSchema } from './checkListItem';
 import { syntaxHighlighting } from './codeBlock';
+import { cancelCodeDetection, detectBlockLanguage, pasteCode } from './codePaste';
 import type { EditorControls, FormattingState, TextStyle } from './editorControls';
 import { useListItemDrag } from './useListItemDrag';
 
@@ -158,6 +162,7 @@ export function NoteEditor({
   const editor = useCreateBlockNote({
     schema: noteEditorSchema,
     extensions: [syntaxHighlighting],
+    pasteHandler: pasteCode,
     // Stored content is BlockNote JSON validated as plain records by the schema.
     initialContent: initialContent?.length ? (initialContent as PartialBlock[]) : EMPTY_NOTE,
     trailingBlock: false,
@@ -190,7 +195,7 @@ export function NoteEditor({
   useCaretAboveKeyboard(editor);
   const editorRef = useListItemDrag(editor, editable);
   // The code block whose language is being chosen.
-  const [languageBlock, setLanguageBlock] = useState<string | null>(null);
+  const [languageBlock, setLanguageBlock] = useState<{ id: string; anchor: Element } | null>(null);
 
   function onClick(event: MouseEvent<HTMLDivElement>) {
     if (!editable || !(event.target instanceof Element)) return;
@@ -198,7 +203,7 @@ export function NoteEditor({
     const language = event.target.closest('.note-code-language > button');
     if (language && editor.domElement?.contains(language)) {
       const id = language.closest<HTMLElement>('[data-node-type="blockContainer"]')?.dataset.id;
-      if (id) setLanguageBlock(id);
+      if (id) setLanguageBlock((open) => (open?.id === id ? null : { id, anchor: language }));
       return;
     }
     focusAboveBlankSpace(event);
@@ -264,6 +269,7 @@ export function NoteEditor({
       onChange={() => onChange?.(editor.document as unknown as Note['content'])}
     >
       <NoteSideMenuController />
+      <EndHiddenEmojiSuggestions />
       <SuggestionMenuController
         triggerCharacter="/"
         shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup('tableContent')}
@@ -273,7 +279,12 @@ export function NoteEditor({
       {languageBlock && (
         <CodeLanguagePicker
           editor={editor}
-          blockId={languageBlock}
+          key={languageBlock.id}
+          blockId={languageBlock.id}
+          anchor={languageBlock.anchor}
+          onChoose={() => {
+            cancelCodeDetection(editor, languageBlock.id);
+          }}
           onDone={() => setLanguageBlock(null)}
         />
       )}
@@ -286,17 +297,22 @@ const CODE_LANGUAGE_OPTIONS: SelectOption[] = Object.entries(CODE_LANGUAGES).map
     value,
     label: language.name,
     keywords: [value, ...('aliases' in language ? language.aliases : [])],
+    icon: <span aria-hidden className="code-language-icon" {...codeLanguageIconProps(value)} />,
   }),
 );
 
 function CodeLanguagePicker({
   editor,
   blockId,
+  anchor,
   onDone,
+  onChoose,
 }: {
   editor: AnyEditor;
   blockId: string;
+  anchor: Element;
   onDone: () => void;
+  onChoose: () => void;
 }) {
   const block = editor.getBlock(blockId);
   const language = block?.type === 'codeBlock' ? String(block.props.language ?? '') : '';
@@ -312,13 +328,13 @@ function CodeLanguagePicker({
   );
   const chosen = useRef(false);
   return (
-    <SearchSelectDialog
-      open
+    <SearchSelectPopover
+      anchor={anchor}
       onOpenChange={(open) => {
         if (!open) onDone();
       }}
       // Back to the code, as the list took focus from it. Its button was drawn again for
-      // the new language, so the dialog has nothing to return focus to.
+      // the new language, so the popover has nothing to return focus to.
       onCloseAutoFocus={(event) => {
         if (!chosen.current) return;
         event.preventDefault();
@@ -328,15 +344,50 @@ function CodeLanguagePicker({
       title="Code language"
       searchLabel="Search languages"
       emptyText="No language matches."
-      options={options}
-      value={id ?? language}
+      options={[
+        {
+          value: '__detect',
+          label: 'Detect language',
+          icon: <ScanText className="size-4 shrink-0" aria-hidden />,
+        },
+        ...options,
+      ]}
+      value={id ?? (language || 'text')}
       onChange={(value) => {
         if (!editor.isEditable || !editor.getBlock(blockId)) return;
         chosen.current = true;
+        onChoose();
+        if (value === '__detect') {
+          void detectBlockLanguage(editor, blockId, true);
+          return;
+        }
         editor.updateBlock(blockId, { props: { language: value } });
       }}
     />
   );
+}
+
+/**
+ * BlockNote's emoji picker hides once its query starts with a space ("Note: ...") but keeps
+ * the suggestion session open for the rest of the line. Every keystroke in it then updates
+ * the menus' shared state, and after about 50 React reports an update loop, or on a slow
+ * device unmounts the app. Ending the session when the picker hides changes nothing visible.
+ */
+function EndHiddenEmojiSuggestions() {
+  const suggestionMenu = useExtension(SuggestionMenu);
+  const hidden = useExtensionState(SuggestionMenu, {
+    selector: (state) =>
+      Boolean(
+        state?.show &&
+          state.triggerCharacter === ':' &&
+          !state.ignoreQueryLength &&
+          state.query.startsWith(' '),
+      ),
+  });
+  useEffect(() => {
+    if (hidden) suggestionMenu.closeMenu();
+  }, [hidden, suggestionMenu]);
+  return null;
 }
 
 function NoteSideMenuController() {
@@ -357,6 +408,7 @@ function NoteSideMenu() {
       <NoteDragHandle>
         <AddBlockMenuItem />
         <RemoveBlockItem>{dict.drag_handle.delete_menuitem}</RemoveBlockItem>
+        <DeleteCheckedItemsMenuItem />
         <BlockColorsItem>{dict.drag_handle.colors_menuitem}</BlockColorsItem>
         <TableRowHeaderItem>{dict.drag_handle.header_row_menuitem}</TableRowHeaderItem>
         <TableColumnHeaderItem>{dict.drag_handle.header_column_menuitem}</TableColumnHeaderItem>
@@ -407,6 +459,55 @@ function NoteDragHandle({ children }: { children: ReactNode }) {
         {children}
       </Menu.DropdownMenuContent>
     </Menu.DropdownMenu>
+  );
+}
+
+function checkedItemIds(editor: AnyEditor) {
+  const matching: string[] = [];
+  function collect(blocks: typeof editor.document) {
+    for (const block of blocks) {
+      if (block.type === 'checkListItem' && block.props.checked === true) {
+        // Removing a parent also removes its children; do not remove them twice.
+        matching.push(block.id);
+      } else collect(block.children);
+    }
+  }
+  collect(editor.document);
+  return matching;
+}
+
+function DeleteCheckedItemsMenuItem() {
+  const Components = useComponentsContext();
+  const editor = useBlockNoteEditor();
+  const block = useExtensionState(SideMenuExtension, { selector: (state) => state?.block });
+  const hasCheckedItems = useEditorState({
+    editor,
+    on: 'change',
+    selector: ({ editor }) => checkedItemIds(editor).length > 0,
+  });
+
+  if (!Components || block?.type !== 'checkListItem' || !editor.isEditable || !hasCheckedItems)
+    return null;
+
+  return (
+    <Components.Generic.Menu.Item
+      className="bn-menu-item"
+      onClick={() => {
+        if (!editor.isEditable) return;
+        const matching = checkedItemIds(editor);
+        if (!matching.length) return;
+        haptics.warning();
+        editor.transact((tr) => {
+          closeHistory(tr);
+          editor.removeBlocks(matching);
+        });
+        editor.transact((tr) => closeHistory(tr));
+        // Return to editing after the block menu finishes restoring its own focus.
+        requestAnimationFrame(() => editor.focus());
+      }}
+    >
+      Delete all checked items in note
+    </Components.Generic.Menu.Item>
   );
 }
 

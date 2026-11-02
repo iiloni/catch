@@ -15,7 +15,15 @@ import {
 } from '../packages/shared/src/historyCodec';
 import { historyReading } from '../packages/shared/src/historyReading';
 import { API_PROTOCOL_HEADER, API_PROTOCOL_VERSION } from '../packages/shared/src/protocol';
-import { bearerToken, card, openNote, seedNotes, settledBox, signUp } from './helpers';
+import {
+  bearerToken,
+  card,
+  editorSelection,
+  openNote,
+  seedNotes,
+  settledBox,
+  signUp,
+} from './helpers';
 
 /** The dock's row while versions are reviewed: their list on a phone, and the actions. */
 const historyDock = (page: Page) => page.locator('[data-history-dock]');
@@ -366,6 +374,7 @@ test('the newest version is listed as the current note, and new formatting is ma
   await editor.getByText('Words made bold').click();
   await expect(editor).toBeFocused();
   await editor.getByText('Words made bold').selectText();
+  await expect.poll(() => editorSelection(editor)).toBe('Words made bold');
   await page.keyboard.press('Control+b');
   await expect(dialog.locator('strong').filter({ hasText: 'Words made bold' })).toBeVisible();
   await page.keyboard.press('ArrowRight');
@@ -398,15 +407,20 @@ test('history preview leaves the editor alone, restores online, and saves a cach
   await seedNotes(page, [{ title: 'Original title', body: previewUrl }]);
   const originalId = await card(page, 'Original title').getAttribute('data-note-card');
   const dialog = await openNote(page, 'Original title');
-  await dialog
+  const linkOptions = dialog
     .locator(`[data-link-card="${previewUrl}"]`)
-    .getByRole('button', { name: 'Link options' })
-    .click();
+    .getByRole('button', { name: 'Link options' });
+  await linkOptions.click();
   await page.getByRole('menuitem', { name: 'Show as Gallery Preview' }).click();
+  // The closing menu restores focus to its trigger. Let that finish
+  // before focusing the editor, or Select All can select the page instead of the note.
+  await expect(linkOptions).toBeFocused();
   const editor = dialog.getByRole('textbox');
   await editor.click();
+  await expect(editor).toBeFocused();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type('Changed title');
+  await expect(editor).toHaveText('Changed title');
   await page
     .getByRole('dialog', { name: 'Edit note' })
     .getByRole('button', { name: 'Version history', exact: true })

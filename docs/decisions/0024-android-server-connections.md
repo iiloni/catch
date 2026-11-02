@@ -1,4 +1,4 @@
-# 0023: Android accounts on several servers
+# 0024: Android accounts on several servers
 
 Status: accepted (2026-10-12)
 

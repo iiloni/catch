@@ -171,6 +171,40 @@ describe('NoteCard', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it('replaces the open toolbar menu, including the color picker', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const onOpen = vi.fn();
+    renderCard({ onOpen });
+    act(() => screen.getByRole('button', { name: 'Open note' }).focus());
+    const labels = ['Background color', 'Tags', 'Move note'];
+    // Click without an outside pointer event: exclusivity belongs to the toolbar itself.
+    for (const label of [...labels, 'Background color']) {
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      for (const sibling of labels) {
+        expect(screen.getByRole('button', { name: sibling })).toHaveAttribute(
+          'aria-expanded',
+          String(sibling === label),
+        );
+      }
+      expect(
+        document.querySelectorAll('[data-slot="popover-content"][data-state="open"]'),
+      ).toHaveLength(1);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Background color' }));
+    expect(
+      document.querySelectorAll('[data-slot="popover-content"][data-state="open"]'),
+    ).toHaveLength(0);
+    expect(onOpen).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it('assigns tags from the card toolbar without opening the note', () => {
     vi.stubGlobal(
       'ResizeObserver',
@@ -288,6 +322,45 @@ describe('NoteCard', () => {
     expect(screen.getByRole('button', { name: 'Work' })).toBeInTheDocument();
     expect(screen.queryByText('Oat milk')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Link/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the chosen preview link from its image and the note from its title', () => {
+    const url = 'https://a.example/';
+    const preview = previews.get(url)!;
+    previews.set(url, { ...preview, imageHash: 'b'.repeat(64) });
+    const linkedNote = {
+      ...note,
+      content: [paragraph(link(`${url}#details`))],
+      galleryPreviewUrl: url,
+    };
+    const onOpen = vi.fn();
+    const onSelect = vi.fn();
+    const { rerender } = renderCard({ note: linkedNote, onOpen, onSelect });
+    const anchor = screen.getByRole('link', { name: 'Open link: Page A' });
+    expect(anchor).toHaveAttribute('href', `${url}#details`);
+    expect(anchor).toHaveAttribute('target', '_blank');
+    expect(anchor).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(anchor.closest('button')).toBeNull();
+    fireEvent.click(anchor.querySelector('img')!);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('heading', { name: 'Page A' }));
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(linkedNote, expect.any(HTMLElement));
+
+    rerender(
+      <TooltipProvider>
+        <NoteCard note={linkedNote} selected={false} onSelect={onSelect} onOpen={onOpen} />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Select note' }).querySelector('img')!);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(linkedNote);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+
+    rerender(<NoteCardFace note={linkedNote} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    previews.set(url, preview);
   });
 
   it('shows the chosen second link and keeps the full link list reachable', () => {

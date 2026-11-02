@@ -110,11 +110,14 @@ Seeded logins: `admin@example.com` / `adminadmin` and `user@example.com` / `user
   pass; require that check in branch protection so testing alone cannot permit merging.
   `merge on pass` means functionality and design are approved and authorizes merging
   once required checks pass.
-- A change confined to documentation (`docs/`, root and `branding/` Markdown, the PR
-  template, `LICENSE`, `.gitignore`, `cubic.yaml`; the list is `scripts/change-scope.ts`)
-  runs `check` and skips E2E, on its PR and on `main`. It still needs `merge on pass` to
-  pass `validation`. One other file in the change makes it code. Do not add `run e2e` to
-  such a PR.
+- A change confined to E2E-exempt paths runs `check` and skips E2E, on its PR and on
+  `main`. The list in `scripts/change-scope.ts` covers documentation (`docs/`, root and
+  `branding/` Markdown, the PR template, `LICENSE`, `.gitignore`, `cubic.yaml`), the
+  `release.yml`, `site.yml`, `tag-release.yml`, `promote-release.yml` and `ai-review.yml`
+  workflows, and `scripts/release-workflows.test.ts`. It still needs `merge on pass` to
+  pass `validation`. Every changed path must be exempt; `ci.yml`, other scripts and app,
+  image or E2E inputs still require E2E. The `run e2e` label overrides the exemption
+  and requests the full suite.
 - After the user approves functionality and design for merging, mark the PR ready and add
   `merge on pass`. Fix failures with the label left in place, then squash-merge. If a fix changes the approved functionality or design, disable pending
   auto-merge, return the PR to draft, remove the label and obtain renewed approval.

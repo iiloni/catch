@@ -125,6 +125,26 @@ public class ReminderAccountsTest {
     }
 
     @Test
+    public void aLegacyReceiptDoesNotOutliveAdoptionOrSilenceAnotherServer() throws Exception {
+        String wall = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm").withZone(ZoneOffset.UTC)
+                .format(Instant.now().minusSeconds(120));
+        JSONArray times = new JSONArray().put(wall);
+        JSONArray alarms = new JSONArray().put(new JSONObject().put("noteId", NOTE).put("title", "Same note")
+                .put("times", times).put("timeZone", "UTC"));
+        ReminderAlarms.preferences(context).edit().putBoolean("enabled", true)
+                .putString("rung", new JSONObject().put(NOTE, System.currentTimeMillis() - 60000).toString()).commit();
+        ReminderAlarms.sync(context, "home", new JSONObject().put("server", "https://home.example"), alarms);
+        ReminderAlarms.schedule(context);
+        assertFalse(new JSONObject(ReminderAlarms.preferences(context).getString("rung", "{}")).has(NOTE));
+
+        ReminderAlarms.sync(context, "work", new JSONObject().put("server", "https://work.example"), alarms);
+        ReminderAlarms.schedule(context);
+        StatusBarNotification[] shown = context.getSystemService(NotificationManager.class).getActiveNotifications();
+        assertEquals(1, shown.length);
+        assertEquals(ReminderAlarms.reminderKey("work", NOTE), shown[0].getTag());
+    }
+
+    @Test
     public void notificationsAndDismissalAreIsolatedByAccount() throws Exception {
         java.lang.reflect.Method ring = ReminderAlarms.class.getDeclaredMethod("ring", Context.class,
                 String.class, String.class, JSONObject.class);

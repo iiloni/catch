@@ -65,124 +65,90 @@ function stepValues(
   return values;
 }
 
-test('Site follows completed Release runs and builds main with every release tag', () => {
+test('Site retains external and manual triggers and builds main with every release tag', () => {
   const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
-  assert.match(
-    workflow,
-    /\n {2}workflow_run:\n {4}workflows: \[Release\]\n {4}types: \[completed\]\n/,
-  );
   assert.match(workflow, /\n {2}workflow_dispatch:\n/);
   assert.match(workflow, /\n {2}push:\n {4}branches: \[main\]\n/);
   assert.match(workflow, /\n {4}tags: \['v\*'\]\n/);
   assert.match(workflow, /\n {2}release:\n {4}types: \[published\]\n/);
-  assert.match(
-    workflow,
-    /needs: eligibility\n {4}if: needs\.eligibility\.outputs\.published == 'true'\n/,
-  );
+  assert.doesNotMatch(workflow, /\n {2}workflow_run:/);
   assert.match(workflow, /ref: main\n\s+fetch-depth: 0\n\s+fetch-tags: true\n/);
   assert.match(workflow, /SITE_CHANGELOG: required/);
-  const release = readFileSync(
+  const condition = /\n {4}if: (.+)\n/.exec(workflow)?.[1];
+  assert.ok(condition, 'Missing site deployment condition');
+  for (const enabled of ['true', 'false', '']) {
+    assert.equal(
+      runInNewContext(condition, { vars: { CLOUDFLARE_SITE_ENABLED: enabled } }),
+      enabled === 'true',
+    );
+  }
+});
+
+test('Release refreshes Site only after publication for enabled dispatched releases', () => {
+  const workflow = readFileSync(
     new URL('../.github/workflows/release.yml', import.meta.url),
     'utf8',
   );
-  assert.match(release, /^name: Release\n/);
-});
-
-test('Site accepts only successful same-repository dispatched Release runs when enabled', () => {
-  const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
-  const condition = /\n {4}if: >-\n((?: {6}.+\n)+)/.exec(workflow)?.[1];
-  assert.ok(condition, 'Missing deployment condition');
-  const repository = 'iiloni/catch';
+  const job = /\n {2}refresh-site:\n([\s\S]+?)(?=\n {2}\w|$)/.exec(workflow)?.[1];
+  assert.ok(job, 'Missing changelog refresh job');
+  assert.match(job, / {4}needs: publish\n/);
+  assert.match(job, / {4}permissions:\n {6}actions: write\n/);
+  assert.doesNotMatch(job, /contents: write|packages: write|actions\/checkout|pnpm/);
+  assert.doesNotMatch(job, /always\(\)|continue-on-error/);
+  const condition = /\n {4}if: (.+)\n/.exec(job)?.[1];
+  assert.ok(condition, 'Missing changelog refresh condition');
   for (const enabled of ['true', 'false', '']) {
-    for (const event of ['push', 'release', 'workflow_dispatch', 'workflow_run']) {
-      for (const conclusion of ['success', 'failure', 'cancelled', 'skipped', 'timed_out']) {
-        for (const [source, trigger] of [
-          [repository, 'workflow_dispatch'],
-          [repository, 'push'],
-          ['someone/catch', 'workflow_dispatch'],
-        ]) {
-          const actual: unknown = runInNewContext(condition, {
-            vars: { CLOUDFLARE_SITE_ENABLED: enabled },
-            github: {
-              repository,
-              event_name: event,
-              event:
-                event === 'workflow_run'
-                  ? {
-                      workflow_run: {
-                        event: trigger,
-                        conclusion,
-                        head_repository: { full_name: source },
-                      },
-                    }
-                  : {},
-            },
-          });
-          const expected =
-            enabled === 'true' &&
-            (event !== 'workflow_run' ||
-              (trigger === 'workflow_dispatch' &&
-                conclusion === 'success' &&
-                source === repository));
-          assert.equal(
-            actual,
-            expected,
-            `${enabled}, ${event}, ${trigger}, ${conclusion}, ${source}`,
-          );
-        }
-      }
+    for (const event of ['workflow_dispatch', 'push']) {
+      assert.equal(
+        runInNewContext(condition, {
+          vars: { CLOUDFLARE_SITE_ENABLED: enabled },
+          github: { event_name: event },
+        }),
+        enabled === 'true' && event === 'workflow_dispatch',
+      );
     }
   }
 });
 
-test('Site completion fallback requires a published GitHub Release and preserves API failures', async () => {
-  for (const event of ['workflow_run', 'push', 'release', 'workflow_dispatch']) {
-    for (const state of ['published', 'draft', 'missing', 'unavailable']) {
-      const outputs: Record<string, string> = {};
-      const calls: Record<string, unknown>[] = [];
-      const result = runInNewContext(
-        `(async () => { ${stepBody('site.yml', 'Verify release publication', 'script')} })()`,
-        {
-          context: { ...context, eventName: event },
-          process: {
-            env: stepValues('site.yml', 'Verify release publication', 'env', {
-              'github.event.workflow_run.head_branch': 'v0.6.3-preview',
-            }),
-          },
-          core: {
-            setOutput: (key: string, value: string) => {
-              outputs[key] = value;
-            },
-          },
-          github: {
-            rest: {
-              repos: {
-                getReleaseByTag: async (input: Record<string, unknown>) => {
-                  calls.push(structuredClone(input));
-                  if (state === 'missing' || state === 'unavailable') {
-                    throw Object.assign(new Error(state), {
-                      status: state === 'missing' ? 404 : 503,
-                    });
-                  }
-                  return { data: { draft: state === 'draft' } };
-                },
+test('Release dispatches Site on main and exposes dispatch failures for independent retry', async () => {
+  for (const fails of [false, true]) {
+    const calls: Record<string, unknown>[] = [];
+    const summary: string[] = [];
+    const core = {
+      summary: {
+        addRaw: (text: string) => {
+          summary.push(text);
+          return core.summary;
+        },
+        write: async () => {},
+      },
+    };
+    const result = runInNewContext(
+      `(async () => { ${stepBody('release.yml', 'Refresh published changelog', 'script')} })()`,
+      {
+        context: { ...context, ref: 'refs/tags/v0.7.0-preview' },
+        core,
+        github: {
+          rest: {
+            actions: {
+              createWorkflowDispatch: async (input: Record<string, unknown>) => {
+                calls.push(structuredClone(input));
+                if (fails) throw new Error('GitHub dispatch unavailable');
               },
             },
           },
         },
-      ) as Promise<void>;
-      if (event === 'workflow_run' && state === 'unavailable') {
-        await assert.rejects(result, /unavailable/);
-        assert.deepEqual(outputs, {});
-      } else {
-        await result;
-        assert.equal(outputs.published, String(event !== 'workflow_run' || state === 'published'));
-      }
-      assert.deepEqual(
-        calls,
-        event === 'workflow_run' ? [{ ...context.repo, tag: 'v0.6.3-preview' }] : [],
-      );
+      },
+    ) as Promise<void>;
+    if (fails) {
+      await assert.rejects(result, /GitHub dispatch unavailable/);
+      assert.deepEqual(summary, [], 'A failed dispatch must not report success');
+    } else {
+      await result;
+      assert.match(summary.join(''), /Requested Site on main/);
+      assert.match(summary.join(''), /release artifacts are already published/);
     }
+    assert.deepEqual(calls, [{ ...context.repo, workflow_id: 'site.yml', ref: 'main' }]);
   }
 });
 
@@ -195,11 +161,8 @@ test('Release names the image and APK without passing them between jobs', () => 
   );
   assert.doesNotMatch(workflow, /needs\.version\.outputs\.(image|apk)/);
   assert.match(workflow, /RELEASE_APK: catch-\$\{\{ needs\.version\.outputs\.version \}\}\.apk\n/);
-  assert.match(
-    workflow,
-    /tags: \$\{\{ env\.IMAGE \}\}:\$\{\{ needs\.version\.outputs\.version \}\}\n/,
-  );
-  assert.equal(workflow.split('- name: Name image\n').length - 1, 2);
+  assert.match(workflow, /outputs: type=image,name=\$\{\{ env\.IMAGE \}\},push-by-digest=true/);
+  assert.equal(workflow.split('- name: Name image\n').length - 1, 3);
 
   const directory = mkdtempSync(join(tmpdir(), 'catch-release-'));
   try {
@@ -214,6 +177,127 @@ test('Release names the image and APK without passing them between jobs', () => 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('APK builds retry transient downloads, preserve failure codes and stop after three attempts', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'catch-apk-retry-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeFileSync(join(directory, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  writeFileSync(
+    join(directory, 'gradlew'),
+    `#!/bin/bash
+attempt=$(cat "$RUNNER_TEMP/attempt" 2>/dev/null || echo 0)
+attempt=$((attempt + 1))
+echo "$attempt" > "$RUNNER_TEMP/attempt"
+printf '%s\\n' "$@" > "$RUNNER_TEMP/arguments"
+if [[ "$MODE" == recover && "$attempt" == 2 ]]; then exit 0; fi
+if [[ "$MODE" == permanent ]]; then echo 'Compilation failed'; else echo 'Read timed out'; fi
+exit 17
+`,
+    { mode: 0o755 },
+  );
+  assert.match(stepLines('release.yml', 'Build signed APK').join('\n'), /shell: bash/);
+  for (const [MODE, attempts, status] of [
+    ['recover', 2, 0],
+    ['timeout', 3, 17],
+    ['permanent', 1, 17],
+  ] as const) {
+    rmSync(join(directory, 'attempt'), { force: true });
+    const result = spawnSync(
+      'bash',
+      ['-e', '-o', 'pipefail', '-c', stepBody('release.yml', 'Build signed APK', 'run')],
+      {
+        cwd: directory,
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          RUNNER_TEMP: directory,
+          MODE,
+          RELEASE_TASK: 'assemblePreviewRelease',
+        },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, status, result.stdout + result.stderr);
+    assert.equal(readFileSync(join(directory, 'attempt'), 'utf8').trim(), String(attempts));
+    assert.equal(
+      readFileSync(join(directory, 'arguments'), 'utf8'),
+      'assemblePreviewRelease\n--no-daemon\n--no-configuration-cache\n',
+    );
+  }
+});
+
+test('native image builds use separate runners and caches and merge only after both succeed', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(workflow, /arch: amd64\n +runner: ubuntu-24.04\n/);
+  assert.match(workflow, /arch: arm64\n +runner: ubuntu-24.04-arm\n/);
+  assert.match(workflow, /runs-on: \$\{\{ matrix.runner \}\}/);
+  assert.doesNotMatch(workflow, /setup-qemu-action/);
+  assert.match(workflow, /platforms: linux\/\$\{\{ matrix.arch \}\}/);
+  assert.match(workflow, /cache-from: type=gha,scope=release-image-\$\{\{ matrix.arch \}\}/);
+  assert.match(workflow, /cache-to: type=gha,scope=release-image-\$\{\{ matrix.arch \}\},mode=max/);
+  assert.match(workflow, /image:\n +needs: \[version, image-build\]/);
+  assert.match(workflow, /digest: \$\{\{ steps.merge.outputs.digest \}\}/);
+  assert.match(workflow, /publish:\n +needs: \[version, android, image\]/);
+});
+
+test('image manifest combines both digests, returns its digest and refuses incomplete builds', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'catch-image-merge-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const digests = join(directory, 'image-digests');
+  mkdirSync(digests);
+  writeFileSync(
+    join(directory, 'docker'),
+    `#!/bin/bash
+if [[ "$3" == create ]]; then printf '%s\\n' "$@" > "$RUNNER_TEMP/docker-arguments"; fi
+if [[ "$3" == inspect ]]; then echo 'sha256:${'c'.repeat(64)}'; fi
+`,
+    { mode: 0o755 },
+  );
+  for (const count of [0, 1, 2]) {
+    if (count) writeFileSync(join(digests, (count === 1 ? 'a' : 'b').repeat(64)), '');
+    const result = spawnSync(
+      'bash',
+      [
+        '-e',
+        '-o',
+        'pipefail',
+        '-c',
+        stepBody('release.yml', 'Publish exact multi-platform image', 'run'),
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          RUNNER_TEMP: directory,
+          GITHUB_OUTPUT: join(directory, 'output'),
+          IMAGE: 'ghcr.io/iiloni/catch',
+          VERSION: '0.7.5-preview',
+        },
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, count === 2 ? 0 : 1, result.stdout + result.stderr);
+    if (count < 2) {
+      assert.equal(existsSync(join(directory, 'docker-arguments')), false);
+    }
+  }
+  assert.deepEqual(readFileSync(join(directory, 'docker-arguments'), 'utf8').trim().split('\n'), [
+    'buildx',
+    'imagetools',
+    'create',
+    '--tag',
+    'ghcr.io/iiloni/catch:0.7.5-preview',
+    `ghcr.io/iiloni/catch@sha256:${'a'.repeat(64)}`,
+    `ghcr.io/iiloni/catch@sha256:${'b'.repeat(64)}`,
+  ]);
+  assert.equal(
+    readFileSync(join(directory, 'output'), 'utf8'),
+    `digest=sha256:${'c'.repeat(64)}\n`,
+  );
 });
 
 test('Release rejects branch refs even when their name looks like a release tag', () => {

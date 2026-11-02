@@ -2,8 +2,8 @@ import { type Note, tagColor } from '@catch/shared';
 import {
   Archive,
   ArchiveRestore,
+  Columns3,
   Copy,
-  LayoutGrid,
   type LucideIcon,
   Palette,
   Pin,
@@ -16,6 +16,7 @@ import {
 import { motion } from 'motion/react';
 import { type ComponentProps, useState } from 'react';
 import { ColorTagSelector } from '@/components/ColorPicker/ColorPicker';
+import { NoteMovePicker } from '@/components/NoteMovePicker/NoteMovePicker';
 import type { HeaderSelection } from '@/components/PageHeader/PageHeader';
 import { TagPicker } from '@/components/TagPicker/TagPicker';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useNoteTagAssignments, useTagReadiness, useTags } from '@/lib/collections';
+import { sortBoardColumns } from '@/lib/boardColumns';
+import {
+  useBoardColumns,
+  useNoteTagAssignments,
+  useTagReadiness,
+  useTags,
+} from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import type { useNoteSelection } from '@/lib/noteSelection';
@@ -35,6 +42,7 @@ import {
   archiveNotes,
   deleteNotesForever,
   duplicateNotes,
+  moveNoteToDeck,
   restoreNotes,
   sendNotesToGallery,
   setNotePinned,
@@ -80,8 +88,12 @@ export function selectionHeader(
 /** Actions for the selected notes, shown in the page header's toolbar. */
 export function SelectionToolbar({ notes, place, onDone }: Props) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const columns = sortBoardColumns(useBoardColumns());
   const ids = notes.map((note) => note.id);
   const allPinned = notes.every((note) => note.isPinned);
+  const firstStatus = notes[0]?.status;
+  const sharedStatus = notes.every((note) => note.status === firstStatus) ? firstStatus : undefined;
   const tags = useTags();
   const assignments = useNoteTagAssignments();
   const { awaitingAssignments } = useTagReadiness();
@@ -160,15 +172,37 @@ export function SelectionToolbar({ notes, place, onDone }: Props) {
           <TagPicker noteIds={ids} />
         </PopoverContent>
       </Popover>
-      {place === 'deck' && (
-        <ToolbarButton
-          label="Send to gallery"
-          icon={LayoutGrid}
-          onClick={then(() => {
-            haptics.success();
-            sendNotesToGallery(notes);
-          })}
-        />
+      {(place === 'gallery' || place === 'deck') && (
+        <Popover open={moving} onOpenChange={setMoving}>
+          <PopoverTrigger asChild>
+            <ToolbarButton label="Move" icon={Columns3} onClick={haptics.toggle} />
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={10}
+            collisionPadding={PICKER_INSET}
+            sticky="always"
+            className={cn(PICKER_WIDTH, 'rounded-3xl p-1 pb-2 sm:w-80')}
+          >
+            <NoteMovePicker
+              columns={columns}
+              current={sharedStatus}
+              hovered={undefined}
+              label="Move selected notes"
+              onSelect={(status) => {
+                setMoving(false);
+                haptics.success();
+                const movingNotes = notes.filter((note) => note.status !== status);
+                if (status === null) {
+                  if (movingNotes.length) sendNotesToGallery(movingNotes);
+                } else {
+                  for (const note of movingNotes) moveNoteToDeck(note.id, status);
+                }
+                onDone();
+              }}
+            />
+          </PopoverContent>
+        </Popover>
       )}
       {place === 'archive' ? (
         <ToolbarButton
@@ -260,7 +294,7 @@ function ToolbarButton({ label, icon: Icon, ...props }: ToolbarButtonProps) {
       aria-label={label}
       whileTap={{ scale: 0.88 }}
       transition={springs.snappy}
-      className="flex h-10 w-9 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50 max-[375px]:w-8 sm:w-10"
+      className="flex h-10 w-9 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50 max-[375px]:w-8 max-[335px]:w-7 sm:w-10"
       {...props}
     >
       <Icon className="size-5" aria-hidden />

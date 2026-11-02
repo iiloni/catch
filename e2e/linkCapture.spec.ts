@@ -36,8 +36,10 @@ test('link intake fetches editable details, saves an ordinary note, and warns ab
     .filter({ has: page.locator('[data-gallery-preview="https://atuin.sh/"]') });
   await expect(captured).toBeVisible();
   await expect(card(page, 'Draft before capture')).toBeVisible();
-  // The card's hover dock sits over the face's bottom edge, so open from its top.
-  await captured.locator('[data-gallery-preview]').click({ position: { x: 20, y: 20 } });
+  // Thumbnails open the URL; the title opens the note. Keep clear of the hover dock below.
+  await captured
+    .getByRole('button', { name: 'Open note', exact: true })
+    .click({ position: { x: 20, y: 6 } });
   const note = page.getByRole('dialog', { name: 'Edit note' });
   await expect(note.getByRole('textbox')).toContainText(metadata.description);
   await expect(note.getByRole('textbox')).toContainText('Try this on the laptop.');
@@ -114,8 +116,10 @@ test('an older server permits manual capture and the note survives an offline re
     .locator('[data-note-card]')
     .filter({ has: page.locator('[data-gallery-preview="https://example.com/"]') });
   await expect(captured).toBeVisible();
-  // The card's hover dock sits over the face's bottom edge, so open from its top.
-  await captured.locator('[data-gallery-preview]').click({ position: { x: 20, y: 20 } });
+  // Thumbnails open the URL; the title opens the note. Keep clear of the hover dock below.
+  await captured
+    .getByRole('button', { name: 'Open note', exact: true })
+    .click({ position: { x: 20, y: 6 } });
   await expect(page.getByRole('dialog', { name: 'Edit note' }).getByRole('textbox')).toContainText(
     'Keep this for the train.',
   );

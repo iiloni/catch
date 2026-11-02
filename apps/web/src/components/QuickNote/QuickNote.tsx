@@ -288,6 +288,11 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
       return;
     }
 
+    // Presence keeps the editor mounted through the exit animation. Release its focus
+    // now so the keyboard closes alongside the window rather than after it disappears.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && ref.current?.contains(focused)) focused.blur();
+
     const hasContent = blocksHaveContent(latest.current.content);
     const candidate = hasContent || draft.current ? create() : null;
     const id = candidate && !discardIfEmpty(candidate) ? candidate : null;
@@ -433,7 +438,7 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
               if (draft.current) updateNote(draft.current, { content: next });
             }}
             onControls={setControls}
-            autoFocus
+            autoFocus={isPresent && !suspended}
           />
         </motion.div>
         <AnimatePresence initial={false}>

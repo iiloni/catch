@@ -207,15 +207,21 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   }, id);
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
   await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
-  await page.waitForTimeout(700);
+  // The previous Synced label can still be fading out beside the new Syncing label.
+  await expect(page.getByRole('dialog').locator('[data-sync-pill]')).toHaveText('Synced', {
+    timeout: 30000,
+  });
   await page.reload();
   await expect(media.getByTitle('pixel.png', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toBeVisible();
+  await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
 
   const other = await browser.newContext();
   const second = await other.newPage();
   await signIn(second, email);
   await openNote(second, 'Attachments');
   await expect(second.getByRole('region', { name: 'Media' }).getByRole('img')).toBeVisible();
+  await expect(second.locator('.note-editor [data-content-type="image"]')).toHaveCount(0);
 
   await media.getByRole('button', { name: 'Manage pixel.png' }).click();
   await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
@@ -226,7 +232,25 @@ test('attachments preview, retain their catalog without blocks, and remove priva
   await page.getByRole('menuitem', { name: 'Add to note' }).click();
   await expect(page.getByRole('menu', { includeHidden: true })).toHaveCount(0);
   await expect(page.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
-  await page.waitForTimeout(700);
+  const content = await page.evaluate(async () => {
+    const { editorControls } = await import('/src/lib/dockState.ts');
+    return editorControls.get().getContent();
+  });
+  await expect(page.getByRole('dialog').locator('[data-sync-pill]')).toHaveText('Synced', {
+    timeout: 30000,
+  });
+  // Each device receives Electric independently. The editor reads content once on mount,
+  // so reloading before this device catches up can keep its old cached content on screen.
+  await expect
+    .poll(
+      () =>
+        second.evaluate(async () => {
+          const { getNote } = await import('/src/lib/notes.ts');
+          return getNote(new URL(location.href).searchParams.get('note')).content;
+        }),
+      { timeout: 30000 },
+    )
+    .toEqual(content);
   await second.reload();
   await expect(second.locator('.note-editor [data-content-type="image"]')).toHaveCount(1);
   await media.getByRole('button', { name: 'Manage Renamed.png' }).click();

@@ -139,7 +139,9 @@ server until the server is updated: **update the server first.**
     its copy of the token.
   - The phone remembers the wall clock time that last rang for each reminder, as well as
     the instant: carried west with its list unchanged, a floating reminder's time would
-    otherwise come round a second time.
+    otherwise come round a second time. It keeps what rang for a day even after the
+    reminder leaves its list: the app opens on the reminders it kept on the device, from
+    before the server moved one on, and hands the phone that older copy until it syncs.
 - **Backups hold the push keys and subscriptions.** A backup already holds every note, so
   it was always to be kept as carefully as the database. What reminders add is that someone
   with one could also send notifications to those browsers until they re-subscribe.

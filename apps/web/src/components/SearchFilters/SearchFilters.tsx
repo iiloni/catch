@@ -26,7 +26,7 @@ import { TagIcon } from '@/components/TagIcon/TagIcon';
 import { TagTree } from '@/components/TagTree/TagTree';
 import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
-import { springs } from '@/lib/motion';
+import { curves, springs } from '@/lib/motion';
 import { usePersistentState } from '@/lib/storage';
 import type { TagSearchFilter } from '@/lib/tagSearch';
 import { cn } from '@/lib/utils';
@@ -66,7 +66,7 @@ export function SearchFilterPanel({
         className="flex w-full max-w-md flex-col justify-end overflow-hidden rounded-[var(--dock-radius)] shadow-[0_10px_30px_-10px_var(--glass-shadow)] [&>*]:shrink-0"
         initial={{ height: 0 }}
         animate={{ height: 'auto' }}
-        exit={{ height: 0 }}
+        exit={{ height: 0, transition: curves.fold }}
         transition={springs.smooth}
       >
         <section
@@ -638,7 +638,9 @@ export function BrowseTags({
           >
             <TagIcon name={tag.icon} className="size-5 shrink-0" />
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{tag.name}</span>
-            <span className="text-xs text-muted-foreground">{counts.get(tag.id) ?? 0}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {counts.get(tag.id) ?? 0}
+            </span>
           </button>
         ))}
         <button
@@ -648,8 +650,8 @@ export function BrowseTags({
           className="flex min-h-16 min-w-0 items-center gap-3 rounded-2xl border border-border bg-card/60 px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Tags className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="flex-1 text-sm font-medium">Untagged</span>
-          <span className="text-xs text-muted-foreground">{untaggedCount}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">Untagged</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{untaggedCount}</span>
         </button>
       </div>
     </section>

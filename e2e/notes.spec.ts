@@ -17,23 +17,26 @@ import {
 } from './helpers';
 
 test('notes are created, edited, and synced across tabs', async ({ page, context }) => {
+  // Two copies of the app share the runner's CPU, and a second tab syncs through the first
+  // tab's device database. Each hand-over takes about 2s on a fast machine and grows with load.
+  const crossTab = { timeout: 15_000 };
   await signUp(page);
   await createNote(page, 'Groceries', 'Oat milk');
 
   const otherTab = await context.newPage();
   await otherTab.goto('/');
-  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk');
+  await expect(card(otherTab, 'Groceries')).toContainText('Oat milk', crossTab);
 
   const dialog = await openNote(otherTab, 'Groceries');
   await dialog.getByText('Oat milk').click();
   await otherTab.keyboard.press('End');
   await otherTab.keyboard.type(' and eggs');
-  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Synced', { exact: true })).toBeVisible(crossTab);
   await dialog.getByRole('button', { name: 'Close' }).click();
 
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
   await page.reload();
-  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs');
+  await expect(card(page, 'Groceries')).toContainText('Oat milk and eggs', crossTab);
 });
 
 test('swiping the quick-note handle up expands after the release threshold', async ({
@@ -602,6 +605,154 @@ test('a sideways touch archives a gallery card', async ({ page, isMobile }) => {
   await expect(card(page, 'Swipe me')).toBeHidden();
 });
 
+for (const direction of [-1, 1]) {
+  for (const reducedMotion of [false, true]) {
+    test(`archive confirmation reuses the ${direction === 1 ? 'left' : 'right'} cue icon${reducedMotion ? ' with reduced motion' : ''}`, async ({
+      page,
+      isMobile,
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        !isMobile && browserName !== 'firefox',
+        'Touch layout and Firefox rendering coverage.',
+      );
+      await page.emulateMedia({
+        reducedMotion: reducedMotion ? 'reduce' : 'no-preference',
+        colorScheme: direction === 1 ? 'light' : 'dark',
+      });
+      // Motion keeps the requestAnimationFrame it finds when the app loads. Installed later,
+      // the fake clock would only move its animations on the browser's next real frame,
+      // which can paint after a measurement; installed first, `runFor` paints each frame.
+      await page.clock.install();
+      await signUp(page);
+      // Cover both a closing masonry gap and the last card yielding to the empty state.
+      const peerTitles =
+        direction === 1 ? ['Remaining one', 'Remaining two', 'Remaining three'] : [];
+      await seedNotes(page, [
+        ...peerTitles,
+        {
+          title: 'Archive confirmation',
+          body: 'Keep the confirmation centered on a tall note. '.repeat(12),
+        },
+      ]);
+      const noteCard = card(page, 'Archive confirmation');
+      const bounds = await settledBox(noteCard);
+      const peerBounds = await Promise.all(
+        peerTitles.map((title) => settledBox(card(page, title))),
+      );
+      const noteId = await noteCard.getAttribute('data-note-card');
+      // Exiting cards are inert, so role locators intentionally stop finding them.
+      const surface = page.locator(`[data-note-cell="${noteId}"] [data-swipe-archive]`);
+      const icon = surface.locator('[data-swipe-archive-icon]');
+      const originalIcon = await icon.elementHandle();
+      await expect(icon.locator('svg')).toHaveCount(1);
+
+      await page.clock.pauseAt(new Date(Date.now() + 1000));
+      // Firefox has no CDP touch input. Drive the touch pointer handlers directly here;
+      // the preceding test covers the browser's native touch recognition in Chromium.
+      await surface.evaluate((element, dx) => {
+        const pointer = { bubbles: true, pointerId: 1, pointerType: 'touch', clientY: 50 };
+        const capture = element.setPointerCapture;
+        element.setPointerCapture = () => {};
+        element.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, clientX: 100 }));
+        element.dispatchEvent(new PointerEvent('pointermove', { ...pointer, clientX: 100 + dx }));
+        element.setPointerCapture = capture;
+      }, direction * 80);
+      await page.clock.runFor(160);
+      const edge = await icon.boundingBox();
+      if (!edge) throw new Error('Missing swipe icon');
+      expect(edge.x + edge.width / 2).toBeCloseTo(
+        direction === 1 ? bounds.x + 30 : bounds.x + bounds.width - 30,
+        0,
+      );
+      await testInfo.attach('swipe-cue', {
+        body: await page.screenshot({ clip: bounds, path: testInfo.outputPath('swipe-cue.png') }),
+        contentType: 'image/png',
+      });
+      await surface.dispatchEvent('pointerup', {
+        pointerId: 1,
+        pointerType: 'touch',
+        clientX: 100 + direction * 80,
+        clientY: 50,
+      });
+      await page.clock.runFor(reducedMotion ? 32 : 300);
+      expect(await icon.evaluate((element, original) => element === original, originalIcon)).toBe(
+        true,
+      );
+      const centered = await icon.boundingBox();
+      if (!centered) throw new Error('Missing confirmation icon');
+      expect(centered.x + centered.width / 2).toBeCloseTo(bounds.x + bounds.width / 2, 0);
+      expect(centered.y + centered.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
+      await testInfo.attach('archive-confirmation', {
+        body: await page.screenshot({
+          clip: bounds,
+          path: testInfo.outputPath('archive-confirmation.png'),
+        }),
+        contentType: 'image/png',
+      });
+      if (!reducedMotion) {
+        await page.clock.runFor(80);
+        await expect(surface).toHaveAttribute('inert', '');
+        await page.clock.runFor(80);
+        // The archive has committed and the grid is moving, but its confirmation remains.
+        const opacity = await surface.evaluate((element) =>
+          Number(getComputedStyle(element).opacity),
+        );
+        expect(opacity).toBeGreaterThan(0);
+        expect(opacity).toBeLessThan(1);
+        const fading = await icon.boundingBox();
+        if (!fading) throw new Error('Missing fading confirmation');
+        expect(fading.x + fading.width / 2).toBeCloseTo(bounds.x + bounds.width / 2, 0);
+        expect(fading.y + fading.height / 2).toBeCloseTo(bounds.y + bounds.height / 2, 0);
+        if (peerTitles.length) {
+          const moving = await Promise.all(
+            peerTitles.map((title) => card(page, title).boundingBox()),
+          );
+          expect(
+            moving.some(
+              (box, index) =>
+                box && (box.x !== peerBounds[index]?.x || box.y !== peerBounds[index]?.y),
+            ),
+          ).toBe(true);
+        } else {
+          await expect(page.getByText('Catch your first note', { exact: true })).toBeVisible();
+        }
+        await testInfo.attach('confirmation-during-grid-reflow', {
+          body: await page.screenshot({
+            path: testInfo.outputPath('confirmation-during-grid-reflow.png'),
+          }),
+          contentType: 'image/png',
+        });
+        if (peerTitles.length) {
+          // An immediate Undo revives the fading card rather than leaving its face offscreen.
+          await page
+            .locator('[data-sonner-toast]')
+            .getByRole('button', { name: 'Undo' })
+            .evaluate((button) => button.click());
+          await page.clock.runFor(32);
+          await expect(surface).not.toHaveAttribute('inert', '');
+          expect(
+            await icon.evaluate((element, original) => element === original, originalIcon),
+          ).toBe(true);
+          await page.clock.runFor(400);
+          const restored = await noteCard.boundingBox();
+          expect(restored?.x).toBeCloseTo(bounds.x, 0);
+          await page.clock.resume();
+          await noteCard.getByRole('button', { name: 'Open note' }).click();
+          await expect(page.getByRole('dialog')).toBeVisible();
+          return;
+        }
+      }
+      await page.clock.runFor(400);
+      await expect(noteCard).toBeHidden();
+      await expect(
+        page.locator('[data-sonner-toast]').filter({ hasText: 'Note archived' }),
+      ).toBeVisible();
+      await page.clock.resume();
+    });
+  }
+}
+
 test('swiping the open note down or up closes it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'The editor swipe is a touch gesture.');
   await signUp(page);
@@ -910,6 +1061,7 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
       ],
     });
   }
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await page.waitForTimeout(100);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(order).toEqual(['One', 'Three', 'Two']);
@@ -972,6 +1124,7 @@ test('a long press picks up a gallery note to move it', async ({ page, isMobile 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
   await page.waitForTimeout(400);
+  await expect(page.getByLabel('1 selected')).toBeVisible();
   for (let step = 1; step <= 10; step++) {
     const point = {
       x: from.x + ((to.x - from.x) * step) / 10,
@@ -979,10 +1132,12 @@ test('a long press picks up a gallery note to move it', async ({ page, isMobile 
     };
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [point] });
   }
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
   await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
   await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('toolbar', { name: 'Selected notes' })).toBeHidden();
   await page.reload();
   await expect.poll(() => galleryOrder(page)).toEqual(['One', 'Three', 'Two']);
 });
@@ -992,6 +1147,32 @@ function cell(page: Page, title: string) {
   return page
     .locator('[data-note-cell]')
     .filter({ has: page.getByRole('heading', { name: title }) });
+}
+
+for (const view of ['Gallery', 'Deck'] as const) {
+  test(`a long press drag in ${view} keeps a selection from an earlier press`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Long press is a touch gesture.');
+    await signUp(page);
+    await seedNotes(page, ['One', 'Two'], view === 'Deck' ? 'new' : undefined);
+    if (view === 'Deck') await openDeck(page);
+    await longPress(page, card(page, 'One'));
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    const from = await centerOf(page, 'One');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+    await page.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: from.x + 30, y: from.y }],
+    });
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    await expect(page.getByRole('dialog')).toBeHidden();
+  });
 }
 
 /** Selects a note with the check that appears when hovering its card. */
@@ -1075,6 +1256,97 @@ test('search results are selected and archived together', async ({ page, isMobil
   await expect(toolbar).toBeHidden();
   await expect(results.getByText('Archived')).toHaveCount(2);
   await expect(result('Milk three').getByRole('button', { name: 'Open note' })).toBeVisible();
+});
+
+test('selected notes move between the gallery and deck columns through a picker', async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 780 });
+  await signUp(page);
+  await seedNotes(page, ['One', 'Two', 'Three']);
+  if (isMobile) {
+    await longPress(page, card(page, 'One'));
+    await card(page, 'Two').tap();
+  } else {
+    await hoverSelect(page, 'One');
+    await hoverSelect(page, 'Two');
+  }
+  const toolbar = page.getByRole('toolbar', { name: 'Selected notes' });
+  const move = toolbar.getByRole('button', { name: 'Move', exact: true });
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  const closeBox = await settledBox(page.getByRole('button', { name: 'Clear selection' }));
+  const toolbarBox = await settledBox(toolbar);
+  expect(toolbarBox.x).toBeGreaterThan(closeBox.x + closeBox.width);
+  await move.click();
+  const picker = page.getByRole('group', { name: 'Move selected notes' });
+  await expect(picker.getByRole('button', { name: 'Send to gallery' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  const popup = page.locator('[data-slot="popover-content"]').filter({ has: picker });
+  const box = await settledBox(popup);
+  if (isMobile) {
+    expect(box.x).toBeCloseTo(12, 0);
+    expect(box.width).toBeCloseTo((page.viewportSize()?.width ?? 0) - 24, 0);
+  }
+  await testInfo.attach('selection-move-picker', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
+  // Dismissing the picker keeps the selection; Escape closes the popup first.
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeHidden();
+  await expect(page.getByLabel('2 selected')).toBeVisible();
+  await expect(move).toBeFocused();
+  await move.click();
+  await picker.getByRole('button', { name: 'In progress', exact: true }).click();
+  await expect(toolbar).toBeHidden();
+  await expect(card(page, 'One')).toBeHidden();
+  await expect(card(page, 'Two')).toBeHidden();
+  await expect(card(page, 'Three')).toBeVisible();
+
+  await openDeck(page);
+  const progress = page.getByRole('region', { name: 'In progress column' });
+  if (isMobile) await page.getByRole('tab', { name: 'In progress 2' }).click();
+  await expect(progress.getByText('One', { exact: true })).toBeVisible();
+  await expect(progress.getByText('Two', { exact: true })).toBeVisible();
+  if (isMobile) {
+    await longPress(page, boardCell(page, 'One'));
+    await boardCell(page, 'Two').tap();
+  } else {
+    await boardCell(page, 'One').hover();
+    await boardCell(page, 'One').getByRole('button', { name: 'Select note' }).click();
+    await boardCell(page, 'Two').getByRole('button', { name: 'Select note' }).click();
+  }
+  await move.click();
+  await expect(picker.getByRole('button', { name: 'In progress' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  await picker.getByRole('button', { name: 'New Default' }).click();
+  await expect(toolbar).toBeHidden();
+  if (isMobile) await page.getByRole('tab', { name: 'New 2' }).click();
+  const newColumn = page.getByRole('region', { name: 'New column' });
+  await expect(newColumn.getByText('One', { exact: true })).toBeVisible();
+  await expect(newColumn.getByText('Two', { exact: true })).toBeVisible();
+  if (isMobile) {
+    await longPress(page, boardCell(page, 'One'));
+    await boardCell(page, 'Two').tap();
+  } else {
+    await boardCell(page, 'One').hover();
+    await boardCell(page, 'One').getByRole('button', { name: 'Select note' }).click();
+    await boardCell(page, 'Two').getByRole('button', { name: 'Select note' }).click();
+  }
+  await move.click();
+  await picker.getByRole('button', { name: 'Send to gallery' }).click();
+  await expect(toolbar).toBeHidden();
+  await page.getByRole('link', { name: 'Gallery' }).click();
+  await expect(card(page, 'One')).toBeVisible();
+  await expect(card(page, 'Two')).toBeVisible();
+  await page.reload();
+  await expect(card(page, 'One')).toBeVisible();
+  await expect(card(page, 'Two')).toBeVisible();
 });
 
 test('selected notes are recolored, archived and trashed together', async ({ page, isMobile }) => {
@@ -1233,7 +1505,11 @@ test('selected deck notes move together as a stack, or stay put when cancelled',
 
   await boardCell(page, 'Three').hover();
   await boardCell(page, 'Three').getByRole('button', { name: 'Select note' }).click();
-  await toolbar.getByRole('button', { name: 'Send to gallery' }).click();
+  await toolbar.getByRole('button', { name: 'Move', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Move selected notes' })
+    .getByRole('button', { name: 'Send to gallery' })
+    .click();
   await expect.poll(() => order(holdColumn)).toEqual(['One']);
   await page.getByRole('link', { name: 'Gallery' }).click();
   await expect(card(page, 'Three')).toBeVisible();

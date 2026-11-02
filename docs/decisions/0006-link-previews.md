@@ -78,6 +78,9 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   the note's color and shows its tags and badges; tags never force it back to text. A chosen
   face with several links keeps the underlay so the full list remains reachable. The choice
   applies to every card view, including the Deck, archive, trash and search.
+  Tapping the chosen face's image opens the link; its title and site open the note. While
+  notes are selected, both parts select the note instead. Faces without an image open the
+  note throughout.
   A removed or hidden chosen link, or previews disabled on the device, falls back to text
   without choosing another link. The saved URL is retained so Undo or enabling previews
   restores the face. If editing moves the chosen link past the per-note preview limit, it
@@ -87,7 +90,9 @@ underlays use the note's own color a step darker, so the user's colors stay in c
   alone. Neither choosing a face nor hiding a preview changes the note's Last edited time.
 - *Overlay.* Tapping an underlay opens every link as a list (`LinkPreviewOverlay`) that slides
   up from behind the dock it belongs to (the page's, or the open note's) and rests just above
-  it, in reach of the thumb, on every screen size. Notes with attachments show their Media
+  it, in reach of the thumb, on every screen size. When scrolling has hidden the page's dock,
+  opening previews brings it back; the panel and its clipping edge follow the dock's scroll
+  spring so the cards emerge from its moving position. Notes with attachments show their Media
   card above the Links card in the same scroll area, with thumbnail viewing and attachment
   management (ADR 0010). Closing normally slides it back down;
   swiping the card up or down dismisses it in that direction, once the link list reaches its

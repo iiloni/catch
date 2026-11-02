@@ -1,0 +1,39 @@
+Language logos are from Devicon v2.17.0, commit `54cfe13ac10eaa1ef817a343ab0a9437eb3c2e08`, https://github.com/devicons/devicon. See LICENSE. Original (colored) variants are preferred. Logos with no brand color are drawn as monochrome masks in the theme's text color, marked tinted in `src/lib/codeLanguages.ts`; plain variants suit those, because their transparent cutouts keep letters visible. The generic code and text icons are drawn locally.
+
+- azuresqldatabase: original
+- bash: plain (tinted)
+- c: original
+- cplusplus: original
+- csharp: original
+- css3: original
+- dart: original
+- docker: original
+- elixir: original
+- go: original
+- graphql: plain
+- haskell: original
+- html5: original
+- java: original
+- javascript: original
+- json: plain (tinted)
+- kotlin: original
+- latex: original (tinted)
+- lua: original
+- markdown: original (tinted)
+- nginx: original
+- nixos: original
+- php: original
+- powershell: original
+- python: original
+- r: original
+- react: original
+- ruby: original
+- rust: original (tinted)
+- sass: original
+- scala: original
+- swift: original
+- terraform: original
+- typescript: original
+- xml: original
+- yaml: plain (tinted)
+- zig: original

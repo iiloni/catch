@@ -10,6 +10,7 @@ import { Dock } from '@/components/Dock/Dock';
 import { GpuWarmup } from '@/components/GpuWarmup/GpuWarmup';
 import { LinkCapture } from '@/components/LinkCapture/LinkCapture';
 import { LinkPreviewOverlay } from '@/components/LinkPreviewOverlay/LinkPreviewOverlay';
+import { MainPagePager } from '@/components/MainPagePager/MainPagePager';
 import { preloadNoteEditor } from '@/components/NoteEditor/LazyNoteEditor';
 import { NoteEditorOverlay } from '@/components/NoteEditorOverlay/NoteEditorOverlay';
 import { PageBottomBlur } from '@/components/PageBottomBlur/PageBottomBlur';
@@ -20,7 +21,7 @@ import { WebUpdatePrompt } from '@/components/WebUpdatePrompt/WebUpdatePrompt';
 import { arrivedBySwitching, followAccountChanges, openAccountNote } from '@/lib/accounts';
 import { getAccountId, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { startNoteCollections } from '@/lib/collections';
-import { editorNote, quickNote, searchFocusRequest } from '@/lib/dockState';
+import { editorNote, quickNote, searchFiltersOpen, searchFocusRequest } from '@/lib/dockState';
 import { linkCaptureControls } from '@/lib/linkCapture';
 import { watchNativeReminders } from '@/lib/nativeReminders';
 import { watchNativeWidgets } from '@/lib/nativeWidgets';
@@ -124,9 +125,11 @@ function AppLayout() {
   const capture = linkCaptureControls.use();
   const widgetNote = widgetNoteOpening.use();
   const activeNote = editorNote.use();
+  const filtersOpen = searchFiltersOpen.use();
   const directNote = Boolean(note && widgetNote === note);
   const waitingForWidgetNote = directNote && activeNote?.id !== note;
-  const hideBrowsingPage = directNote && (waitingForWidgetNote || !pane.split);
+  const hideBrowsingPage =
+    (directNote && (waitingForWidgetNote || !pane.split)) || (pane.shown && pane.covered);
 
   return (
     <>
@@ -148,13 +151,19 @@ function AppLayout() {
           opacity: hideBrowsingPage ? 0 : undefined,
         }}
         inert={
-          (Boolean(note) && !pane.split) ||
+          (Boolean(note) && (!pane.split || pane.expanded)) ||
           noteState === 'open' ||
           noteState === 'capture' ||
           Boolean(capture)
         }
       >
-        <Outlet />
+        <MainPagePager
+          enabled={
+            !note && noteState !== 'open' && noteState !== 'capture' && !capture && !filtersOpen
+          }
+        >
+          <Outlet />
+        </MainPagePager>
       </motion.div>
       <QuickNote />
       <LinkCapture />
@@ -175,7 +184,7 @@ function AppLayout() {
       <AppUpdatePrompt />
       <WebUpdatePrompt />
       <AnimatePresence>
-        {pane.shown && note && (
+        {pane.shown && !pane.expanded && note && (
           <SplitHandle listWidth={pane.listWidth} viewportWidth={pane.viewport.width} />
         )}
       </AnimatePresence>

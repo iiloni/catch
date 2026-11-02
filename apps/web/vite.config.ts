@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defaultAllowedOrigins } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { type ManifestOptions, VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import brandTokens from '../../branding/catch-brand-tokens.json' with { type: 'json' };
 import { type WebBuild, webBuildSchema } from '../../packages/shared/src/releases.ts';
@@ -12,11 +12,55 @@ import { buildChannel } from '../../scripts/build-channel.ts';
 import { developmentServerUrl } from '../../scripts/dev-server.ts';
 
 const channel = buildChannel(process.env.CATCH_CHANNEL);
-const iconBase = channel === 'stable' ? '' : `/${channel}`;
 const webBuild = webBuildSchema.parse({ id: randomUUID() } satisfies WebBuild);
+
+const manifest = {
+  name: 'Catch',
+  short_name: 'Catch',
+  description: 'Self-hosted notes that work offline.',
+  theme_color: brandTokens.colors.amberPrimary.hex,
+  background_color: '#f7f6f2',
+  display: 'standalone',
+  id: '/',
+  scope: '/',
+  lang: 'en',
+  start_url: '/',
+  share_target: {
+    action: '/share',
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    params: {
+      title: 'title',
+      text: 'text',
+      url: 'url',
+      files: [{ name: 'files', accept: ['*/*'] }],
+    },
+  },
+  icons: [
+    { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+    { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+    {
+      src: '/maskable-512x512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+  ],
+} satisfies Partial<ManifestOptions>;
+
+function iconManifest(icon: 'stable' | 'preview' | 'dev') {
+  return {
+    ...manifest,
+    icons: manifest.icons.map((entry) => ({
+      ...entry,
+      src: icon === 'stable' ? entry.src : `/${icon}${entry.src}`,
+    })),
+  };
+}
 
 export default defineConfig(({ command }) => ({
   define: {
+    'import.meta.env.CATCH_CHANNEL': JSON.stringify(channel),
     'import.meta.env.CATCH_WEB_BUILD': JSON.stringify(String(command === 'build')),
     'import.meta.env.CATCH_BUILD_ID': JSON.stringify(webBuild.id),
     'import.meta.env.CATCH_DEV_SERVER_URL': JSON.stringify(
@@ -28,15 +72,24 @@ export default defineConfig(({ command }) => ({
       name: 'web-build-metadata',
       generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'build.json', source: JSON.stringify(webBuild) });
+        for (const icon of ['stable', 'preview', 'dev'] as const) {
+          this.emitFile({
+            type: 'asset',
+            fileName: `manifest-${icon}.webmanifest`,
+            source: JSON.stringify(iconManifest(icon)),
+          });
+        }
       },
     },
     {
-      name: 'channel-icons',
+      name: 'default-channel-icons',
       transformIndexHtml(html) {
-        return html.replace(
-          /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
-          `href="${iconBase}/$1"`,
-        );
+        return html
+          .replaceAll('__CATCH_DEFAULT_ICON__', channel === 'dev' ? 'dev' : 'stable')
+          .replace(
+            /href="\/(favicon\.ico|favicon-mark\.svg|apple-touch-icon\.png)"/g,
+            channel === 'dev' ? 'href="/dev/$1"' : 'href="/$1"',
+          );
       },
     },
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
@@ -48,38 +101,9 @@ export default defineConfig(({ command }) => ({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      manifest: {
-        name: 'Catch',
-        short_name: 'Catch',
-        description: 'Self-hosted notes that work offline.',
-        theme_color: brandTokens.colors.amberPrimary.hex,
-        background_color: '#f7f6f2',
-        display: 'standalone',
-        start_url: '/',
-        share_target: {
-          action: '/share',
-          method: 'POST',
-          enctype: 'multipart/form-data',
-          params: {
-            title: 'title',
-            text: 'text',
-            url: 'url',
-            files: [{ name: 'files', accept: ['*/*'] }],
-          },
-        },
-        icons: [
-          { src: `${iconBase}/pwa-192x192.png`, sizes: '192x192', type: 'image/png' },
-          { src: `${iconBase}/pwa-512x512.png`, sizes: '512x512', type: 'image/png' },
-          {
-            src: `${iconBase}/maskable-512x512.png`,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      manifest: iconManifest(channel === 'dev' ? 'dev' : 'stable'),
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
       },
     }),
   ],

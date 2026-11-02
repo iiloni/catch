@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { noteContentSchema } from '../packages/shared/src/notes';
 import { API_PROTOCOL_HEADER } from '../packages/shared/src/protocol';
 import { sharedNoteViewSchema } from '../packages/shared/src/sharing';
-import { bearerToken, card, noteAction, seedNotes, signUp } from './helpers';
+import { bearerToken, card, noteAction, seedNotes, settledBox, signUp } from './helpers';
 
 const shapeRows = z.array(
   z.object({
@@ -533,6 +533,89 @@ test('a shared note is read from its link and added to another gallery', async (
   await reader.goto(link);
   await expect(reader.getByRole('heading', { name: 'This note is not shared' })).toBeVisible();
   await reader.context().close();
+});
+
+test('share tab highlight stays inside a resizing card popover', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Card toolbars are available with a mouse; content sharing covers touch.');
+  await page.setViewportSize({ width: 1036, height: 700 });
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Trip plan', body: 'Pack the tent\n'.repeat(12) }]);
+  const note = card(page, 'Trip plan');
+  await note.hover();
+  await note.getByRole('button', { name: 'Share', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Share type' });
+  await settledBox(tabs);
+  await test.info().attach('share-before-switch', {
+    body: await page.screenshot({ path: test.info().outputPath('share-before.png') }),
+    contentType: 'image/png',
+  });
+
+  for (const [index, name] of [
+    'Note content',
+    'Catch link',
+    'Note content',
+    'Catch link',
+  ].entries()) {
+    // Switch again while the popup is still resizing, as a user can with a mouse.
+    await tabs.getByRole('tab', { name, exact: true }).click({ force: true });
+    const sample = tabs.evaluate(async (strip) => {
+      const escaped: { top: number; bottom: number; left: number; right: number }[] = [];
+      const start = performance.now();
+      while (performance.now() - start < 250) {
+        await new Promise(requestAnimationFrame);
+        const bounds = strip.getBoundingClientRect();
+        for (const highlight of strip.querySelectorAll('span[aria-hidden="true"]')) {
+          const rect = highlight.getBoundingClientRect();
+          if (
+            rect.top < bounds.top - 1 ||
+            rect.bottom > bounds.bottom + 1 ||
+            rect.left < bounds.left - 1 ||
+            rect.right > bounds.right + 1
+          ) {
+            escaped.push({
+              top: rect.top - bounds.top,
+              bottom: rect.bottom - bounds.bottom,
+              left: rect.left - bounds.left,
+              right: rect.right - bounds.right,
+            });
+          }
+        }
+      }
+      return escaped;
+    });
+    // Capture painted frames as well as sampling geometry during the spring.
+    await page.waitForTimeout(80);
+    await test.info().attach(`share-switch-${index}`, {
+      body: await page.screenshot({ path: test.info().outputPath(`share-switch-${index}.png`) }),
+      contentType: 'image/png',
+    });
+    const escaped = await sample;
+    expect(escaped, `${name} highlight must stay within the tab strip`).toEqual([]);
+  }
+  const selected = tabs.getByRole('tab', { selected: true });
+  await settledBox(tabs);
+  for (const key of ['End', 'Home']) {
+    if (key === 'Home') await page.emulateMedia({ reducedMotion: 'reduce' });
+    await selected.press(key);
+    await expect(selected).toBeFocused();
+    await expect
+      .poll(async () => {
+        const target = await selected.boundingBox();
+        const highlight = await tabs.locator('span[aria-hidden="true"]').boundingBox();
+        if (!target || !highlight) return false;
+        return (
+          Math.abs(target.x - highlight.x) < 1 &&
+          Math.abs(target.y - highlight.y) < 1 &&
+          Math.abs(target.width - highlight.width) < 1 &&
+          Math.abs(target.height - highlight.height) < 1
+        );
+      })
+      .toBe(true);
+  }
+  await test.info().attach('share-after-switch', {
+    body: await page.screenshot({ path: test.info().outputPath('share-after.png') }),
+    contentType: 'image/png',
+  });
 });
 
 test('note content shares a Markdown copy without making a Catch link', async ({

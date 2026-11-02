@@ -54,14 +54,18 @@ product they describe.
 - **Deployed from GitHub Actions to Cloudflare Workers with static assets**, not by
   Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` builds
   on pushes to `main` that touch the site or its inputs, external tag pushes or release
-  publication, and successful dispatched **Release** workflow completions in this repository
-  whose GitHub Release is published. Tag-push completions skip the fallback to avoid a
-  second deployment; disabled or unpublished dispatched runs do not deploy.
-  The completed-run trigger handles automated releases because `GITHUB_TOKEN` suppresses
-  the tag-push and release-published triggers; it works even when the released commit
-  predates this site workflow. The deploy always checks out `main` with all tags and does
-  not consume the Release run's code or artifacts. It uploads the export and is skipped
-  until the repository has the Cloudflare credentials and enables `CLOUDFLARE_SITE_ENABLED`.
+  publication, and explicit dispatches from published **Release** runs in this repository.
+  After successful publication, a separate job in a dispatched Release requests Site on
+  `main` with `actions: write`, so it can be retried independently of artifact publication.
+  Tag-push Release runs skip this request because the external push already deployed Site;
+  disabled or unpublished runs cannot reach it. Explicit dispatch replaces the completed-run
+  trigger: `GITHUB_TOKEN` suppresses tag-push and release-published triggers, and Site did
+  not start on completion of a Release dispatched by that token either. `workflow_dispatch`
+  is a documented exception. A tag whose commit predates this release job (including an
+  older preview promoted to stable) still needs a manual Site dispatch. The deploy always
+  checks out `main` with all tags and does not consume the Release run's code or artifacts.
+  It uploads the export and is skipped until the repository has the Cloudflare credentials
+  and enables `CLOUDFLARE_SITE_ENABLED`.
   `apps/site/wrangler.jsonc`
   names the `catch-site` Worker and serves the export directly, without a Worker script,
   preserving trailing-slash URLs and the exported 404 page. The user attaches the custom

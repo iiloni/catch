@@ -54,6 +54,36 @@ describe('NoteLinks', () => {
     expect(editorLinksInView.get()).toBeNull();
   });
 
+  it('only the destination list reports visibility while preview layouts crossfade', () => {
+    const { rerender } = render(
+      <>
+        <NoteLinks note={note} variant="below" active />
+        <NoteLinks note={note} variant="side" active={false} />
+      </>,
+    );
+    act(() => observed?.([{ isIntersecting: false }]));
+    expect(editorLinksInView.get()).toBeNull();
+    const outgoingObserver = observed;
+    rerender(
+      <>
+        <NoteLinks note={note} variant="below" active={false} />
+        <NoteLinks note={note} variant="side" active />
+      </>,
+    );
+    expect(editorLinksInView.get()).toBe(note.id);
+    act(() => outgoingObserver?.([{ isIntersecting: false }]));
+    expect(editorLinksInView.get()).toBe(note.id);
+    rerender(
+      <>
+        <NoteLinks note={note} variant="below" active />
+        <NoteLinks note={note} variant="side" active={false} />
+      </>,
+    );
+    expect(editorLinksInView.get()).toBeNull();
+    act(() => observed?.([{ isIntersecting: true }]));
+    expect(editorLinksInView.get()).toBe(note.id);
+  });
+
   it('leaves out removed previews, and everything while previews are off', () => {
     const { rerender } = render(
       <NoteLinks note={{ ...note, hiddenLinks: ['https://a.example/'] }} variant="below" />,

@@ -174,10 +174,15 @@ export async function noteAction(page: Page, title: string, action: string) {
 
 /**
  * Waits for a page slide to finish. While it runs, the transition's snapshots cover the
- * page and take pointer input, which raw mouse gestures (unlike clicks) do not retry.
+ * page and take pointer input, or the main pages are still moving side by side; raw mouse
+ * gestures (unlike clicks) do not retry.
  */
 export async function waitForPageTransition(page: Page) {
-  await page.waitForFunction(() => !document.documentElement.matches(':active-view-transition'));
+  await page.waitForFunction(
+    () =>
+      !document.documentElement.matches(':active-view-transition') &&
+      document.querySelectorAll('[data-pager-page]').length <= 1,
+  );
 }
 
 /**
@@ -204,6 +209,60 @@ export async function settledBox(locator: Locator) {
     .toBe(true);
   if (!box) throw new Error('Missing layout');
   return box;
+}
+
+/**
+ * Clicks an editor block's text and moves the caret to its end, returning once the editor has
+ * taken that caret. When a click focuses the editor, ProseMirror rewrites the page's selection
+ * from its own about 20 ms later unless it has read the newest one. On a busy machine that
+ * undoes an End sent at once, and typing lands where the click was; it happens once per focus,
+ * so End is sent again until ProseMirror reports the caret at the end.
+ */
+export async function caretToEnd(text: Locator) {
+  await text.click();
+  await expect(async () => {
+    await text.page().keyboard.press('End');
+    const atEnd = await text.evaluate((element) => {
+      type View = {
+        state: {
+          selection: {
+            empty: boolean;
+            head: number;
+            $head: { parentOffset: number; parent: { content: { size: number } } };
+          };
+        };
+        domAtPos(pos: number): { node: Node };
+      };
+      const root = element.closest<HTMLElement & { editor?: { view: View } }>('.ProseMirror');
+      const view = root?.editor?.view;
+      if (!view) return false;
+      const { empty, head, $head } = view.state.selection;
+      return (
+        empty &&
+        $head.parentOffset === $head.parent.content.size &&
+        element.contains(view.domAtPos(head).node)
+      );
+    });
+    expect(atEnd).toBe(true);
+  }).toPass();
+}
+
+/**
+ * The text ProseMirror holds as selected in the editor around `element`. A selection made on the
+ * page reaches it a moment later, and a shortcut pressed before then acts on the old one.
+ */
+export function editorSelection(element: Locator) {
+  return element.evaluate((node) => {
+    type View = {
+      state: {
+        selection: { from: number; to: number };
+        doc: { textBetween(from: number, to: number): string };
+      };
+    };
+    const root = node.closest<HTMLElement & { editor?: { view: View } }>('.ProseMirror');
+    const state = root?.editor?.view.state;
+    return state ? state.doc.textBetween(state.selection.from, state.selection.to) : null;
+  });
 }
 
 /**

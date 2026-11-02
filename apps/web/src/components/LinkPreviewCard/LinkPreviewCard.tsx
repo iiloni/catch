@@ -5,13 +5,13 @@ import {
   EyeOff,
   Globe,
   Image,
-  MoreHorizontal,
+  MoreVertical,
   RefreshCw,
   Share2,
   Text,
   TextSearch,
 } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEventHandler } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -128,7 +128,7 @@ export function LinkPreviewCard({
         target="_blank"
         rel="noopener noreferrer"
         draggable={false}
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 pr-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 pr-11 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <Thumbnail link={link} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -177,11 +177,11 @@ function LinkMenu({
           variant="ghost"
           size="icon"
           aria-label="Link options"
-          className="absolute top-1 right-1 size-8 rounded-full text-muted-foreground"
+          className="absolute top-1/2 right-1 size-9 -translate-y-1/2 rounded-full text-muted-foreground"
           // Keeps focus (and the keyboard) in the editor when the card sits under the note.
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <MoreHorizontal />
+          <MoreVertical className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       {/* Above the link overlay and the open note. */}
@@ -225,46 +225,82 @@ function LinkMenu({
 }
 
 /**
- * A note that is nothing but a link shows as the link itself: its image across the top, then
- * its title and site. It keeps the note's color when the user chose one.
+ * A chosen link fills the note's face. Interactive cards open the link from its image and
+ * the note from its title and site; selection and transition faces stay noninteractive.
  */
-export function LinkNoteFace({ link, tinted }: { link: ResolvedLink; tinted: boolean }) {
+export function LinkNoteFace({
+  link,
+  tinted,
+  onOpen,
+}: {
+  link: ResolvedLink;
+  tinted: boolean;
+  onOpen?: MouseEventHandler<HTMLButtonElement>;
+}) {
   const { preview } = link;
   const image = preview?.imageHash;
   const ratio =
     preview?.imageWidth && preview.imageHeight
       ? Math.max(0.6, Math.min(1.91, preview.imageWidth / preview.imageHeight))
       : 1.91;
+  const thumbnail = image && (
+    <img
+      src={assetUrl(image)}
+      alt=""
+      loading="lazy"
+      draggable={false}
+      className="pointer-events-none w-full rounded-t-2xl object-cover"
+      style={{ aspectRatio: ratio }}
+    />
+  );
+  const details = (
+    <div className="flex flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
+      <h3
+        className={cn(
+          'line-clamp-3 break-words font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]',
+          !preview?.title && 'font-sans font-medium text-muted-foreground text-sm',
+        )}
+      >
+        {linkTitle(link)}
+      </h3>
+      <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+        <SiteIcon link={link} className="size-3.5" />
+        <span className="truncate">{preview?.siteName ?? linkDomain(link.url)}</span>
+      </p>
+    </div>
+  );
   return (
     <div
       data-gallery-preview={link.url}
       {...(tinted ? linkTint(preview) : {})}
       className={cn(tinted && 'bg-link', 'rounded-2xl')}
     >
-      {image && (
-        <img
-          src={assetUrl(image)}
-          alt=""
-          loading="lazy"
+      {thumbnail && onOpen ? (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
           draggable={false}
-          className="w-full rounded-t-2xl object-cover"
-          style={{ aspectRatio: ratio }}
-        />
-      )}
-      <div className="flex flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
-        <h3
-          className={cn(
-            'line-clamp-3 break-words font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]',
-            !preview?.title && 'font-sans font-medium text-muted-foreground text-sm',
-          )}
+          aria-label={`Open link: ${linkTitle(link)}`}
+          className="block rounded-t-2xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          {linkTitle(link)}
-        </h3>
-        <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-          <SiteIcon link={link} className="size-3.5" />
-          <span className="truncate">{preview?.siteName ?? linkDomain(link.url)}</span>
-        </p>
-      </div>
+          {thumbnail}
+        </a>
+      ) : (
+        thumbnail
+      )}
+      {onOpen ? (
+        <button
+          type="button"
+          aria-label="Open note"
+          onClick={onOpen}
+          className="min-h-12 w-full cursor-pointer rounded-2xl text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>*]:pointer-events-none"
+        >
+          {details}
+        </button>
+      ) : (
+        details
+      )}
     </div>
   );
 }

@@ -307,6 +307,23 @@ final class ReminderAlarms {
                 }
                 scheduled.add(new Uri.Builder().scheme("catch").authority("reminder").appendPath(account).appendPath(noteId).build().toString());
             }
+            // A reminder that rang is soon gone from the list (the server moves it on and the
+            // background check brings that), but an app opening on its older copy of the
+            // reminders hands it back for a moment. Remembered for the day it could ring late
+            // in, so it does not ring again then. A bare note ID from an older install says
+            // nothing of whose it was: kept, it would silence the same note on another server.
+            for (java.util.Iterator<String> ids = rung.keys(); ids.hasNext(); ) {
+                String identity = ids.next();
+                long at = rung.optLong(identity);
+                if (!identity.contains(":") || kept.has(identity) || at <= now - ReminderTimes.LATE_MS) continue;
+                try {
+                    kept.put(identity, at);
+                    JSONObject wall = walls.optJSONObject(identity);
+                    if (wall != null && !keptWalls.has(identity)) keptWalls.put(identity, wall);
+                } catch (JSONException ignored) {
+                    // Numbers and objects cannot fail to be put.
+                }
+            }
             preferences.edit().putString("rung", kept.toString()).putString("walls", keptWalls.toString()).apply();
         }
         preferences.edit().putStringSet("scheduled", scheduled).apply();

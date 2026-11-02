@@ -144,4 +144,4 @@ together. Migration `0010` only changes the table's key.
   record yet of whose it was. This has not been tried on an installed iOS web app.
 
 Android connections now span several servers, with local account identities and fixed
-page origins rather than bare user IDs (ADR 0023). The browser behavior above is unchanged.
+page origins rather than bare user IDs (ADR 0024). The browser behavior above is unchanged.

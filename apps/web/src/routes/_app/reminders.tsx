@@ -64,7 +64,7 @@ function RemindersPage() {
       <motion.section
         aria-label="Reminders"
         style={{ x: gutterShift }}
-        className="mx-auto flex max-w-7xl flex-col gap-6 px-3 pt-3 sm:px-6"
+        className="gallery-fade mx-auto flex max-w-7xl flex-col gap-6 px-3 pt-3 sm:px-6"
       >
         {awaitingSync ? null : reminded.length > 0 ? (
           <>

@@ -30,6 +30,16 @@ contrast is the same on every color. Menus, sheets and the dock use frosted glas
 button. Tapping Gallery while on a gallery page shows a separate segmented control
 floating above the dock for Gallery, Archive and Trash (`GallerySwitcher`); holding Gallery opens it and
 lets the finger slide straight onto a segment.
+
+The browsing dock slides down out of view after 48 px of document scrolling in one
+direction and returns after 48 px upward; reversing direction starts that distance again.
+The top 48 px always shows it. The bottom edge blur slides offscreen on the same spring,
+so hidden controls leave no band of blur behind. Page padding stays constant to avoid
+changing the scroll range. Navigation reveals the dock, as do keyboard focus and opening a
+note, composer, picker, filter panel or preview overlay. Those interactions and horizontal
+page transitions keep it visible; nested scrollers do not drive it. Reduced motion switches
+immediately.
+
 Settings is a page of its own (`/settings/<page>`) behind the gear in the Gallery's header,
 split into User and admin-only Admin sections (ADR 0011), with pages listed in
 `SETTINGS_TABS` (`src/lib/settings.ts`), each a route file under
@@ -48,6 +58,49 @@ a transformed page ancestor, preserving their viewport positioning and glass.
 Sheets float above the bottom safe area or keyboard with a small gap and rounded corners on
 all sides, so they do not meet the keyboard's rounded top edge.
 Tabs replace history entries, so the back gesture leaves the app instead of cycling tabs.
+Horizontal touch swipes move the three main pages in dock order (Deck, Gallery, Search)
+with the finger, without wrapping at either end (`MainPagePager`). The current page and
+its incoming neighbour are live while dragging; distance and release velocity choose
+whether a spring finishes the move or returns home. A swipe that will arrive replaces the
+URL as the finger lifts, without a second View Transition, and its spring finishes on the
+new route with the page it left mounted and inert. The next touch therefore lands on the
+arriving page and can take over the spring, rather than on a page about to unmount, whose
+touch events would stop reaching the pager. Each touch is judged by its own travel and
+velocity, so one that catches a settling page moves one page on from where it was heading,
+and one that barely moves lets it arrive. Short, vertical, held or cancelled gestures
+stay on the current page. Reduced motion navigates on release without sliding.
+Only page code is prefetched; the neighbour mounts on a horizontal drag and becomes the
+active page without remounting after a completed swipe. At rest one page is mounted. Each
+page retains its vertical scroll position for this browsing session. Headers portal into
+an untransformed host beside the page content and share its horizontal motion value,
+preserving fixed positioning and glass. The dock stays on the viewport; its tab indicator
+and icon emphasis, Search field, text and compose/filter button follow the same live page
+position through dragging, reversal and settling. Only visual motion is previewed: controls
+remain owned by the active route until the swipe commits. Incoming pages are inert and do
+not publish selection, search-filter or header state until activated.
+The page views live in ignored `routes/_app/-pages` helpers; the three file routes select
+their URLs while the pager owns the views. Any other route between these three pages, such as
+a dock tab, slides them side by side on the same spring instead of a View Transition, so a
+tap and a swipe move the same way. The spring starts the frame after the pages it passes have
+mounted, so their first render does not eat its opening; a jump from Deck to Search passes the
+Gallery. The dock keeps its own animation for a tap, whose indicator has already moved under
+the finger. Other routes keep their View Transitions, as do these pages under reduced motion.
+Cards and controls keep their gestures, except Search's tap-only tags, recent searches and
+result rows, which also allow page swipes (and suppress their click after a horizontal drag).
+Their taps, vertical scrolling and result long presses still work. Text inputs, menus and
+other gesture owners remain excluded. Horizontal scrollers take priority while they have
+room in the swipe direction, and reaching their edge requires a fresh swipe to navigate.
+The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
+a note, composer or search filter panel is open. Swiping into Search leaves its field
+unfocused, so browsing does not summon the keyboard.
+With a query or filters active, a downward touch pull at the top of Search clears both
+(`ClearFiltersPull`). It starts anywhere a page swipe can, plus result rows and filter chips,
+and leaves text fields, inner scrollers mid-scroll, held presses and selection mode alone.
+Search has no undo for this, so only distance past the threshold commits, never a fling;
+the page stays still while a glass pill is drawn down from above the screen, arriving as
+letting go starts to clear. Unlike the sync pill it may cross the status bar, because it only
+comes when the finger draws it and it rests below the safe area. Its words then change as a header toolbar's controls do: they
+crossfade while the measured width animates. With reduced motion it fades in at rest instead.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
@@ -117,11 +170,15 @@ so the count and selection actions have the corners to themselves.
 
 **Selection.** As in Keep, a long press on a card in the Gallery, Deck, Archive or Trash
 selects it (in the Gallery and Deck, the same press picks it up to rearrange it), and while
-any note is selected a tap selects or deselects one instead of opening it. With a mouse, a
+any note is selected a tap selects or deselects one instead of opening it. Dragging in the
+press that starts selecting deselects the card as soon as it moves beyond the hold
+tolerance; dragging an existing selection keeps it. With a mouse, a
 check at the card's corner appears on hover. A close button with the count takes the top
 left, and the selection's actions (`SelectionToolbar`) take the top right toolbar: color,
-archive, move to trash and copy, with Send to gallery in the Deck, Unarchive in the Archive,
-and Restore and Delete forever in the Trash. Back and Escape end selecting.
+tags, archive, move to trash and copy, with a Move picker in the Gallery and Deck, Unarchive
+in the Archive, and Restore and Delete forever in the Trash. Move offers Deck columns and
+Gallery, using the same full-width inset popover on phones as color and tags. Choosing a
+destination ends selecting. Back and Escape end selecting after closing any open picker.
 
 In the Deck, dragging a card while notes are selected gathers the whole selection: the other
 cards fold out of their columns and fly into a stack under the finger, with the count on it.
@@ -137,7 +194,8 @@ pane, and the note itself is a large rounded card between its back and trash too
 top and that dock at the bottom, so it reads as the page's card opened up. Tapping another card swaps the pane's note in place (replacing the history entry, so
 back still closes the note in one step). A grip in the gutter resizes the split; the page keeps
 at least 280 px and a quarter of the screen, the note at least 340 px, and the page's share is
-saved so it survives rotation and unfolding. Below 480 px of note width, undo and redo float
+saved so it survives rotation and unfolding. Below 480 px of note width (520 px with the
+Gallery's expand control), undo and redo float
 above the note's dock as on phones, leaving the header's actions and compact sync pill room
 to fit. Wider panes keep undo and redo beside Back. The pane does not use the container transform:
 opening it narrows the page, which moves the card it would grow from, so a morph chases a moving
@@ -170,12 +228,32 @@ advancing by frames (`animateSteadySpring`), as the container transform does. Cl
 pane has no such frame and keeps its spring.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
-The Gallery pages and Search split. Landscape phones are too short for two panes and keep the centered
-panel.
+The Gallery pages and Search split. In Gallery, Reminders, Archive and Trash, an expand
+button beside the note's Back button hides the page and gives its width to the same
+note pane. Its rounded card, header, dock and editor stay mounted; Show gallery restores
+the saved split width. The device remembers the choice independently of the split ratio.
+The Gallery, its header and its dock keep their split widths and fade out together; they
+fade back into the same positions when restored. The note's growing width is separate from
+the space reserved for the page's fixed controls, so they never squeeze toward the edge.
+One pane spring moves the note's left edge, its width, its dock and the Gallery fade together, advancing by
+painted frames so busy rendering cannot skip its entrance. The preview layout is chosen from
+both endpoint widths before expansion: the card reserves the sidebar's space on that same
+spring while its inline links, media and tags fade and collapse. The fixed-width sidebar
+fades into the opening space, so previews never stretch across the note and then snap to a
+column at an intermediate breakpoint. Only the destination link list reports visibility to
+the dock while the two copies crossfade. A tap can reverse it from its
+current width, with no text scaling, and reduced motion changes the layout immediately. Folding to phone
+width temporarily uses the phone layout; unfolding restores the chosen pane layout.
+Search keeps its ordinary split. Landscape phones are too short for two panes and keep
+the centered panel.
 
 **Motion.** [Motion](https://motion.dev) drives everything, with spring presets in
 `src/lib/motion.ts`. Springs are interruptible, which is most of what makes the dock feel
-native; CSS `linear()` springs can mimic the curve but not the interruption.
+native; CSS `linear()` springs can mimic the curve but not the interruption. A surface that
+folds shut to nothing, like the Search filter panel, uses an eased curve (`curves.fold`)
+instead: a bounce carries its height below zero, which the browser ignores, so a sliver stays
+drawn until the spring settles, and a spring without one slows into a long tail that reads as
+something left behind.
 
 The card-to-editor transition is a hand-rolled container transform
 (`NoteEditorOverlay`, `src/lib/noteTransition.ts`): the editor's surface is translated onto the
@@ -257,7 +335,8 @@ cards or routes remount. They never block input or wait for other content, and r
 shows elements immediately. Fixed headers and the dock have no animated page ancestor.
 
 **Page transitions.** Moving between pages slides them a short way in the direction of
-travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API
+travel (Deck, Gallery, Archive, Trash, Search, left to right) using the View Transitions API,
+except between the three main pages, which the pager slides (see Navigation),
 with transition types, set up once in the router (`pageTransition` in `lib/dockState.ts`).
 It animates snapshots, so no transform lands on the page and fixed UI keeps working. The dock
 gets a `view-transition-name` only while a transition runs and shows live, so its own
@@ -331,15 +410,43 @@ when it is valid. Link capture never saves on outside dismissal or back. Bookmar
 standalone share windows have the same icon-only close/save control in their form footer.
 
 **Code blocks.** A code block's surface is a tint of the note's text color rather than a
-fill, so it sits on every note color in both themes. Each block names its language in a
-button at its top right that is always shown (BlockNote's own picker appears on hover only)
-and opens the searchable list below; a fence with a language or alias (` ```py `) sets it. Shiki highlights the code with a theme
+fill, so it sits on every note color in both themes. Each block has a glass pill in its top right corner. At rest it shows only the
+language's icon; hover or keyboard focus expands it leftward to reveal the language name,
+Copy and Download, keeping the icon under the pointer. On touch the first tap expands it
+and a second tap on the language opens the searchable picker; tapping outside or Escape
+collapses it. The pill is compact: 28 px buttons inset in a thin glass rim, a rounded
+rectangle like the dock with its radius scaled to the smaller height and the buttons concentric. It moves like that toolbar too, the glass springing
+to its new width while the controls arrive from a slight blur and scale, and it changes at once
+with reduced motion.
+The source starts at the top of the block with space on the right for the resting pill,
+rather than reserving a header row. Icons are bundled Devicon SVGs in their brand colors;
+logos with no color of their own (black or white ones such as Rust or Markdown) and the generic
+code/text fallbacks are monochrome masks in the text color so they show in both themes. A fence with a language or alias
+(` ```py `) sets it. Shiki highlights the code with a theme
 of CSS variables (`--code-token-*` in `styles.css`) instead of a fixed palette: like the
 note colors, the syntax colors share one lightness and chroma per theme and differ in hue.
 The highlighter and each grammar load on first use, and the languages offered are the short
 list in `lib/codeLanguages.ts`, because the service worker precaches every grammar so code
 is highlighted offline. A language outside the list (pasted or imported) keeps its name and
 shows as plain text. Cards and the opening preview show code in one color. Long lines wrap.
+
+Pasting into a code block removes the common indentation margin (tabs are measured at
+two-column stops and remaining tabs are retained), aligning continuation lines with the
+cursor’s indentation and preserving relative nesting, blank lines and trailing newlines;
+CRLF becomes LF. New code blocks pasted from external sources
+get the same normalization. Pasting ordinary note text keeps BlockNote's normal behavior.
+When an empty unlabelled code block receives a paste, or an unlabelled fenced block is
+pasted, a lazy Highlight.js detector guesses its language on the device. An empty language
+is unlabelled; `text` is an explicit Plain text choice, including after a reload. Existing
+plain-text blocks, explicit fence languages and picker choices are kept, weak guesses stay
+plain, and Detect language in the picker retries a guess. Async guesses are discarded if the block, its source or its
+language has changed, or the editor has closed. Detection grammars and icons are precached
+with the app; no note content leaves the device. Copy uses the current source without
+markup; Download saves it as a UTF-8 file with the selected language's filename/extension
+(`snippet.py`, `snippet.ts`, `Dockerfile`, `Makefile`), or `snippet.txt` for unknown languages.
+Android uses the existing native Save dialog. These are existing language/source values and
+need no protocol or collection schema change: older clients show an unlabelled block as
+plain text, and newer clients keep the languages on existing blocks.
 
 **Choosing from a list.** The app draws its own lists instead of native `<select>` menus
 and time inputs, which look different on every platform and, on Android, open a system
@@ -354,7 +461,7 @@ dropdown menu, and a time of day is the reminder panel's clock face in a popover
 Its toolbar appears once an edit can be undone, and stays available while there is undo or
 redo history. From 640 px it sits beside the back button, including in narrow split panes.
 It is positioned outside the header's flow so it never moves the centered sync pill.
-Split panes narrower than 480 px show the sync pill's icon with an accessible status label
+Split panes narrower than 480 px (520 px with the Gallery's expand control) show the sync pill's icon with an accessible status label
 and a tooltip, leaving room for every header control. On phones the history toolbar floats
 at the dock's left edge above either the note actions or formatting bar, and the jump to
 the note's end at its right. Both slide out to their sides while the list of the note's
@@ -376,6 +483,10 @@ The mouse drag handle uses the same drop projection. Checkbox items have a trail
 usual; checkbox taps keep toggling, and links keep opening. A drop marker and edge scrolling
 guide the move, which is committed as one undo step on release. The mouse drag handle
 remains available.
+
+The checklist block menu offers Delete all checked items in note when any are checked.
+It removes checked items across every list, including nested lists, in one undo
+step. As with the per-item delete control, deleting a checked parent also removes its children.
 
 Block menu handles sit in a compact 40 px gutter on touch screens, with a 32 px button and
 a 4 px gap before the block. Their

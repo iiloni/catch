@@ -390,6 +390,12 @@ test('secondary tag search keeps focus and selection usable above the keyboard',
   await page.keyboard.type('Projects');
   await expect(search).toHaveValue('Projects');
   await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Clear tag search' }).click();
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toBeVisible();
+  await page.keyboard.type('Projects');
+  await expect(picker.getByRole('checkbox', { name: 'Ideas', exact: true })).toHaveCount(0);
   const projects = picker.getByRole('checkbox', { name: 'Work / Projects', exact: true });
   await projects.check();
   await expect(projects).toBeChecked();
@@ -610,6 +616,63 @@ test('settings tag tree supports search, branch expansion and direct editing', a
   await expect(dialog.getByLabel('Name', { exact: true })).not.toBeFocused();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+});
+
+test('settings tag tree lets the page scroll from its rows', async ({
+  page,
+  request,
+  isMobile,
+}, testInfo) => {
+  await page.setViewportSize({ width: 393, height: 700 });
+  await signUp(page);
+  const headers = await auth(page);
+  const root = await addTag(request, headers, 'Scroll tree');
+  for (let i = 0; i < 24; i++) {
+    await addTag(request, headers, `Scroll tag ${String(i).padStart(2, '0')}`, root);
+  }
+  await page.goto('/settings/tags');
+  const settings = page.getByRole('region', { name: 'Tags', exact: true });
+  await expect(settings.getByRole('button', { name: 'Edit Scroll tag 23' })).toBeAttached();
+  await settledBox(settings.getByRole('button', { name: 'Edit Scroll tag 00' }));
+  const touch = isMobile ? await page.context().newCDPSession(page) : null;
+
+  async function scrollFromRow(delta: number) {
+    const point = await settings
+      .getByRole('button', { name: /^Edit Scroll tag/ })
+      .evaluateAll((rows) => {
+        const box = rows
+          .map((row) => row.getBoundingClientRect())
+          .find((box) => box.top > 300 && box.bottom < innerHeight - 150);
+        return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+      });
+    if (!point) throw new Error('No tag row in the swipe area');
+    if (touch) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+      for (let step = 1; step <= 8; step++) {
+        await touch.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: point.x, y: point.y - (delta * step) / 8 }],
+        });
+      }
+      // Stop the fling so the reverse gesture tests scrolling in the other direction.
+      await page.waitForTimeout(200);
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.wheel(0, delta);
+    }
+  }
+
+  await scrollFromRow(180);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(80);
+  await page.screenshot({ path: testInfo.outputPath('tags-settings-scrolled.png') });
+  const scrolled = await page.evaluate(() => window.scrollY);
+  await scrollFromRow(-140);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(scrolled - 50);
+  await expect(page).toHaveURL(/\/settings\/tags$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await touch?.detach();
 });
 
 test('tag forms follow the overlay keyboard on every animation frame', async ({

@@ -22,12 +22,37 @@ describe('media thumbnails', () => {
     env.ATTACHMENTS_DIR = originalDirectory;
   });
 
-  // Generation and repair each allow FFmpeg up to ten seconds.
-  it.skipIf(!ffmpeg)(
-    'generates a video poster and repairs a missing poster without changing the original',
-    async () => {
+  it.each(['jpeg', 'png', 'webp', 'gif', 'tiff', 'avif', 'svg'] as const)(
+    'creates a WebP preview from %s without changing the original',
+    async (format) => {
       const id = randomUUID();
-      const video = await readFile(new URL('../../../../e2e/fixtures/video.mp4', import.meta.url));
+      const image =
+        format === 'svg'
+          ? Buffer.from(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="red"/></svg>',
+            )
+          : await sharp({
+              create: { width: 120, height: 80, channels: 3, background: 'red' },
+            })
+              .toFormat(format)
+              .toBuffer();
+      await writeFile(filePath(id), image);
+      await createThumbnail(id, 'image');
+      expect(await sharp(filePath(id, true)).metadata()).toMatchObject({
+        format: 'webp',
+        width: 120,
+        height: 80,
+      });
+      expect(await readFile(filePath(id))).toEqual(image);
+    },
+  );
+
+  // Generation and repair each allow FFmpeg up to ten seconds.
+  it.skipIf(!ffmpeg).each(['video.mp4', 'video-cineform.avi'])(
+    'generates and repairs a poster for %s without changing the original',
+    async (fixture) => {
+      const id = randomUUID();
+      const video = await readFile(new URL(`../../../../e2e/fixtures/${fixture}`, import.meta.url));
       await writeFile(filePath(id), video);
       await Promise.all([createThumbnail(id, 'video'), createThumbnail(id, 'video')]);
       expect(await sharp(filePath(id, true)).metadata()).toMatchObject({

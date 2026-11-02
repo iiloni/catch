@@ -43,6 +43,38 @@ export function masonry(heights: readonly number[], grid: Grid) {
   return { slots, height: columns.height };
 }
 
+/** Both pin groups share coordinates, so cards keep their springs when changing groups. */
+export function galleryMasonry(
+  heights: readonly number[],
+  grid: Grid,
+  pinnedCount: number,
+  dragging = false,
+) {
+  const pinned = masonry(heights.slice(0, pinnedCount), grid);
+  const others = masonry(heights.slice(pinnedCount), grid);
+  const showPinned = pinnedCount > 0 || dragging;
+  const showOthers = heights.length > pinnedCount || dragging;
+  // A 20px heading and 8px below it; the groups have 20px between them.
+  const pinnedTop = showPinned ? 28 : 0;
+  const pinnedHeight = dragging ? Math.max(64, pinned.height) : pinned.height;
+  const othersHeading = showPinned ? pinnedTop + pinnedHeight + 20 : 0;
+  const othersTop = showPinned ? othersHeading + 28 : 0;
+  return {
+    slots: [
+      ...pinned.slots.map((slot) => ({ ...slot, y: slot.y + pinnedTop })),
+      ...others.slots.map((slot) => ({ ...slot, y: slot.y + othersTop })),
+    ],
+    height: showOthers
+      ? othersTop + (dragging ? Math.max(64, others.height) : others.height)
+      : pinnedTop + pinnedHeight,
+    pinnedTop,
+    othersTop,
+    othersHeading,
+    showPinned,
+    showOthers: showPinned && showOthers,
+  };
+}
+
 /** How much closer another slot must be before a dragged card leaves its own. */
 const HYSTERESIS = 16;
 

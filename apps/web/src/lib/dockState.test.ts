@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { pageTransition, quickNote, tabFor } from './dockState';
 
 describe('tabFor', () => {
@@ -13,17 +13,20 @@ describe('tabFor', () => {
 
 describe('pageTransition', () => {
   it('slides in tab order', () => {
-    expect(pageTransition('/deck', '/')).toEqual(['forward']);
-    expect(pageTransition('/', '/deck')).toEqual(['back']);
     expect(pageTransition('/', '/trash')).toEqual(['forward']);
     expect(pageTransition('/archive', '/')).toEqual(['back']);
+    expect(pageTransition('/archive', '/search')).toEqual(['forward']);
+    expect(pageTransition('/search', '/trash')).toEqual(['back']);
   });
 
-  it('slides into and out of search in tab order', () => {
+  it('leaves the main pages to the pager, unless motion is reduced', () => {
+    expect(pageTransition('/deck', '/')).toBe(false);
+    expect(pageTransition('/', '/search')).toBe(false);
+    expect(pageTransition('/search', '/deck')).toBe(false);
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce') }));
     expect(pageTransition('/deck', '/search')).toEqual(['forward']);
-    expect(pageTransition('/', '/search')).toEqual(['forward']);
-    expect(pageTransition('/search', '/')).toEqual(['back']);
-    expect(pageTransition('/search', '/deck')).toEqual(['back']);
+    expect(pageTransition('/', '/deck')).toEqual(['back']);
+    vi.unstubAllGlobals();
   });
 
   it('slides Settings in from the right, and its pages past each other on narrow screens', () => {
@@ -44,7 +47,7 @@ describe('pageTransition', () => {
 
   it('keeps still while the quick note is open', () => {
     quickNote.set('open');
-    expect(pageTransition('/deck', '/')).toBe(false);
+    expect(pageTransition('/deck', '/archive')).toBe(false);
     quickNote.set('closed');
   });
 });

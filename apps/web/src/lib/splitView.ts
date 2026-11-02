@@ -1,6 +1,10 @@
 import { useRouterState } from '@tanstack/react-router';
-import { type MotionValue, motionValue, useTransform } from 'motion/react';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { type MotionValue, motionValue, useReducedMotion, useTransform } from 'motion/react';
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import { z } from 'zod';
+import { GALLERY_PAGES } from './galleryPages';
+import { afterPaint, animateSteadySpring, springs, stopSteady } from './motion';
+import { usePersistentState } from './storage';
 import { createStore } from './store';
 
 /**
@@ -21,6 +25,26 @@ export const READING_MAX = 672;
 export const GUTTER = 24;
 const DEFAULT_RATIO = 0.42;
 const STORAGE_KEY = 'catch-split';
+const expandedSchema = z.boolean();
+
+export function useGalleryExpanded() {
+  return usePersistentState('catch-gallery-expanded', expandedSchema, false);
+}
+
+/** Shared by the note surface and its dock. */
+export const paneExpansion = motionValue(0);
+/** The Gallery fades in place while the note takes its width. */
+export const galleryOpacity = motionValue(1);
+
+const watchExpansion = (listener: () => void) => paneExpansion.on('change', listener);
+
+/** Reflow header tools and sidebars only when the moving pane has room for them. */
+export function usePaneWidthAtLeast(width: number, gained: number, minimum: number) {
+  return useSyncExternalStore(
+    watchExpansion,
+    () => width + gained * paneExpansion.get() >= minimum,
+  );
+}
 
 export type Viewport = { width: number; height: number };
 
@@ -70,20 +94,45 @@ export const paneNoteId = createStore<string | null>(null);
  */
 export const paneReveal = motionValue(0);
 
+function viewportSize(): Viewport {
+  return {
+    width: document.documentElement.clientWidth || window.innerWidth,
+    height: document.documentElement.clientHeight || window.innerHeight,
+  };
+}
+
 export function useViewport(): Viewport {
-  const [viewport, setViewport] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
+  const [viewport, setViewport] = useState(viewportSize);
   useEffect(() => {
-    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    let frame = 0;
+    const update = () =>
+      setViewport((previous) => {
+        const next = viewportSize();
+        return previous.width === next.width && previous.height === next.height ? previous : next;
+      });
+    const resize = () => {
+      update();
+      // The root's client size stays within the screen while mobile innerWidth can briefly
+      // include content from before a fold. Recheck after that content paints too.
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('resize', resize);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    observer?.observe(document.documentElement);
+    return () => {
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, []);
   return viewport;
 }
 
 export type NotePane = {
+  /** A Gallery pane can take the page's width while keeping its card and toolbars. */
+  expandable: boolean;
+  expanded: boolean;
   /** The screen is wide enough to show a note beside the page. */
   split: boolean;
   /** A note is open beside the page, which is narrowed for it. */
@@ -96,6 +145,7 @@ export type NotePane = {
 
 export function useNotePane(): NotePane {
   const viewport = useViewport();
+  const [expanded] = useGalleryExpanded();
   const ratio = listRatio.use();
   // The page as rendered: `location` runs ahead of it while a navigation resolves, and a note
   // leaving for the Deck must still be closing in a pane when the Deck's path arrives.
@@ -105,8 +155,11 @@ export function useNotePane(): NotePane {
   });
   const pathname = useRouterState({ select: (state) => state.matches.at(-1)?.pathname ?? '/' });
   const split = canSplit(viewport, pathname);
+  const expandable = split && GALLERY_PAGES.some((page) => page === pathname);
   const listWidth = listWidthFor(ratio, viewport.width);
   return {
+    expandable,
+    expanded: expandable && expanded,
     split,
     shown: split && noteOpen,
     listWidth,
@@ -116,24 +169,66 @@ export function useNotePane(): NotePane {
 }
 
 /**
- * Publishes how much of the screen the pane covers as `--note-pane`, which fixed UI over the
+ * Publishes the ordinary split width as `--note-pane`, which fixed UI over the
  * page (headers, the dock, the quick note) leaves free on the right. It follows the pane as
  * it slides; the page itself takes its new width at once, so its cards move only once. Called
  * once, by the app layout.
  */
-export function useNotePaneLayout(): NotePane {
+export function useNotePaneLayout(): NotePane & { covered: boolean } {
   const pane = useNotePane();
+  const [covered, setCovered] = useState(false);
+  const reducedMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    const target = pane.expanded ? 1 : 0;
+    const update = () =>
+      setCovered(pane.expanded && paneExpansion.get() === 1 && paneReveal.get() === 1);
+    const stop = paneExpansion.on('change', update);
+    const stopReveal = paneReveal.on('change', update);
+    if (reducedMotion || !pane.split || paneReveal.get() === 0) {
+      paneExpansion.jump(target);
+      update();
+      return () => {
+        stop();
+        stopReveal();
+      };
+    }
+    update();
+    // Reflowing the header can occupy the first frame. Keep that work out of the spring's
+    // time, as when opening a pane; a reversal continues from its current width.
+    const cancel = afterPaint(() => {
+      void animateSteadySpring(paneExpansion, target, springs.pane);
+    });
+    return () => {
+      stop();
+      stopReveal();
+      cancel();
+      stopSteady(paneExpansion);
+    };
+  }, [pane.expanded, pane.split, reducedMotion]);
   const width = pane.split ? pane.noteWidth : 0;
   useLayoutEffect(() => {
     const root = document.documentElement;
-    const update = () => root.style.setProperty('--note-pane', `${width * paneReveal.get()}px`);
+    const update = () => {
+      const covered = width + (pane.split ? pane.listWidth * paneExpansion.get() : 0);
+      const reveal = paneReveal.get();
+      root.style.setProperty('--note-pane', `${width * reveal}px`);
+      root.style.setProperty('--expanded-note-pane', `${covered * reveal}px`);
+      const opacity = pane.split ? 1 - paneExpansion.get() * reveal : 1;
+      galleryOpacity.set(opacity);
+      root.style.setProperty('--gallery-opacity', String(opacity));
+    };
     update();
-    return paneReveal.on('change', update);
-  }, [width]);
+    const stopReveal = paneReveal.on('change', update);
+    const stopExpansion = paneExpansion.on('change', update);
+    return () => {
+      stopReveal();
+      stopExpansion();
+    };
+  }, [width, pane.split, pane.listWidth]);
   useLayoutEffect(() => {
     document.documentElement.toggleAttribute('data-note-pane', pane.shown);
   }, [pane.shown]);
-  return pane;
+  return { ...pane, covered };
 }
 
 /**

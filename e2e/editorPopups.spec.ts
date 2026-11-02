@@ -222,3 +222,29 @@ test('block handles stay inset and align with the first line, including touch-si
   await dialog.getByRole('button', { name: 'Open block menu' }).click();
   await expect(page.getByRole('menuitem', { name: 'Add block', exact: true })).toBeVisible();
 });
+
+test('a colon in prose ends its hidden emoji suggestions, and the picker still opens', async ({
+  page,
+}) => {
+  const loops: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes('Maximum update depth')) {
+      loops.push(message.text());
+    }
+  });
+  const dialog = await openNote(page, 'Popup focus');
+  await dialog.getByText('Last paragraph', { exact: true }).click();
+  await page.keyboard.press('End');
+  // Typed one key at a time, as a person does: each keystroke used to update the hidden menu.
+  const sentence = ' Note: the picker hides after a space, so this whole line is ordinary prose.';
+  await page.keyboard.type(sentence);
+  await expect(dialog.locator('[data-content-type="paragraph"]').last()).toHaveText(
+    `Last paragraph${sentence}`,
+  );
+  expect(loops).toEqual([]);
+
+  await page.keyboard.type(' :smi');
+  await expect(page.locator('.bn-grid-suggestion-menu-item').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.bn-grid-suggestion-menu-item')).toHaveCount(0);
+});

@@ -127,5 +127,5 @@ Original restores are freshness-checked online requests, not optimistic outbox m
 cached versions can be copied offline. Sign-out deletes the history store for that account.
 
 Android server connections use a local account identity for database and outbox names
-(ADR 0023). Existing first-server stores retain their names; new connections cannot share
+(ADR 0024). Existing first-server stores retain their names; new connections cannot share
 stores even when their server user IDs match. Browser stores still use user IDs per origin.

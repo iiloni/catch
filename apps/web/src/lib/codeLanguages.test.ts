@@ -1,5 +1,12 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CODE_LANGUAGES, codeLanguageId, codeLanguageName } from './codeLanguages';
+import {
+  CODE_LANGUAGES,
+  codeLanguageIcon,
+  codeLanguageIconProps,
+  codeLanguageId,
+  codeLanguageName,
+} from './codeLanguages';
 
 describe('codeLanguages', () => {
   it('finds a language by id or alias in any letter case', () => {
@@ -22,5 +29,21 @@ describe('codeLanguages', () => {
       ...('aliases' in language ? language.aliases : []),
     ]);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('bundles an icon for every language and for unlabelled or unknown code', () => {
+    for (const language of [...Object.keys(CODE_LANGUAGES), '', 'brainfuck']) {
+      const path = codeLanguageIcon(language);
+      expect(existsSync(`public${path}`), path).toBe(true);
+    }
+  });
+
+  it('keeps brand colors and tints logos that have none', () => {
+    expect(codeLanguageIconProps('python')['data-tinted']).toBeUndefined();
+    expect(codeLanguageIconProps('rust')['data-tinted']).toBe('');
+    expect(codeLanguageIconProps('brainfuck')).toEqual({
+      'data-tinted': '',
+      style: { '--code-language-icon': 'url("/code-languages/code.svg")' },
+    });
   });
 });

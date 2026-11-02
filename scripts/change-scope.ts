@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-// Files the app, its image and its tests never load. Markdown elsewhere is left out on
-// purpose: an importer fixture or a bundled file ending in .md is code to the E2E suite.
-const documentation = [
+// Files outside the app build, production image and Playwright inputs. Markdown elsewhere
+// is left out: an importer fixture or a bundled file ending in .md is E2E input.
+const exemptPaths = [
   /^docs\//,
   /^[^/]+\.md$/,
   /^branding\/.+\.md$/,
@@ -11,16 +11,19 @@ const documentation = [
   /^LICENSE$/,
   /^\.gitignore$/,
   /^cubic\.yaml$/,
+  // These workflows orchestrate publication or review; CI itself defines the E2E jobs.
+  /^\.github\/workflows\/(release|site|tag-release|promote-release|ai-review)\.yml$/,
+  /^scripts\/release-workflows\.test\.ts$/,
 ];
 
-/** A change needs E2E unless every path it touches is documentation. No paths prove nothing. */
-export function docsOnly(paths: string[]) {
-  return paths.length > 0 && paths.every((path) => documentation.some((rule) => rule.test(path)));
+/** Skip E2E only when every changed path is exempt. No paths prove nothing. */
+export function e2eExempt(paths: string[]) {
+  return paths.length > 0 && paths.every((path) => exemptPaths.some((rule) => rule.test(path)));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const paths = readFileSync(0, 'utf8')
     .split('\n')
     .filter((path) => path !== '');
-  console.log(docsOnly(paths));
+  console.log(e2eExempt(paths));
 }

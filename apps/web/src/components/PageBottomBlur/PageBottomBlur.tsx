@@ -1,11 +1,18 @@
-import { motion } from 'motion/react';
+import { motion, useTransform } from 'motion/react';
 import { useEffect, useState } from 'react';
+import { dockScrollProgress } from '@/lib/dockScroll';
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 
 /** Fades the page into the dock only while there is more content below the viewport. */
 export function PageBottomBlur() {
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
   const swipeY = useSettingsSwipeY();
+  const y = useTransform(() => {
+    const progress = dockScrollProgress.get();
+    return progress === 0
+      ? swipeY.get()
+      : `calc(${swipeY.get()}px + ${progress} * (var(--dock-height) + var(--safe-bottom) + 3rem))`;
+  });
 
   useEffect(() => {
     let frame = 0;
@@ -38,7 +45,7 @@ export function PageBottomBlur() {
       data-page-bottom-blur
       aria-hidden
       className="page-bottom-blur pointer-events-none fixed right-0 bottom-[var(--keyboard)] left-0 z-30 h-[calc(var(--dock-height)+var(--safe-bottom)+3rem)] transition-opacity duration-200"
-      style={{ opacity: hasMoreBelow ? 1 : 0, y: swipeY }}
+      style={{ opacity: hasMoreBelow ? 1 : 0, y }}
     />
   );
 }

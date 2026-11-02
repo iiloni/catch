@@ -5,6 +5,7 @@ import {
   archiveNotes,
   deleteNotesForever,
   duplicateNotes,
+  moveNoteToDeck,
   restoreNotes,
   sendNotesToGallery,
   setNotePinned,
@@ -17,6 +18,10 @@ import { SelectionToolbar } from './SelectionToolbar';
 const readiness = { awaitingTags: false, awaitingAssignments: false };
 vi.mock('@/lib/notes');
 vi.mock('@/lib/collections', () => ({
+  useBoardColumns: () => [
+    { id: 'new', userId: 'user-1', name: 'New', color: 'amber', position: 'a0' },
+    { id: 'doing', userId: 'user-1', name: 'Doing', color: 'blue', position: 'a1' },
+  ],
   useTagReadiness: () => readiness,
   useTags: () => [],
   useNoteTagAssignments: () => new Map(),
@@ -120,13 +125,49 @@ describe('SelectionToolbar', () => {
     );
   });
 
-  it('sends deck notes back to the gallery', () => {
+  it('sends selected deck notes back to the gallery', () => {
     const onDone = vi.fn();
-    render(<SelectionToolbar notes={notes} place="deck" onDone={onDone} />);
+    const deckNotes = notes.map((note) => ({ ...note, status: 'doing' }));
+    render(<SelectionToolbar notes={deckNotes} place="deck" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send to gallery' }));
-    expect(sendNotesToGallery).toHaveBeenCalledWith(notes);
+    expect(sendNotesToGallery).toHaveBeenCalledWith(deckNotes);
     expect(onDone).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+  });
+
+  it('moves gallery notes to a chosen column and ends selecting', () => {
+    const onDone = vi.fn();
+    render(<SelectionToolbar notes={notes} place="gallery" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(onDone).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Send to gallery' })).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Doing' }));
+    expect(moveNoteToDeck).toHaveBeenCalledWith('note-1', 'doing');
+    expect(moveNoteToDeck).toHaveBeenCalledWith('note-2', 'doing');
+    expect(onDone).toHaveBeenCalledOnce();
+  });
+
+  it('checks no destination for mixed columns and only moves notes that need moving', () => {
+    const onDone = vi.fn();
+    render(
+      <SelectionToolbar
+        notes={[makeNote('one', { status: 'new' }), makeNote('two', { status: 'doing' })]}
+        place="deck"
+        onDone={onDone}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    const picker = screen.getByRole('group', { name: 'Move selected notes' });
+    for (const button of within(picker).getAllByRole('button')) {
+      expect(button).not.toHaveAttribute('aria-current');
+    }
+    fireEvent.click(within(picker).getByRole('button', { name: 'Doing' }));
+    expect(moveNoteToDeck).toHaveBeenCalledExactlyOnceWith('one', 'doing');
+    expect(onDone).toHaveBeenCalledOnce();
   });
 
   it('unarchives in the archive', () => {

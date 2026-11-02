@@ -44,11 +44,13 @@ import {
 } from '@/components/SettingsTabPicker/SettingsTabPicker';
 import { useAdminAccess } from '@/lib/admin';
 import { useBackHandler } from '@/lib/backButton';
+import { dockScrollProgress, useDockScroll } from '@/lib/dockScroll';
 import {
   editorControls,
   editorNote,
   lastBrowsingTab,
   noteHistoryOpen,
+  pageSwipePosition,
   quickNote,
   quickNoteCanSave,
   searchFilterCount,
@@ -76,7 +78,14 @@ import {
 } from '@/lib/settings';
 import { useSettingsSwipeY } from '@/lib/settingsSwipe';
 import { isSharedNote } from '@/lib/sharing';
-import { GUTTER, HEADER_HISTORY_MIN, useNotePane } from '@/lib/splitView';
+import {
+  GUTTER,
+  galleryOpacity,
+  HEADER_HISTORY_MIN,
+  paneExpansion,
+  useNotePane,
+  usePaneWidthAtLeast,
+} from '@/lib/splitView';
 import { cn } from '@/lib/utils';
 import { focusWidgetInput } from '@/lib/widgetInputFocus';
 
@@ -117,6 +126,9 @@ export function Dock() {
   const capture = linkCaptureControls.use();
   const quickNoteOpen = noteState === 'open' || noteState === 'capture' || Boolean(capture);
   const hidden = useWideSettings() && inSettings && !quickNoteOpen;
+  const galleryVisibility = useTransform(() =>
+    !quickNoteOpen && galleryOpacity.get() === 0 ? 'hidden' : 'visible',
+  );
   const entry = useEntryMotion('dock', !hidden, 120);
   const historyOpen = noteHistoryOpen.use();
   // A tap changes the dock before the router mounts the page, alongside the keyboard.
@@ -138,7 +150,13 @@ export function Dock() {
           ? 'search'
           : 'tabs';
   const settingsY = useSettingsSwipeY();
-  const dockY = useTransform(() => entry.y.get() + (mode === 'settings' ? settingsY.get() : 0));
+  const dockY = useTransform(() => {
+    const y = entry.y.get() + (mode === 'settings' ? settingsY.get() : 0);
+    const progress = dockScrollProgress.get();
+    return progress === 0
+      ? y
+      : `calc(${y}px + ${progress} * (var(--dock-height) + var(--dock-bottom) + 1.5rem))`;
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const requestedSearchFocus = searchFocusRequest.use();
   // The tap that opens search trails a compatibility click; by the time it arrives
@@ -149,6 +167,7 @@ export function Dock() {
   const searchProgress = useMotionValue(mode === 'search' ? 1 : 0);
   const reducedMotion = useReducedMotion();
   const searchActive = mode === 'search';
+  const swipePosition = pageSwipePosition.use();
   useEffect(() => {
     if (!requestedSearchFocus || !searchActive) return;
     return focusWidgetInput(
@@ -159,6 +178,11 @@ export function Dock() {
     );
   }, [requestedSearchFocus, searchActive]);
   useLayoutEffect(() => {
+    if (swipePosition && (mode === 'tabs' || mode === 'search') && !reducedMotion) {
+      const update = () => searchProgress.set(Math.max(0, Math.min(1, swipePosition.get() - 1)));
+      update();
+      return swipePosition.on('change', update);
+    }
     if (searchProgress.get() === (searchActive ? 1 : 0)) return;
     if (reducedMotion) {
       searchProgress.set(searchActive ? 1 : 0);
@@ -171,7 +195,7 @@ export function Dock() {
       duration: 0.35,
     });
     return () => animation.stop();
-  }, [searchActive, reducedMotion, searchProgress]);
+  }, [searchActive, reducedMotion, searchProgress, swipePosition, mode]);
 
   function openSearch() {
     searchOpenedAt.current = performance.now();
@@ -204,6 +228,19 @@ export function Dock() {
   const [switcherHover, setSwitcherHover] = useState<GalleryPage | null>(null);
   const [settingsHover, setSettingsHover] = useState<SettingsPath | null>(null);
   const switcherOpen = switcherOn === pathname && (mode === 'tabs' || mode === 'settings');
+  const filtersOpen = searchFiltersOpen.use();
+  const previewsOpen = linkOverlay.use() !== null;
+  const scrollHidden = useDockScroll(
+    pathname,
+    !noteOpen &&
+      !quickNoteOpen &&
+      !keyboardOpen &&
+      !switcherOpen &&
+      !filtersOpen &&
+      !previewsOpen &&
+      !swipePosition,
+    dockRef,
+  );
   const goToGalleryPage = useGalleryPages();
   const setSwitcher = (open: boolean) => setSwitcherOn(open ? pathname : null);
 
@@ -249,14 +286,16 @@ export function Dock() {
       <motion.div
         ref={dockRef}
         data-dock
+        data-scroll-hidden={scrollHidden}
         // Translate the dock without fading its glass's ancestor.
-        style={{ zIndex, y: dockY }}
+        style={{ zIndex, y: dockY, visibility: galleryVisibility }}
+        inert={pane.shown && pane.expanded && !quickNoteOpen}
         // Spans the whole width and pads the pane away rather than ending at it: a page
         // transition sizes the dock's snapshot once, as it starts, while a pane closing with
         // the navigation (to Search, say) goes on widening the dock, which would squash it.
         className={cn(
           'pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] flex justify-center overflow-x-clip',
-          quickNoteOpen && 'z-[75]!',
+          quickNoteOpen && 'z-[75]! [--gallery-opacity:1]',
           mode === 'note' && keyboardOpen
             ? 'pr-[calc(var(--note-pane)+0.25rem)] pl-1'
             : 'pr-[calc(var(--note-pane)+0.75rem)] pl-3',
@@ -300,44 +339,56 @@ export function Dock() {
                 <div className="relative isolate min-w-0 flex-1">
                   {mode === 'note' && !historyOpen && <NoteLinkTray />}
                   {mode === 'note' && !historyOpen && <FloatingNoteToolbars />}
-                  <div className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]">
-                    <SearchField
-                      inputRef={inputRef}
-                      active={searchActive}
-                      visible={mode === 'tabs' || mode === 'search'}
-                      progress={searchProgress}
-                      openedAt={searchOpenedAt}
-                      onClose={closeSearch}
+                  <div className="relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)] border border-transparent">
+                    {/* Fade the glass separately so it keeps blurring the Gallery. */}
+                    <span
+                      aria-hidden
+                      className="glass gallery-fade pointer-events-none absolute -inset-px rounded-[inherit]"
                     />
-                    <AnimatePresence initial={false}>
-                      {(mode === 'tabs' || mode === 'search') && (
-                        <Tabs
-                          key="tabs"
-                          active={tab}
-                          searchProgress={searchProgress}
-                          searchActive={searchActive}
-                          // Focusing inside the tap keeps Android willing to raise the keyboard.
-                          onSearch={openSearch}
-                          switcherOpen={switcherOpen}
-                          onSwitcher={setSwitcher}
-                          onSwitcherHover={setSwitcherHover}
-                          onSwitcherSelect={selectGalleryPage}
-                        />
-                      )}
-                      {mode === 'settings' && (
-                        <SettingsTabSelector
-                          key="settings"
-                          current={settingsTab}
-                          open={switcherOpen}
-                          onOpenChange={setSwitcher}
-                          onHover={setSettingsHover}
-                          onSelect={selectSettingsTab}
-                          pickerRoot={() => dockRef.current}
-                        />
-                      )}
-                      {mode === 'note' &&
-                        (historyOpen ? <HistoryDockSlot key="history" /> : <NoteDock key="note" />)}
-                    </AnimatePresence>
+                    <div className="gallery-fade relative min-h-[calc(var(--dock-height)-2px)]">
+                      <SearchField
+                        inputRef={inputRef}
+                        active={searchActive}
+                        visible={mode === 'tabs' || mode === 'search'}
+                        progress={searchProgress}
+                        openedAt={searchOpenedAt}
+                        onClose={closeSearch}
+                      />
+                      <AnimatePresence initial={false}>
+                        {(mode === 'tabs' || mode === 'search') && (
+                          <Tabs
+                            key="tabs"
+                            active={tab}
+                            swipePosition={swipePosition}
+                            searchProgress={searchProgress}
+                            searchActive={searchActive}
+                            // Focusing inside the tap keeps Android willing to raise the keyboard.
+                            onSearch={openSearch}
+                            switcherOpen={switcherOpen}
+                            onSwitcher={setSwitcher}
+                            onSwitcherHover={setSwitcherHover}
+                            onSwitcherSelect={selectGalleryPage}
+                          />
+                        )}
+                        {mode === 'settings' && (
+                          <SettingsTabSelector
+                            key="settings"
+                            current={settingsTab}
+                            open={switcherOpen}
+                            onOpenChange={setSwitcher}
+                            onHover={setSettingsHover}
+                            onSelect={selectSettingsTab}
+                            pickerRoot={() => dockRef.current}
+                          />
+                        )}
+                        {mode === 'note' &&
+                          (historyOpen ? (
+                            <HistoryDockSlot key="history" />
+                          ) : (
+                            <NoteDock key="note" />
+                          ))}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </div>
                 <AnimatePresence initial={false}>
@@ -358,7 +409,13 @@ export function Dock() {
       </motion.div>
       <AnimatePresence>
         {pane.shown && noteOpen && !quickNoteOpen && (
-          <PaneDock key="pane" width={pane.noteWidth} compact={keyboardOpen} />
+          <PaneDock
+            key="pane"
+            width={pane.noteWidth}
+            listWidth={pane.listWidth}
+            compact={keyboardOpen}
+            historyMin={HEADER_HISTORY_MIN + (pane.expandable ? 40 : 0)}
+          />
         )}
       </AnimatePresence>
     </>
@@ -398,18 +455,31 @@ function FloatingNoteToolbars({ inPane = false }: { inPane?: boolean }) {
  * for the page's dock (the page transition names it), and the editor ignores every
  * interaction outside it in a pane.
  */
-function PaneDock({ width, compact }: { width: number; compact: boolean }) {
+function PaneDock({
+  width,
+  listWidth,
+  compact,
+  historyMin,
+}: {
+  width: number;
+  listWidth: number;
+  compact: boolean;
+  historyMin: number;
+}) {
   const historyOpen = noteHistoryOpen.use();
+  const headerWide = usePaneWidthAtLeast(width - GUTTER, listWidth + GUTTER / 2, historyMin);
+  const animatedWidth = useTransform(() => width + listWidth * paneExpansion.get());
+  const paddingLeft = useTransform(() => GUTTER * (1 - paneExpansion.get()) + (compact ? 4 : 12));
   return (
-    <div
+    <motion.div
       className={cn(
-        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--note-pane))] z-[60] flex justify-center overflow-x-clip',
+        'pointer-events-none fixed bottom-[var(--dock-bottom)] left-[calc(100%-var(--expanded-note-pane))] z-[60] flex justify-center overflow-x-clip',
         compact ? 'pr-1' : 'pr-3',
       )}
-      style={{ width, paddingLeft: GUTTER + (compact ? 4 : 12) }}
+      style={{ width: animatedWidth, paddingLeft }}
     >
       <div className="pointer-events-auto relative isolate w-full max-w-md">
-        {!historyOpen && width - GUTTER < HEADER_HISTORY_MIN && <FloatingNoteToolbars inPane />}
+        {!historyOpen && !headerWide && <FloatingNoteToolbars inPane />}
         {!historyOpen && <NoteLinkTray />}
         <motion.div
           className="glass relative min-h-[var(--dock-height)] rounded-[var(--dock-radius)]"
@@ -423,12 +493,13 @@ function PaneDock({ width, compact }: { width: number; compact: boolean }) {
           </AnimatePresence>
         </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 type TabsProps = {
   active: TabPath;
+  swipePosition: MotionValue<number> | null;
   searchProgress: MotionValue<number>;
   searchActive: boolean;
   onSearch: () => void;
@@ -440,6 +511,7 @@ type TabsProps = {
 
 function Tabs({
   active,
+  swipePosition,
   searchProgress,
   searchActive,
   onSearch,
@@ -458,6 +530,24 @@ function Tabs({
   const [pressed, setPressed] = useState<TabPath | null>(null);
   const [pending, setPending] = useState<TabPath | null>(null);
   const shown = pressed ?? pending ?? active;
+  const slot = TABS.findIndex((tab) => tab.path === shown);
+  const position = useMotionValue(slot);
+  const indicatorX = useTransform(position, (value) => `${value * 100}%`);
+  const reducedMotion = useReducedMotion();
+  useLayoutEffect(() => {
+    if (swipePosition && !reducedMotion) {
+      const update = () => position.set(swipePosition.get());
+      update();
+      return swipePosition.on('change', update);
+    }
+    if (reducedMotion) {
+      position.set(slot);
+      return;
+    }
+    if (position.get() === slot) return;
+    const animation = animate(position, slot, springs.snappy);
+    return () => animation.stop();
+  }, [slot, position, swipePosition, reducedMotion]);
 
   // The tabs stay behind the field during the morph, ready for an interrupted close.
   useEffect(() => {
@@ -576,9 +666,16 @@ function Tabs({
         setPressed(null);
       }}
     >
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const current = shown === tab.path;
+      {/* One indicator keeps its painted position when the swipe commits to a new route. */}
+      <motion.span
+        data-dock-indicator
+        aria-hidden
+        className="pointer-events-none absolute top-1 bottom-1 left-1 w-[calc((100%_-_0.5rem)/3)] rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+        style={{ x: indicatorX }}
+        animate={{ scale: pressed ? 1.06 : 1 }}
+        transition={springs.snappy}
+      />
+      {TABS.map((tab, index) => {
         return (
           <Link
             key={tab.path}
@@ -589,41 +686,61 @@ function Tabs({
             // Native link dragging hijacks a hold-and-slide gesture (the URL preview
             // in the video) and swallows the pointer moves the switcher needs.
             onDragStart={(event) => event.preventDefault()}
-            // Pointer taps are handled by the nav's pointer events (so scrubbing works);
-            // this path is for keyboard activation.
+            // The nav handles pointer taps so scrubbing works; synthesized activation
+            // still works without a pointer or key event.
             onClick={(event) => {
               event.preventDefault();
               if (event.detail === 0) go(tab.path);
             }}
-            className={cn(
-              'relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-              current ? 'text-foreground' : 'text-muted-foreground',
-            )}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              // Firefox gives Enter's native click detail=1, like a pointer click.
+              event.preventDefault();
+              go(tab.path);
+            }}
+            className="relative z-0 flex items-center justify-center rounded-[calc(var(--dock-radius)-0.25rem)] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           >
-            {current && (
-              <motion.span
-                layoutId="dock-indicator"
-                aria-hidden
-                className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.25rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                animate={{ scale: pressed ? 1.06 : 1 }}
-                transition={springs.snappy}
-              />
-            )}
             {tab.path === '/search' ? (
               // The field owns one icon throughout the morph, including while it is a tab.
               <span className="size-6" aria-hidden />
             ) : (
-              <motion.span
-                animate={{ scale: pressed === tab.path ? 1.12 : 1 }}
-                transition={springs.snappy}
-              >
-                <Icon className="size-6" aria-hidden />
-              </motion.span>
+              <TabIcon
+                icon={tab.icon}
+                index={index}
+                position={position}
+                pressed={pressed === tab.path}
+              />
             )}
           </Link>
         );
       })}
     </motion.nav>
+  );
+}
+
+function TabIcon({
+  icon: Icon,
+  index,
+  position,
+  pressed,
+}: {
+  icon: typeof Columns3;
+  index: number;
+  position: MotionValue<number>;
+  pressed: boolean;
+}) {
+  const color = useTransform(() => {
+    const weight = Math.max(0, 1 - Math.abs(index - position.get())) * 100;
+    return `color-mix(in oklab, var(--foreground) ${weight}%, var(--muted-foreground))`;
+  });
+  return (
+    <motion.span
+      style={{ color }}
+      animate={{ scale: pressed ? 1.12 : 1 }}
+      transition={springs.snappy}
+    >
+      <Icon className="size-6" aria-hidden />
+    </motion.span>
   );
 }
 
@@ -642,7 +759,6 @@ function SearchField({
   openedAt: RefObject<number>;
   onClose: () => void;
 }) {
-  const reducedMotion = useReducedMotion();
   const query = searchQuery.use();
   const fieldRef = useRef<HTMLElement>(null);
   const width = useMotionValue(0);
@@ -705,24 +821,26 @@ function SearchField({
       <motion.span className="relative shrink-0" style={{ x: iconX, opacity: visible ? 1 : 0 }}>
         <Search className="size-6" aria-hidden />
       </motion.span>
-      <motion.input
-        ref={inputRef}
-        type="text"
-        inputMode="search"
-        enterKeyHint="search"
-        aria-label="Search notes"
-        aria-hidden={!active}
-        tabIndex={active ? 0 : -1}
-        placeholder="Search notes"
-        value={query}
-        onChange={(event) => searchQuery.set(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-        }}
-        animate={{ opacity: active ? 1 : 0, x: active ? 0 : 8 }}
-        transition={reducedMotion ? { duration: 0 } : { duration: 0.25, delay: active ? 0.1 : 0 }}
-        className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-      />
+      {/* Text travels beside the icon, clipped before the close button as it emerges. */}
+      <div className="h-full min-w-0 flex-1 overflow-hidden">
+        <motion.input
+          ref={inputRef}
+          type="text"
+          inputMode="search"
+          enterKeyHint="search"
+          aria-label="Search notes"
+          aria-hidden={!active}
+          tabIndex={active ? 0 : -1}
+          placeholder="Search notes"
+          value={query}
+          onChange={(event) => searchQuery.set(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+          style={{ opacity: contentOpacity, x: iconX }}
+          className="h-full w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        />
+      </div>
       <motion.button
         key="close"
         type="button"
@@ -730,6 +848,7 @@ function SearchField({
         onClick={() => {
           // Discard the compatibility click trailed by the tap that opened search.
           if (performance.now() - openedAt.current < GHOST_CLICK_MS) return;
+          searchQuery.set('');
           exit(false);
         }}
         aria-hidden={!active}
@@ -824,7 +943,7 @@ function DockActionButton({
         whileTap={{ scale: 0.88 }}
         transition={springs.snappy}
         className={cn(
-          'relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
+          'gallery-fade relative flex size-[var(--dock-height)] items-center justify-center rounded-[var(--dock-radius)] outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring/70',
           search
             ? filtersOpen || count > 0
               ? 'text-brand'
@@ -842,7 +961,10 @@ function DockActionButton({
           style={{ opacity: gradientOpacity }}
         />
         <motion.span
-          className="relative flex size-7 items-center justify-center"
+          className={cn(
+            'relative flex size-7 items-center justify-center',
+            gradient ? 'text-brand-foreground' : 'text-foreground',
+          )}
           style={{ opacity: composeOpacity, rotate: composeRotate }}
           aria-hidden
         >
@@ -906,7 +1028,10 @@ function DockActionButton({
         </motion.span>
         <motion.span
           aria-hidden
-          className="absolute flex size-7 items-center justify-center"
+          className={cn(
+            'absolute flex size-7 items-center justify-center',
+            filtersOpen || count > 0 ? 'text-brand' : 'text-foreground',
+          )}
           style={{ opacity: searchProgress, rotate: filterRotate }}
         >
           <SlidersHorizontal className="size-7" strokeWidth={2.25} />
