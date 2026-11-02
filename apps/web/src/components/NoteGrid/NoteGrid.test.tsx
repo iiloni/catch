@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { columnsFor, estimateCardHeight } from './NoteGrid';
+import { estimateCardHeight } from './NoteGrid';
 
 const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] });
-
-describe('columnsFor', () => {
-  it('uses two columns on phones and more as space allows', () => {
-    expect(columnsFor(260)).toBe(1);
-    expect(columnsFor(366)).toBe(2);
-    expect(columnsFor(768)).toBe(3);
-    expect(columnsFor(1232)).toBe(5);
-  });
-});
 
 describe('estimateCardHeight', () => {
   it('grows with the text a card wraps and the blocks it shows', () => {

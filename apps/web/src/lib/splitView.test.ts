@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { canSplit, GUTTER, LIST_MIN, listWidthFor, listWidthLimits, NOTE_MIN } from './splitView';
+import {
+  canSplit,
+  GUTTER,
+  isFolded,
+  LIST_MIN,
+  listWidthFor,
+  listWidthLimits,
+  NOTE_MIN,
+} from './splitView';
 
 describe('splitView', () => {
+  it('counts phone-sized screens as folded in either orientation', () => {
+    expect(isFolded({ width: 412, height: 915 })).toBe(true);
+    expect(isFolded({ width: 915, height: 412 })).toBe(true);
+    expect(isFolded({ width: 690, height: 830 })).toBe(false);
+    expect(isFolded({ width: 1180, height: 820 })).toBe(false);
+  });
+
   it('splits on tablets and unfolded foldables, not on phones', () => {
     expect(canSplit({ width: 412, height: 915 }, '/')).toBe(false);
     // A phone on its side is wide but too short for two panes.
