@@ -120,22 +120,28 @@ function PreviewBlock({
       body =
         variant === 'editor' ? (
           <h3
+            dir="auto"
             className="pt-[18px]! font-bold font-display leading-normal tracking-[-0.01em]"
             style={{ fontSize: HEADING_SIZES[Number(props.level)] ?? HEADING_SIZES[3] }}
           >
             {text}
           </h3>
         ) : isTitle ? (
-          <h3 className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]">
+          <h3
+            dir="auto"
+            className="font-display font-semibold text-[0.9375rem] leading-snug tracking-[-0.01em]"
+          >
             {inline}
           </h3>
         ) : (
-          <p className="font-semibold">{inline}</p>
+          <p dir="auto" className="font-semibold">
+            {inline}
+          </p>
         );
       break;
     case 'checkListItem': {
       body = (
-        <div data-content-type="checkListItem" className="note-preview-checklist">
+        <div dir="auto" data-content-type="checkListItem" className="note-preview-checklist">
           <div className="note-checkbox-target" aria-hidden>
             <span className="note-checkbox" data-checked={Boolean(props.checked)} />
           </div>
@@ -154,31 +160,39 @@ function PreviewBlock({
     case 'bulletListItem':
       body =
         variant === 'editor' ? (
-          <p data-content-type="bulletListItem" className="note-preview-list">
+          <p dir="auto" data-content-type="bulletListItem" className="note-preview-list">
             <span className="note-preview-list-marker" aria-hidden>
               •
             </span>
             <span className="min-w-0 whitespace-pre-wrap">{text}</span>
           </p>
         ) : (
-          <p className="before:mr-2 before:content-['•']">{inline}</p>
+          <p dir="auto" className="before:me-2 before:content-['•']">
+            {inline}
+          </p>
         );
       break;
     case 'numberedListItem':
       body =
         variant === 'editor' ? (
-          <p data-content-type="numberedListItem" className="note-preview-list">
+          <p dir="auto" data-content-type="numberedListItem" className="note-preview-list">
             <span className="note-preview-list-marker" aria-hidden>
               {listIndex}.
             </span>
             <span className="min-w-0 whitespace-pre-wrap">{text}</span>
           </p>
         ) : (
-          <p className="before:mr-2 before:content-['–']">{inline}</p>
+          <p dir="auto" className="before:me-2 before:content-['–']">
+            {inline}
+          </p>
         );
       break;
     case 'quote':
-      body = <blockquote className="border-current/30 border-l-2 pl-2 italic">{inline}</blockquote>;
+      body = (
+        <blockquote dir="auto" className="border-current/30 border-s-2 ps-2 italic">
+          {inline}
+        </blockquote>
+      );
       break;
     case 'codeBlock':
       // Highlighting needs the editor's grammars, so previews show code in one color.
@@ -210,7 +224,10 @@ function PreviewBlock({
             </pre>
           </div>
         ) : (
-          <pre className="overflow-hidden rounded-md bg-(--code-background) p-2 font-mono text-xs">
+          <pre
+            dir="ltr"
+            className="overflow-hidden rounded-md bg-(--code-background) p-2 font-mono text-xs"
+          >
             {inline}
           </pre>
         );
@@ -290,7 +307,7 @@ function PreviewBlock({
           : [];
       body = rows.length ? (
         <div className="overflow-x-auto">
-          <table className="border-collapse text-left">
+          <table className="border-collapse text-start">
             <tbody>
               {rows.map((row, rowIndex) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: a table's rows have no ids and never reorder here
@@ -299,6 +316,7 @@ function PreviewBlock({
                     <td
                       // biome-ignore lint/suspicious/noArrayIndexKey: as for the rows
                       key={cellIndex}
+                      dir="auto"
                       className="border border-foreground/20 px-2 py-1 align-top"
                     >
                       {renderInline(isObject(cell) ? cell.content : cell, variant, 0, reading)}
@@ -313,16 +331,22 @@ function PreviewBlock({
       break;
     }
     default:
-      body = inline || variant === 'editor' ? <p className="whitespace-pre-wrap">{text}</p> : null;
+      body =
+        inline || variant === 'editor' ? (
+          <p dir="auto" className="whitespace-pre-wrap">
+            {text}
+          </p>
+        ) : null;
   }
 
   const nested = children.length > 0 && (
-    <div className={variant === 'editor' ? 'pl-6' : 'pl-4'}>
+    <div className={variant === 'editor' ? 'ps-6' : 'ps-4'}>
       {renderBlocks(children, variant, false, reading)}
     </div>
   );
   return variant === 'editor' ? (
-    <div className="note-preview-block" data-preview-block={block.id}>
+    // Like the editor's blocks, so nested blocks indent from the side their parent reads from.
+    <div dir="auto" className="note-preview-block" data-preview-block={block.id}>
       {body}
       {nested}
     </div>

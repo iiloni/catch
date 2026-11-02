@@ -442,6 +442,46 @@
   font-family: var(--font-sans);
 }
 
+/*
+ * Right-to-left text. Every block has its own `dir="auto"` (NoteEditor), but BlockNote
+ * stores "left" as every block's default alignment and forces it, so a Hebrew or Arabic
+ * line would still hug the left edge. Left here means the side the block reads from, and
+ * the spacing BlockNote sets on one physical side follows the block's direction.
+ */
+.bn-container.note-editor [data-text-alignment="left"] {
+  justify-content: flex-start !important;
+  text-align: start !important;
+}
+.bn-container.note-editor .bn-block-group .bn-block-group {
+  margin-left: 0;
+  margin-inline-start: 24px;
+}
+.bn-container.note-editor
+  .bn-block-group
+  .bn-block-group
+  > .bn-block-outer:not([data-prev-depth-changed])::before {
+  inset-inline: -20px auto;
+}
+.bn-container.note-editor
+  .bn-block-content:is(
+    [data-content-type="bulletListItem"],
+    [data-content-type="numberedListItem"]
+  )::before {
+  padding-right: 0;
+  padding-inline-end: 4px;
+}
+.bn-container.note-editor [data-content-type="quote"] blockquote {
+  border-left: 0;
+  border-inline-start: 2px solid rgb(125, 121, 122);
+  padding-left: 0;
+  padding-inline-start: 1em;
+}
+/* Code reads left to right whatever language its comments are in. */
+.note-code-block,
+.bn-container.note-editor .bn-block-content[data-content-type="codeBlock"] {
+  direction: ltr;
+}
+
 /* Images and videos in the editor share MediaPreview's corners, so they hold through the swap. */
 .bn-container.note-editor [data-file-block] .bn-visual-media {
   border-radius: var(--radius-sm);
@@ -616,7 +656,7 @@
 .note-preview-list-marker {
   flex-shrink: 0;
   min-width: 24px;
-  padding-right: 4px;
+  padding-inline-end: 4px;
   text-align: center;
 }
 .note-preview-checklist,
