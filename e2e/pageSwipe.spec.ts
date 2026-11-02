@@ -372,6 +372,41 @@ test('search filter panels retain their gestures and reduced motion still naviga
   await expect(page.getByRole('heading', { name: 'Gallery', exact: true })).toBeVisible();
 });
 
+test('pulling down at the top of Search clears its filters and keeps the query', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await seedNotes(page, ['Loose note']);
+  await page.getByRole('link', { name: 'Search', exact: true }).click();
+  await page.getByRole('button', { name: 'Browse Untagged' }).click();
+  const filters = page.getByRole('group', { name: 'Active filters' });
+  const result = page.getByRole('button', { name: 'Open note' });
+  await expect(filters).toBeVisible();
+  await expect(result).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search notes' }).fill('Loose');
+
+  const short = await beginSwipe(page, isMobile, 195, 240);
+  await short.move(0, 85);
+  const indicator = page.getByText('Pull to clear filters').locator('..');
+  await expect(indicator).toHaveCSS('opacity', '1');
+  await short.end();
+  await expect(indicator).toHaveCSS('opacity', '0');
+  await expect(filters).toBeVisible();
+
+  const box = await settledBox(result);
+  const pull = await beginSwipe(page, isMobile, box.x + box.width / 2, box.y + box.height / 2);
+  await pull.move(0, 130);
+  await expect(page.getByText('Release to clear filters')).toBeVisible();
+  await pull.end();
+  await expect(filters).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Search notes' })).toHaveValue('Loose');
+  await expect(result).toBeVisible();
+  // The press that began the pull did not open the note under it.
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
 test('pages and headers track the finger before release and retain the incoming DOM on commit', async ({
   page,
   isMobile,

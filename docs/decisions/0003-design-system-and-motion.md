@@ -93,6 +93,11 @@ room in the swipe direction, and reaching their edge requires a fresh swipe to n
 The screen's outer 24 px stay available to system back gestures. Swipes are disabled while
 a note, composer or search filter panel is open. Swiping into Search leaves its field
 unfocused, so browsing does not summon the keyboard.
+With filters active, a downward touch pull at the top of Search clears them
+(`ClearFiltersPull`). It starts anywhere a page swipe can, plus result rows and filter chips,
+and leaves text fields, inner scrollers mid-scroll, held presses and selection mode alone.
+Search has no undo for this, so only distance past the threshold commits, never a fling;
+the query stays, and the pill above the content says when letting go will clear.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns
