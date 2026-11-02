@@ -149,7 +149,12 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
 
   const y = useMotionValue(0);
   const flight = useMotionValue(0);
-  const landing = useRef<{ card: HTMLElement; self: DOMRect; box: DOMRect } | null>(null);
+  const landing = useRef<{
+    card: HTMLElement;
+    self: DOMRect;
+    box: DOMRect;
+    offset: { left: number; top: number };
+  } | null>(null);
   // Measured on every frame of the flight: the new card is still sliding into its place in
   // the grid when the window sets off, and a spot measured once would be where it was.
   const flightTarget = useTransform(() => {
@@ -158,9 +163,14 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
     if (!to) return null;
     // The grid may stop rendering the card; the window then finishes where it last was.
     if (to.card.isConnected) to.box = to.card.getBoundingClientRect();
+    // The window rides above the keyboard, which closes during the flight, so its own
+    // spot moves too. Offsets ignore transforms, so they track that without the flight.
+    const element = ref.current;
+    const left = to.self.left + (element ? element.offsetLeft - to.offset.left : 0);
+    const top = to.self.top + (element ? element.offsetTop - to.offset.top : 0);
     return {
-      dx: to.box.left - to.self.left,
-      dy: to.box.top - to.self.top,
+      dx: to.box.left - left,
+      dy: to.box.top - top,
       right: Math.max(0, to.self.width - to.box.width),
       bottom: Math.max(0, to.self.height - to.box.height),
     };
@@ -324,7 +334,8 @@ function QuickNoteWindow({ exit, suspended }: { exit: { current: Exit }; suspend
           void shrinkIntoButton().then(finish);
           return;
         }
-        landing.current = { card, self, box };
+        const offset = { left: ref.current?.offsetLeft ?? 0, top: ref.current?.offsetTop ?? 0 };
+        landing.current = { card, self, box, offset };
         // Saved straight after opening, the window is still springing to its size. The
         // flight is measured from where it rests, so it has to be there when it lands.
         animate(scale, 1, { duration: 0.15 });
