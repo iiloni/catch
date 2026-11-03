@@ -234,7 +234,8 @@ beside the page. A spring keeps time, so one started in that frame lost its firs
 it and appeared most of the way there. The cards' springs therefore start once the frame is
 painted, and the pane slides in the same way, following the spring it leaves on but
 advancing by frames (`animateSteadySpring`), as the container transform does. Closing the
-pane has no such frame and keeps its spring.
+pane is the same long frame, since the page takes its full width at once, and leaves the same
+way; a pane closed while still sliding in turns back on its spring, keeping its speed.
 The Deck does not split: its columns need the whole width, so a note opened there pops up
 over the board as a centered panel, as on other wide screens (`canSplit` takes the page).
 The Gallery pages and Search split. In Gallery, Reminders, Archive and Trash, an expand
