@@ -482,6 +482,22 @@
   direction: ltr;
 }
 
+/*
+ * Inline code is set as the cards set it (NotePreview), so it holds through the swap. A
+ * monospace face runs large beside the text, hence the smaller size.
+ */
+.bn-container.note-editor .bn-inline-content code {
+  border-radius: 0.375em;
+  /*
+   * The background spans the font's ascent and descent, which leave more room below the
+   * letters than above them in most system monospace faces, so the top gets the padding.
+   */
+  padding: 0.12em 0.4em 0.05em;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
 /* Images and videos in the editor share MediaPreview's corners, so they hold through the swap. */
 .bn-container.note-editor [data-file-block] .bn-visual-media {
   border-radius: var(--radius-sm);

@@ -85,7 +85,8 @@ function renderInline(content: unknown, variant: Variant, key = 0, reading = fal
         Boolean(styles.italic) && 'italic',
         Boolean(styles.underline) && 'underline',
         Boolean(styles.strike) && 'line-through',
-        Boolean(styles.code) && 'rounded bg-foreground/10 px-1 font-mono text-[0.9em]',
+        Boolean(styles.code) &&
+          'rounded-[0.375em] bg-foreground/10 px-[0.4em] pt-[0.12em] pb-[0.05em] font-mono text-[0.9em]',
       )}
     >
       {content.text}
