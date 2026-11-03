@@ -1084,6 +1084,92 @@ test('a long press reorders deck notes on touch', async ({ page, isMobile }) => 
   await expect.poll(order).toEqual(['One', 'Three', 'Two']);
 });
 
+test('holding a deck card above the drop targets scrolls a tall column', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  const body = 'Wraps over a few lines of a card so the column runs past the screen';
+  const titles = Array.from({ length: 12 }, (_, index) => `Note ${index + 1}`);
+  await seedNotes(
+    page,
+    titles.map((title) => ({ title, body })),
+    'new',
+  );
+  await openDeck(page);
+  const column = page.getByRole('region', { name: 'New column' });
+  const order = () => column.getByRole('article').getByRole('heading').allTextContents();
+  await expect.poll(order).toEqual(titles.toReversed());
+
+  // Mouse on desktop; a long press and touch moves on a phone.
+  const cdp = isMobile ? await page.context().newCDPSession(page) : null;
+  let at = { x: 0, y: 0 };
+  async function press(point: typeof at) {
+    at = point;
+    if (!cdp) {
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.down();
+      return;
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    await page.waitForTimeout(400);
+  }
+  async function moveTo(point: typeof at) {
+    const from = at;
+    at = point;
+    for (let step = 1; step <= 10; step++) {
+      const x = from.x + ((point.x - from.x) * step) / 10;
+      const y = from.y + ((point.y - from.y) * step) / 10;
+      if (cdp) {
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x, y }],
+        });
+      } else await page.mouse.move(x, y);
+    }
+  }
+  async function release() {
+    await page.waitForTimeout(100);
+    if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    else await page.mouse.up();
+    await expect(page.getByRole('region', { name: 'Cancel move' })).toBeHidden();
+  }
+  const scrollY = () => page.evaluate(() => window.scrollY);
+
+  const source = await settledBox(column.getByRole('article').filter({ hasText: 'Note 12' }));
+  await press({ x: source.x + source.width / 2, y: source.y + 20 });
+  await moveTo({ x: at.x + 10, y: at.y + 30 });
+  const cancel = page.getByRole('region', { name: 'Cancel move' });
+  const gallery = page.getByRole('region', { name: 'Send to gallery' });
+  const cancelBox = await settledBox(cancel);
+  const galleryBox = await settledBox(gallery);
+  // The targets share one row, Cancel first.
+  expect(Math.abs(cancelBox.y - galleryBox.y)).toBeLessThan(1);
+  expect(cancelBox.x).toBeLessThan(galleryBox.x);
+
+  // Passing the band on the way may scroll a little; resting on a target does not.
+  await moveTo({ x: cancelBox.x + cancelBox.width / 2, y: cancelBox.y + cancelBox.height / 2 });
+  const resting = await scrollY();
+  await page.waitForTimeout(300);
+  expect(await scrollY()).toBe(resting);
+  await release();
+  await expect.poll(order).toEqual(titles.toReversed());
+
+  // Just above the targets, the page scrolls on down the column.
+  const again = await settledBox(column.getByRole('article').filter({ hasText: 'Note 12' }));
+  await press({ x: again.x + again.width / 2, y: again.y + 20 });
+  await moveTo({ x: at.x, y: cancelBox.y - 24 });
+  await expect.poll(scrollY).toBeGreaterThan(200);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('Missing viewport');
+  await moveTo({ x: at.x, y: viewport.height / 2 });
+  const stopped = await scrollY();
+  await page.waitForTimeout(300);
+  expect(await scrollY()).toBe(stopped);
+  await release();
+  await expect.poll(async () => (await order()).indexOf('Note 12')).toBeGreaterThan(2);
+});
+
 /** Gallery card titles in reading order: top to bottom, then left to right. */
 async function galleryOrder(page: Page) {
   const cards = await page.getByRole('article').all();
