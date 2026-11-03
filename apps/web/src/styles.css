@@ -488,8 +488,11 @@
  */
 .bn-container.note-editor .bn-inline-content code {
   border-radius: 0.375em;
-  /* Vertical padding on an inline box widens its background without moving the lines. */
-  padding: 0.15em 0.4em;
+  /*
+   * The background spans the font's ascent and descent, which sit unevenly around the
+   * letters in most system monospace faces, so it adds little above and below them.
+   */
+  padding: 0.05em 0.4em;
   background: color-mix(in oklab, var(--foreground) 10%, transparent);
   font-family: var(--font-mono);
   font-size: 0.9em;
