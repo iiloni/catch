@@ -172,5 +172,9 @@ test.describe('on a wide screen', () => {
     // frames, so even a busy machine shows it setting off rather than nearly there.
     const started = samples.find((sample) => sample.pane > 0)?.pane ?? 0;
     expect(started).toBeLessThan(full * 0.4);
+    // Closing widens the page at once, which is as long a frame, so it leaves the same way.
+    const closing = samples.slice(samples.findIndex((sample) => sample.pane === full));
+    const leaving = closing.find((sample) => sample.pane < full)?.pane ?? 0;
+    expect(leaving).toBeGreaterThan(full * 0.6);
   });
 });

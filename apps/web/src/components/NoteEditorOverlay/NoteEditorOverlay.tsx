@@ -571,9 +571,11 @@ function EditorSurface({
 
     if (splitRef.current) {
       let done = false;
+      let cancelStart = () => {};
       const finish = () => {
         if (done) return;
         done = true;
+        cancelStart();
         leavingPanes.delete(finish);
         progress.set(0);
         safeToRemove();
@@ -585,15 +587,32 @@ function EditorSurface({
         return () => window.clearTimeout(timer);
       }
       leavingPanes.add(finish);
-      // Closed before it finished sliding in, or before it began.
-      cancelSlide.current();
-      stopSteady(paneReveal);
-      const animation = animate(paneReveal, 0, springs.pane);
-      void animation.then(finish);
+      // Closed before it finished sliding in, or before it began: turn back from where it is,
+      // keeping the speed it had.
+      if (paneReveal.get() < 1) {
+        cancelSlide.current();
+        stopSteady(paneReveal);
+        const animation = animate(paneReveal, 0, springs.pane);
+        void animation.then(finish);
+        return () => {
+          done = true;
+          leavingPanes.delete(finish);
+          animation.stop();
+        };
+      }
+      // The page takes its full width at once, and laying every card out again at it is one
+      // long frame. A spring keeps time, so that frame came out of the slide, which jumped
+      // most of the way out. As when opening, the pane waits for it and then goes by frames.
+      cancelStart = afterPaint(() => {
+        void animateSteadySpring(paneReveal, 0, springs.pane).then(finish);
+      });
       return () => {
+        if (!done) {
+          cancelStart();
+          stopSteady(paneReveal);
+        }
         done = true;
         leavingPanes.delete(finish);
-        animation.stop();
       };
     }
 
