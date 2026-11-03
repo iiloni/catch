@@ -22,13 +22,14 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { LayoutDashboard, type LucideIcon, X } from 'lucide-react';
-import { AnimatePresence, motion, type TargetAndTransition } from 'motion/react';
+import { AnimatePresence, motion, type TargetAndTransition, useTransform } from 'motion/react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sortBoardColumns } from '@/lib/boardColumns';
+import { dockScrollProgress, holdDockScroll } from '@/lib/dockScroll';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS, LONG_PRESS_TOLERANCE, useLongPress } from '@/lib/longPress';
@@ -198,6 +199,11 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
   // Removes the pointer listeners that follow a drag.
   const unfollow = useRef<() => void>(null);
   const dropZones = useRef<HTMLDivElement>(null);
+  // With the dock scrolled away, the targets come down into its place.
+  const dropZonesY = useTransform(() => {
+    const progress = dockScrollProgress.get();
+    return progress === 0 ? 0 : `calc(${progress} * (var(--dock-height) + 0.5rem))`;
+  });
   const scrollFrame = useRef(0);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -304,6 +310,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
     setActive({ note, group, width: rect?.width ?? 280, height: rect?.height ?? 96, origins });
     setHeldStack(group.length > 1);
     held.current = { note, ids };
+    holdDockScroll(true);
     pointer.current = eventPoint(event.activatorEvent);
     setDropTarget({
       column: columnOf(note),
@@ -369,6 +376,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
     unfollow.current = null;
     cancelAnimationFrame(scrollFrame.current);
     stopEdgeTurns();
+    holdDockScroll(false);
     held.current = null;
     pointer.current = null;
     setDropTarget(null);
@@ -397,6 +405,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
     () => () => {
       unfollow.current?.();
       cancelAnimationFrame(scrollFrame.current);
+      holdDockScroll(false);
       window.clearTimeout(edge.current.timer);
       window.clearTimeout(settlingTimer.current);
       window.clearTimeout(landingTimer.current);
@@ -605,8 +614,9 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
         </div>
       </div>
       {/* One row above the dock, so a held card can reach most of the page above it. */}
-      <div
+      <motion.div
         ref={dropZones}
+        style={{ y: dropZonesY }}
         className="pointer-events-none fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.5rem)] left-3 z-50 mx-auto flex max-w-md gap-2"
       >
         <AnimatePresence>
@@ -632,7 +642,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
             />
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
       {/* A stack has no one card to fly back to; its cards settle into the column instead. */}
       <DragOverlay dropAnimation={heldStack ? null : { duration: DROP_ANIMATION_MS }}>
         {active && <HeldCards held={active} />}

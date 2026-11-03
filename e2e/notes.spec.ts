@@ -1160,6 +1160,9 @@ test('holding a deck card above the drop targets scrolls a tall column', async (
   await press({ x: again.x + again.width / 2, y: again.y + 20 });
   await moveTo({ x: at.x, y: cancelBox.y - 24 });
   await expect.poll(scrollY).toBeGreaterThan(200);
+  // The dock stays while a card is held, so the targets do not drop away from it.
+  await expect(page.locator('[data-dock]')).toHaveAttribute('data-scroll-hidden', 'false');
+  expect((await settledBox(cancel)).y).toBeCloseTo(cancelBox.y, 0);
   const viewport = page.viewportSize();
   if (!viewport) throw new Error('Missing viewport');
   await moveTo({ x: at.x, y: viewport.height / 2 });
@@ -1168,6 +1171,19 @@ test('holding a deck card above the drop targets scrolls a tall column', async (
   expect(await scrollY()).toBe(stopped);
   await release();
   await expect.poll(async () => (await order()).indexOf('Note 12')).toBeGreaterThan(2);
+
+  // With the dock scrolled away, the targets come down into its place.
+  const dock = await settledBox(page.locator('[data-dock]'));
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollBy(0, 300));
+  await expect(page.locator('[data-dock]')).toHaveAttribute('data-scroll-hidden', 'true');
+  const next = await settledBox(column.getByRole('article').filter({ hasText: 'Note 9' }));
+  await press({ x: next.x + next.width / 2, y: next.y + 20 });
+  await moveTo({ x: at.x + 10, y: at.y - 30 });
+  const lowered = await settledBox(cancel);
+  expect(lowered.y + lowered.height).toBeCloseTo(dock.y + dock.height, 0);
+  await moveTo({ x: lowered.x + lowered.width / 2, y: lowered.y + lowered.height / 2 });
+  await release();
 });
 
 /** Gallery card titles in reading order: top to bottom, then left to right. */
