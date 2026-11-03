@@ -22,13 +22,14 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { LayoutDashboard, type LucideIcon, X } from 'lucide-react';
-import { AnimatePresence, motion, type TargetAndTransition } from 'motion/react';
+import { AnimatePresence, motion, type TargetAndTransition, useTransform } from 'motion/react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { NoteCard } from '@/components/NoteCard/NoteCard';
 import { SelectCheck } from '@/components/SelectCheck/SelectCheck';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { sortBoardColumns } from '@/lib/boardColumns';
+import { dockScrollProgress, holdDockScroll } from '@/lib/dockScroll';
 import { useEntryMotion } from '@/lib/entryMotion';
 import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS, LONG_PRESS_TOLERANCE, useLongPress } from '@/lib/longPress';
@@ -57,6 +58,14 @@ const PAGE_EDGE = 0.14;
 const FIRST_TURN_MS = 350;
 const NEXT_TURN_MS = 800;
 const DROP_ANIMATION_MS = 180;
+/**
+ * How close to the page's fixed controls (the header above, the drop targets below) a
+ * held card starts scrolling the page, how fast it scrolls at most (px/ms), and how far
+ * the card must move first so picking one up beside the controls does not scroll at once.
+ */
+const SCROLL_EDGE = 72;
+const SCROLL_SPEED = 0.9;
+const SCROLL_ARM_DISTANCE = 12;
 /** How many of a held stack's other cards fly into it; the rest just join the count. */
 const STACK_FLYERS = 6;
 
@@ -119,6 +128,24 @@ function dropIndex(column: HTMLElement, y: number, moving: ReadonlySet<string>) 
   return index < 0 ? cards.length : index;
 }
 
+/**
+ * How far to scroll the page this frame for a card held at `point`: toward the header or
+ * the drop targets once it comes within SCROLL_EDGE of them, faster the closer it is.
+ * Aiming at a drop target itself keeps the page still.
+ */
+function edgeScroll(point: Point, bottomEdge: number, elapsed: number) {
+  if (isOverDropZone(point)) return 0;
+  const topEdge = document.querySelector('[data-page-header]')?.getBoundingClientRect().bottom ?? 0;
+  const depth =
+    point.y > bottomEdge - SCROLL_EDGE
+      ? point.y - (bottomEdge - SCROLL_EDGE)
+      : point.y < topEdge + SCROLL_EDGE
+        ? point.y - (topEdge + SCROLL_EDGE)
+        : 0;
+  const share = Math.min(1, Math.abs(depth) / SCROLL_EDGE);
+  return Math.sign(depth) * share * share * SCROLL_SPEED * elapsed;
+}
+
 function isOverDropZone(point: Point) {
   return [...document.querySelectorAll('[data-drop-zone]')].some((zone) => {
     const rect = zone.getBoundingClientRect();
@@ -130,8 +157,8 @@ function isOverDropZone(point: Point) {
 
 /**
  * Kanban board of deck notes. When narrow, each column is a page of a horizontal pager;
- * wider boards show all columns side by side. Dragging a card reveals "Send to gallery"
- * and "Cancel" targets above the dock.
+ * wider boards show all columns side by side. Dragging a card reveals "Cancel" and
+ * "Send to gallery" targets side by side above the dock.
  */
 export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelectionDone }: Props) {
   const orderedColumns = sortBoardColumns(columns);
@@ -171,6 +198,13 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
   const edge = useRef<{ side: -1 | 0 | 1; timer: number }>({ side: 0, timer: 0 });
   // Removes the pointer listeners that follow a drag.
   const unfollow = useRef<() => void>(null);
+  const dropZones = useRef<HTMLDivElement>(null);
+  // With the dock scrolled away, the targets come down into its place.
+  const dropZonesY = useTransform(() => {
+    const progress = dockScrollProgress.get();
+    return progress === 0 ? 0 : `calc(${progress} * (var(--dock-height) + 0.5rem))`;
+  });
+  const scrollFrame = useRef(0);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     // A long press before dragging keeps touch scrolling (and the pager) working.
@@ -276,6 +310,7 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
     setActive({ note, group, width: rect?.width ?? 280, height: rect?.height ?? 96, origins });
     setHeldStack(group.length > 1);
     held.current = { note, ids };
+    holdDockScroll(true);
     pointer.current = eventPoint(event.activatorEvent);
     setDropTarget({
       column: columnOf(note),
@@ -299,6 +334,36 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
       window.removeEventListener('touchmove', follow);
       window.removeEventListener('mousemove', follow);
     };
+    if (pointer.current) followEdges(pointer.current, ids);
+  }
+
+  // Holding a card near the header or the drop targets scrolls the page (a tall column
+  // runs under them). dnd-kit's auto-scroll measures from the viewport's edges instead,
+  // which on a phone lie behind the targets and the dock.
+  function followEdges(start: Point, ids: ReadonlySet<string>) {
+    let armed = false;
+    let last = performance.now();
+    // Slow scrolling moves less than a pixel a frame; gather it into whole pixels.
+    let carry = 0;
+    const step = (now: number) => {
+      const point = pointer.current;
+      const elapsed = Math.min(now - last, 50);
+      last = now;
+      if (!point || !held.current) return;
+      armed ||= Math.hypot(point.x - start.x, point.y - start.y) >= SCROLL_ARM_DISTANCE;
+      const bottom = dropZones.current?.getBoundingClientRect().top ?? window.innerHeight;
+      const delta = armed ? edgeScroll(point, bottom, elapsed) : 0;
+      carry = delta === 0 ? 0 : carry + delta;
+      const distance = Math.trunc(carry);
+      if (distance !== 0) {
+        carry -= distance;
+        const before = window.scrollY;
+        window.scrollBy({ top: distance, behavior: 'instant' });
+        if (window.scrollY !== before) updateDropTarget(point, ids);
+      }
+      scrollFrame.current = requestAnimationFrame(step);
+    };
+    scrollFrame.current = requestAnimationFrame(step);
   }
 
   function stopEdgeTurns() {
@@ -309,7 +374,9 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
   function endDrag(id?: string) {
     unfollow.current?.();
     unfollow.current = null;
+    cancelAnimationFrame(scrollFrame.current);
     stopEdgeTurns();
+    holdDockScroll(false);
     held.current = null;
     pointer.current = null;
     setDropTarget(null);
@@ -337,6 +404,8 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
   useEffect(
     () => () => {
       unfollow.current?.();
+      cancelAnimationFrame(scrollFrame.current);
+      holdDockScroll(false);
       window.clearTimeout(edge.current.timer);
       window.clearTimeout(settlingTimer.current);
       window.clearTimeout(landingTimer.current);
@@ -468,8 +537,11 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
       sensors={sensors}
       collisionDetection={collisionDetection}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      // Columns turn one at a time (followPointer); still scroll up and down on their own.
-      autoScroll={{ canScroll: (element) => element !== pager.current }}
+      // Columns turn one at a time (followPointer) and the page scrolls near its fixed
+      // controls (followEdges); anything else still scrolls on its own.
+      autoScroll={{
+        canScroll: (element) => element !== pager.current && element !== document.scrollingElement,
+      }}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
@@ -541,9 +613,25 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
           ))}
         </div>
       </div>
-      {/* Cancel sits between the dock and "Send to gallery", nearest the thumb. */}
-      <div className="pointer-events-none fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.5rem)] left-3 z-50 mx-auto flex max-w-md flex-col gap-2">
+      {/* One row above the dock, so a held card can reach most of the page above it. */}
+      <motion.div
+        ref={dropZones}
+        style={{ y: dropZonesY }}
+        className="pointer-events-none fixed right-[calc(var(--note-pane)+0.75rem)] bottom-[calc(var(--dock-bottom)+var(--dock-height)+0.5rem)] left-3 z-50 mx-auto flex max-w-md gap-2"
+      >
         <AnimatePresence>
+          {active && (
+            <DropZone
+              key="cancel"
+              id={CANCEL_DROP_ID}
+              label="Cancel move"
+              icon={X}
+              className="text-destructive"
+              overClassName="bg-destructive/15"
+            >
+              Cancel
+            </DropZone>
+          )}
           {active && (
             <DropZone
               key="gallery"
@@ -553,19 +641,8 @@ export function NoteBoard({ notes, columns, onOpen, selected, onSelect, onSelect
               overClassName="bg-brand/25"
             />
           )}
-          {active && (
-            <DropZone
-              key="cancel"
-              id={CANCEL_DROP_ID}
-              label="Cancel move"
-              icon={X}
-              overClassName="bg-foreground/[0.08]"
-            >
-              Cancel
-            </DropZone>
-          )}
         </AnimatePresence>
-      </div>
+      </motion.div>
       {/* A stack has no one card to fly back to; its cards settle into the column instead. */}
       <DragOverlay dropAnimation={heldStack ? null : { duration: DROP_ANIMATION_MS }}>
         {active && <HeldCards held={active} />}
@@ -919,12 +996,14 @@ function DropZone({
   id,
   label,
   icon: Icon,
+  className,
   overClassName,
   children,
 }: {
   id: string;
   label: string;
   icon: LucideIcon;
+  className?: string;
   overClassName: string;
   /** What the target says, when it differs from its accessible label. */
   children?: ReactNode;
@@ -942,7 +1021,10 @@ function DropZone({
       animate={{ opacity: 1, y: 0, scale: isOver ? 1.06 : 1 }}
       exit={{ opacity: 0, y: 24, scale: 0.9 }}
       transition={springs.bouncy}
-      className="glass pointer-events-auto relative z-0 flex h-[var(--dock-height)] items-center justify-center gap-2 rounded-[var(--dock-radius)] font-medium text-sm"
+      className={cn(
+        'glass pointer-events-auto relative z-0 flex h-[var(--dock-height)] min-w-0 flex-1 items-center justify-center gap-2 rounded-[var(--dock-radius)] font-medium text-sm',
+        className,
+      )}
     >
       {/* Lit like the dock's selected tab, so the glass keeps blurring the page behind it. */}
       <AnimatePresence>
@@ -960,8 +1042,8 @@ function DropZone({
           />
         )}
       </AnimatePresence>
-      <Icon className="size-5" aria-hidden />
-      {children ?? label}
+      <Icon className="size-5 shrink-0" aria-hidden />
+      <span className="truncate">{children ?? label}</span>
     </motion.section>
   );
 }

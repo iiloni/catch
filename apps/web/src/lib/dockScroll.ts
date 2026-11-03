@@ -6,6 +6,15 @@ import { springs } from '@/lib/motion';
 export const dockScrollProgress = motionValue(0);
 const MOVEMENT_THRESHOLD = 48;
 
+let held = false;
+/**
+ * Keeps the dock where it is while on, whichever way the page scrolls. A dragged card
+ * scrolls the page, and the drop targets that take the dock's place must stay put under it.
+ */
+export function holdDockScroll(on: boolean) {
+  held = on;
+}
+
 /** Only document scrolling controls the browsing dock; editors and nested scrollers do not. */
 export function useDockScroll(
   pathname: string,
@@ -45,6 +54,10 @@ export function useDockScroll(
     };
     const onScroll = () => {
       if (!ready) {
+        reset();
+        return;
+      }
+      if (held) {
         reset();
         return;
       }
