@@ -27,6 +27,7 @@ import {
   rememberHistoryContentKey,
 } from './historyEvents';
 import { stopHistoryWorker } from './historyWorker';
+import { currentAccountId } from './storageIdentity';
 import { createStore } from './store';
 import {
   createVaultKey,
@@ -217,7 +218,7 @@ async function dropKeyNow() {
   vaultMode.set(false);
   vaultRemembered.set(false);
   const id = userId();
-  return id ? forgetVaultKey(id) : Promise.resolve();
+  return id ? forgetVaultKey(currentAccountId() ?? id) : Promise.resolve();
 }
 
 function refreshStatus() {
@@ -228,12 +229,12 @@ function refreshStatus() {
     // Deleted on another device.
     if (key && known) void dropKey();
     const id = userId();
-    if (known && id) localStorage.removeItem(vaultSeenKey(id));
+    if (known && id) localStorage.removeItem(vaultSeenKey(currentAccountId() ?? id));
     vaultStatus.set(key ? 'unlocked' : known ? 'none' : 'loading');
     return;
   }
   awaitingRow = null;
-  localStorage.setItem(vaultSeenKey(vault.userId), 'true');
+  localStorage.setItem(vaultSeenKey(currentAccountId() ?? vault.userId), 'true');
   // Deleted and set up again on another device: this key opens none of the new vault.
   if (key && keyVault !== vaultIdentity(vault)) void dropKey();
   vaultStatus.set(key ? 'unlocked' : 'locked');
@@ -323,8 +324,11 @@ async function setRemembered(remember: boolean) {
   const id = userId();
   if (!id) return;
   if (remember && key && keyVault) {
-    await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
-  } else await forgetVaultKey(id);
+    await rememberVaultKey(currentAccountId() ?? id, {
+      ...(await sealForDevice(key)),
+      vault: keyVault,
+    });
+  } else await forgetVaultKey(currentAccountId() ?? id);
   vaultRemembered.set(remember && key !== null);
 }
 
@@ -334,7 +338,7 @@ async function setRemembered(remember: boolean) {
  */
 export function hasSeenVault() {
   const id = userId();
-  return id !== null && localStorage.getItem(vaultSeenKey(id)) === 'true';
+  return id !== null && localStorage.getItem(vaultSeenKey(currentAccountId() ?? id)) === 'true';
 }
 
 /** Starts following the vault: at launch on a device that has seen it, or when first asked for. */
@@ -364,7 +368,7 @@ export function startVault() {
 async function restoreKey() {
   const id = userId();
   if (!id || key) return;
-  const kept = await loadVaultKey(id);
+  const kept = await loadVaultKey(currentAccountId() ?? id);
   if (!kept || key) return;
   const vault = vaultRow();
   const raw =
@@ -372,7 +376,7 @@ async function restoreKey() {
       ? null
       : await openFromDevice(kept.deviceKey, kept.sealed);
   if (!raw || key) {
-    if (!raw) await forgetVaultKey(id);
+    if (!raw) await forgetVaultKey(currentAccountId() ?? id);
     return;
   }
   await adoptKey(raw, { recoveryKey: kept.vault });

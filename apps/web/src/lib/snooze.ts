@@ -1,11 +1,11 @@
 import { DEFAULT_SNOOZE_MINUTES, type SnoozeMinutes, snoozeMinutesSchema } from '@catch/shared';
-import { getSignedInUser } from './auth';
+import { currentAccountId } from './storageIdentity';
 import { createStore } from './store';
 
 export type { SnoozeMinutes };
 
 /** Per user, as the quick times are: two people may share a device. */
-export const snoozeKey = () => `catch-snooze:${getSignedInUser()?.id ?? ''}`;
+export const snoozeKey = () => `catch-snooze:${currentAccountId() ?? ''}`;
 
 function cached(): SnoozeMinutes {
   try {

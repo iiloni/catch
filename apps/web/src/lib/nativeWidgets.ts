@@ -5,13 +5,14 @@ import { z } from 'zod';
 import { getAccounts, getSignedInUser } from './auth';
 import { watchWidgetSnapshot } from './collections';
 import { getServerUrl } from './serverUrl';
+import { currentAccountId } from './storageIdentity';
 import { widgetImagePublisher } from './widgetImages';
 
 const Widgets = registerPlugin<{
   begin(input: {
     account: string;
     server: string;
-    accounts: { id: string; label: string }[];
+    accounts: { id: string; label: string; server?: string }[];
   }): Promise<unknown>;
   sync(input: { session: string; snapshot: WidgetSnapshot }): Promise<void>;
   clear(input: { account?: string }): Promise<void>;
@@ -64,21 +65,28 @@ export const nativeWidgets = {
 /** Each page load gets a native generation, so late writes cannot resurrect signed-out data. */
 export function watchNativeWidgets() {
   const user = getSignedInUser();
-  if (!available || !user || clearedAll || clearedAccounts.has(user.id)) return () => {};
+  const id = currentAccountId();
+  if (!available || !user || !id || clearedAll || clearedAccounts.has(id)) return () => {};
   let stopped = false;
   let stopWatching: (() => void) | undefined;
   let stopImages: (() => void) | undefined;
   const failed = (error: unknown) => console.error('Widgets could not be updated', error);
   void Widgets.begin({
-    account: user.id,
+    account: id,
     server: getServerUrl(),
-    accounts: getAccounts().map(({ user }) => ({ id: user.id, label: user.name || user.email })),
+    accounts: getAccounts().map((account) => ({
+      id: account.id ?? account.user.id,
+      label: account.server
+        ? `${account.user.name || account.user.email} · ${new URL(account.server).host}`
+        : account.user.name || account.user.email,
+      ...(account.server ? { server: account.server } : {}),
+    })),
   })
     .then((result) => {
-      if (stopped || clearedAll || clearedAccounts.has(user.id)) return;
+      if (stopped || clearedAll || clearedAccounts.has(id)) return;
       const { session } = z.object({ session: z.string() }).parse(result);
       const images = widgetImagePublisher((snapshot) => {
-        if (!stopped && !clearedAll && !clearedAccounts.has(user.id))
+        if (!stopped && !clearedAll && !clearedAccounts.has(id))
           void Widgets.sync({ session, snapshot }).catch(failed);
       });
       stopWatching = watchWidgetSnapshot(images.update);

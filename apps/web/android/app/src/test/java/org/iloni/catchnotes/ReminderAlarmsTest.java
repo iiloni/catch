@@ -63,7 +63,7 @@ public class ReminderAlarmsTest {
     public void ringsADueReminderOnce() throws Exception {
         sync(alarms(wall(-2)));
         assertEquals(1, notifications.size());
-        ReminderAlarms.dismiss(context, NOTE);
+        ReminderAlarms.dismiss(context, ACCOUNT, NOTE);
 
         sync(alarms(wall(-2)));
         assertEquals(0, notifications.size());
@@ -75,7 +75,7 @@ public class ReminderAlarmsTest {
         sync(alarms(time));
         assertEquals(1, notifications.size());
         // Done on the notification.
-        ReminderAlarms.dismiss(context, NOTE);
+        ReminderAlarms.dismiss(context, ACCOUNT, NOTE);
 
         // The server moved the reminder on, and the background check brought that.
         ReminderAlarms.store(context, ACCOUNT, new JSONArray());
@@ -89,7 +89,7 @@ public class ReminderAlarmsTest {
     @Test
     public void stillRingsTheReminderSetAgainForLater() throws Exception {
         sync(alarms(wall(-2)));
-        ReminderAlarms.dismiss(context, NOTE);
+        ReminderAlarms.dismiss(context, ACCOUNT, NOTE);
         ReminderAlarms.store(context, ACCOUNT, new JSONArray());
         ReminderAlarms.schedule(context);
 

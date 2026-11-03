@@ -7,7 +7,7 @@ import {
   historyVersionSchema,
 } from '@catch/shared';
 import { z } from 'zod';
-import { getSignedInUser } from './auth';
+import { currentAccountId } from './storageIdentity';
 
 const recordSchema = z.object({
   id: z.string(),
@@ -31,7 +31,7 @@ export const subscribeHistoryStorage = (listener: () => void) => {
   return () => void listeners.delete(listener);
 };
 
-async function openHistory(userId = getSignedInUser()?.id) {
+async function openHistory(userId = currentAccountId()) {
   if (!userId) throw new Error('Sign in to keep history on this device.');
   let promise = databases.get(userId);
   if (!promise) {

@@ -13,10 +13,10 @@ import {
 import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { api } from './api';
-import { getSignedInUser } from './auth';
 import { formatTime } from './clock';
 import { remindersCollection, write } from './collections';
 import { applySnoozeMinutes, onSnoozeChange, snoozeKey, snoozeMinutes } from './snooze';
+import { currentAccountId } from './storageIdentity';
 import { createStore } from './store';
 
 export const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -203,7 +203,7 @@ export function describeRecurrence(recurrence: Recurrence) {
   return text;
 }
 
-const timesKey = () => `catch-reminder-times:${getSignedInUser()?.id ?? ''}`;
+const timesKey = () => `catch-reminder-times:${currentAccountId() ?? ''}`;
 /** Set while a change made on this device has not reached the server. */
 const unsentKey = () => `${timesKey()}:unsent`;
 const snoozeUnsentKey = () => `${snoozeKey()}:unsent`;
@@ -314,7 +314,7 @@ export function defaultReminderStart(now: Date, times: ReminderTimes) {
  * the user is; and brings the quick times and the snooze length in line with the server's.
  */
 export async function syncReminderSettings(userId: string) {
-  const zoneKey = `catch-time-zone:${userId}`;
+  const zoneKey = `catch-time-zone:${currentAccountId() ?? userId}`;
   const timeZone = deviceTimeZone();
   const reported = localStorage.getItem(zoneKey);
   try {

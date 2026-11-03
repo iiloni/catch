@@ -25,7 +25,11 @@ vi.mock('./auth', () => ({
   ],
 }));
 vi.mock('./collections', () => ({ watchWidgetSnapshot: native.watch }));
-vi.mock('./serverUrl', () => ({ getServerUrl: () => 'https://catch.example' }));
+vi.mock('./serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  bindPageServer: () => {},
+  getServerUrl: () => 'https://catch.example',
+}));
 
 import { nativeWidgets, watchNativeWidgets } from './nativeWidgets';
 

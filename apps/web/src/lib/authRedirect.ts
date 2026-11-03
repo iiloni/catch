@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const authRedirectSearchSchema = z.object({
+  server: z.string().url().optional().catch(undefined),
   // A return destination must stay on this origin, including after browser URL normalization.
   redirect: z
     .string()

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { getAuthToken, getSignedInUser } from './auth';
 import { compatibleFetch } from './compatibility';
 import { getServerUrl } from './serverUrl';
+import { currentAccountId } from './storageIdentity';
 
 type StoredFile = { id: string; blob: Blob; pending: boolean; preview: boolean; savedAt: number };
 let database: Promise<IDBDatabase> | null = null;
@@ -100,7 +101,7 @@ function openFiles() {
   const user = getSignedInUser();
   if (!user) return Promise.reject(new Error('Sign in to store attachments'));
   database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(`catch-files-${user.id}`, 1);
+    const request = indexedDB.open(`catch-files-${currentAccountId()}`, 1);
     request.onupgradeneeded = () => request.result.createObjectStore('files', { keyPath: 'id' });
     request.onsuccess = () => {
       request.result.onversionchange = () => {
@@ -189,7 +190,7 @@ export async function clearAttachmentFiles() {
   objectUrls.clear();
   accessUrls.clear();
   const user = getSignedInUser();
-  if (user) await deleteAttachmentFiles(user.id);
+  if (user) await deleteAttachmentFiles(currentAccountId() ?? user.id);
 }
 
 /** Deletes the files kept on this device for one account, which need not be the one in use. */

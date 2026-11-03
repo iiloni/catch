@@ -5,14 +5,19 @@ const auth = vi.hoisted(() => ({ signIn: vi.fn(), signUp: vi.fn() }));
 vi.mock('@/lib/auth', () => ({
   authClient: { signIn: { email: auth.signIn }, signUp: { email: auth.signUp } },
   getAccounts: () => [],
+  getReturnAccount: () => undefined,
   getSignedInUser: () => null,
   activateAccount: () => false,
 }));
+vi.mock('@/lib/accounts', () => ({ openAccountPage: vi.fn() }));
 vi.mock('@/lib/webUpdates', () => ({
   updateSignedOutPage: async () => {},
   useWebUpdates: () => ({ reloading: false }),
 }));
-vi.mock('@/lib/serverUrl', () => ({ needsServerUrl: () => false }));
+vi.mock('@/lib/serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  needsServerUrl: () => false,
+}));
 vi.mock('@/components/BrandLockup/BrandLockup', () => ({ BrandLockup: () => <img alt="Catch" /> }));
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-router')>()),
