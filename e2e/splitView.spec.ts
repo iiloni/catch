@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   APP_LOAD_TIMEOUT,
   card,
+  caretToEnd,
   moveNote,
   noteToolbar,
   openDeck,
@@ -375,6 +376,71 @@ test('link and media previews crossfade into their column throughout note expans
   expect((await settledBox(surface)).width).toBeCloseTo(after.width, 0);
   await expect(inline).toBeHidden();
   await expect(side.getByRole('region', { name: 'Links', exact: true })).toBeVisible();
+});
+
+test('the extras column springs open and shut as a note gains and loses its only link', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 740, height: 860 });
+  await signUp(page);
+  await seedNotes(page, [{ title: 'Growing extras', body: 'Plain text' }]);
+  const dialog = await openNote(page, 'Growing extras');
+  await dialog.getByRole('button', { name: 'Expand note', exact: true }).click();
+  const surface = dialog.locator('[data-note-scroll]');
+  const wide = await settledBox(surface);
+  // Card widths, frame by frame, from the first change until it has rested for half a second.
+  const record = () =>
+    page.evaluate(
+      () =>
+        new Promise<number[]>((resolve) => {
+          const read = () =>
+            document.querySelector('[role="dialog"] [data-note-scroll]')?.getBoundingClientRect()
+              .width ?? 0;
+          const start = read();
+          const widths: number[] = [];
+          let restingSince = 0;
+          const end = performance.now() + 10_000;
+          function capture(now: number) {
+            const width = read();
+            if (widths.length || width !== start) {
+              if (widths.length && width === widths[widths.length - 1]) {
+                restingSince ||= now;
+              } else {
+                restingSince = 0;
+              }
+              widths.push(width);
+            }
+            if (now > end || (restingSince && now - restingSince > 500)) resolve(widths);
+            else requestAnimationFrame(capture);
+          }
+          requestAnimationFrame(capture);
+        }),
+    );
+
+  const editor = dialog.getByRole('textbox');
+  await caretToEnd(editor);
+  const link = ' https://example.com/extra';
+  const opening = record();
+  await page.keyboard.type(link);
+  const narrowing = await opening;
+  const narrow = await settledBox(surface);
+  expect(narrow.width).toBeLessThan(wide.width - 200);
+  await expect(
+    dialog.locator('[data-note-extras="side"]').getByRole('region', { name: 'Links', exact: true }),
+  ).toBeVisible();
+  const between = (widths: number[]) =>
+    new Set(
+      widths
+        .filter((width) => width > narrow.width + 2 && width < wide.width - 2)
+        .map((width) => Math.round(width)),
+    ).size;
+  expect(between(narrowing)).toBeGreaterThan(4);
+
+  const closing = record();
+  for (let i = 0; i < link.length; i++) await page.keyboard.press('Backspace');
+  const widening = await closing;
+  expect((await settledBox(surface)).width).toBeCloseTo(wide.width, 0);
+  expect(between(widening)).toBeGreaterThan(4);
 });
 
 test('the scrolled page edge blur paints continuously behind both split panes', async ({
