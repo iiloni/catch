@@ -86,10 +86,11 @@ tries leads to the PIN, then the password. A change in the phone's fingerprints 
 fingerprint unlock off with a note saying why, and the next unlock with the PIN or password
 offers once to turn it on again. Locking keeps it. Switching it off, switching off Lock
 automatically (a vault that stays open needs no way back in), signing out and the vault being
-deleted or replaced remove it, deleting the Keystore key with the sealed copy. Turning it
-off fails loudly when either cannot be deleted, while one that opens nothing any
-longer goes even if its deletion fails, as with the PIN. Keystore protection for the PIN's
-copy, and unlocking with a passkey on the web, were left out.
+deleted or replaced remove it, deleting the Keystore key and the sealed copy. Turning it
+off fails loudly when either cannot be deleted. The others go on regardless, as with the PIN:
+a copy for a deleted or replaced vault opens nothing, and signing out deletes the key and the
+copy separately, so only when both deletions fail is a pair left behind. Keystore protection
+for the PIN's copy, and unlocking with a passkey on the web, were left out.
 
 **Forgetting both secrets loses the notes.** The recovery code is shown once at setup and
 kept nowhere. Without the password or the code nobody can open the vault; the only way on

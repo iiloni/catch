@@ -289,6 +289,20 @@ function FormError({ children }: { children: string | null }) {
   );
 }
 
+/**
+ * A form's error, or the gate's notice when that is newer: a fingerprint giving way after a
+ * wrong PIN or password shows why, rather than the old error.
+ */
+function useFormError(notice: string | null) {
+  const [error, setError] = useState<string | null>(null);
+  const [seen, setSeen] = useState(notice);
+  if (notice !== seen) {
+    setSeen(notice);
+    setError(null);
+  }
+  return [error ?? notice, setError] as const;
+}
+
 const failure = (error: unknown) =>
   error instanceof Error && error.message ? error.message : 'Something went wrong. Try again.';
 
@@ -380,7 +394,7 @@ function Unlock({
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useFormError(notice);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -416,7 +430,7 @@ function Unlock({
         />
         {/* A device with a PIN or fingerprint keeps it; remembering the vault would end it. */}
         {!quick && <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />}
-        <FormError>{error ?? notice}</FormError>
+        <FormError>{error}</FormError>
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
@@ -493,7 +507,7 @@ function UnlockWithPin({
   const id = useId();
   const [pin, setPin] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useFormError(notice);
 
   async function attempt(candidate: string) {
     if (pending) return;
@@ -553,7 +567,7 @@ function UnlockWithPin({
             }}
           />
         </label>
-        <FormError>{error ?? notice}</FormError>
+        <FormError>{error}</FormError>
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>

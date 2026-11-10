@@ -467,6 +467,16 @@ const pinState = (kept: { length: number; failures: number }) => ({
   left: Math.max(0, PIN_ATTEMPTS - kept.failures),
 });
 
+/**
+ * Whether a PIN or fingerprint kept for `vault` may still open the user's vault. Read when
+ * the device reads them, which can end after the first sync: `refreshStatus` saw no PIN or
+ * fingerprint to drop then, so a vault deleted meanwhile is caught here.
+ */
+function forThisVault(vault: string) {
+  const row = vaultRow();
+  return row ? vault === vaultIdentity(row) : !vaultCollection.isReady();
+}
+
 /** Reads whether this device has a PIN for the vault. */
 async function restorePin() {
   const id = userId();
@@ -478,7 +488,7 @@ async function restorePin() {
     // Unreadable for now: the vault asks for its password, and the PIN is read next launch.
     return;
   }
-  if (kept && !usablePin(kept, vaultRow())) {
+  if (kept && (!usablePin(kept, vaultRow()) || !forThisVault(kept.vault))) {
     await dropPin(id);
     return;
   }
@@ -496,8 +506,7 @@ async function restoreBiometrics() {
   } catch {
     return;
   }
-  const vault = vaultRow();
-  if (kept && vault && kept.vault !== vaultIdentity(vault)) {
+  if (kept && !forThisVault(kept.vault)) {
     await dropBiometrics(id);
     return;
   }
@@ -786,6 +795,9 @@ export async function enableVaultBiometrics(prompt: BiometricPromptText) {
   const { id, key: current } = unlocked();
   const vault = keyVault;
   if (!vault) throw new VaultError('The vault is locked.');
+  // The phone replaces the Keystore key before the prompt, so a dismissed prompt here would
+  // leave a working copy unopenable.
+  if (vaultBiometrics.get()) return;
   // A copy: locking meanwhile wipes the key in place.
   const raw = current.slice();
   let sealed: Awaited<ReturnType<typeof sealWithBiometrics>>;
