@@ -237,6 +237,12 @@ test('a PIN set on this device opens the vault in place of its password', async 
   await gate(page).getByLabel('Vault password').fill(PASSWORD);
   await gate(page).getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(gate(page)).toBeHidden();
+  // A vault that never locks has nothing for a PIN to open.
+  const autoLock = page.getByRole('switch', { name: 'Lock automatically' });
+  await expect(autoLock).toBeChecked();
+  await autoLock.click();
+  await expect(pinSwitch).toHaveCount(0);
+  await autoLock.click();
   await pinSwitch.click();
   const dialog = page.getByRole('dialog', { name: 'Set a PIN' });
   await dialog.getByLabel('PIN', { exact: true }).fill('24');

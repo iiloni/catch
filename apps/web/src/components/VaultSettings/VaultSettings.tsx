@@ -3,7 +3,7 @@ import {
   LockKeyhole,
   LockKeyholeOpen,
   RectangleEllipsis,
-  Smartphone,
+  Timer,
   Trash2,
 } from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
@@ -55,44 +55,41 @@ export function VaultSettings() {
 
   if (status === 'none' || status === 'loading') {
     return (
-      <SettingsSection
-        title="Vault"
-        description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
-      >
+      <div className="flex flex-col gap-6">
         <VaultButtonSetting />
-        <SettingsRow
-          icon={LockKeyhole}
-          label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
-          description={status === 'none' ? 'Set one up to keep private notes' : undefined}
+        <SettingsSection
+          title="Vault"
+          description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
         >
-          {status === 'none' && (
-            <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
-              Set up
-            </Button>
-          )}
-        </SettingsRow>
-      </SettingsSection>
+          <SettingsRow
+            icon={LockKeyhole}
+            label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
+            description={status === 'none' ? 'Set one up to keep private notes' : undefined}
+          >
+            {status === 'none' && (
+              <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
+                Set up
+              </Button>
+            )}
+          </SettingsRow>
+        </SettingsSection>
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection
-        title="This device"
-        description="The vault locks when you leave it and after five minutes in the background. With a PIN it opens again with the PIN, and locks after a minute in the background or five minutes untouched. A device that remembers the vault opens it without either, for anyone who can open Catch here."
-      >
-        <VaultButtonSetting />
+      <VaultButtonSetting />
+      <SettingsSection title="This device">
         <SettingsRow
           icon={unlocked ? LockKeyholeOpen : LockKeyhole}
           label={unlocked ? 'Unlocked' : 'Locked'}
           description={
             unlocked
-              ? pin
-                ? 'Lock it until the PIN is entered'
-                : 'Lock it and forget its key here'
+              ? 'Lock it on this device'
               : pin
-                ? 'Enter the PIN to open it'
-                : 'Enter the password to open it'
+                ? 'Opens with your PIN'
+                : 'Opens with your password'
           }
         >
           <Button
@@ -108,54 +105,60 @@ export function VaultSettings() {
           </Button>
         </SettingsRow>
         <SettingsRow
-          icon={RectangleEllipsis}
-          label="Unlock with a PIN"
+          icon={Timer}
+          label="Lock automatically"
           description={
-            pin
-              ? 'Asked for here in place of the password'
-              : unlocked
-                ? 'Four to eight digits, for this device only'
-                : 'Unlock the vault to set one'
+            !unlocked
+              ? 'Unlock to change'
+              : remembered
+                ? 'Stays open on this device'
+                : 'When you leave it or go idle'
           }
         >
           <Switch
-            aria-label="Unlock with a PIN"
-            checked={pin !== null}
-            disabled={!pin && !unlocked}
+            aria-label="Lock automatically"
+            checked={!remembered}
+            disabled={!unlocked}
             onCheckedChange={(checked) => {
               haptics.toggle();
-              if (checked) setDialog('pin');
-              else void removeVaultPin();
+              // A vault that never locks has nothing for a PIN to open, so the PIN goes.
+              if (!checked && pin) toast('PIN turned off');
+              void rememberVault(!checked);
             }}
           />
         </SettingsRow>
-        {pin && unlocked && (
-          <SettingsRow icon={RectangleEllipsis} label="Change PIN">
-            <Button
-              variant="outline"
-              className="h-11 rounded-full"
-              onClick={() => setDialog('pin')}
+        {/* Ways back in, which only a vault that locks needs. */}
+        {!remembered && (
+          <div className="flex flex-col divide-y divide-foreground/[0.06] pl-8">
+            <SettingsRow
+              icon={RectangleEllipsis}
+              label="Unlock with a PIN"
+              description={pin || unlocked ? 'Instead of the password' : 'Unlock to set one'}
             >
-              Change
-            </Button>
-          </SettingsRow>
+              <Switch
+                aria-label="Unlock with a PIN"
+                checked={pin !== null}
+                disabled={!pin && !unlocked}
+                onCheckedChange={(checked) => {
+                  haptics.toggle();
+                  if (checked) setDialog('pin');
+                  else void removeVaultPin();
+                }}
+              />
+            </SettingsRow>
+            {pin && unlocked && (
+              <SettingsRow label={<span className="pl-8">Change PIN</span>}>
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-full"
+                  onClick={() => setDialog('pin')}
+                >
+                  Change
+                </Button>
+              </SettingsRow>
+            )}
+          </div>
         )}
-        <SettingsRow
-          icon={Smartphone}
-          label="Remember on this device"
-          description={
-            unlocked
-              ? 'Keep the vault open here, with no password or PIN'
-              : 'Unlock the vault to change this'
-          }
-        >
-          <Switch
-            aria-label="Remember on this device"
-            checked={remembered}
-            disabled={!unlocked}
-            onCheckedChange={(checked) => void rememberVault(checked)}
-          />
-        </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Vault">
         <SettingsRow
@@ -204,20 +207,22 @@ function VaultButtonSetting() {
   const [shown, setShown] = useShowVaultButton();
 
   return (
-    <SettingsRow
-      icon={LockKeyhole}
-      label="Show vault button"
-      description="Header shortcut on this device"
-    >
-      <Switch
-        aria-label="Show vault button"
-        checked={shown}
-        onCheckedChange={(checked) => {
-          haptics.toggle();
-          setShown(checked);
-        }}
-      />
-    </SettingsRow>
+    <SettingsSection title="Vault button">
+      <SettingsRow
+        icon={LockKeyhole}
+        label="Show vault button"
+        description="Header shortcut on this device"
+      >
+        <Switch
+          aria-label="Show vault button"
+          checked={shown}
+          onCheckedChange={(checked) => {
+            haptics.toggle();
+            setShown(checked);
+          }}
+        />
+      </SettingsRow>
+    </SettingsSection>
   );
 }
 
@@ -380,9 +385,7 @@ function SetVaultPin({
       <DialogContent showCloseButton={!pending} className={DIALOG}>
         <DialogTitle>{replacing ? 'Change PIN' : 'Set a PIN'}</DialogTitle>
         <DialogDescription>
-          This device will ask for the PIN in place of the vault password. It keeps out someone who
-          picks up the device, not someone who can copy its files. Five wrong PINs in a row turn it
-          off, and the vault asks for its password.
+          Four to eight digits, for this device only. Five wrong tries turn it off.
         </DialogDescription>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           {fields.map(([name, label, value, set]) => (
