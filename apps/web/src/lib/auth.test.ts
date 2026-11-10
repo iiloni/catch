@@ -337,7 +337,7 @@ describe('several accounts on one device', () => {
       window.history.replaceState(null, '', '/archive');
       await load();
       expect(address()).toBe('/archive');
-      expect(auth.basePath).toBe('');
+      expect(auth.basePath()).toBe('');
       expect(auth.accountPath(user.id, '/archive')).toBe('/archive');
     });
 
@@ -346,7 +346,7 @@ describe('several accounts on one device', () => {
       window.history.replaceState(null, '', '/archive?note=abc');
       await load();
       expect(address()).toBe('/u/2/archive?note=abc');
-      expect(auth.basePath).toBe('/u/2');
+      expect(auth.basePath()).toBe('/u/2');
       expect(auth.currentPath()).toBe('/archive');
       expect(auth.pagePath('/settings/update')).toBe('/u/2/settings/update');
       expect(auth.accountPath(user.id)).toBe('/u/1/');
@@ -375,7 +375,7 @@ describe('several accounts on one device', () => {
       await load();
       expect(auth.getSignedInUser()).toEqual(user);
       expect(address()).toBe('/u/1/deck');
-      expect(auth.basePath).toBe('/u/1');
+      expect(auth.basePath()).toBe('/u/1');
     });
 
     it('asks to sign in for an address that names nobody signed in', async () => {
@@ -400,6 +400,78 @@ describe('several accounts on one device', () => {
       expect(auth.accountPath('third-user')).toBe('/u/3/');
       signIn('first-again');
       expect(auth.accountPath(user.id)).toBe('/u/1/');
+    });
+
+    it('numbers the accounts in the order they are put in', async () => {
+      await signInBoth();
+      window.history.replaceState({ key: 'entry' }, '', '/u/2/archive?note=abc#top');
+      await load();
+      auth.reorderAccounts([other.id, user.id]);
+      expect(auth.getAccounts().map(({ user }) => user.id)).toEqual([other.id, user.id]);
+      expect(auth.accountPath(other.id)).toBe('/u/1/');
+      expect(auth.accountPath(user.id)).toBe('/u/2/');
+      // The page stays as it was and its address follows its account's new number.
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(window.location.href).toBe(`${window.location.origin}/u/1/archive?note=abc#top`);
+      expect(window.history.state).toEqual({ key: 'entry' });
+      expect(auth.basePath()).toBe('/u/1');
+      expect(auth.pagePath('/deck')).toBe('/u/1/deck');
+      expect(auth.currentPath()).toBe('/archive');
+      // The new numbers hold when the page loads again.
+      await load();
+      expect(auth.getSignedInUser()).toEqual(other);
+      expect(address()).toBe('/u/1/archive?note=abc');
+    });
+
+    it('moves another tab’s address when it hears of a reorder', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/2/archive');
+      await load();
+      // Another tab put the second account first.
+      const accounts = auth.getAccounts();
+      localStorage.setItem('catch-accounts', JSON.stringify([...accounts].reverse()));
+      localStorage.setItem(
+        'catch-account-numbers',
+        JSON.stringify({ [other.id]: 1, [user.id]: 2 }),
+      );
+      auth.followAccountNumber();
+      expect(address()).toBe('/u/1/archive');
+      expect(auth.getSignedInUser()).toEqual(other);
+    });
+
+    it('takes any account number off the router’s paths, and adds the page’s', async () => {
+      await signInBoth();
+      window.history.replaceState(null, '', '/u/2/');
+      await load();
+      const url = (path: string) => new URL(path, window.location.origin);
+      // An entry made before a reorder still names the old number.
+      expect(auth.routerRewrite.input({ url: url('/u/1/archive') }).pathname).toBe('/archive');
+      expect(auth.routerRewrite.input({ url: url('/u/2') }).pathname).toBe('/');
+      expect(auth.routerRewrite.output({ url: url('/archive') }).pathname).toBe('/u/2/archive');
+    });
+
+    it('gives a signed-out account a number nobody has once a reorder takes its own', async () => {
+      await signInBoth();
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      auth.forgetAccount(other.id);
+      // First 1, third 3: the reorder makes them 1 and 2, and the second, signed out, moves on.
+      auth.reorderAccounts(['third-user', user.id]);
+      expect(auth.accountPath('third-user')).toBe('/u/1/');
+      expect(auth.accountPath(user.id)).toBe('/u/2/');
+      signIn('second-again', other);
+      expect(auth.accountPath(other.id)).toBe('/u/3/');
+    });
+
+    it('puts an account that signs in again back in its numbered place', async () => {
+      await signInBoth();
+      signIn('third-token', { id: 'third-user', name: '', email: 'third@example.com' });
+      auth.forgetAccount(other.id);
+      signIn('second-again', other);
+      expect(auth.getAccounts().map(({ user }) => user.id)).toEqual([
+        user.id,
+        other.id,
+        'third-user',
+      ]);
     });
 
     it('has no numbers in the phone’s app', async () => {

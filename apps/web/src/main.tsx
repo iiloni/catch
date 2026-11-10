@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { basePath } from './lib/auth';
+import { onAccountNumberChange, routerRewrite } from './lib/auth';
 import { pageTransition } from './lib/dockState';
 import { rememberHomePage, restoreHomePage } from './lib/homePage';
 import { startKeyboardTracking } from './lib/keyboard';
@@ -21,7 +21,8 @@ restoreHomePage();
 const router = createRouter({
   routeTree,
   // A page of one of several accounts is at `/u/<number>/…` (ADR 0019); routes never say so.
-  basepath: basePath || undefined,
+  // Not a `basepath`, which is fixed: reordering the accounts changes the number.
+  rewrite: routerRewrite,
   // Pages slide in the direction of travel (see the view transition styles in styles.css).
   // Without transition types the router would cross-fade every navigation, opening notes too.
   defaultViewTransition: CSS.supports('selector(:active-view-transition-type(a))')
@@ -31,6 +32,10 @@ const router = createRouter({
       }
     : false,
 });
+
+// A rewrite the router has not seen makes it parse the address again and its links rebuild
+// theirs, now with the account's new number.
+onAccountNumberChange(() => router.update({ ...router.options, rewrite: { ...routerRewrite } }));
 
 declare module '@tanstack/react-router' {
   interface Register {

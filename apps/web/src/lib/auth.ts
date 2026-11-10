@@ -146,16 +146,39 @@ function resolvePage(): { userId: string | null; prefix: string } {
 const page = resolvePage();
 
 /**
- * What this page's addresses start with: `/u/<number>` or nothing. The router is mounted on
- * it, so routes and links never mention it; only a full page load has to (`accountPath`).
+ * What this page's addresses start with: `/u/<number>` or nothing. It changes when the
+ * accounts are reordered (`followAccountNumber`), without the page loading again.
  */
-export const basePath = page.prefix;
+let prefix = page.prefix;
+
+/** The address without the account's number, as routes name it. */
+const withoutNumber = (pathname: string) =>
+  (numbersAddresses() ? pathname.replace(NUMBERED, '') : pathname) || '/';
+
+/**
+ * Keeps the account's number out of the router's sight, so routes and links never mention it;
+ * only a full page load has to (`accountPath`). Any number is taken off, not only the page's:
+ * after a reorder, the entries this tab made before it still carry the old one.
+ */
+export const routerRewrite = {
+  input: ({ url }: { url: URL }) => {
+    url.pathname = withoutNumber(url.pathname);
+    return url;
+  },
+  output: ({ url }: { url: URL }) => {
+    if (prefix) url.pathname = prefix + url.pathname;
+    return url;
+  },
+};
+
+/** What this page's addresses start with now: `/u/<number>`, or nothing. */
+export const basePath = () => prefix;
 
 /** The address of a page of this tab's account, for a plain link or a full page load. */
-export const pagePath = (path: string) => basePath + path;
+export const pagePath = (path: string) => prefix + path;
 
 /** The path of the page showing, as routes name it. */
-export const currentPath = () => window.location.pathname.slice(basePath.length) || '/';
+export const currentPath = () => withoutNumber(window.location.pathname);
 
 /**
  * The account this page was loaded for. Collections open that user's database when the app
@@ -207,11 +230,18 @@ function clearActive() {
 function saveAccount(account: Account, activate: boolean) {
   const accounts = getAccounts();
   const known = accounts.some(({ user }) => user.id === account.user.id);
-  writeAccounts(
-    known
-      ? accounts.map((other) => (other.user.id === account.user.id ? account : other))
-      : [...accounts, account],
-  );
+  if (known) {
+    writeAccounts(accounts.map((other) => (other.user.id === account.user.id ? account : other)));
+  } else {
+    // An account signing in again takes its place in the order its number gives it, so the
+    // list keeps reading as the addresses count.
+    const numbers = accountNumbers();
+    const number = numbers[account.user.id];
+    const after = number ? accounts.findIndex(({ user }) => (numbers[user.id] ?? 0) > number) : -1;
+    if (after < 0) accounts.push(account);
+    else accounts.splice(after, 0, account);
+    writeAccounts(accounts);
+  }
   if (activate || activeUser()?.id === account.user.id) writeActive(account);
 }
 
@@ -243,6 +273,78 @@ export function activateAccount(userId: string): boolean {
   writeActive(account);
   return true;
 }
+
+/**
+ * Puts the device's accounts in this order, as the list and the swipe go through them, and
+ * numbers their addresses after it: the first is `/u/1`, the next `/u/2`. A signed-out account
+ * keeps the number it had unless one signed in has taken it; then it gets one nobody has.
+ * Open tabs move to their account's new address (`followAccountNumber`); a bookmark or an
+ * address another tab has not yet replaced names whoever has the number now.
+ */
+export function reorderAccounts(userIds: string[]) {
+  const accounts = getAccounts();
+  const rank = (userId: string) => {
+    const index = userIds.indexOf(userId);
+    return index < 0 ? userIds.length : index;
+  };
+  // Any account the caller did not know of (signed in by another tab meanwhile) goes last.
+  const ordered = [...accounts].sort((a, b) => rank(a.user.id) - rank(b.user.id));
+  const old = accountNumbers();
+  const numbers: Record<string, number> = {};
+  ordered.forEach(({ user }, index) => {
+    numbers[user.id] = index + 1;
+  });
+  let last = ordered.length;
+  const displaced: string[] = [];
+  for (const [userId, number] of Object.entries(old).sort(([, a], [, b]) => a - b)) {
+    if (numbers[userId]) continue;
+    if (number > ordered.length) {
+      numbers[userId] = number;
+      last = Math.max(last, number);
+    } else {
+      displaced.push(userId);
+    }
+  }
+  for (const userId of displaced) numbers[userId] = ++last;
+  writeAccounts(ordered);
+  localStorage.setItem(sessionKey(NUMBERS_KEY), JSON.stringify(numbers));
+  followAccountNumber();
+}
+
+/**
+ * Moves this page's address to its account's number after the accounts were reordered, here
+ * or in another tab. The page stays as it is: only the number in the address bar changes.
+ */
+export function followAccountNumber() {
+  if (!prefix || !pageUserId || pageAccountGone()) return;
+  const next = prefixFor(pageUserId);
+  if (next === prefix) return;
+  prefix = next;
+  showOwnNumber();
+  for (const listener of numberListeners) listener();
+}
+
+const numberListeners = new Set<() => void>();
+
+/** Calls back when this page's account number changes, for links to rebuild their addresses. */
+export function onAccountNumberChange(listener: () => void) {
+  numberListeners.add(listener);
+  return () => numberListeners.delete(listener);
+}
+
+/** Writes the page's number into the address bar, if it shows another. */
+function showOwnNumber() {
+  const url = new URL(window.location.href);
+  url.pathname = prefix + withoutNumber(url.pathname);
+  // The router's own entry, its key and scroll position included, only changes address.
+  if (url.href !== window.location.href) {
+    window.history.replaceState(window.history.state, '', url);
+  }
+}
+
+// Going back or forward to an entry this tab made before a reorder shows its old number,
+// which now names someone else to a copy of the address or a reload.
+if (numbersAddresses()) window.addEventListener('popstate', () => prefix && showOwnNumber());
 
 /** Whether the account this page was loaded for has been signed out, here or in another tab. */
 export function pageAccountGone() {

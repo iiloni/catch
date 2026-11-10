@@ -35,15 +35,27 @@ addresses start with the account's number on the device: `/u/2/archive`,
 `/u/2/?note=<id>`. So a bookmark, a copied address or a link opened in a new tab leads to
 the same account's page, whatever the tab or the device was last showing. `lib/auth.ts`
 reads the number when the page loads, before anything asks whose page it is, and the
-router is mounted on the prefix (`basepath`), so routes and links never mention it. Only a
-full page load to another account has to: `accountPath` builds its address, and `pagePath`
-that of a plain link within this one.
+router takes any number off the addresses it reads and puts the page's on those it writes
+(`routerRewrite`), so routes and links never mention it. Only a full page load to another
+account has to: `accountPath` builds its address, and `pagePath` that of a plain link within
+this one.
 
 - Numbers are per device, given in the order accounts first signed in here
-  (`catch-account-numbers`). A number is kept after a sign-out: it is never given to
-  another account, and an account that signs in again has the number its bookmarks name.
-  The user's id would be the same on every device, but makes an address nobody can read or
-  type.
+  (`catch-account-numbers`). A number is kept after a sign-out, and an account that signs
+  in again has the number its bookmarks name and its old place in the list. The user's id
+  would be the same on every device, but makes an address nobody can read or type.
+- The accounts can be put in order (`reorderAccounts`), by dragging them in the switcher's
+  list or with the arrow keys there. The order is the list's and the swipe's, and it
+  renumbers the addresses: the first account is `/u/1`, the next `/u/2`. Otherwise the order
+  in which accounts happened to sign in would fix their numbers for good. A signed-out
+  account keeps its number unless one signed in has taken it, and then gets one nobody has,
+  so a number never names two accounts at once. A reorder is the one time a number passes
+  from one account to another, and bookmarks follow the number, not the account.
+- An open tab follows its account to the new number without loading again
+  (`followAccountNumber`, on the storage event in other tabs). Only the address bar
+  changes. The router reads past any number, so going back to an entry the tab made
+  before the reorder still works within the page; loading such an entry from scratch, or
+  an address saved elsewhere, opens whoever has its number now.
 - An address with no number means the tab's account, or for a new tab the one last used.
   It gains the number when the page loads if several accounts are signed in. With one
   account, addresses stay as they were: there is nobody to tell apart, and an existing
@@ -133,6 +145,8 @@ together. Migration `0010` only changes the table's key.
 - Code that reads `window.location.pathname` sees the number. Compare `currentPath()`
   instead, and build an absolute link outside the router with `pagePath`.
 - The ids of accounts that signed out stay on the device with their numbers.
+- After a reorder, bookmarks, addresses copied before it and history entries loaded from
+  scratch name accounts by their old numbers, which may now be someone else's.
 - An account whose session has ended stays in the device's list until it signs in again or
   is signed out. Until then it keeps ringing: the server still has its subscription, and
   the phone keeps the alarms it had without refreshing them.

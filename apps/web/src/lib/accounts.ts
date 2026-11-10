@@ -6,6 +6,7 @@ import {
   activateAccount,
   authClient,
   clearAuthToken,
+  followAccountNumber,
   forgetAccount,
   getAccounts,
   getSignedInUser,
@@ -103,7 +104,8 @@ async function stopRinging(account: Account) {
 /**
  * Leaves an account that was signed out in another tab. This page holds its notes and
  * outbox, so it loads again as another account, or at sign-in, once it holds no open note
- * or composer whose text the load would drop. A switch in another tab changes nothing here.
+ * or composer whose text the load would drop. A switch in another tab changes nothing here;
+ * a reorder there changes only the number in this page's address.
  */
 export function followAccountChanges() {
   let waiting: (() => void)[] = [];
@@ -125,7 +127,9 @@ export function followAccountChanges() {
     void cleared.then(() => window.location.assign('/'));
   };
   const onStorage = (event: StorageEvent) => {
-    if (event.storageArea === localStorage) follow();
+    if (event.storageArea !== localStorage) return;
+    followAccountNumber();
+    follow();
   };
   window.addEventListener('storage', onStorage);
   return () => {

@@ -1,7 +1,22 @@
 import { Link } from '@tanstack/react-router';
-import { Check, LogOut, Plus } from 'lucide-react';
-import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
-import { type PointerEvent, useEffect, useRef, useState } from 'react';
+import { Check, GripVertical, LogOut, Plus } from 'lucide-react';
+import {
+  animate,
+  type DragControls,
+  motion,
+  Reorder,
+  useDragControls,
+  useMotionValue,
+  useReducedMotion,
+} from 'motion/react';
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { AccountAvatar } from '@/components/AccountSummary/AccountSummary';
 import { Button } from '@/components/ui/button';
@@ -14,7 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { signOutAccount, switchAccount, unsyncedChanges } from '@/lib/accounts';
-import { type Account, getAccounts, getSignedInUser } from '@/lib/auth';
+import { type Account, getAccounts, getSignedInUser, reorderAccounts } from '@/lib/auth';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
 import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
@@ -45,14 +60,22 @@ type Swipe = { axis: 'x' | 'y'; target: Account | null; from: 1 | -1 };
 /**
  * The avatar in the Gallery header (ADR 0019). A swipe across it, in any direction, changes
  * to the next or previous account signed in on this device; a tap opens the list of them,
- * where accounts are added and signed out.
+ * where accounts are added, signed out and put in order. The order numbers their addresses.
  */
 export function AccountSwitcher() {
-  const [accounts, setAccounts] = useState(getAccounts);
+  const [accounts, setAccountsState] = useState(getAccounts);
+  // Read when a drag ends, which can come before the last move of it has rendered.
+  const latest = useRef(accounts);
+  const setAccounts = (next: Account[]) => {
+    latest.current = next;
+    setAccountsState(next);
+  };
   useEffect(() => {
     // Another tab may add an account or sign one out.
     const refresh = (event: StorageEvent) => {
-      if (event.storageArea === localStorage) setAccounts(getAccounts());
+      if (event.storageArea !== localStorage) return;
+      latest.current = getAccounts();
+      setAccountsState(latest.current);
     };
     window.addEventListener('storage', refresh);
     return () => window.removeEventListener('storage', refresh);
@@ -141,6 +164,31 @@ export function AccountSwitcher() {
     void settle(0).then(() => setSwipe(null));
   }
 
+  /** Saves the order the list shows, which renumbers the accounts' addresses. */
+  function saveOrder() {
+    const order = latest.current.map(({ user }) => user.id);
+    if (
+      order.join() ===
+      getAccounts()
+        .map(({ user }) => user.id)
+        .join()
+    )
+      return;
+    reorderAccounts(order);
+  }
+
+  function move(account: Account, step: 1 | -1) {
+    const from = accounts.indexOf(account);
+    const to = from + step;
+    if (from < 0 || to < 0 || to >= accounts.length) return;
+    const next = [...accounts];
+    next.splice(from, 1);
+    next.splice(to, 0, account);
+    setAccounts(next);
+    haptics.selection();
+    saveOrder();
+  }
+
   /** Signing out deletes the account's notes from the device, so it is always asked first. */
   async function askToSignOut(account: Account) {
     if (account === current && !canLeave('signing out')) return;
@@ -204,12 +252,28 @@ export function AccountSwitcher() {
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={12} className="flex w-72 flex-col gap-1 p-2">
-          <ul aria-label="Accounts" className="flex flex-col gap-1">
+        <PopoverContent align="end" sideOffset={12} className="flex w-80 flex-col gap-1 p-2">
+          <Reorder.Group
+            as="ul"
+            axis="y"
+            values={accounts}
+            onReorder={(next) => {
+              if (next.some((account, i) => account !== accounts[i])) haptics.selection();
+              setAccounts(next);
+            }}
+            aria-label="Accounts"
+            className="flex flex-col gap-1"
+          >
             {accounts.map((account) => {
               const active = account === current;
               return (
-                <li key={account.user.id} className="flex items-center gap-1">
+                <AccountRow
+                  key={account.user.id}
+                  account={account}
+                  movable={accounts.length > 1 && leaving === null}
+                  onMove={(step) => move(account, step)}
+                  onDrop={saveOrder}
+                >
                   <button
                     type="button"
                     aria-current={active ? 'true' : undefined}
@@ -238,10 +302,10 @@ export function AccountSwitcher() {
                   >
                     <LogOut className="size-4" aria-hidden />
                   </button>
-                </li>
+                </AccountRow>
               );
             })}
-          </ul>
+          </Reorder.Group>
           <Link
             to="/login"
             className="flex items-center gap-3 rounded-xl p-2 font-medium outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -282,5 +346,76 @@ export function AccountSwitcher() {
         )}
       </Dialog>
     </>
+  );
+}
+
+/**
+ * An account in the list, put in order by dragging its handle, or with the arrow keys on it.
+ * Only the handle starts a drag, so a press on the rest of the row is still a tap.
+ */
+function AccountRow({
+  account,
+  movable,
+  onMove,
+  onDrop,
+  children,
+}: {
+  account: Account;
+  movable: boolean;
+  onMove: (step: 1 | -1) => void;
+  onDrop: () => void;
+  children: ReactNode;
+}) {
+  const controls = useDragControls();
+  const [dragging, setDragging] = useState(false);
+  return (
+    <Reorder.Item
+      value={account}
+      dragListener={false}
+      dragControls={controls}
+      onDragStart={() => setDragging(true)}
+      onDragEnd={() => {
+        setDragging(false);
+        onDrop();
+      }}
+      className={`relative flex items-center gap-1 rounded-xl ${dragging ? 'z-10 bg-popover shadow-lg' : ''}`}
+    >
+      {movable && <MoveHandle account={account} controls={controls} onMove={onMove} />}
+      {children}
+    </Reorder.Item>
+  );
+}
+
+function MoveHandle({
+  account,
+  controls,
+  onMove,
+}: {
+  account: Account;
+  controls: DragControls;
+  onMove: (step: 1 | -1) => void;
+}) {
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    onMove(step);
+  }
+  return (
+    <button
+      type="button"
+      aria-label={`Move ${account.user.email}`}
+      aria-description="Drag, or press the up and down arrow keys, to change the account's place and the number in its address"
+      title="Drag to reorder"
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        haptics.longPress();
+        controls.start(event);
+      }}
+      onKeyDown={onKeyDown}
+      className="-mr-1 flex h-10 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground outline-none active:cursor-grabbing focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <GripVertical className="size-4" aria-hidden />
+    </button>
   );
 }
