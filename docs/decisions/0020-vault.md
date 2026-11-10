@@ -1,6 +1,6 @@
 # 0020: The vault
 
-Status: accepted (2026-10-06), revised 2026-10-07
+Status: accepted (2026-10-06), revised 2026-10-07 and 2026-11-10
 
 ## Context
 
@@ -45,6 +45,22 @@ the vault opens there without the password. Locking forgets it, as does signing 
 device that does not remember locks on reload, on leaving the vault and after five minutes in
 the background. A vault with no password at all was rejected: the key would have to live on
 the server, which is the party the vault excludes.
+
+**A device can open the vault with a PIN instead.** A PIN of four to eight digits seals the
+key a second time (PBKDF2-SHA256, 100,000 rounds, its own salt) inside the device's own key,
+as an entry of its own in the same database: an older client reads only the remembered
+entry, and would take the PIN's copy for the key. The PIN is for convenience and for keeping
+out someone who comes across an unlocked phone or computer, not a targeted attacker: a PIN
+this short falls to a guess at every PIN by anyone who can copy the browser's files, however
+it is stretched, so it guards the vault no better than remembering does against them. Five
+wrong PINs in a row forget it and the vault asks for its password; the count is written
+before each try, but someone with the browser's developer tools can reset it. A PIN and
+remembering exclude each other, since a remembered vault never asks. Locking keeps the PIN;
+switching it off, forgetting it and signing out remove it, as does the vault being deleted or
+replaced. Because the vault opens again quickly, a device with a PIN locks it sooner: a
+minute after the app is hidden, and after five minutes on screen with no input, which covers
+a computer left open. A PIN known to the server was rejected: limiting its tries there would
+need the server's help to open the vault and a connection to do it.
 
 **Forgetting both secrets loses the notes.** The recovery code is shown once at setup and
 kept nowhere. Without the password or the code nobody can open the vault; the only way on

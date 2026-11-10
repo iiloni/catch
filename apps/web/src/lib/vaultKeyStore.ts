@@ -1,13 +1,27 @@
 /**
- * The vault key on a device asked to remember it (ADR 0020): sealed under a key of the
- * device's own, which the browser stores as an object scripts can use but never read the
- * bytes of. Both are kept in a database named after the user. Signing out deletes it.
+ * The vault key as a device keeps it between visits (ADR 0020), in a database named after
+ * the user. Signing out deletes it.
+ *
+ * A device asked to remember the vault keeps the key sealed under a key of the device's own,
+ * which the browser stores as an object scripts can use but never read the bytes of. A device
+ * given a PIN keeps it sealed under the PIN as well, in an entry of its own: an older client
+ * reads only the remembered one, and would take the PIN's sealed copy for the key itself.
  */
 export type KeptVaultKey = { deviceKey: CryptoKey; sealed: string; vault: string };
 
+/** The vault key sealed under a PIN, and how many wrong PINs were tried since the right one. */
+export type KeptVaultPin = KeptVaultKey & {
+  salt: string;
+  iterations: number;
+  /** How many digits the PIN has, so the form can try it once they are all typed. */
+  length: number;
+  failures: number;
+};
+
 const databaseName = (userId: string) => `catch-vault-${userId}`;
 const STORE = 'keys';
-const ENTRY = 'vault';
+const REMEMBERED = 'vault';
+const PIN = 'pin';
 
 function open(userId: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -37,25 +51,58 @@ async function run<T>(
   }
 }
 
+const isKept = (kept: Partial<KeptVaultKey> | undefined): kept is KeptVaultKey =>
+  kept?.deviceKey instanceof CryptoKey &&
+  typeof kept.sealed === 'string' &&
+  typeof kept.vault === 'string';
+
+async function load(userId: string, entry: string) {
+  try {
+    return await run<Partial<KeptVaultPin> | undefined>(userId, 'readonly', (store) =>
+      store.get(entry),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+async function remove(userId: string, entry: string) {
+  try {
+    await run(userId, 'readwrite', (store) => store.delete(entry));
+  } catch {}
+}
+
 export async function rememberVaultKey(userId: string, kept: KeptVaultKey) {
-  await run(userId, 'readwrite', (store) => store.put(kept, ENTRY));
+  await run(userId, 'readwrite', (store) => store.put(kept, REMEMBERED));
 }
 
 /** The remembered key, or null when there is none or this browser cannot keep one. */
 export async function loadVaultKey(userId: string): Promise<KeptVaultKey | null> {
-  try {
-    const kept = await run<KeptVaultKey | undefined>(userId, 'readonly', (store) =>
-      store.get(ENTRY),
-    );
-    return kept?.deviceKey instanceof CryptoKey &&
-      typeof kept.sealed === 'string' &&
-      typeof kept.vault === 'string'
-      ? kept
-      : null;
-  } catch {
-    return null;
-  }
+  const kept = await load(userId, REMEMBERED);
+  return isKept(kept) ? kept : null;
 }
+
+/** Forgets the remembered key; a PIN set on the device stays. */
+export const forgetVaultKey = (userId: string) => remove(userId, REMEMBERED);
+
+export async function keepVaultPin(userId: string, kept: KeptVaultPin) {
+  await run(userId, 'readwrite', (store) => store.put(kept, PIN));
+}
+
+/** The key as the device's PIN seals it, or null when no PIN is set here. */
+export async function loadVaultPin(userId: string): Promise<KeptVaultPin | null> {
+  const kept = await load(userId, PIN);
+  if (!isKept(kept)) return null;
+  const { salt, iterations, length, failures } = kept as Partial<KeptVaultPin>;
+  return typeof salt === 'string' &&
+    typeof iterations === 'number' &&
+    typeof length === 'number' &&
+    typeof failures === 'number'
+    ? { ...kept, salt, iterations, length, failures }
+    : null;
+}
+
+export const forgetVaultPin = (userId: string) => remove(userId, PIN);
 
 /** Where a device notes that it has seen the user's vault (see `hasSeenVault`). */
 export const vaultSeenKey = (userId: string) => `catch-vault:${userId}`;
@@ -63,10 +110,11 @@ export const vaultSeenKey = (userId: string) => `catch-vault:${userId}`;
 /** Everything a device keeps about a user's vault besides its synced rows, for signing out. */
 export function forgetVault(userId: string) {
   localStorage.removeItem(vaultSeenKey(userId));
-  return forgetVaultKey(userId);
+  return forgetVaultDevice(userId);
 }
 
-export function forgetVaultKey(userId: string): Promise<void> {
+/** Forgets every copy of the key this device keeps: remembered, and sealed under a PIN. */
+export function forgetVaultDevice(userId: string): Promise<void> {
   return new Promise((resolve) => {
     try {
       const request = indexedDB.deleteDatabase(databaseName(userId));

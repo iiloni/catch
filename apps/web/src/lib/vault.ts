@@ -36,13 +36,24 @@ import {
   openNote,
   openVaultHistory,
   openVaultKey,
+  openWithPin,
   sealForDevice,
   sealNote,
   sealUnderPassword,
+  sealUnderPin,
   sealVaultHistory,
   vaultHistoryIdentity,
 } from './vaultCrypto';
-import { forgetVaultKey, loadVaultKey, rememberVaultKey, vaultSeenKey } from './vaultKeyStore';
+import {
+  forgetVaultDevice,
+  forgetVaultKey,
+  forgetVaultPin,
+  keepVaultPin,
+  loadVaultKey,
+  loadVaultPin,
+  rememberVaultKey,
+  vaultSeenKey,
+} from './vaultKeyStore';
 
 /**
  * The vault (ADR 0020): notes the server only ever holds as ciphertext. The collections
@@ -70,9 +81,24 @@ export const vaultNotes = createStore<readonly Note[]>([]);
 export const vaultUnreadable = createStore(0);
 /** Whether this device keeps the key, so the vault opens without its password. */
 export const vaultRemembered = createStore(false);
+/**
+ * The PIN this device opens the vault with in place of its password, if it has one: how many
+ * digits it has and how many more wrong ones it takes before the device forgets it.
+ */
+export const vaultPin = createStore<{ length: number; left: number } | null>(null);
 
+/** Wrong PINs in a row before the device forgets its PIN and asks for the password. */
+export const PIN_ATTEMPTS = 5;
 /** A hidden app locks a vault it does not remember once it has been away this long. */
 const AUTO_LOCK_MS = 5 * 60_000;
+/**
+ * With a PIN, opening the vault again is quick, so it locks sooner: a minute after the app
+ * is hidden (as when the phone's screen goes off), and after five minutes on screen with
+ * nobody touching it, as on a computer left open.
+ */
+const PIN_AUTO_LOCK_MS = 60_000;
+const IDLE_LOCK_MS = 5 * 60_000;
+const IDLE_CHECK_MS = 15_000;
 
 type Bytes = Uint8Array<ArrayBuffer>;
 type Tags = Pick<NoteTags, 'primaryTagId' | 'secondaryTagIds'>;
@@ -90,6 +116,11 @@ let fileKey: CryptoKey | null = null;
 let keyVault: string | null = null;
 /** A vault this device just made, until its row syncs back. */
 let awaitingRow: string | null = null;
+/** The vault this device's PIN opens, once it has been read. */
+let pinVault: string | null = null;
+/** When someone last touched the app, for locking a vault left open. */
+let lastActive = Date.now();
+let idleTimer: ReturnType<typeof setInterval> | null = null;
 let entries: ReadonlyMap<string, Entry> = new Map();
 /** Every file in the unlocked vault, by its id. */
 let files: ReadonlyMap<string, { noteId: string; file: VaultFile }> = new Map();
@@ -185,14 +216,24 @@ function publish(next: ReadonlyMap<string, Entry>, unreadable = vaultUnreadable.
   );
 }
 
-/** Locks: forgets the key and the notes it opened, in memory and in the device's keeping. */
+/**
+ * Locks: forgets the key and the notes it opened. The device forgets the key it remembers;
+ * a PIN set here stays for the next unlock, unless the vault it opens is gone (`everything`).
+ */
 let dropping: Promise<void> | null = null;
-function dropKey(): Promise<void> {
-  if (dropping) return dropping;
-  dropping = dropKeyNow().finally(() => {
+function dropKey(forget: 'remembered' | 'everything' = 'remembered'): Promise<void> {
+  dropping ??= dropKeyNow().finally(() => {
     dropping = null;
   });
-  return dropping;
+  return dropping.then(() => forgetOnDevice(forget));
+}
+async function forgetOnDevice(forget: 'remembered' | 'everything') {
+  const id = userId();
+  if (!id) return;
+  if (forget === 'remembered') return forgetVaultKey(id);
+  pinVault = null;
+  vaultPin.set(null);
+  await forgetVaultDevice(id);
 }
 async function dropKeyNow() {
   // A save that fails must not leave the vault open: its owner reports it, and the key goes.
@@ -210,14 +251,14 @@ async function dropKeyNow() {
   fileKey = null;
   keyVault = null;
   awaitingRow = null;
+  if (idleTimer !== null) clearInterval(idleTimer);
+  idleTimer = null;
   opened.clear();
   shown.clear();
   publish(new Map(), 0);
   closeSealedFiles();
   vaultMode.set(false);
   vaultRemembered.set(false);
-  const id = userId();
-  return id ? forgetVaultKey(id) : Promise.resolve();
 }
 
 function refreshStatus() {
@@ -226,16 +267,20 @@ function refreshStatus() {
     // Until the first sync, no row may only mean this device has not heard of the vault.
     const known = vaultCollection.isReady() && !(key && keyVault === awaitingRow);
     // Deleted on another device.
-    if (key && known) void dropKey();
+    if (key && known) void dropKey('everything');
     const id = userId();
-    if (known && id) localStorage.removeItem(vaultSeenKey(id));
+    if (known && id) {
+      localStorage.removeItem(vaultSeenKey(id));
+      if (pinVault) void forgetPin(id);
+    }
     vaultStatus.set(key ? 'unlocked' : known ? 'none' : 'loading');
     return;
   }
   awaitingRow = null;
   localStorage.setItem(vaultSeenKey(vault.userId), 'true');
   // Deleted and set up again on another device: this key opens none of the new vault.
-  if (key && keyVault !== vaultIdentity(vault)) void dropKey();
+  if (key && keyVault !== vaultIdentity(vault)) void dropKey('everything');
+  else if (pinVault && pinVault !== vaultIdentity(vault)) void forgetPin(vault.userId);
   vaultStatus.set(key ? 'unlocked' : 'locked');
 }
 
@@ -315,8 +360,18 @@ async function adoptKey(raw: Bytes, vault: Pick<Vault, 'recoveryKey'>) {
   fileKey = await importFileKey(raw);
   key = raw;
   keyVault = vaultIdentity(vault);
+  lastActive = Date.now();
+  idleTimer ??= setInterval(lockIfIdle, IDLE_CHECK_MS);
   refreshStatus();
   refreshNotes();
+}
+
+/** Whether the vault locks on its own here: always, unless the device remembers it. */
+const locksItself = () => key !== null && !vaultRemembered.get();
+
+function lockIfIdle() {
+  if (!locksItself() || !vaultPin.get() || document.visibilityState !== 'visible') return;
+  if (Date.now() - lastActive >= IDLE_LOCK_MS) void lockVault();
 }
 
 async function setRemembered(remember: boolean) {
@@ -324,8 +379,35 @@ async function setRemembered(remember: boolean) {
   if (!id) return;
   if (remember && key && keyVault) {
     await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
+    // A vault that stays open has nothing for a PIN to open.
+    await forgetPin(id);
   } else await forgetVaultKey(id);
   vaultRemembered.set(remember && key !== null);
+}
+
+async function forgetPin(id: string) {
+  pinVault = null;
+  vaultPin.set(null);
+  await forgetVaultPin(id);
+}
+
+const pinState = (kept: { length: number; failures: number }) => ({
+  length: kept.length,
+  left: Math.max(0, PIN_ATTEMPTS - kept.failures),
+});
+
+/** Reads whether this device has a PIN for the vault. */
+async function restorePin() {
+  const id = userId();
+  if (!id) return;
+  const kept = await loadVaultPin(id);
+  const vault = vaultRow();
+  if (kept && vault && kept.vault !== vaultIdentity(vault)) {
+    await forgetPin(id);
+    return;
+  }
+  pinVault = kept?.vault ?? null;
+  vaultPin.set(kept && pinState(kept));
 }
 
 /**
@@ -346,6 +428,7 @@ export function startVault() {
   vaultCollection.onFirstReady(refreshStatus);
   vaultNotesCollection.subscribeChanges(refreshNotes, { includeInitialState: true });
   void restoreKey();
+  void restorePin();
 
   let hiddenAt: number | null = null;
   document.addEventListener('visibilitychange', () => {
@@ -356,8 +439,16 @@ export function startVault() {
     // Checked on return rather than with a timer, which a sleeping phone does not run.
     const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
     hiddenAt = null;
-    if (key && !vaultRemembered.get() && away >= AUTO_LOCK_MS) void lockVault();
+    lastActive = Date.now();
+    const limit = vaultPin.get() ? PIN_AUTO_LOCK_MS : AUTO_LOCK_MS;
+    if (locksItself() && away >= limit) void lockVault();
   });
+  const active = () => {
+    lastActive = Date.now();
+  };
+  for (const type of ['pointerdown', 'keydown', 'wheel', 'input']) {
+    document.addEventListener(type, active, { capture: true, passive: true });
+  }
 }
 
 /** Unlocks with the key this device was asked to remember, if it still fits the vault. */
@@ -491,14 +582,84 @@ async function resealVault(id: string, vault: Vault, raw: Bytes, password: strin
   }
 }
 
-/** Locks the vault and has this device forget its key. */
+/** Locks the vault and has this device forget the key it remembers. A PIN set here stays. */
 export async function lockVault() {
   await dropKey();
   refreshStatus();
 }
 
-/** Whether this device keeps the key between visits. Only an unlocked vault can start to. */
+/**
+ * Whether this device keeps the key between visits. Only an unlocked vault can start to,
+ * and starting turns off the device's PIN.
+ */
 export const rememberVault = (remember: boolean) => setRemembered(remember);
+
+/**
+ * Lets this device open the vault with a PIN in place of its password, and stop remembering
+ * it. Only an unlocked vault can be given one. The vault still locks on leaving it.
+ */
+export async function setVaultPin(pin: string) {
+  const { id, key: current } = unlocked();
+  const vault = keyVault;
+  if (!vault) throw new VaultError('The vault is locked.');
+  // A copy: locking meanwhile wipes the key in place.
+  const raw = current.slice();
+  try {
+    const sealed = await sealUnderPin(id, raw, pin);
+    await keepVaultPin(id, { ...sealed, vault, length: pin.length, failures: 0 });
+  } finally {
+    raw.fill(0);
+  }
+  if (vaultRemembered.get()) {
+    await forgetVaultKey(id);
+    vaultRemembered.set(false);
+  }
+  pinVault = vault;
+  vaultPin.set({ length: pin.length, left: PIN_ATTEMPTS });
+}
+
+/** Turns this device's PIN off: the vault then asks for its password. */
+export async function removeVaultPin() {
+  const id = userId();
+  if (id) await forgetPin(id);
+}
+
+export type PinUnlock =
+  | { result: 'unlocked' }
+  | { result: 'wrong'; left: number }
+  /** No PIN opens the vault here any longer: too many wrong ones, or its copy is gone. */
+  | { result: 'forgotten' };
+
+/**
+ * Unlocks the vault with this device's PIN. After `PIN_ATTEMPTS` wrong ones in a row the
+ * device forgets the PIN, and the vault asks for its password.
+ */
+export async function unlockWithPin(pin: string): Promise<PinUnlock> {
+  const id = requireUser();
+  const vault = vaultRow();
+  const kept = await loadVaultPin(id);
+  if (!vault || !kept || kept.vault !== vaultIdentity(vault)) {
+    await forgetPin(id);
+    return { result: 'forgotten' };
+  }
+  // Counted before it is tried, so closing the app mid-try does not give a try back.
+  const failures = kept.failures + 1;
+  await keepVaultPin(id, { ...kept, failures });
+  const raw = await openWithPin(id, kept, pin);
+  if (raw === null || (raw === 'wrong' && failures >= PIN_ATTEMPTS)) {
+    await forgetPin(id);
+    return { result: 'forgotten' };
+  }
+  if (raw === 'wrong') {
+    const state = pinState({ ...kept, failures });
+    vaultPin.set(state);
+    return { result: 'wrong', left: state.left };
+  }
+  await keepVaultPin(id, { ...kept, failures: 0 });
+  vaultPin.set(pinState({ ...kept, failures: 0 }));
+  await adoptKey(raw, vault);
+  return { result: 'unlocked' };
+}
 
 /** Deletes the vault and every note in it, for good, on every device. */
 export async function deleteVault() {
@@ -508,7 +669,7 @@ export async function deleteVault() {
   } catch (error) {
     throw requestFailure(error);
   }
-  await dropKey();
+  await dropKey('everything');
   refreshStatus();
 }
 

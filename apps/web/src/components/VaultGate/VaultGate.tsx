@@ -1,12 +1,19 @@
 import { Copy, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { type FormEvent, type ReactNode, useId, useState } from 'react';
+import { type FormEvent, type ReactNode, type Ref, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
 import { useSyncStatus } from '@/lib/syncStatus';
-import { createVault, recoverVault, unlockVault, type VaultStatus } from '@/lib/vault';
+import {
+  createVault,
+  recoverVault,
+  unlockVault,
+  unlockWithPin,
+  type VaultStatus,
+  vaultPin,
+} from '@/lib/vault';
 
 /** The shortest vault password. It is all that stands between the server and the notes. */
 export const MIN_VAULT_PASSWORD = 8;
@@ -20,6 +27,10 @@ type Props = {
 /** What stands in front of the vault's notes: setting it up, or unlocking it. */
 export function VaultGate({ status, onCreated }: Props) {
   const [recovering, setRecovering] = useState(false);
+  const [usePassword, setUsePassword] = useState(false);
+  // Why the PIN form gave way to the password, when it did so on its own.
+  const [notice, setNotice] = useState<string | null>(null);
+  const pin = vaultPin.use();
   const { offline } = useSyncStatus();
 
   if (status === 'loading') {
@@ -35,7 +46,24 @@ export function VaultGate({ status, onCreated }: Props) {
   }
   if (status === 'none') return <SetUp onCreated={onCreated} />;
   if (recovering) return <Recover onBack={() => setRecovering(false)} />;
-  return <Unlock onForgot={() => setRecovering(true)} />;
+  if (pin && !usePassword) {
+    return (
+      <UnlockWithPin
+        length={pin.length}
+        onPassword={() => setUsePassword(true)}
+        onForgotten={() =>
+          setNotice('Too many wrong PINs. The PIN is off on this device until you set it again.')
+        }
+      />
+    );
+  }
+  return (
+    <Unlock
+      notice={notice}
+      onForgot={() => setRecovering(true)}
+      onPin={pin ? () => setUsePassword(false) : undefined}
+    />
+  );
 }
 
 function Panel({
@@ -193,7 +221,16 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
   );
 }
 
-function Unlock({ onForgot }: { onForgot: () => void }) {
+function Unlock({
+  notice,
+  onForgot,
+  onPin,
+}: {
+  notice: string | null;
+  onForgot: () => void;
+  /** Back to the PIN, on a device that has one. */
+  onPin?: () => void;
+}) {
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [pending, setPending] = useState(false);
@@ -228,13 +265,135 @@ function Unlock({ onForgot }: { onForgot: () => void }) {
           disabled={pending}
           autoFocus
         />
-        <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />
+        {/* A device with a PIN keeps it; remembering the vault would turn it off. */}
+        {!onPin && <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />}
+        <FormError>{error ?? notice}</FormError>
+        <Button type="submit" disabled={pending} className="h-11 rounded-xl">
+          {pending ? 'Unlocking…' : 'Unlock'}
+        </Button>
+        {onPin && (
+          <Button type="button" variant="ghost" className="rounded-xl" onClick={onPin}>
+            Use the PIN
+          </Button>
+        )}
+        <Button type="button" variant="ghost" className="rounded-xl" onClick={onForgot}>
+          Use the recovery code
+        </Button>
+      </form>
+    </Panel>
+  );
+}
+
+/** The digits of a PIN as typed, whatever else came with them. */
+export const pinDigits = (value: string) => value.replace(/\D/g, '').slice(0, 8);
+
+/** A PIN field: digits only, with the phone's number pad. */
+export function PinInput({
+  id,
+  value,
+  onChange,
+  inputRef,
+  readOnly,
+  autoFocus,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  inputRef?: Ref<HTMLInputElement>;
+  readOnly?: boolean;
+  autoFocus?: boolean;
+}) {
+  return (
+    <Input
+      id={id}
+      ref={inputRef}
+      type="password"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="off"
+      required
+      maxLength={8}
+      value={value}
+      readOnly={readOnly}
+      autoFocus={autoFocus}
+      onChange={(event) => onChange(pinDigits(event.target.value))}
+      className="h-12 text-center font-mono text-xl tracking-[0.5em] md:text-xl"
+    />
+  );
+}
+
+function UnlockWithPin({
+  length,
+  onPassword,
+  onForgotten,
+}: {
+  length: number;
+  onPassword: () => void;
+  onForgotten: () => void;
+}) {
+  const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const [pin, setPin] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function attempt(candidate: string) {
+    if (pending || candidate.length < 4) return;
+    setPending(true);
+    setError(null);
+    try {
+      const unlock = await unlockWithPin(candidate);
+      if (unlock.result === 'unlocked') {
+        haptics.success();
+        return;
+      }
+      haptics.warning();
+      setPin('');
+      if (unlock.result === 'forgotten') onForgotten();
+      else
+        setError(
+          unlock.left === 1
+            ? 'That is not the PIN. One more wrong PIN turns it off on this device.'
+            : `That is not the PIN. ${unlock.left} tries left.`,
+        );
+    } catch (caught) {
+      setError(failure(caught));
+    } finally {
+      setPending(false);
+      input.current?.focus();
+    }
+  }
+
+  return (
+    <Panel icon={LockKeyhole} title="The vault is locked">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void attempt(pin);
+        }}
+        className="flex w-full flex-col gap-4"
+      >
+        <label htmlFor={id} className="flex flex-col gap-2 text-left text-sm">
+          Vault PIN
+          <PinInput
+            id={id}
+            inputRef={input}
+            value={pin}
+            readOnly={pending}
+            autoFocus
+            onChange={(next) => {
+              setPin(next);
+              // Tried as soon as it has all its digits, as a phone's lock screen does.
+              if (next.length === length) void attempt(next);
+            }}
+          />
+        </label>
         <FormError>{error}</FormError>
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
-        <Button type="button" variant="ghost" className="rounded-xl" onClick={onForgot}>
-          Use the recovery code
+        <Button type="button" variant="ghost" className="rounded-xl" onClick={onPassword}>
+          Use the vault password
         </Button>
       </form>
     </Panel>
