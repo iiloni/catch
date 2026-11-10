@@ -1,4 +1,5 @@
 import {
+  FingerprintPattern,
   KeyRound,
   LockKeyhole,
   LockKeyholeOpen,
@@ -19,21 +20,30 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { MIN_VAULT_PASSWORD, newPasswordProblem, PinInput } from '@/components/VaultGate/VaultGate';
+import {
+  dismissed,
+  MIN_VAULT_PASSWORD,
+  newPasswordProblem,
+  PinInput,
+} from '@/components/VaultGate/VaultGate';
 import { haptics } from '@/lib/haptics';
 import {
   changeVaultPassword,
   deleteVault,
+  enableVaultBiometrics,
   enterVault,
   lockVault,
   rememberVault,
+  removeVaultBiometrics,
   removeVaultPin,
   setVaultPin,
   useVault,
+  vaultBiometrics,
   vaultNotes,
   vaultPin,
   vaultRemembered,
 } from '@/lib/vault';
+import { BiometricError, biometricWords, useBiometricAvailability } from '@/lib/vaultBiometrics';
 import { isVaultPin } from '@/lib/vaultCrypto';
 import { useShowVaultButton } from '@/lib/vaultPreferences';
 
@@ -49,9 +59,33 @@ export function VaultSettings() {
   const status = useVault();
   const remembered = vaultRemembered.use();
   const pin = vaultPin.use();
+  const biometrics = vaultBiometrics.use();
+  const availability = useBiometricAvailability();
+  const words = biometricWords(availability?.kind);
   const notes = vaultNotes.use();
   const [dialog, setDialog] = useState<'password' | 'pin' | 'delete' | null>(null);
+  const [enabling, setEnabling] = useState(false);
   const unlocked = status === 'unlocked';
+  // Only the Android app, with a strong biometric enrolled, can turn it on; any can turn it off.
+  const offersBiometrics = biometrics || availability?.available === true;
+
+  async function enableBiometrics() {
+    setEnabling(true);
+    try {
+      await enableVaultBiometrics({ title: `Turn on ${words.feature}`, cancel: 'Cancel' });
+      haptics.success();
+      toast.success(`${words.Feature} is on`);
+    } catch (caught) {
+      if (dismissed(caught)) return;
+      toast.error(
+        caught instanceof BiometricError && caught.reason === 'unavailable'
+          ? `Set up ${words.name} in the phone's settings first.`
+          : `Could not turn on ${words.feature}. Try again.`,
+      );
+    } finally {
+      setEnabling(false);
+    }
+  }
 
   if (status === 'none' || status === 'loading') {
     return (
@@ -87,9 +121,11 @@ export function VaultSettings() {
           description={
             unlocked
               ? 'Lock it on this device'
-              : pin
-                ? 'Opens with your PIN'
-                : 'Opens with your password'
+              : biometrics
+                ? `Opens with your ${words.name}`
+                : pin
+                  ? 'Opens with your PIN'
+                  : 'Opens with your password'
           }
         >
           <Button
@@ -121,10 +157,13 @@ export function VaultSettings() {
             disabled={!unlocked}
             onCheckedChange={(checked) => {
               haptics.toggle();
-              // A vault that never locks has nothing for a PIN to open, so the PIN goes.
+              // A vault that never locks has nothing for a PIN or fingerprint to open, so they go.
               rememberVault(!checked).then(
                 () => {
-                  if (!checked && pin) toast('PIN turned off');
+                  if (checked) return;
+                  if (pin && biometrics) toast(`PIN and ${words.feature} turned off`);
+                  else if (pin) toast('PIN turned off');
+                  else if (biometrics) toast(`${words.Feature} turned off`);
                 },
                 () => toast.error('Could not change this. Try again.'),
               );
@@ -134,6 +173,33 @@ export function VaultSettings() {
         {/* Ways back in, which only a vault that locks needs. */}
         {!remembered && (
           <div className="flex flex-col divide-y divide-foreground/[0.06] pl-8">
+            {offersBiometrics && (
+              <SettingsRow
+                icon={FingerprintPattern}
+                label={words.unlock}
+                description={
+                  biometrics || unlocked
+                    ? pin
+                      ? 'Before the PIN'
+                      : 'Instead of the password'
+                    : 'Unlock to turn on'
+                }
+              >
+                <Switch
+                  aria-label={words.unlock}
+                  checked={biometrics}
+                  disabled={enabling || (!biometrics && !unlocked)}
+                  onCheckedChange={(checked) => {
+                    haptics.toggle();
+                    if (checked) void enableBiometrics();
+                    else
+                      removeVaultBiometrics().catch(() =>
+                        toast.error(`Could not turn ${words.feature} off. Try again.`),
+                      );
+                  }}
+                />
+              </SettingsRow>
+            )}
             <SettingsRow
               icon={RectangleEllipsis}
               label="Unlock with a PIN"
@@ -285,7 +351,7 @@ function ChangeVaultPassword({ open, onClose }: { open: boolean; onClose: () => 
         <DialogTitle>Change vault password</DialogTitle>
         <DialogDescription>
           Use at least {MIN_VAULT_PASSWORD} characters. Your recovery code stays the same, and
-          devices that remember the vault or open it with a PIN keep doing so.
+          devices that remember the vault or open it another way keep doing so.
         </DialogDescription>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           {fields.map(([name, label, value, set, autoComplete]) => (

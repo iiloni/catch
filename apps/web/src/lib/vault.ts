@@ -29,6 +29,13 @@ import {
 import { stopHistoryWorker } from './historyWorker';
 import { createStore } from './store';
 import {
+  BiometricError,
+  biometricsSupported,
+  forgetBiometricKey,
+  openWithBiometrics,
+  sealWithBiometrics,
+} from './vaultBiometrics';
+import {
   createVaultKey,
   importFileKey,
   openFile,
@@ -45,11 +52,14 @@ import {
   vaultHistoryIdentity,
 } from './vaultCrypto';
 import {
+  forgetVaultBiometric,
   forgetVaultDevice,
   forgetVaultKey,
   forgetVaultPin,
   type KeptVaultPin,
+  keepVaultBiometric,
   keepVaultPin,
+  loadVaultBiometric,
   loadVaultKey,
   loadVaultPin,
   rememberVaultKey,
@@ -87,17 +97,24 @@ export const vaultRemembered = createStore(false);
  * digits it has and how many more wrong ones it takes before the device forgets it.
  */
 export const vaultPin = createStore<{ length: number; left: number } | null>(null);
+/** Whether this device opens the vault with a fingerprint, tried before the PIN (Android only). */
+export const vaultBiometrics = createStore(false);
+/**
+ * Set when the phone's fingerprints changed, which turns fingerprint unlock off, until the
+ * next unlock with the PIN or password offers to turn it on again.
+ */
+export const vaultBiometricsLost = createStore(false);
 
 /** Wrong PINs in a row before the device forgets its PIN and asks for the password. */
 export const PIN_ATTEMPTS = 5;
 /** A hidden app locks a vault it does not remember once it has been away this long. */
 const AUTO_LOCK_MS = 5 * 60_000;
 /**
- * With a PIN, opening the vault again is quick, so it locks sooner: a minute after the app
- * is hidden (as when the phone's screen goes off), and after five minutes on screen with
- * nobody touching it, as on a computer left open.
+ * With a PIN or a fingerprint, opening the vault again is quick, so it locks sooner: a minute
+ * after the app is hidden (as when the phone's screen goes off), and after five minutes on
+ * screen with nobody touching it, as on a computer left open.
  */
-const PIN_AUTO_LOCK_MS = 60_000;
+const QUICK_AUTO_LOCK_MS = 60_000;
 const IDLE_LOCK_MS = 5 * 60_000;
 const IDLE_CHECK_MS = 15_000;
 
@@ -119,6 +136,8 @@ let keyVault: string | null = null;
 let awaitingRow: string | null = null;
 /** The vault this device's PIN opens, once it has been read. */
 let pinVault: string | null = null;
+/** The vault this device's fingerprint opens, once it has been read. */
+let biometricVault: string | null = null;
 /** When someone last touched the app, for locking a vault left open. */
 let lastActive = Date.now();
 let idleTimer: ReturnType<typeof setInterval> | null = null;
@@ -232,8 +251,8 @@ async function forgetOnDevice(forget: 'remembered' | 'everything') {
   const id = userId();
   if (!id) return;
   if (forget === 'remembered') return forgetVaultKey(id);
-  pinVault = null;
-  vaultPin.set(null);
+  clearPin();
+  clearBiometrics();
   await forgetVaultDevice(id);
 }
 async function dropKeyNow() {
@@ -273,6 +292,7 @@ function refreshStatus() {
     if (known && id) {
       localStorage.removeItem(vaultSeenKey(id));
       if (pinVault) void dropPin(id);
+      if (biometricVault) void dropBiometrics(id);
     }
     vaultStatus.set(key ? 'unlocked' : known ? 'none' : 'loading');
     return;
@@ -280,8 +300,12 @@ function refreshStatus() {
   awaitingRow = null;
   localStorage.setItem(vaultSeenKey(vault.userId), 'true');
   // Deleted and set up again on another device: this key opens none of the new vault.
-  if (key && keyVault !== vaultIdentity(vault)) void dropKey('everything');
-  else if (pinVault && pinVault !== vaultIdentity(vault)) void dropPin(vault.userId);
+  const identity = vaultIdentity(vault);
+  if (key && keyVault !== identity) void dropKey('everything');
+  else {
+    if (pinVault && pinVault !== identity) void dropPin(vault.userId);
+    if (biometricVault && biometricVault !== identity) void dropBiometrics(vault.userId);
+  }
   vaultStatus.set(key ? 'unlocked' : 'locked');
 }
 
@@ -369,9 +393,11 @@ async function adoptKey(raw: Bytes, vault: Pick<Vault, 'recoveryKey'>) {
 
 /** Whether the vault locks on its own here: always, unless the device remembers it. */
 const locksItself = () => key !== null && !vaultRemembered.get();
+/** Whether the vault opens here without its password: with a PIN or a fingerprint. */
+const quickUnlock = () => vaultPin.get() !== null || vaultBiometrics.get();
 
 function lockIfIdle() {
-  if (!locksItself() || !vaultPin.get() || document.visibilityState !== 'visible') return;
+  if (!locksItself() || !quickUnlock() || document.visibilityState !== 'visible') return;
   if (Date.now() - lastActive >= IDLE_LOCK_MS) void lockVault();
 }
 
@@ -379,9 +405,10 @@ async function setRemembered(remember: boolean) {
   const id = userId();
   if (!id) return;
   if (remember && key && keyVault) {
-    // A vault that stays open has nothing for a PIN to open. First, so a PIN the device
-    // fails to forget leaves the vault as it was.
+    // A vault that stays open has nothing for a PIN or a fingerprint to open. First, so one
+    // the device fails to forget leaves the vault as it was.
     await forgetPin(id);
+    await forgetBiometrics(id);
     await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
   } else await forgetVaultKey(id);
   vaultRemembered.set(remember && key !== null);
@@ -409,6 +436,28 @@ async function dropPin(id: string) {
   } catch {}
 }
 
+function clearBiometrics() {
+  biometricVault = null;
+  vaultBiometrics.set(false);
+}
+
+/**
+ * Turns fingerprint unlock off. Throws, leaving it on, when the device could not delete its
+ * Keystore key or its sealed copy. The key goes first: without it no copy opens.
+ */
+async function forgetBiometrics(id: string) {
+  await forgetBiometricKey(id);
+  await forgetVaultBiometric(id);
+  clearBiometrics();
+}
+
+/** As `dropPin`, for a fingerprint that opens nothing any longer. */
+async function dropBiometrics(id: string) {
+  clearBiometrics();
+  await forgetBiometricKey(id).catch(() => {});
+  await forgetVaultBiometric(id).catch(() => {});
+}
+
 /** Whether a kept PIN may still be tried: it is for this vault and has tries left. */
 const usablePin = (kept: KeptVaultPin, vault: Pick<Vault, 'recoveryKey'> | undefined) =>
   kept.failures < PIN_ATTEMPTS && (!vault || kept.vault === vaultIdentity(vault));
@@ -417,6 +466,16 @@ const pinState = (kept: { length: number; failures: number }) => ({
   length: kept.length,
   left: Math.max(0, PIN_ATTEMPTS - kept.failures),
 });
+
+/**
+ * Whether a PIN or fingerprint kept for `vault` may still open the user's vault. Read when
+ * the device reads them, which can end after the first sync: `refreshStatus` saw no PIN or
+ * fingerprint to drop then, so a vault deleted meanwhile is caught here.
+ */
+function forThisVault(vault: string) {
+  const row = vaultRow();
+  return row ? vault === vaultIdentity(row) : !vaultCollection.isReady();
+}
 
 /** Reads whether this device has a PIN for the vault. */
 async function restorePin() {
@@ -429,12 +488,30 @@ async function restorePin() {
     // Unreadable for now: the vault asks for its password, and the PIN is read next launch.
     return;
   }
-  if (kept && !usablePin(kept, vaultRow())) {
+  if (kept && (!usablePin(kept, vaultRow()) || !forThisVault(kept.vault))) {
     await dropPin(id);
     return;
   }
   pinVault = kept?.vault ?? null;
   vaultPin.set(kept && pinState(kept));
+}
+
+/** Reads whether this device opens the vault with a fingerprint. */
+async function restoreBiometrics() {
+  const id = userId();
+  if (!id || !biometricsSupported()) return;
+  let kept: Awaited<ReturnType<typeof loadVaultBiometric>>;
+  try {
+    kept = await loadVaultBiometric(id);
+  } catch {
+    return;
+  }
+  if (kept && !forThisVault(kept.vault)) {
+    await dropBiometrics(id);
+    return;
+  }
+  biometricVault = kept?.vault ?? null;
+  vaultBiometrics.set(kept !== null);
 }
 
 /**
@@ -456,6 +533,7 @@ export function startVault() {
   vaultNotesCollection.subscribeChanges(refreshNotes, { includeInitialState: true });
   void restoreKey();
   void restorePin();
+  void restoreBiometrics();
 
   let hiddenAt: number | null = null;
   document.addEventListener('visibilitychange', () => {
@@ -467,7 +545,7 @@ export function startVault() {
     const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
     hiddenAt = null;
     lastActive = Date.now();
-    const limit = vaultPin.get() ? PIN_AUTO_LOCK_MS : AUTO_LOCK_MS;
+    const limit = quickUnlock() ? QUICK_AUTO_LOCK_MS : AUTO_LOCK_MS;
     if (locksItself() && away >= limit) void lockVault();
   });
   const active = () => {
@@ -609,7 +687,10 @@ async function resealVault(id: string, vault: Vault, raw: Bytes, password: strin
   }
 }
 
-/** Locks the vault and has this device forget the key it remembers. A PIN set here stays. */
+/**
+ * Locks the vault and has this device forget the key it remembers. A PIN or fingerprint set
+ * here stays.
+ */
 export async function lockVault() {
   await dropKey();
   refreshStatus();
@@ -617,7 +698,7 @@ export async function lockVault() {
 
 /**
  * Whether this device keeps the key between visits. Only an unlocked vault can start to,
- * and starting turns off the device's PIN.
+ * and starting turns off the device's PIN and fingerprint.
  */
 export const rememberVault = (remember: boolean) => setRemembered(remember);
 
@@ -699,6 +780,110 @@ async function tryPin(pin: string): Promise<PinUnlock> {
   }
   await keepVaultPin(id, { ...kept, failures: 0 });
   vaultPin.set(pinState({ ...kept, failures: 0 }));
+  await adoptKey(raw, vault);
+  return { result: 'unlocked' };
+}
+
+/** The words on the phone's fingerprint prompt: its title and its button out. */
+export type BiometricPromptText = { title: string; cancel: string };
+
+/**
+ * Lets this phone open the vault with a fingerprint, once one confirms it. Only an unlocked
+ * vault can. Throws a `BiometricError` when the prompt ends without one.
+ */
+export async function enableVaultBiometrics(prompt: BiometricPromptText) {
+  const { id, key: current } = unlocked();
+  const vault = keyVault;
+  if (!vault) throw new VaultError('The vault is locked.');
+  // The phone replaces the Keystore key before the prompt, so a dismissed prompt here would
+  // leave a working copy unopenable.
+  if (vaultBiometrics.get()) return;
+  // A copy: locking meanwhile wipes the key in place.
+  const raw = current.slice();
+  let sealed: Awaited<ReturnType<typeof sealWithBiometrics>>;
+  try {
+    sealed = await sealWithBiometrics(id, raw, prompt);
+  } finally {
+    raw.fill(0);
+  }
+  try {
+    await keepVaultBiometric(id, { ...sealed, vault });
+  } catch (error) {
+    await forgetBiometricKey(id).catch(() => {});
+    throw error;
+  }
+  if (vaultRemembered.get()) {
+    await forgetVaultKey(id);
+    vaultRemembered.set(false);
+  }
+  biometricVault = vault;
+  vaultBiometrics.set(true);
+  vaultBiometricsLost.set(false);
+}
+
+/** Turns fingerprint unlock off on this phone. */
+export async function removeVaultBiometrics() {
+  const id = userId();
+  if (id) await forgetBiometrics(id);
+}
+
+export type BiometricUnlock = {
+  result:
+    | 'unlocked'
+    /** Dismissed: the PIN or password form takes over. */
+    | 'canceled'
+    /** The prompt's own button, asking for the PIN or password. */
+    | 'fallback'
+    /** Too many tries: the phone takes no fingerprint for a while. */
+    | 'lockout'
+    /** The phone's fingerprints changed, which turned fingerprint unlock off. */
+    | 'invalidated'
+    /** Fingerprint unlock opens nothing here any longer, and is off. */
+    | 'forgotten'
+    | 'failed';
+};
+
+let biometricTry: Promise<BiometricUnlock> | null = null;
+
+/** Unlocks the vault with a fingerprint. One prompt at a time. */
+export function unlockWithBiometrics(prompt: BiometricPromptText): Promise<BiometricUnlock> {
+  biometricTry ??= tryBiometrics(prompt).finally(() => {
+    biometricTry = null;
+  });
+  return biometricTry;
+}
+
+async function tryBiometrics(prompt: BiometricPromptText): Promise<BiometricUnlock> {
+  const id = requireUser();
+  if (key) return { result: 'unlocked' };
+  const vault = vaultRow();
+  if (!vault) return { result: 'failed' };
+  const kept = await loadVaultBiometric(id);
+  if (!kept || kept.vault !== vaultIdentity(vault)) {
+    await dropBiometrics(id);
+    return { result: 'forgotten' };
+  }
+  let raw: Bytes;
+  try {
+    raw = await openWithBiometrics(id, kept, prompt);
+  } catch (error) {
+    const reason = error instanceof BiometricError ? error.reason : 'failed';
+    if (reason === 'invalidated') {
+      await dropBiometrics(id);
+      vaultBiometricsLost.set(true);
+      return { result: 'invalidated' };
+    }
+    if (reason === 'gone') {
+      await dropBiometrics(id);
+      return { result: 'forgotten' };
+    }
+    return { result: reason === 'unavailable' ? 'failed' : reason };
+  }
+  // Unlocked another way while the prompt was up.
+  if (key) {
+    raw.fill(0);
+    return { result: 'unlocked' };
+  }
   await adoptKey(raw, vault);
   return { result: 'unlocked' };
 }

@@ -1,5 +1,15 @@
 import { Copy, KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { type FormEvent, type ReactNode, type Ref, useId, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,12 +18,22 @@ import { haptics } from '@/lib/haptics';
 import { useSyncStatus } from '@/lib/syncStatus';
 import {
   createVault,
+  enableVaultBiometrics,
   recoverVault,
   unlockVault,
+  unlockWithBiometrics,
   unlockWithPin,
   type VaultStatus,
+  vaultBiometrics,
+  vaultBiometricsLost,
   vaultPin,
 } from '@/lib/vault';
+import {
+  BiometricError,
+  biometricAvailability,
+  biometricWords,
+  useBiometricAvailability,
+} from '@/lib/vaultBiometrics';
 
 /** The shortest vault password. It is all that stands between the server and the notes. */
 export const MIN_VAULT_PASSWORD = 8;
@@ -24,14 +44,85 @@ type Props = {
   onCreated: (recoveryCode: string) => void;
 };
 
+/**
+ * Focuses the PIN or password field, bringing up the keyboard. While the fingerprint prompt
+ * is closing the app does not have focus yet, and a keyboard raised then is shut again, so
+ * it waits for focus to come back.
+ */
+function focusWhenInFront(field: RefObject<HTMLInputElement | null>) {
+  if (document.hasFocus()) field.current?.focus();
+  else window.addEventListener('focus', () => field.current?.focus(), { once: true });
+}
+
 /** What stands in front of the vault's notes: setting it up, or unlocking it. */
 export function VaultGate({ status, onCreated }: Props) {
   const [recovering, setRecovering] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
-  // Why the PIN form gave way to the password, when it did so on its own.
+  // Why a quicker way in gave way to the next, when it did so on its own.
   const [notice, setNotice] = useState<string | null>(null);
   const pin = vaultPin.use();
+  const biometrics = vaultBiometrics.use();
+  const words = biometricWords(useBiometricAvailability()?.kind);
+  const [prompting, setPrompting] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
   const { offline } = useSyncStatus();
+  const withPin = pin !== null && !usePassword;
+
+  async function tryBiometrics() {
+    if (prompting) return;
+    setPrompting(true);
+    setNotice(null);
+    const fallback = withPin ? 'your PIN' : 'the vault password';
+    try {
+      const { result } = await unlockWithBiometrics({
+        title: 'Unlock the vault',
+        cancel: withPin ? 'Use PIN' : 'Use password',
+      });
+      if (result === 'unlocked') {
+        haptics.success();
+        return;
+      }
+      if (result === 'lockout') setNotice(`Too many tries. Use ${fallback}.`);
+      else if (result === 'invalidated')
+        setNotice(`${words.changed} on this phone, so ${words.feature} is off.`);
+      else if (result === 'forgotten')
+        setNotice(`${words.Feature} no longer works here and is off.`);
+      else if (result === 'failed') setNotice(`Could not use ${words.name}. Use ${fallback}.`);
+      focusWhenInFront(field);
+    } catch (caught) {
+      setNotice(failure(caught));
+    } finally {
+      setPrompting(false);
+    }
+  }
+
+  // Entering asks for a fingerprint at once; the gate behind it is for when that fails. A
+  // reminder can open the gate before the app is in front, so the prompt waits until it is.
+  const tried = useRef(false);
+  const tryOnEntering = useEffectEvent(() => {
+    if (tried.current || document.visibilityState !== 'visible') return;
+    tried.current = true;
+    void tryBiometrics();
+  });
+  useEffect(() => {
+    if (!biometrics || status !== 'locked' || recovering) return;
+    const onVisible = () => tryOnEntering();
+    onVisible();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [biometrics, status, recovering]);
+
+  const biometricsButton = biometrics ? (
+    <Button
+      type="button"
+      variant="ghost"
+      className="rounded-xl"
+      disabled={prompting}
+      onClick={() => void tryBiometrics()}
+    >
+      {words.use}
+    </Button>
+  ) : null;
 
   if (status === 'loading') {
     return (
@@ -50,6 +141,10 @@ export function VaultGate({ status, onCreated }: Props) {
     return (
       <UnlockWithPin
         length={pin.length}
+        inputRef={field}
+        autoFocus={!biometrics}
+        notice={notice}
+        biometrics={biometricsButton}
         onPassword={() => setUsePassword(true)}
         onForgotten={(reason) =>
           setNotice(
@@ -63,12 +158,46 @@ export function VaultGate({ status, onCreated }: Props) {
   }
   return (
     <Unlock
+      inputRef={field}
+      autoFocus={!biometrics}
       notice={notice}
+      quick={pin !== null || biometrics}
+      biometrics={biometricsButton}
       onForgot={() => setRecovering(true)}
       onPin={pin ? () => setUsePassword(false) : undefined}
     />
   );
 }
+
+/**
+ * After the PIN or password opens a vault whose fingerprint unlock went off because the
+ * phone's fingerprints changed, offers once to turn it back on.
+ */
+async function offerBiometricsAgain() {
+  if (!vaultBiometricsLost.get()) return;
+  vaultBiometricsLost.set(false);
+  const available = await biometricAvailability();
+  if (!available?.available) return;
+  const words = biometricWords(available.kind);
+  toast(`Turn ${words.feature} back on?`, {
+    duration: 10_000,
+    action: {
+      label: 'Turn on',
+      onClick: () => {
+        enableVaultBiometrics({ title: `Turn on ${words.feature}`, cancel: 'Cancel' }).then(
+          () => toast.success(`${words.Feature} is on`),
+          (error: unknown) => {
+            if (!dismissed(error)) toast.error(`Could not turn on ${words.feature}.`);
+          },
+        );
+      },
+    },
+  });
+}
+
+/** Whether a fingerprint prompt was closed by the user, which needs no message. */
+export const dismissed = (error: unknown) =>
+  error instanceof BiometricError && (error.reason === 'canceled' || error.reason === 'fallback');
 
 function Panel({
   icon: Icon,
@@ -97,6 +226,7 @@ function PasswordField({
   autoComplete,
   disabled,
   autoFocus,
+  inputRef,
 }: {
   label: string;
   value: string;
@@ -104,6 +234,7 @@ function PasswordField({
   autoComplete: 'current-password' | 'new-password';
   disabled: boolean;
   autoFocus?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
 }) {
   const id = useId();
   return (
@@ -111,6 +242,7 @@ function PasswordField({
       {label}
       <Input
         id={id}
+        ref={inputRef}
         type="password"
         autoComplete={autoComplete}
         required
@@ -155,6 +287,20 @@ function FormError({ children }: { children: string | null }) {
       {children}
     </p>
   );
+}
+
+/**
+ * A form's error, or the gate's notice when that is newer: a fingerprint giving way after a
+ * wrong PIN or password shows why, rather than the old error.
+ */
+function useFormError(notice: string | null) {
+  const [error, setError] = useState<string | null>(null);
+  const [seen, setSeen] = useState(notice);
+  if (notice !== seen) {
+    setSeen(notice);
+    setError(null);
+  }
+  return [error ?? notice, setError] as const;
 }
 
 const failure = (error: unknown) =>
@@ -227,10 +373,20 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
 
 function Unlock({
   notice,
+  quick,
+  biometrics,
+  inputRef,
+  autoFocus,
   onForgot,
   onPin,
 }: {
   notice: string | null;
+  /** Whether the device opens the vault with a PIN or fingerprint, which remembering ends. */
+  quick: boolean;
+  /** The button that asks for a fingerprint again, on a phone that opens the vault with one. */
+  biometrics: ReactNode;
+  inputRef: Ref<HTMLInputElement>;
+  autoFocus: boolean;
   onForgot: () => void;
   /** Back to the PIN, on a device that has one. */
   onPin?: () => void;
@@ -238,7 +394,7 @@ function Unlock({
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useFormError(notice);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -246,8 +402,10 @@ function Unlock({
     setPending(true);
     setError(null);
     try {
-      if (await unlockVault(password, remember)) haptics.success();
-      else {
+      if (await unlockVault(password, remember)) {
+        haptics.success();
+        void offerBiometricsAgain();
+      } else {
         haptics.warning();
         setError('That is not the vault password.');
       }
@@ -267,14 +425,16 @@ function Unlock({
           onChange={setPassword}
           autoComplete="current-password"
           disabled={pending}
-          autoFocus
+          autoFocus={autoFocus}
+          inputRef={inputRef}
         />
-        {/* A device with a PIN keeps it; remembering the vault would turn it off. */}
-        {!onPin && <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />}
-        <FormError>{error ?? notice}</FormError>
+        {/* A device with a PIN or fingerprint keeps it; remembering the vault would end it. */}
+        {!quick && <RememberSwitch checked={remember} onChange={setRemember} disabled={pending} />}
+        <FormError>{error}</FormError>
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
+        {biometrics}
         {onPin && (
           <Button type="button" variant="ghost" className="rounded-xl" onClick={onPin}>
             Use the PIN
@@ -328,18 +488,26 @@ export function PinInput({
 
 function UnlockWithPin({
   length,
+  notice,
+  biometrics,
+  inputRef: input,
+  autoFocus,
   onPassword,
   onForgotten,
 }: {
   length: number;
+  notice: string | null;
+  /** The button that asks for a fingerprint again, on a phone that opens the vault with one. */
+  biometrics: ReactNode;
+  inputRef: RefObject<HTMLInputElement | null>;
+  autoFocus: boolean;
   onPassword: () => void;
   onForgotten: (reason: 'locked-out' | 'forgotten') => void;
 }) {
   const id = useId();
-  const input = useRef<HTMLInputElement>(null);
   const [pin, setPin] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useFormError(notice);
 
   async function attempt(candidate: string) {
     if (pending) return;
@@ -354,6 +522,7 @@ function UnlockWithPin({
       const unlock = await unlockWithPin(candidate);
       if (unlock.result === 'unlocked') {
         haptics.success();
+        void offerBiometricsAgain();
         return;
       }
       haptics.warning();
@@ -390,7 +559,7 @@ function UnlockWithPin({
             inputRef={input}
             value={pin}
             readOnly={pending}
-            autoFocus
+            autoFocus={autoFocus}
             onChange={(next) => {
               setPin(next);
               // Tried as soon as it has all its digits, as a phone's lock screen does.
@@ -402,6 +571,7 @@ function UnlockWithPin({
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
+        {biometrics}
         <Button type="button" variant="ghost" className="rounded-xl" onClick={onPassword}>
           Use the vault password
         </Button>
@@ -428,6 +598,7 @@ function Recover({ onBack }: { onBack: () => void }) {
     try {
       if (await recoverVault(code, password, false)) {
         haptics.success();
+        void offerBiometricsAgain();
         toast.success('Vault password changed');
       } else {
         haptics.warning();

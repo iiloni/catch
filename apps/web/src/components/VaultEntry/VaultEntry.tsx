@@ -7,6 +7,7 @@ import {
   hasSeenVault,
   isVaultNote,
   startVault,
+  vaultBiometrics,
   vaultMode,
   vaultPrompt,
   vaultStatus,
@@ -63,6 +64,13 @@ export function VaultEntry() {
       <DialogContent
         showCloseButton={recoveryCode === null}
         className="top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto"
+        onOpenAutoFocus={(event) => {
+          // The fingerprint prompt comes up at once, and would shut a keyboard raised by
+          // focusing the PIN or password field; the gate focuses it if the prompt gives way.
+          if (status !== 'locked' || !vaultBiometrics.get()) return;
+          event.preventDefault();
+          if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+        }}
         onPointerDownOutside={(event) => {
           if (recoveryCode !== null) event.preventDefault();
         }}
