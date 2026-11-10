@@ -338,20 +338,28 @@ function EditorSurface({
   const hasLinks = useNoteLinks(note).length > 0;
   const hasMedia = useNoteAttachments(note.id).length > 0;
   const hasExtras = hasLinks || hasMedia || hasTags;
-  const splitLinks = split && hasExtras && target.width >= SIDE_LINKS_MIN;
-  const expandedLinks =
-    split && pane.expandable && hasExtras && target.width + gainedWidth >= SIDE_LINKS_MIN;
+  const sideFits = split && target.width >= SIDE_LINKS_MIN;
+  const sideFitsExpanded = split && pane.expandable && target.width + gainedWidth >= SIDE_LINKS_MIN;
+  const splitLinks = sideFits && hasExtras;
+  const expandedLinks = sideFitsExpanded && hasExtras;
   const sideLinks = splitLinks || (pane.expanded && expandedLinks);
-  // Choose both endpoint layouts before the width spring starts. Reserving the sidebar
-  // gradually makes the card's growth and sideways move one motion, without a breakpoint snap.
-  const linksProgress = useTransform(() =>
-    splitLinks ? 1 : expandedLinks ? paneExpansion.get() : 0,
+  // How far the extras sit beside the card rather than below it. Choose both endpoint layouts
+  // before the width spring starts. Reserving the sidebar gradually makes the card's growth
+  // and sideways move one motion, without a breakpoint snap.
+  const sideProgress = useTransform(() =>
+    sideFits ? 1 : sideFitsExpanded ? paneExpansion.get() : 0,
   );
+  // The first tag, file or link opens the sidebar, and removing the last closes it. The card
+  // narrows or widens on the pane's spring instead of jumping (see the effect below).
+  const extrasShown = useMotionValue(hasExtras ? 1 : 0);
+  const linksProgress = useTransform(() => sideProgress.get() * extrasShown.get());
   const linksSpace = useTransform(() => (256 + PANEL_GAP) * linksProgress.get());
   const sideOpacity = useTransform(linksProgress, [0, 0.3, 1], [0, 0, 1]);
-  const inlineOpacity = useTransform(linksProgress, [0, 1], [1, 0]);
+  // The inline extras follow only the layout: with the sidebar coming, a new tag goes
+  // straight to it rather than showing below the note first.
+  const inlineOpacity = useTransform(sideProgress, [0, 1], [1, 0]);
   const sideVisibility = useTransform(() => (linksProgress.get() === 0 ? 'hidden' : 'visible'));
-  const inlineVisibility = useTransform(() => (linksProgress.get() === 1 ? 'hidden' : 'visible'));
+  const inlineVisibility = useTransform(() => (sideProgress.get() === 1 ? 'hidden' : 'visible'));
   const inlineSize = useMotionValue(0);
   // The portal mounts after this surface's layout effects. Measure on attachment so the
   // inline previews have a real height throughout both directions of the width spring.
@@ -367,7 +375,7 @@ function EditorSurface({
     [inlineSize],
   );
   const inlineHeight = useTransform(() =>
-    linksProgress.get() === 0 ? 'auto' : inlineSize.get() * (1 - linksProgress.get()),
+    sideProgress.get() === 0 ? 'auto' : inlineSize.get() * (1 - sideProgress.get()),
   );
 
   useEffect(() => {
@@ -386,6 +394,28 @@ function EditorSurface({
   });
   const cardRect = useRef<Rect | null>(origin);
   const [settled, setSettled] = useState(direct);
+  const reducedMotion = useReducedMotion();
+
+  // A note's extras can still be loading while its pane slides in, and that slide already
+  // moves the card, so the sidebar only springs open or shut once the note has settled.
+  useEffect(() => {
+    const target = hasExtras ? 1 : 0;
+    if (!split || !settled || reducedMotion) {
+      stopSteady(extrasShown);
+      extrasShown.jump(target);
+      return;
+    }
+    if (extrasShown.get() === target) return;
+    // The card's text lays out again at its new width on the first frame. Keep that out of
+    // the spring's time, as the pane's own slides do; a reversal continues from where it is.
+    const cancel = afterPaint(() => {
+      void animateSteadySpring(extrasShown, target, springs.pane);
+    });
+    return () => {
+      cancel();
+      stopSteady(extrasShown);
+    };
+  }, [hasExtras, split, settled, reducedMotion, extrasShown]);
 
   const progress = useMotionValue(direct ? 1 : 0);
   const [self] = useState(() => ({}));
@@ -740,7 +770,6 @@ function EditorSurface({
     };
   }, [offerScrollToBottom, scrollElement]);
 
-  const reducedMotion = useReducedMotion();
   const closeHistory = () => {
     noteHistoryOpen.set(false);
   };
@@ -1140,7 +1169,8 @@ function EditorSurface({
                   style={{ paddingRight: linksSpace }}
                 >
                   {scrollArea}
-                  {(splitLinks || expandedLinks) && (
+                  {/* Kept mounted with nothing in it, so the last tag's removal can close it. */}
+                  {(sideFits || sideFitsExpanded) && (
                     <motion.aside
                       data-note-extras="side"
                       inert={!sideLinks}

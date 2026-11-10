@@ -250,7 +250,10 @@ painted frames so busy rendering cannot skip its entrance. The preview layout is
 both endpoint widths before expansion: the card reserves the sidebar's space on that same
 spring while its inline links, media and tags fade and collapse. The fixed-width sidebar
 fades into the opening space, so previews never stretch across the note and then snap to a
-column at an intermediate breakpoint. Only the destination link list reports visibility to
+column at an intermediate breakpoint. A note's first tag, file or link opens the sidebar,
+and removing its last one closes it, on the same pane spring: the card narrows or widens
+rather than jumping, and a new tag goes straight to the sidebar instead of showing below the
+note first. Only the destination link list reports visibility to
 the dock while the two copies crossfade. A tap can reverse it from its
 current width, with no text scaling, and reduced motion changes the layout immediately. Folding to phone
 width temporarily uses the phone layout; unfolding restores the chosen pane layout.
