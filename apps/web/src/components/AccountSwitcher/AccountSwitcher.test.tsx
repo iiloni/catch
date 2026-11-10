@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
   switchAccount: vi.fn(),
   signOutAccount: vi.fn(),
   unsyncedChanges: vi.fn(),
+  reorderAccounts: vi.fn(),
   blocked: vi.fn(() => false),
 }));
 vi.mock('@/lib/auth', () => ({
   getAccounts: () => mocks.accounts,
   getSignedInUser: () => mocks.accounts[0]?.user ?? null,
+  reorderAccounts: mocks.reorderAccounts,
 }));
 vi.mock('@/lib/accounts', () => ({
   switchAccount: mocks.switchAccount,
@@ -102,6 +104,34 @@ describe('AccountSwitcher', () => {
     expect(mocks.signOutAccount).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mocks.signOutAccount).toHaveBeenCalledWith(bob));
+  });
+
+  it('moves an account with the arrow keys and saves the order', () => {
+    mocks.reorderAccounts.mockImplementation((ids: string[]) => {
+      mocks.accounts = ids.map((id) => (id === 'ada' ? ada : bob));
+    });
+    render(<AccountSwitcher />);
+    openList();
+    const items = () => screen.getAllByRole('listitem').map((item) => item.textContent);
+    expect(items()).toEqual(['AAdaada@example.com', 'Bbob@example.com']);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move ada@example.com' }), {
+      key: 'ArrowDown',
+    });
+    expect(mocks.reorderAccounts).toHaveBeenCalledWith(['bob', 'ada']);
+    expect(items()).toEqual(['Bbob@example.com', 'AAdaada@example.com']);
+    // Already last: nothing to save.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move ada@example.com' }), {
+      key: 'ArrowDown',
+    });
+    expect(mocks.reorderAccounts).toHaveBeenCalledTimes(1);
+    expect(mocks.switchAccount).not.toHaveBeenCalled();
+  });
+
+  it('offers no reordering with one account', () => {
+    mocks.accounts = [ada];
+    render(<AccountSwitcher />);
+    openList();
+    expect(screen.queryByRole('button', { name: /^Move / })).not.toBeInTheDocument();
   });
 
   it('shows nothing when nobody is signed in', () => {

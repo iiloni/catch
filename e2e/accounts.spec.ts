@@ -233,3 +233,58 @@ test('an address names its account, as a bookmark of it does', async ({ page, is
   await expect(avatar(page, second)).toBeVisible({ timeout: 30_000 });
   await expect(card(page, 'Second account note')).toBeVisible();
 });
+
+test('putting the accounts in order renumbers their addresses, in every open tab', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Addresses do not depend on the layout.');
+  const first = await signUp(page);
+  await seedNotes(page, ['First account note']);
+  const second = await addAccount(page, first);
+  await seedNotes(page, ['Second account note']);
+  await expect(page).toHaveURL(/\/u\/2\/$/);
+  const tab = await page.context().newPage();
+  await tab.goto('/u/1/');
+  await expect(avatar(tab, first)).toBeVisible({ timeout: 30_000 });
+
+  await avatar(page, second).click();
+  const accounts = page.getByRole('list', { name: 'Accounts' });
+  const rows = accounts.getByRole('listitem');
+  await expect(rows).toHaveCount(2);
+  const handle = await settledBox(page.getByRole('button', { name: `Move ${second}` }));
+  const above = await settledBox(rows.first());
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - above.height / 2, { steps: 5 });
+  await page.mouse.move(x, y - above.height - 4, { steps: 5 });
+  await page.mouse.up();
+  await expect(rows.first()).toContainText(second);
+
+  // This tab and the other keep their accounts and take their new numbers, without loading.
+  await expect(page).toHaveURL(/\/u\/1\/$/);
+  await expect(tab).toHaveURL(/\/u\/2\/$/);
+  await expect(avatar(tab, first)).toBeVisible();
+  // Its links say so too.
+  await expect(tab.getByRole('link', { name: 'Search' }).first()).toHaveAttribute(
+    'href',
+    '/u/2/search',
+  );
+  await page.keyboard.press('Escape');
+  await expect(accounts).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Search' }).first()).toHaveAttribute(
+    'href',
+    '/u/1/search',
+  );
+  // The new numbers hold across loads.
+  await page.goto('/u/1/');
+  await expect(avatar(page, second)).toBeVisible({ timeout: 30_000 });
+  await expect(card(page, 'Second account note')).toBeVisible();
+  await tab.reload();
+  await expect(avatar(tab, first)).toBeVisible({ timeout: 30_000 });
+  await expect(tab).toHaveURL(/\/u\/2\/$/);
+  await expect(card(tab, 'First account note')).toBeVisible();
+  await tab.close();
+});
