@@ -44,6 +44,16 @@ type Props = {
   onCreated: (recoveryCode: string) => void;
 };
 
+/**
+ * Focuses the PIN or password field, bringing up the keyboard. While the fingerprint prompt
+ * is closing the app does not have focus yet, and a keyboard raised then is shut again, so
+ * it waits for focus to come back.
+ */
+function focusWhenInFront(field: RefObject<HTMLInputElement | null>) {
+  if (document.hasFocus()) field.current?.focus();
+  else window.addEventListener('focus', () => field.current?.focus(), { once: true });
+}
+
 /** What stands in front of the vault's notes: setting it up, or unlocking it. */
 export function VaultGate({ status, onCreated }: Props) {
   const [recovering, setRecovering] = useState(false);
@@ -78,7 +88,7 @@ export function VaultGate({ status, onCreated }: Props) {
       else if (result === 'forgotten')
         setNotice(`${words.Feature} no longer works here and is off.`);
       else if (result === 'failed') setNotice(`Could not use ${words.name}. Use ${fallback}.`);
-      field.current?.focus();
+      focusWhenInFront(field);
     } catch (caught) {
       setNotice(failure(caught));
     } finally {
