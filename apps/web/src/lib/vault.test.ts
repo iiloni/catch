@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { Note, Reminder, Vault, VaultFile, VaultNote } from '@catch/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { KeptVaultPin } from './vaultKeyStore';
 
 // The collections as plain maps: what the device's database and the outbox would be given.
 const store = vi.hoisted(() => {
@@ -43,13 +44,42 @@ vi.mock('./collections', () => ({
 }));
 vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
 vi.mock('./attachmentFiles', () => ({ setSealedFiles: vi.fn(), closeSealedFiles: vi.fn() }));
-vi.stubGlobal('document', { addEventListener: () => {}, visibilityState: 'visible' });
+// The page as the vault sees it: whether it is shown, and what it hears from the user.
+const page = vi.hoisted(() => {
+  const listeners = new Map<string, (() => void)[]>();
+  return {
+    visibility: 'visible' as 'visible' | 'hidden',
+    listeners,
+    fire: (type: string) => {
+      for (const listener of listeners.get(type) ?? []) listener();
+    },
+  };
+});
+vi.stubGlobal('document', {
+  addEventListener: (type: string, listener: () => void) =>
+    page.listeners.set(type, [...(page.listeners.get(type) ?? []), listener]),
+  get visibilityState() {
+    return page.visibility;
+  },
+});
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+// What the device keeps under its PIN.
+const device = vi.hoisted(() => ({ pin: null as KeptVaultPin | null }));
 vi.mock('./vaultKeyStore', () => ({
   vaultSeenKey: (id: string) => `catch-vault:${id}`,
   rememberVaultKey: vi.fn(async () => {}),
   loadVaultKey: vi.fn(async () => null),
   forgetVaultKey: vi.fn(async () => {}),
+  keepVaultPin: vi.fn(async (_id: string, kept: KeptVaultPin) => {
+    device.pin = kept;
+  }),
+  loadVaultPin: vi.fn(async () => device.pin),
+  forgetVaultPin: vi.fn(async () => {
+    device.pin = null;
+  }),
+  forgetVaultDevice: vi.fn(async () => {
+    device.pin = null;
+  }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 vi.mock('./api', () => ({
@@ -90,15 +120,22 @@ import {
   leaveVault,
   lockVault,
   recoverVault,
+  rememberVault,
   removeVaultNote,
+  removeVaultPin,
+  setVaultPin,
+  startVault,
   unlockVault,
+  unlockWithPin,
   vaultFileNote,
   vaultMode,
   vaultNotes,
+  vaultPin,
   vaultPrompt,
+  vaultRemembered,
   vaultStatus,
 } from './vault';
-import { forgetVaultKey, rememberVaultKey } from './vaultKeyStore';
+import { forgetVaultKey, forgetVaultPin, loadVaultPin, rememberVaultKey } from './vaultKeyStore';
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
 const TAG = '0199a0a0-0000-7000-8000-00000000000a';
@@ -135,7 +172,13 @@ describe('the vault', () => {
     vaultPrompt.set(false);
     vi.mocked(rememberVaultKey).mockClear();
     vi.mocked(forgetVaultKey).mockClear();
+    await removeVaultPin();
     recoveryCode = await createVault('correct horse', false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    page.visibility = 'visible';
   });
 
   it('is unlocked by setting it up, and keeps the key off the device unless asked', () => {
@@ -291,5 +334,148 @@ describe('the vault', () => {
     await deleteVault();
     expect(vaultStatus.get()).toBe('none');
     expect(vaultNotes.get()).toEqual([]);
+  });
+
+  it('opens with a PIN in place of the password, and keeps the PIN through a lock', async () => {
+    const id = add('secret');
+    await setVaultPin('2468');
+    expect(vaultPin.get()).toEqual({ length: 4, left: 5 });
+    expect(JSON.stringify(device.pin)).not.toContain('2468');
+    await lockVault();
+    expect(vaultStatus.get()).toBe('locked');
+    expect(vaultPin.get()).not.toBeNull();
+    expect(await unlockWithPin('1357')).toEqual({ result: 'wrong', left: 4 });
+    expect(vaultStatus.get()).toBe('locked');
+    expect(await unlockWithPin('2468')).toEqual({ result: 'unlocked' });
+    expect(getVaultNote(id)?.content).toEqual(paragraph('secret'));
+    // A right PIN starts the count again.
+    expect(vaultPin.get()).toEqual({ length: 4, left: 5 });
+  });
+
+  it('forgets the PIN after five wrong ones in a row, and asks for the password', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    for (const left of [4, 3, 2, 1]) {
+      expect(await unlockWithPin('0000')).toEqual({ result: 'wrong', left });
+    }
+    expect(await unlockWithPin('0000')).toEqual({ result: 'locked-out' });
+    expect(vaultPin.get()).toBeNull();
+    expect(device.pin).toBeNull();
+    expect(await unlockWithPin('2468')).toEqual({ result: 'forgotten' });
+    expect(vaultStatus.get()).toBe('locked');
+    expect(await unlockVault('correct horse', false)).toBe(true);
+  });
+
+  it('counts wrong PINs tried at once one after another', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    const tries = await Promise.all(Array.from({ length: 6 }, () => unlockWithPin('0000')));
+    expect(tries).toEqual([
+      { result: 'wrong', left: 4 },
+      { result: 'wrong', left: 3 },
+      { result: 'wrong', left: 2 },
+      { result: 'wrong', left: 1 },
+      { result: 'locked-out' },
+      { result: 'forgotten' },
+    ]);
+    expect(device.pin).toBeNull();
+  });
+
+  it('never tries a PIN with no tries left, even one the device failed to delete', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    if (device.pin) device.pin = { ...device.pin, failures: 5 };
+    expect(await unlockWithPin('2468')).toEqual({ result: 'locked-out' });
+    expect(vaultStatus.get()).toBe('locked');
+  });
+
+  it('keeps the PIN when the device cannot read or delete it', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    vi.mocked(loadVaultPin).mockRejectedValueOnce(new Error('unreadable'));
+    await expect(unlockWithPin('2468')).rejects.toThrow('unreadable');
+    expect(device.pin).not.toBeNull();
+    expect(await unlockWithPin('2468')).toEqual({ result: 'unlocked' });
+
+    // Turning it off reports the failure and leaves it shown as set, as it still is.
+    vi.mocked(forgetVaultPin).mockRejectedValueOnce(new Error('undeletable'));
+    await expect(removeVaultPin()).rejects.toThrow('undeletable');
+    expect(vaultPin.get()).not.toBeNull();
+    expect(device.pin).not.toBeNull();
+  });
+
+  it('forgets a PIN for a vault deleted and set up again elsewhere', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    const vault = store.vault.get('user-1');
+    if (vault) store.vault.insert({ ...vault, recoveryKey: 'another vault' });
+    expect(await unlockWithPin('2468')).toEqual({ result: 'forgotten' });
+    expect(vaultPin.get()).toBeNull();
+    expect(device.pin).toBeNull();
+  });
+
+  it('either remembers the vault or asks for a PIN, not both', async () => {
+    await setVaultPin('2468');
+    await rememberVault(true);
+    expect(vaultRemembered.get()).toBe(true);
+    expect(vaultPin.get()).toBeNull();
+    expect(device.pin).toBeNull();
+    await setVaultPin('1357');
+    expect(vaultRemembered.get()).toBe(false);
+    expect(forgetVaultKey).toHaveBeenCalledWith('user-1');
+    expect(vaultPin.get()).toEqual({ length: 4, left: 5 });
+  });
+
+  it('keeps the PIN through a password change, and forgets it with the vault', async () => {
+    await setVaultPin('24681357');
+    expect(await changeVaultPassword('correct horse', 'new password')).toBe(true);
+    await lockVault();
+    expect(await unlockWithPin('24681357')).toEqual({ result: 'unlocked' });
+    await deleteVault();
+    expect(vaultPin.get()).toBeNull();
+    expect(device.pin).toBeNull();
+  });
+
+  it('locks a minute after the app is hidden with a PIN, and five minutes without one', async () => {
+    startVault();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const away = (ms: number) => {
+      page.visibility = 'hidden';
+      page.fire('visibilitychange');
+      vi.setSystemTime(Date.now() + ms);
+      page.visibility = 'visible';
+      page.fire('visibilitychange');
+    };
+    away(61_000);
+    expect(vaultStatus.get()).toBe('unlocked');
+    away(5 * 60_000);
+    await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+
+    await unlockVault('correct horse', false);
+    await setVaultPin('2468');
+    away(30_000);
+    expect(vaultStatus.get()).toBe('unlocked');
+    away(61_000);
+    await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+  });
+
+  it('with a PIN, locks after five minutes on screen with nobody touching it', async () => {
+    startVault();
+    await setVaultPin('2468');
+    await lockVault();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    await unlockWithPin('2468');
+    vi.advanceTimersByTime(4 * 60_000);
+    page.fire('pointerdown');
+    vi.advanceTimersByTime(4 * 60_000);
+    expect(vaultStatus.get()).toBe('unlocked');
+    vi.advanceTimersByTime(60_000 + 15_000);
+    await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+
+    // Without a PIN, only leaving or the app being away locks it.
+    await removeVaultPin();
+    await unlockVault('correct horse', false);
+    vi.advanceTimersByTime(30 * 60_000);
+    expect(vaultStatus.get()).toBe('unlocked');
   });
 });

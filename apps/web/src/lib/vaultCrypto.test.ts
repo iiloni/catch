@@ -7,16 +7,19 @@ import {
   formatRecoveryCode,
   fromBase64,
   importFileKey,
+  isVaultPin,
   openFile,
   openFromDevice,
   openNote,
   openVaultKey,
+  openWithPin,
   parseRecoveryCode,
   sealedFileSize,
   sealFile,
   sealForDevice,
   sealNote,
   sealUnderPassword,
+  sealUnderPin,
   toBase64,
 } from './vaultCrypto';
 
@@ -168,6 +171,31 @@ describe('a remembered key', () => {
     expect(await openFromDevice(kept.deviceKey, kept.sealed)).toEqual(raw);
     const other = await sealForDevice(raw);
     expect(await openFromDevice(other.deviceKey, kept.sealed)).toBeNull();
+  });
+});
+
+describe('a key kept under a PIN', () => {
+  it('opens only with its PIN, for its user, on the device that sealed it', async () => {
+    const { raw } = await createVaultKey(USER, 'p', ROUNDS);
+    const kept = await sealUnderPin(USER, raw, '2468', ROUNDS);
+    expect(kept.sealed).not.toContain(toBase64(raw));
+    expect(await openWithPin(USER, kept, '2468')).toEqual(raw);
+    expect(await openWithPin(USER, kept, '1357')).toBe('wrong');
+    expect(await openWithPin('user-2', kept, '2468')).toBe('wrong');
+    // The device's own key is not the PIN's: no PIN opens a copy made on another device.
+    const other = await sealUnderPin(USER, raw, '2468', ROUNDS);
+    expect(await openWithPin(USER, { ...kept, deviceKey: other.deviceKey }, '2468')).toBeNull();
+    // Nor is a remembered copy one a PIN opens.
+    const remembered = await sealForDevice(raw);
+    expect(await openWithPin(USER, { ...kept, ...remembered }, '2468')).toBeNull();
+    // Nor a copy whose salt or rounds were damaged, which no PIN will change.
+    expect(await openWithPin(USER, { ...kept, salt: '%%%' }, '2468')).toBeNull();
+    expect(await openWithPin(USER, { ...kept, iterations: 0 }, '2468')).toBeNull();
+  });
+
+  it('takes four to eight digits', () => {
+    expect(['1234', '12345678'].every(isVaultPin)).toBe(true);
+    expect(['123', '123456789', '12a4', ' 1234', ''].some(isVaultPin)).toBe(false);
   });
 });
 

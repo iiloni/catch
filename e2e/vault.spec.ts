@@ -223,6 +223,72 @@ test('the vault is set up, locks on leaving, and opens with its password or reco
   await expect(card(page, 'Safe combination')).toBeVisible();
 });
 
+test('a PIN set on this device opens the vault in place of its password', async ({ page }) => {
+  await signUp(page);
+  await setUpVault(page);
+  await seedVaultNotes(page, ['Safe combination']);
+  await expect(card(page, 'Safe combination')).toBeVisible();
+
+  // Loading Settings locks the vault, and only an unlocked vault can be given a PIN.
+  await page.goto('/settings/vault');
+  const pinSwitch = page.getByRole('switch', { name: 'Unlock with a PIN' });
+  await expect(pinSwitch).toBeDisabled();
+  await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await gate(page).getByLabel('Vault password').fill(PASSWORD);
+  await gate(page).getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(gate(page)).toBeHidden();
+  // A vault that never locks has nothing for a PIN to open.
+  const autoLock = page.getByRole('switch', { name: 'Lock automatically' });
+  await expect(autoLock).toBeChecked();
+  await autoLock.click();
+  await expect(pinSwitch).toHaveCount(0);
+  await autoLock.click();
+  await pinSwitch.click();
+  const dialog = page.getByRole('dialog', { name: 'Set a PIN' });
+  await dialog.getByLabel('PIN', { exact: true }).fill('24');
+  await dialog.getByLabel('Repeat it').fill('24');
+  await dialog.getByRole('button', { name: 'Set PIN' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Use four to eight digits.');
+  await dialog.getByLabel('PIN', { exact: true }).fill('246810');
+  await dialog.getByLabel('Repeat it').fill('246810');
+  await dialog.getByRole('button', { name: 'Set PIN' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(pinSwitch).toBeChecked();
+
+  // A reload locks the vault and keeps the PIN, which opens it once all its digits are in.
+  await page.reload();
+  await expect(pinSwitch).toBeChecked();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await enter(page);
+  const pin = gate(page).getByLabel('Vault PIN');
+  await pin.fill('135791');
+  await expect(gate(page).getByRole('alert')).toHaveText('That is not the PIN. 4 tries left.');
+  await pin.fill('246810');
+  await expect(card(page, 'Safe combination')).toBeVisible();
+
+  // The password still works, and a device with a PIN does not offer to remember the vault.
+  await leave(page);
+  await enter(page);
+  await gate(page).getByRole('button', { name: 'Use the vault password' }).click();
+  await expect(gate(page).getByRole('switch', { name: 'Remember on this device' })).toHaveCount(0);
+  await gate(page).getByRole('button', { name: 'Use the PIN' }).click();
+
+  // Five wrong PINs in a row turn it off here, and the vault asks for its password.
+  for (const left of [4, 3, 2]) {
+    await pin.fill('000000');
+    await expect(gate(page).getByRole('alert')).toContainText(`${left} tries left`);
+  }
+  await pin.fill('000000');
+  await expect(gate(page).getByRole('alert')).toContainText('One more wrong PIN');
+  await pin.fill('000000');
+  await expect(gate(page).getByRole('alert')).toContainText('Too many wrong PINs');
+  await gate(page).getByLabel('Vault password').fill(PASSWORD);
+  await gate(page).getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(card(page, 'Safe combination')).toBeVisible();
+  await page.goto('/settings/vault');
+  await expect(pinSwitch).not.toBeChecked();
+});
+
 test('the Deck and search show the vault’s notes while inside it', async ({ page }) => {
   await signUp(page);
   await seedNotes(page, ['Plain task'], 'todo');

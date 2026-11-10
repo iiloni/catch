@@ -81,7 +81,7 @@ async function unseal(key: CryptoKey, data: string, context: string): Promise<By
   }
 }
 
-const keyContext = (userId: string, kind: 'password' | 'recovery') =>
+const keyContext = (userId: string, kind: 'password' | 'recovery' | 'pin') =>
   `catch-vault-key:${kind}:${userId}`;
 const noteContext = (userId: string, noteId: string) => `catch-vault-note:${userId}:${noteId}`;
 
@@ -331,6 +331,62 @@ export async function sealForDevice(raw: Bytes) {
 
 export const openFromDevice = (deviceKey: CryptoKey, sealed: string) =>
   unseal(deviceKey, sealed, 'catch-vault-key:device');
+
+/**
+ * Far fewer rounds than the password's. A PIN of a few digits is tried in moments however it
+ * is stretched by anyone holding the browser's files; the rounds only slow guesses made in
+ * the app, which the wrong-PIN limit stops sooner. They keep a PIN unlock quick on a phone.
+ */
+export const VAULT_PIN_ITERATIONS = 100_000;
+
+/** Whether a PIN is one the vault takes: four to eight digits. */
+export const isVaultPin = (pin: string) => /^\d{4,8}$/.test(pin);
+
+/**
+ * The vault key for a device given a PIN: sealed under a key stretched from the PIN, then
+ * under a key of the device's own, as a remembered key is.
+ */
+export async function sealUnderPin(
+  userId: string,
+  raw: Bytes,
+  pin: string,
+  iterations = VAULT_PIN_ITERATIONS,
+) {
+  const salt = random(SALT_BYTES);
+  const inner = await seal(
+    await passwordWrappingKey(pin, salt, iterations),
+    raw,
+    keyContext(userId, 'pin'),
+  );
+  const deviceKey = await crypto.subtle.generateKey(AES, false, ['encrypt', 'decrypt']);
+  return {
+    deviceKey,
+    salt: toBase64(salt),
+    iterations,
+    sealed: await seal(deviceKey, utf8(inner), 'catch-vault-key:device-pin'),
+  };
+}
+
+/**
+ * The vault key, opened with the device's PIN. `wrong` for another PIN; null when the
+ * device's copy itself cannot be opened, which no PIN will change.
+ */
+export async function openWithPin(
+  userId: string,
+  kept: { deviceKey: CryptoKey; sealed: string; salt: string; iterations: number },
+  pin: string,
+): Promise<Bytes | 'wrong' | null> {
+  const inner = await unseal(kept.deviceKey, kept.sealed, 'catch-vault-key:device-pin');
+  if (!inner) return null;
+  let wrapping: CryptoKey;
+  try {
+    wrapping = await passwordWrappingKey(pin, fromBase64(kept.salt), kept.iterations);
+  } catch {
+    // A salt or round count no PIN can be stretched with.
+    return null;
+  }
+  return (await unseal(wrapping, decoder.decode(inner), keyContext(userId, 'pin'))) ?? 'wrong';
+}
 
 export type VaultHistoryContext = { userId: string; noteId: string; epoch: string };
 const historyDomain = (context: VaultHistoryContext) =>

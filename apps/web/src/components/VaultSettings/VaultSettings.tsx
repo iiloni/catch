@@ -1,4 +1,11 @@
-import { KeyRound, LockKeyhole, LockKeyholeOpen, Smartphone, Trash2 } from 'lucide-react';
+import {
+  KeyRound,
+  LockKeyhole,
+  LockKeyholeOpen,
+  RectangleEllipsis,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import { type FormEvent, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsRow, SettingsSection } from '@/components/SettingsSection/SettingsSection';
@@ -12,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { MIN_VAULT_PASSWORD, newPasswordProblem } from '@/components/VaultGate/VaultGate';
+import { MIN_VAULT_PASSWORD, newPasswordProblem, PinInput } from '@/components/VaultGate/VaultGate';
 import { haptics } from '@/lib/haptics';
 import {
   changeVaultPassword,
@@ -20,10 +27,14 @@ import {
   enterVault,
   lockVault,
   rememberVault,
+  removeVaultPin,
+  setVaultPin,
   useVault,
   vaultNotes,
+  vaultPin,
   vaultRemembered,
 } from '@/lib/vault';
+import { isVaultPin } from '@/lib/vaultCrypto';
 import { useShowVaultButton } from '@/lib/vaultPreferences';
 
 const failure = (error: unknown) =>
@@ -37,44 +48,48 @@ const DIALOG =
 export function VaultSettings() {
   const status = useVault();
   const remembered = vaultRemembered.use();
+  const pin = vaultPin.use();
   const notes = vaultNotes.use();
-  const [dialog, setDialog] = useState<'password' | 'delete' | null>(null);
+  const [dialog, setDialog] = useState<'password' | 'pin' | 'delete' | null>(null);
   const unlocked = status === 'unlocked';
 
   if (status === 'none' || status === 'loading') {
     return (
-      <SettingsSection
-        title="Vault"
-        description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
-      >
+      <div className="flex flex-col gap-6">
         <VaultButtonSetting />
-        <SettingsRow
-          icon={LockKeyhole}
-          label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
-          description={status === 'none' ? 'Set one up to keep private notes' : undefined}
+        <SettingsSection
+          title="Vault"
+          description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
         >
-          {status === 'none' && (
-            <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
-              Set up
-            </Button>
-          )}
-        </SettingsRow>
-      </SettingsSection>
+          <SettingsRow
+            icon={LockKeyhole}
+            label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
+            description={status === 'none' ? 'Set one up to keep private notes' : undefined}
+          >
+            {status === 'none' && (
+              <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
+                Set up
+              </Button>
+            )}
+          </SettingsRow>
+        </SettingsSection>
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection
-        title="This device"
-        description="A device that remembers the vault opens it without the password, for anyone who can open Catch here. Otherwise the vault locks when you leave it, and after five minutes in the background."
-      >
-        <VaultButtonSetting />
+      <VaultButtonSetting />
+      <SettingsSection title="This device">
         <SettingsRow
           icon={unlocked ? LockKeyholeOpen : LockKeyhole}
           label={unlocked ? 'Unlocked' : 'Locked'}
           description={
-            unlocked ? 'Lock it and forget its key here' : 'Enter the password to open it'
+            unlocked
+              ? 'Lock it on this device'
+              : pin
+                ? 'Opens with your PIN'
+                : 'Opens with your password'
           }
         >
           <Button
@@ -90,17 +105,67 @@ export function VaultSettings() {
           </Button>
         </SettingsRow>
         <SettingsRow
-          icon={Smartphone}
-          label="Remember on this device"
-          description={unlocked ? 'Keep the vault open here' : 'Unlock the vault to change this'}
+          icon={Timer}
+          label="Lock automatically"
+          description={
+            !unlocked
+              ? 'Unlock to change'
+              : remembered
+                ? 'Stays open on this device'
+                : 'When you leave it or go idle'
+          }
         >
           <Switch
-            aria-label="Remember on this device"
-            checked={remembered}
+            aria-label="Lock automatically"
+            checked={!remembered}
             disabled={!unlocked}
-            onCheckedChange={(checked) => void rememberVault(checked)}
+            onCheckedChange={(checked) => {
+              haptics.toggle();
+              // A vault that never locks has nothing for a PIN to open, so the PIN goes.
+              rememberVault(!checked).then(
+                () => {
+                  if (!checked && pin) toast('PIN turned off');
+                },
+                () => toast.error('Could not change this. Try again.'),
+              );
+            }}
           />
         </SettingsRow>
+        {/* Ways back in, which only a vault that locks needs. */}
+        {!remembered && (
+          <div className="flex flex-col divide-y divide-foreground/[0.06] pl-8">
+            <SettingsRow
+              icon={RectangleEllipsis}
+              label="Unlock with a PIN"
+              description={pin || unlocked ? 'Instead of the password' : 'Unlock to set one'}
+            >
+              <Switch
+                aria-label="Unlock with a PIN"
+                checked={pin !== null}
+                disabled={!pin && !unlocked}
+                onCheckedChange={(checked) => {
+                  haptics.toggle();
+                  if (checked) setDialog('pin');
+                  else
+                    removeVaultPin().catch(() =>
+                      toast.error('Could not turn the PIN off. Try again.'),
+                    );
+                }}
+              />
+            </SettingsRow>
+            {pin && unlocked && (
+              <SettingsRow label={<span className="pl-8">Change PIN</span>}>
+                <Button
+                  variant="outline"
+                  className="h-11 rounded-full"
+                  onClick={() => setDialog('pin')}
+                >
+                  Change
+                </Button>
+              </SettingsRow>
+            )}
+          </div>
+        )}
       </SettingsSection>
       <SettingsSection title="Vault">
         <SettingsRow
@@ -131,6 +196,11 @@ export function VaultSettings() {
         </SettingsRow>
       </SettingsSection>
       <ChangeVaultPassword open={dialog === 'password'} onClose={() => setDialog(null)} />
+      <SetVaultPin
+        open={dialog === 'pin'}
+        replacing={pin !== null}
+        onClose={() => setDialog(null)}
+      />
       <DeleteVault
         open={dialog === 'delete'}
         noteCount={unlocked ? notes.length : null}
@@ -144,20 +214,22 @@ function VaultButtonSetting() {
   const [shown, setShown] = useShowVaultButton();
 
   return (
-    <SettingsRow
-      icon={LockKeyhole}
-      label="Show vault button"
-      description="Header shortcut on this device"
-    >
-      <Switch
-        aria-label="Show vault button"
-        checked={shown}
-        onCheckedChange={(checked) => {
-          haptics.toggle();
-          setShown(checked);
-        }}
-      />
-    </SettingsRow>
+    <SettingsSection title="Vault button">
+      <SettingsRow
+        icon={LockKeyhole}
+        label="Show vault button"
+        description="Header shortcut on this device"
+      >
+        <Switch
+          aria-label="Show vault button"
+          checked={shown}
+          onCheckedChange={(checked) => {
+            haptics.toggle();
+            setShown(checked);
+          }}
+        />
+      </SettingsRow>
+    </SettingsSection>
   );
 }
 
@@ -213,7 +285,7 @@ function ChangeVaultPassword({ open, onClose }: { open: boolean; onClose: () => 
         <DialogTitle>Change vault password</DialogTitle>
         <DialogDescription>
           Use at least {MIN_VAULT_PASSWORD} characters. Your recovery code stays the same, and
-          devices that remember the vault keep it open.
+          devices that remember the vault or open it with a PIN keep doing so.
         </DialogDescription>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           {fields.map(([name, label, value, set, autoComplete]) => (
@@ -249,6 +321,109 @@ function ChangeVaultPassword({ open, onClose }: { open: boolean; onClose: () => 
             </Button>
             <Button type="submit" className="rounded-xl" disabled={pending}>
               {pending ? 'Changing…' : 'Change password'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Null when the pair is a usable new PIN, or what is wrong with it. */
+function newPinProblem(pin: string, confirmation: string) {
+  if (!isVaultPin(pin)) return 'Use four to eight digits.';
+  if (pin !== confirmation) return 'The PINs do not match.';
+  return null;
+}
+
+function SetVaultPin({
+  open,
+  replacing,
+  onClose,
+}: {
+  open: boolean;
+  /** Whether the device has a PIN already, which this one replaces. */
+  replacing: boolean;
+  onClose: () => void;
+}) {
+  const formId = useId();
+  const [pin, setPin] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function close() {
+    if (pending) return;
+    setPin('');
+    setConfirmation('');
+    setError(null);
+    onClose();
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (pending) return;
+    const problem = newPinProblem(pin, confirmation);
+    setError(problem);
+    if (problem) return;
+    setPending(true);
+    try {
+      await setVaultPin(pin);
+      haptics.success();
+      toast.success(replacing ? 'PIN changed' : 'PIN set');
+      setPending(false);
+      setPin('');
+      setConfirmation('');
+      onClose();
+    } catch (caught) {
+      setError(failure(caught));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const fields = [
+    ['pin', 'PIN', pin, setPin],
+    ['confirm', 'Repeat it', confirmation, setConfirmation],
+  ] as const;
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && close()}>
+      <DialogContent showCloseButton={!pending} className={DIALOG}>
+        <DialogTitle>{replacing ? 'Change PIN' : 'Set a PIN'}</DialogTitle>
+        <DialogDescription>
+          Four to eight digits, for this device only. Five wrong tries turn it off.
+        </DialogDescription>
+        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+          {fields.map(([name, label, value, set]) => (
+            <label key={name} htmlFor={`${formId}-${name}`} className="flex flex-col gap-2 text-sm">
+              {label}
+              <PinInput
+                id={`${formId}-${name}`}
+                value={value}
+                readOnly={pending}
+                autoFocus={name === 'pin'}
+                onChange={set}
+              />
+            </label>
+          ))}
+          {error && (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="rounded-xl"
+              disabled={pending}
+              onClick={close}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="rounded-xl" disabled={pending}>
+              {pending ? 'Saving…' : replacing ? 'Change PIN' : 'Set PIN'}
             </Button>
           </div>
         </form>
