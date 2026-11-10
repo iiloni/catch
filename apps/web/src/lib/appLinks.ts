@@ -27,7 +27,7 @@ export function canOfferApp() {
 export type AppLink =
   | { kind: 'share'; token: string }
   /** A link to a server this app is not connected to, which it cannot read from. */
-  | { kind: 'elsewhere'; host: string };
+  | { kind: 'elsewhere'; host: string; server: string; token: string };
 
 /** What an address the app was opened with asks for, or null when it is not one of ours. */
 export function parseAppLink(address: string, serverUrl: string): AppLink | null {
@@ -44,7 +44,7 @@ export function parseAppLink(address: string, serverUrl: string): AppLink | null
   if (!link.pathname.startsWith(`${SHARE_PATH}/`) || rest.length) return null;
   if (!shareTokenSchema.safeParse(token).success || !token) return null;
   if (serverUrl && link.origin !== new URL(serverUrl).origin)
-    return { kind: 'elsewhere', host: link.host };
+    return { kind: 'elsewhere', host: link.host, server: link.origin, token };
   return { kind: 'share', token };
 }
 

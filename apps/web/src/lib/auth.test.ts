@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   success: undefined as ((context: SuccessContext) => void) | undefined,
 }));
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: mocks.native } }));
-vi.mock('./serverUrl', () => ({ getServerUrl: mocks.server }));
+vi.mock('./serverUrl', () => ({
+  supportsMultipleServers: () => false,
+  bindPageServer: () => {},
+  getServerUrl: mocks.server,
+}));
 vi.mock('better-auth/react', () => ({
   createAuthClient: (options: {
     fetchOptions: { onSuccess: (context: SuccessContext) => void };

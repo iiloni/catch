@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { signOutAccount, switchAccount, unsyncedChanges } from '@/lib/accounts';
-import { type Account, getAccounts, getSignedInUser } from '@/lib/auth';
+import { type Account, accountId, getAccountId, getAccounts } from '@/lib/auth';
 import { haptics } from '@/lib/haptics';
 import { springs } from '@/lib/motion';
+import { supportsMultipleServers } from '@/lib/serverUrl';
 import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 
 /** The avatar's width: how far a swipe carries it before the next account has replaced it. */
@@ -36,7 +37,7 @@ function canLeave(action: string) {
 function switchTo(account: Account) {
   if (!canLeave('switching accounts')) return false;
   haptics.success();
-  switchAccount(account.user.id);
+  void switchAccount(accountId(account));
   return true;
 }
 
@@ -77,8 +78,8 @@ export function AccountSwitcher() {
   const press = useRef<{ id: number; x: number; y: number; committed: boolean } | null>(null);
   const swiped = useRef(false);
 
-  const user = getSignedInUser();
-  const index = accounts.findIndex((account) => account.user.id === user?.id);
+  const currentId = getAccountId();
+  const index = accounts.findIndex((account) => accountId(account) === currentId);
   const current = accounts[index];
   if (!current) return null;
 
@@ -151,7 +152,7 @@ export function AccountSwitcher() {
 
   async function signOut(account: Account) {
     setConfirming(null);
-    setLeaving(account.user.id);
+    setLeaving(accountId(account));
     try {
       // Signing out the account in use loads the page again; any other just leaves the list.
       await signOutAccount(account);
@@ -187,10 +188,11 @@ export function AccountSwitcher() {
                 className="absolute inset-0"
                 style={swipe?.axis === 'x' ? { x: offset } : { y: offset }}
               >
-                <AccountAvatar {...current.user} />
+                <AccountAvatar {...current.user} id={accountId(current)} />
                 {swipe?.target && (
                   <AccountAvatar
                     {...swipe.target.user}
+                    id={accountId(swipe.target)}
                     className="absolute"
                     // It follows the avatar from the side the swipe is pulling away from.
                     style={
@@ -209,7 +211,7 @@ export function AccountSwitcher() {
             {accounts.map((account) => {
               const active = account === current;
               return (
-                <li key={account.user.id} className="flex items-center gap-1">
+                <li key={accountId(account)} className="flex items-center gap-1">
                   <button
                     type="button"
                     aria-current={active ? 'true' : undefined}
@@ -217,7 +219,7 @@ export function AccountSwitcher() {
                     onClick={() => (active ? setOpen(false) : switchTo(account))}
                     className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   >
-                    <AccountAvatar {...account.user} className="size-9" />
+                    <AccountAvatar {...account.user} id={accountId(account)} className="size-9" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{label(account)}</span>
                       {account.user.name && (
@@ -225,12 +227,17 @@ export function AccountSwitcher() {
                           {account.user.email}
                         </span>
                       )}
+                      {account.server && (
+                        <span className="block truncate text-muted-foreground text-xs">
+                          {new URL(account.server).host}
+                        </span>
+                      )}
                     </span>
                     {active && <Check className="size-4 shrink-0" aria-hidden />}
                   </button>
                   <button
                     type="button"
-                    aria-label={`Sign out ${account.user.email}`}
+                    aria-label={`Sign out ${account.user.email}${account.server ? ` on ${new URL(account.server).host}` : ''}`}
                     title="Sign out"
                     disabled={leaving !== null}
                     onClick={() => askToSignOut(account)}
@@ -243,7 +250,10 @@ export function AccountSwitcher() {
             })}
           </ul>
           <Link
-            to="/login"
+            to={supportsMultipleServers() ? '/setup' : '/login'}
+            onClick={(event) => {
+              if (!canLeave('adding an account')) event.preventDefault();
+            }}
             className="flex items-center gap-3 rounded-xl p-2 font-medium outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <span className="flex size-9 items-center justify-center rounded-full bg-foreground/[0.06]">

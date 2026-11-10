@@ -1,7 +1,7 @@
 import type { WidgetLaunch } from '@catch/shared';
 import { toast } from 'sonner';
 import { switchAccount } from './accounts';
-import { getAccounts, getSignedInUser, pagePath } from './auth';
+import { accountId, accountServer, getAccountId, getAccounts, pagePath } from './auth';
 import { waitForPendingWritesStored } from './collections';
 import {
   editorNote,
@@ -12,13 +12,12 @@ import {
 } from './dockState';
 import { linkCaptureControls, linkCaptureOpen } from './linkCapture';
 import { nativeWidgets } from './nativeWidgets';
-import { getServerUrl } from './serverUrl';
 import { leaveVault } from './vault';
 import { beforeWidgetOpen, widgetNoteOpening } from './widgetNavigation';
 
 function validAccount(launch: WidgetLaunch) {
-  return (
-    launch.server === getServerUrl() && getAccounts().some(({ user }) => user.id === launch.account)
+  return getAccounts().some(
+    (account) => accountId(account) === launch.account && accountServer(account) === launch.server,
   );
 }
 
@@ -27,9 +26,11 @@ export async function prepareInitialWidgetLaunch() {
   try {
     const launch = await nativeWidgets.pending();
     if (!launch || !validAccount(launch)) return false;
-    if (launch.account !== getSignedInUser()?.id) {
-      switchAccount(launch.account, launch.action === 'note' ? launch.noteId : undefined);
-      return true;
+    if (launch.account !== getAccountId()) {
+      return await switchAccount(
+        launch.account,
+        launch.action === 'note' ? launch.noteId : undefined,
+      );
     }
     if (launch.action === 'note' && launch.noteId) {
       widgetNoteOpening.set(launch.noteId);
@@ -88,7 +89,7 @@ export function watchWidgetLaunch(
     try {
       await Promise.all([...beforeWidgetOpen].map((flush) => flush()));
       if (stopped || pending?.id !== launch.id) return;
-      const changingAccount = launch.account !== getSignedInUser()?.id;
+      const changingAccount = launch.account !== getAccountId();
       if (!editorNote.get()) closingNote = false;
       if (editorNote.get() && (closingNote || changingAccount || launch.action !== 'note')) {
         // Back is asynchronous. A second close could replace its entry, then let the
@@ -102,8 +103,10 @@ export function watchWidgetLaunch(
       if (changingAccount) {
         await waitForPendingWritesStored();
         if (stopped || pending?.id !== launch.id) return;
-        consumed.add(launch.id);
-        switchAccount(launch.account, launch.action === 'note' ? launch.noteId : undefined);
+        if (
+          await switchAccount(launch.account, launch.action === 'note' ? launch.noteId : undefined)
+        )
+          consumed.add(launch.id);
         return;
       }
       leaveVault();

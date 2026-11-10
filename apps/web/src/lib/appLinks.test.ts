@@ -33,6 +33,8 @@ describe('parseAppLink', () => {
     expect(parseAppLink(address(`https://other.example/s/${token}`), server)).toEqual({
       kind: 'elsewhere',
       host: 'other.example',
+      server: 'https://other.example',
+      token,
     });
   });
 

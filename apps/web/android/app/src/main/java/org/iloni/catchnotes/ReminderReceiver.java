@@ -20,7 +20,7 @@ public class ReminderReceiver extends BroadcastReceiver {
             ReminderAlarms.snooze(
                     context, account == null ? "" : account, noteId, title == null ? "Reminder" : title, body == null ? "" : body);
         } else if (ReminderAlarms.ACTION_DONE.equals(action) && noteId != null) {
-            ReminderAlarms.dismiss(context, noteId);
+            ReminderAlarms.dismiss(context, intent.getStringExtra(ReminderAlarms.ACCOUNT) == null ? "" : intent.getStringExtra(ReminderAlarms.ACCOUNT), noteId);
         } else {
             ReminderAlarms.schedule(context);
         }

@@ -1,7 +1,20 @@
 import { Capacitor } from '@capacitor/core';
 import { createAuthClient } from 'better-auth/react';
 import { z } from 'zod';
-import { getServerUrl } from './serverUrl';
+import {
+  activateNativeAccount,
+  forgetNativeAccount,
+  nativeAccounts,
+  nativeActiveAccountId,
+  nativePage,
+  saveNativeAccount,
+  signedInUserSchema,
+} from './nativeAccounts';
+import { bindPageServer, getServerUrl, supportsMultipleServers } from './serverUrl';
+
+const native = supportsMultipleServers() ? nativePage() : null;
+if (native) bindPageServer(native.server);
+let nativePageId = native?.account?.id ?? null;
 
 // The session in use, kept under the keys it had before a device could hold several.
 const TOKEN_KEY = 'catch-auth-token';
@@ -21,12 +34,24 @@ function sessionKey(key: string) {
     : key;
 }
 
-const signedInUserSchema = z.object({ id: z.string().min(1), name: z.string(), email: z.string() });
-const accountSchema = z.object({ user: signedInUserSchema, token: z.string().min(1) });
+const accountSchema = z.object({
+  user: signedInUserSchema,
+  token: z.string().min(1),
+  id: z.string().optional(),
+  server: z.string().optional(),
+});
 
 export type SignedInUser = z.infer<typeof signedInUserSchema>;
 /** An account signed in on this device, with the bearer token of its session. */
 export type Account = z.infer<typeof accountSchema>;
+
+/** Device identity; server user IDs still belong in requests and note content. */
+export const accountId = (account: Account) => account.id ?? account.user.id;
+export const accountServer = (account: Account) => account.server ?? getServerUrl();
+export function getAccountId(): string | null {
+  return native ? nativePageId : (getSignedInUser()?.id ?? null);
+}
+const nativePageAccount = () => nativeAccounts().find((account) => account.id === nativePageId);
 
 function read<T extends z.ZodType>(key: string, schema: T): z.infer<T> | null {
   try {
@@ -72,7 +97,7 @@ function accountNumbers() {
 }
 
 // The phone's app has no address bar to read one from, and nothing to bookmark.
-const numbersAddresses = () => !Capacitor.isNativePlatform();
+const numbersAddresses = () => !native && !Capacitor.isNativePlatform();
 const NUMBERED = /^\/u\/(\d+)(?=[/?#]|$)/;
 const prefixFor = (userId: string) => `/u/${accountNumbers()[userId]}`;
 
@@ -98,6 +123,15 @@ export function accountPath(userId: string, path = '/') {
  */
 function resolvePage(): { userId: string | null; prefix: string } {
   const url = new URL(window.location.href);
+  if (native) {
+    if (url.searchParams.has('account')) {
+      if (!native.account) url.searchParams.delete('note');
+      else activateNativeAccount(native.account.id);
+      url.searchParams.delete('account');
+      window.history.replaceState(window.history.state, '', url);
+    }
+    return { userId: native.account?.user.id ?? null, prefix: '' };
+  }
   const show = () => window.history.replaceState(window.history.state, '', url);
   const numbered = NUMBERED.exec(url.pathname);
   if (numbered && numbersAddresses()) url.pathname = url.pathname.slice(numbered[0].length) || '/';
@@ -167,6 +201,7 @@ let pageUserId = page.userId;
 
 /** Every account signed in on this device (ADR 0019), in the order they were added. */
 export function getAccounts(): Account[] {
+  if (native) return nativeAccounts();
   let accounts = read(ACCOUNTS_KEY, z.array(accountSchema)) ?? [];
   const user = activeUser();
   const token = activeToken();
@@ -182,6 +217,13 @@ export function getAccounts(): Account[] {
   return accounts.some((account) => account.user.id === user.id)
     ? accounts.map((account) => (account.user.id === user.id ? active : account))
     : [...accounts, active];
+}
+
+/** Adding an account keeps the previous session as the destination when cancelled. */
+export function getReturnAccount(): Account | undefined {
+  const accounts = getAccounts();
+  const id = getAccountId() ?? (native ? nativeActiveAccountId() : activeUser()?.id);
+  return accounts.find((account) => accountId(account) === id) ?? accounts[0];
 }
 
 function writeAccounts(accounts: Account[]) {
@@ -205,6 +247,7 @@ function clearActive() {
 }
 
 function saveAccount(account: Account, activate: boolean) {
+  if (native) return saveNativeAccount(account, getServerUrl(), activate);
   const accounts = getAccounts();
   const known = accounts.some(({ user }) => user.id === account.user.id);
   writeAccounts(
@@ -219,6 +262,7 @@ const pageAccount = () =>
   pageUserId ? (getAccounts().find(({ user }) => user.id === pageUserId) ?? null) : null;
 
 export function getAuthToken(): string | null {
+  if (native) return nativePageAccount()?.token ?? null;
   return pageUserId ? (pageAccount()?.token ?? null) : activeToken();
 }
 
@@ -227,6 +271,7 @@ export function getAuthToken(): string | null {
  * Offline there is no session to fetch, and the app still needs to know whose notes to open.
  */
 export function getSignedInUser(): SignedInUser | null {
+  if (native) return nativePageAccount()?.user ?? null;
   return pageUserId ? (pageAccount()?.user ?? null) : activeUser();
 }
 
@@ -235,6 +280,7 @@ export function getSignedInUser(): SignedInUser | null {
  * load again afterwards. Other tabs keep the accounts they show.
  */
 export function activateAccount(userId: string): boolean {
+  if (native) return activateNativeAccount(userId);
   const account = getAccounts().find(({ user }) => user.id === userId);
   if (!account) return false;
   sessionStorage.setItem(sessionKey(TAB_KEY), userId);
@@ -246,11 +292,13 @@ export function activateAccount(userId: string): boolean {
 
 /** Whether the account this page was loaded for has been signed out, here or in another tab. */
 export function pageAccountGone() {
+  if (native) return nativePageId !== null && !nativePageAccount();
   return pageUserId !== null && pageAccount() === null;
 }
 
 /** Forgets an account's session on this device. Its data here is the caller's to remove. */
 export function forgetAccount(userId: string) {
+  if (native) return forgetNativeAccount(userId);
   const wasActive = activeUser()?.id === userId;
   writeAccounts(getAccounts().filter(({ user }) => user.id !== userId));
   if (wasActive) clearActive();
@@ -258,6 +306,10 @@ export function forgetAccount(userId: string) {
 
 /** Forgets the session this page uses, leaving the device's other accounts signed in. */
 export function clearAuthToken() {
+  if (native) {
+    if (nativePageId) forgetNativeAccount(nativePageId);
+    return;
+  }
   const userId = pageUserId ?? activeUser()?.id;
   if (userId) {
     forgetAccount(userId);
@@ -294,11 +346,13 @@ export const authClient = createAuthClient({
         // outbox are still that account's, and must not send with the new one's token.
         const user = userOf(context.data);
         if (user) {
-          saveAccount({ user, token }, true);
+          const saved = saveAccount({ user, token }, true);
+          if (native) nativePageId ??= saved?.id ?? null;
           // The load that follows is this tab's, as the account that just signed in.
-          sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
+          if (!native) sessionStorage.setItem(sessionKey(TAB_KEY), user.id);
           pageUserId ??= user.id;
         } else {
+          if (native) return;
           // Kept in the list first, since the keys below are about to name someone else.
           writeAccounts(getAccounts());
           clearActive();
@@ -332,7 +386,7 @@ export async function changeAccountName(name: string) {
   const result = await authClient.updateUser({ name });
   if (!result.error) {
     // Another tab may have switched accounts or signed this one out while saving.
-    const account = getAccounts().find((account) => account.user.id === user.id);
+    const account = getAccounts().find((account) => accountId(account) === getAccountId());
     if (account) saveAccount({ ...account, user: { ...account.user, name } }, false);
   }
   return result;

@@ -73,7 +73,8 @@ final class WidgetStore {
     static synchronized String begin(
             Context context, String account, String server, JSONArray accounts) {
         JSONObject root = state(context);
-        if (!server.equals(root.optString("server"))) {
+        boolean multipleServers = accounts.length() > 0 && accounts.optJSONObject(0).has("server");
+        if (!multipleServers && !server.equals(root.optString("server"))) {
             root = new JSONObject();
             state = root;
         }
@@ -85,7 +86,10 @@ final class WidgetStore {
             if (given == null || given.optString("id").isEmpty()) continue;
             String id = given.optString("id");
             JSONObject entry = object(old, id);
+            String origin = given.optString("server", server);
+            if (!origin.equals(entry.optString("server", origin))) entry = new JSONObject();
             put(entry, "label", given.optString("label"));
+            put(entry, "server", origin);
             put(kept, id, entry);
         }
         put(root, "accounts", kept);
@@ -230,7 +234,7 @@ final class WidgetStore {
             return null;
         put(launch, "id", UUID.randomUUID().toString());
         put(launch, "account", account);
-        put(launch, "server", state(context).optString("server"));
+        put(launch, "server", account(context, account).optString("server", state(context).optString("server")));
         put(launch, "action", action);
         put(state(context), "pending", launch);
         save(context);
