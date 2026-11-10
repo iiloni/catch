@@ -48,6 +48,7 @@ import {
   forgetVaultDevice,
   forgetVaultKey,
   forgetVaultPin,
+  type KeptVaultPin,
   keepVaultPin,
   loadVaultKey,
   loadVaultPin,
@@ -271,7 +272,7 @@ function refreshStatus() {
     const id = userId();
     if (known && id) {
       localStorage.removeItem(vaultSeenKey(id));
-      if (pinVault) void forgetPin(id);
+      if (pinVault) void dropPin(id);
     }
     vaultStatus.set(key ? 'unlocked' : known ? 'none' : 'loading');
     return;
@@ -280,7 +281,7 @@ function refreshStatus() {
   localStorage.setItem(vaultSeenKey(vault.userId), 'true');
   // Deleted and set up again on another device: this key opens none of the new vault.
   if (key && keyVault !== vaultIdentity(vault)) void dropKey('everything');
-  else if (pinVault && pinVault !== vaultIdentity(vault)) void forgetPin(vault.userId);
+  else if (pinVault && pinVault !== vaultIdentity(vault)) void dropPin(vault.userId);
   vaultStatus.set(key ? 'unlocked' : 'locked');
 }
 
@@ -378,18 +379,39 @@ async function setRemembered(remember: boolean) {
   const id = userId();
   if (!id) return;
   if (remember && key && keyVault) {
-    await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
-    // A vault that stays open has nothing for a PIN to open.
+    // A vault that stays open has nothing for a PIN to open. First, so a PIN the device
+    // fails to forget leaves the vault as it was.
     await forgetPin(id);
+    await rememberVaultKey(id, { ...(await sealForDevice(key)), vault: keyVault });
   } else await forgetVaultKey(id);
   vaultRemembered.set(remember && key !== null);
 }
 
-async function forgetPin(id: string) {
+function clearPin() {
   pinVault = null;
   vaultPin.set(null);
-  await forgetVaultPin(id);
 }
+
+/** Forgets this device's PIN. Throws, leaving it set, when the device could not delete it. */
+async function forgetPin(id: string) {
+  await forgetVaultPin(id);
+  clearPin();
+}
+
+/**
+ * Lets go of a PIN that opens nothing any longer: used up, or for a vault since replaced.
+ * It goes even if the device fails to delete it, since such a PIN is never tried again.
+ */
+async function dropPin(id: string) {
+  clearPin();
+  try {
+    await forgetVaultPin(id);
+  } catch {}
+}
+
+/** Whether a kept PIN may still be tried: it is for this vault and has tries left. */
+const usablePin = (kept: KeptVaultPin, vault: Pick<Vault, 'recoveryKey'> | undefined) =>
+  kept.failures < PIN_ATTEMPTS && (!vault || kept.vault === vaultIdentity(vault));
 
 const pinState = (kept: { length: number; failures: number }) => ({
   length: kept.length,
@@ -400,10 +422,15 @@ const pinState = (kept: { length: number; failures: number }) => ({
 async function restorePin() {
   const id = userId();
   if (!id) return;
-  const kept = await loadVaultPin(id);
-  const vault = vaultRow();
-  if (kept && vault && kept.vault !== vaultIdentity(vault)) {
-    await forgetPin(id);
+  let kept: KeptVaultPin | null;
+  try {
+    kept = await loadVaultPin(id);
+  } catch {
+    // Unreadable for now: the vault asks for its password, and the PIN is read next launch.
+    return;
+  }
+  if (kept && !usablePin(kept, vaultRow())) {
+    await dropPin(id);
     return;
   }
   pinVault = kept?.vault ?? null;
@@ -627,28 +654,43 @@ export async function removeVaultPin() {
 export type PinUnlock =
   | { result: 'unlocked' }
   | { result: 'wrong'; left: number }
-  /** No PIN opens the vault here any longer: too many wrong ones, or its copy is gone. */
+  /** Too many wrong PINs in a row: the device has forgotten it. */
+  | { result: 'locked-out' }
+  /** No PIN opens the vault here any longer: its copy is gone, or for a vault since replaced. */
   | { result: 'forgotten' };
+
+// One try at a time, so each counts the wrong ones the last try wrote.
+let pinTries: Promise<unknown> = Promise.resolve();
 
 /**
  * Unlocks the vault with this device's PIN. After `PIN_ATTEMPTS` wrong ones in a row the
  * device forgets the PIN, and the vault asks for its password.
  */
-export async function unlockWithPin(pin: string): Promise<PinUnlock> {
+export function unlockWithPin(pin: string): Promise<PinUnlock> {
+  const attempt = pinTries.then(() => tryPin(pin));
+  pinTries = attempt.catch(() => {});
+  return attempt;
+}
+
+async function tryPin(pin: string): Promise<PinUnlock> {
   const id = requireUser();
   const vault = vaultRow();
   const kept = await loadVaultPin(id);
-  if (!vault || !kept || kept.vault !== vaultIdentity(vault)) {
-    await forgetPin(id);
-    return { result: 'forgotten' };
+  if (!vault || !kept || !usablePin(kept, vault)) {
+    await dropPin(id);
+    return { result: kept && kept.failures >= PIN_ATTEMPTS ? 'locked-out' : 'forgotten' };
   }
   // Counted before it is tried, so closing the app mid-try does not give a try back.
   const failures = kept.failures + 1;
   await keepVaultPin(id, { ...kept, failures });
   const raw = await openWithPin(id, kept, pin);
-  if (raw === null || (raw === 'wrong' && failures >= PIN_ATTEMPTS)) {
-    await forgetPin(id);
+  if (raw === null) {
+    await dropPin(id);
     return { result: 'forgotten' };
+  }
+  if (raw === 'wrong' && failures >= PIN_ATTEMPTS) {
+    await dropPin(id);
+    return { result: 'locked-out' };
   }
   if (raw === 'wrong') {
     const state = pinState({ ...kept, failures });

@@ -48,13 +48,15 @@ the server, which is the party the vault excludes.
 
 **A device can open the vault with a PIN instead.** A PIN of four to eight digits seals the
 key a second time (PBKDF2-SHA256, 100,000 rounds, its own salt) inside the device's own key,
-as an entry of its own in the same database: an older client reads only the remembered
-entry, and would take the PIN's copy for the key. The PIN is for convenience and for keeping
+as an entry of its own in the same database. An older client reads only the remembered
+entry, so it ignores the PIN and asks for the password; in that entry it would have taken the
+PIN's copy for the key. The PIN is for convenience and for keeping
 out someone who comes across an unlocked phone or computer, not a targeted attacker: a PIN
 this short falls to a guess at every PIN by anyone who can copy the browser's files, however
 it is stretched, so it guards the vault no better than remembering does against them. Five
 wrong PINs in a row forget it and the vault asks for its password; the count is written
-before each try, but someone with the browser's developer tools can reset it. A PIN and
+before each try, tries run one at a time, and a PIN with no tries left is never tried even if
+the device failed to delete it, but someone with the browser's developer tools can reset it. A PIN and
 remembering exclude each other, since a remembered vault never asks. Locking keeps the PIN;
 switching it off, forgetting it and signing out remove it, as does the vault being deleted or
 replaced. Because the vault opens again quickly, a device with a PIN locks it sooner: a

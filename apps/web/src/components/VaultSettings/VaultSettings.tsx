@@ -122,8 +122,12 @@ export function VaultSettings() {
             onCheckedChange={(checked) => {
               haptics.toggle();
               // A vault that never locks has nothing for a PIN to open, so the PIN goes.
-              if (!checked && pin) toast('PIN turned off');
-              void rememberVault(!checked);
+              rememberVault(!checked).then(
+                () => {
+                  if (!checked && pin) toast('PIN turned off');
+                },
+                () => toast.error('Could not change this. Try again.'),
+              );
             }}
           />
         </SettingsRow>
@@ -142,7 +146,10 @@ export function VaultSettings() {
                 onCheckedChange={(checked) => {
                   haptics.toggle();
                   if (checked) setDialog('pin');
-                  else void removeVaultPin();
+                  else
+                    removeVaultPin().catch(() =>
+                      toast.error('Could not turn the PIN off. Try again.'),
+                    );
                 }}
               />
             </SettingsRow>

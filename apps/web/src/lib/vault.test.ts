@@ -135,7 +135,7 @@ import {
   vaultRemembered,
   vaultStatus,
 } from './vault';
-import { forgetVaultKey, rememberVaultKey } from './vaultKeyStore';
+import { forgetVaultKey, forgetVaultPin, loadVaultPin, rememberVaultKey } from './vaultKeyStore';
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
 const TAG = '0199a0a0-0000-7000-8000-00000000000a';
@@ -358,12 +358,60 @@ describe('the vault', () => {
     for (const left of [4, 3, 2, 1]) {
       expect(await unlockWithPin('0000')).toEqual({ result: 'wrong', left });
     }
-    expect(await unlockWithPin('0000')).toEqual({ result: 'forgotten' });
+    expect(await unlockWithPin('0000')).toEqual({ result: 'locked-out' });
     expect(vaultPin.get()).toBeNull();
     expect(device.pin).toBeNull();
     expect(await unlockWithPin('2468')).toEqual({ result: 'forgotten' });
     expect(vaultStatus.get()).toBe('locked');
     expect(await unlockVault('correct horse', false)).toBe(true);
+  });
+
+  it('counts wrong PINs tried at once one after another', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    const tries = await Promise.all(Array.from({ length: 6 }, () => unlockWithPin('0000')));
+    expect(tries).toEqual([
+      { result: 'wrong', left: 4 },
+      { result: 'wrong', left: 3 },
+      { result: 'wrong', left: 2 },
+      { result: 'wrong', left: 1 },
+      { result: 'locked-out' },
+      { result: 'forgotten' },
+    ]);
+    expect(device.pin).toBeNull();
+  });
+
+  it('never tries a PIN with no tries left, even one the device failed to delete', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    if (device.pin) device.pin = { ...device.pin, failures: 5 };
+    expect(await unlockWithPin('2468')).toEqual({ result: 'locked-out' });
+    expect(vaultStatus.get()).toBe('locked');
+  });
+
+  it('keeps the PIN when the device cannot read or delete it', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    vi.mocked(loadVaultPin).mockRejectedValueOnce(new Error('unreadable'));
+    await expect(unlockWithPin('2468')).rejects.toThrow('unreadable');
+    expect(device.pin).not.toBeNull();
+    expect(await unlockWithPin('2468')).toEqual({ result: 'unlocked' });
+
+    // Turning it off reports the failure and leaves it shown as set, as it still is.
+    vi.mocked(forgetVaultPin).mockRejectedValueOnce(new Error('undeletable'));
+    await expect(removeVaultPin()).rejects.toThrow('undeletable');
+    expect(vaultPin.get()).not.toBeNull();
+    expect(device.pin).not.toBeNull();
+  });
+
+  it('forgets a PIN for a vault deleted and set up again elsewhere', async () => {
+    await setVaultPin('2468');
+    await lockVault();
+    const vault = store.vault.get('user-1');
+    if (vault) store.vault.insert({ ...vault, recoveryKey: 'another vault' });
+    expect(await unlockWithPin('2468')).toEqual({ result: 'forgotten' });
+    expect(vaultPin.get()).toBeNull();
+    expect(device.pin).toBeNull();
   });
 
   it('either remembers the vault or asks for a PIN, not both', async () => {

@@ -4,8 +4,9 @@
  *
  * A device asked to remember the vault keeps the key sealed under a key of the device's own,
  * which the browser stores as an object scripts can use but never read the bytes of. A device
- * given a PIN keeps it sealed under the PIN as well, in an entry of its own: an older client
- * reads only the remembered one, and would take the PIN's sealed copy for the key itself.
+ * given a PIN keeps it sealed under the PIN as well, in an entry of its own. An older client
+ * reads only the remembered entry, so it ignores the PIN and asks for the password; had the
+ * PIN's copy been in that entry, it would have taken that copy for the key itself.
  */
 export type KeptVaultKey = { deviceKey: CryptoKey; sealed: string; vault: string };
 
@@ -56,20 +57,11 @@ const isKept = (kept: Partial<KeptVaultKey> | undefined): kept is KeptVaultKey =
   typeof kept.sealed === 'string' &&
   typeof kept.vault === 'string';
 
-async function load(userId: string, entry: string) {
-  try {
-    return await run<Partial<KeptVaultPin> | undefined>(userId, 'readonly', (store) =>
-      store.get(entry),
-    );
-  } catch {
-    return undefined;
-  }
-}
+const load = (userId: string, entry: string) =>
+  run<Partial<KeptVaultPin> | undefined>(userId, 'readonly', (store) => store.get(entry));
 
 async function remove(userId: string, entry: string) {
-  try {
-    await run(userId, 'readwrite', (store) => store.delete(entry));
-  } catch {}
+  await run(userId, 'readwrite', (store) => store.delete(entry));
 }
 
 export async function rememberVaultKey(userId: string, kept: KeptVaultKey) {
@@ -78,18 +70,29 @@ export async function rememberVaultKey(userId: string, kept: KeptVaultKey) {
 
 /** The remembered key, or null when there is none or this browser cannot keep one. */
 export async function loadVaultKey(userId: string): Promise<KeptVaultKey | null> {
-  const kept = await load(userId, REMEMBERED);
-  return isKept(kept) ? kept : null;
+  try {
+    const kept = await load(userId, REMEMBERED);
+    return isKept(kept) ? kept : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Forgets the remembered key; a PIN set on the device stays. */
-export const forgetVaultKey = (userId: string) => remove(userId, REMEMBERED);
+export async function forgetVaultKey(userId: string) {
+  try {
+    await remove(userId, REMEMBERED);
+  } catch {}
+}
 
 export async function keepVaultPin(userId: string, kept: KeptVaultPin) {
   await run(userId, 'readwrite', (store) => store.put(kept, PIN));
 }
 
-/** The key as the device's PIN seals it, or null when no PIN is set here. */
+/**
+ * The key as the device's PIN seals it, or null when no PIN is set here. Throws when the
+ * device cannot be read, which must not be mistaken for there being no PIN.
+ */
 export async function loadVaultPin(userId: string): Promise<KeptVaultPin | null> {
   const kept = await load(userId, PIN);
   if (!isKept(kept)) return null;
@@ -102,6 +105,7 @@ export async function loadVaultPin(userId: string): Promise<KeptVaultPin | null>
     : null;
 }
 
+/** Throws when the device could not delete it, so a PIN turned off cannot come back. */
 export const forgetVaultPin = (userId: string) => remove(userId, PIN);
 
 /** Where a device notes that it has seen the user's vault (see `hasSeenVault`). */

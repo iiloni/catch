@@ -378,7 +378,13 @@ export async function openWithPin(
 ): Promise<Bytes | 'wrong' | null> {
   const inner = await unseal(kept.deviceKey, kept.sealed, 'catch-vault-key:device-pin');
   if (!inner) return null;
-  const wrapping = await passwordWrappingKey(pin, fromBase64(kept.salt), kept.iterations);
+  let wrapping: CryptoKey;
+  try {
+    wrapping = await passwordWrappingKey(pin, fromBase64(kept.salt), kept.iterations);
+  } catch {
+    // A salt or round count no PIN can be stretched with.
+    return null;
+  }
   return (await unseal(wrapping, decoder.decode(inner), keyContext(userId, 'pin'))) ?? 'wrong';
 }
 

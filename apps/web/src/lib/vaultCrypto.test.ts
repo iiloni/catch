@@ -188,6 +188,9 @@ describe('a key kept under a PIN', () => {
     // Nor is a remembered copy one a PIN opens.
     const remembered = await sealForDevice(raw);
     expect(await openWithPin(USER, { ...kept, ...remembered }, '2468')).toBeNull();
+    // Nor a copy whose salt or rounds were damaged, which no PIN will change.
+    expect(await openWithPin(USER, { ...kept, salt: '%%%' }, '2468')).toBeNull();
+    expect(await openWithPin(USER, { ...kept, iterations: 0 }, '2468')).toBeNull();
   });
 
   it('takes four to eight digits', () => {

@@ -51,8 +51,12 @@ export function VaultGate({ status, onCreated }: Props) {
       <UnlockWithPin
         length={pin.length}
         onPassword={() => setUsePassword(true)}
-        onForgotten={() =>
-          setNotice('Too many wrong PINs. The PIN is off on this device until you set it again.')
+        onForgotten={(reason) =>
+          setNotice(
+            reason === 'locked-out'
+              ? 'Too many wrong PINs. The PIN is off on this device until you set it again.'
+              : 'The PIN no longer opens the vault on this device. Use the vault password.',
+          )
         }
       />
     );
@@ -329,7 +333,7 @@ function UnlockWithPin({
 }: {
   length: number;
   onPassword: () => void;
-  onForgotten: () => void;
+  onForgotten: (reason: 'locked-out' | 'forgotten') => void;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -338,7 +342,12 @@ function UnlockWithPin({
   const [error, setError] = useState<string | null>(null);
 
   async function attempt(candidate: string) {
-    if (pending || candidate.length < 4) return;
+    if (pending) return;
+    // Only a whole PIN is tried, so a press of Unlock part way through costs no try.
+    if (candidate.length !== length) {
+      setError(`The PIN has ${length} digits.`);
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -349,7 +358,8 @@ function UnlockWithPin({
       }
       haptics.warning();
       setPin('');
-      if (unlock.result === 'forgotten') onForgotten();
+      if (unlock.result === 'locked-out' || unlock.result === 'forgotten')
+        onForgotten(unlock.result);
       else
         setError(
           unlock.left === 1
