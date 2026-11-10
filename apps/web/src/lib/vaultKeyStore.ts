@@ -1,12 +1,15 @@
+import { type BiometricSeal, forgetBiometricKey } from './vaultBiometrics';
+
 /**
  * The vault key as a device keeps it between visits (ADR 0020), in a database named after
  * the user. Signing out deletes it.
  *
  * A device asked to remember the vault keeps the key sealed under a key of the device's own,
  * which the browser stores as an object scripts can use but never read the bytes of. A device
- * given a PIN keeps it sealed under the PIN as well, in an entry of its own. An older client
- * reads only the remembered entry, so it ignores the PIN and asks for the password; had the
- * PIN's copy been in that entry, it would have taken that copy for the key itself.
+ * given a PIN keeps it sealed under the PIN as well, in an entry of its own, and a phone that
+ * opens it with a fingerprint keeps the copy its Keystore sealed in a third. An older client
+ * reads only the remembered entry, so it ignores the others and asks for the password; had
+ * the PIN's copy been in that entry, it would have taken that copy for the key itself.
  */
 export type KeptVaultKey = { deviceKey: CryptoKey; sealed: string; vault: string };
 
@@ -19,10 +22,14 @@ export type KeptVaultPin = KeptVaultKey & {
   failures: number;
 };
 
+/** The vault key as the phone's Keystore sealed it, for opening with a fingerprint. */
+export type KeptVaultBiometric = BiometricSeal & { vault: string };
+
 const databaseName = (userId: string) => `catch-vault-${userId}`;
 const STORE = 'keys';
 const REMEMBERED = 'vault';
 const PIN = 'pin';
+const BIOMETRIC = 'biometric';
 
 function open(userId: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -108,6 +115,28 @@ export async function loadVaultPin(userId: string): Promise<KeptVaultPin | null>
 /** Throws when the device could not delete it, so a PIN turned off cannot come back. */
 export const forgetVaultPin = (userId: string) => remove(userId, PIN);
 
+export async function keepVaultBiometric(userId: string, kept: KeptVaultBiometric) {
+  await run(userId, 'readwrite', (store) => store.put(kept, BIOMETRIC));
+}
+
+/**
+ * The key as the phone's Keystore sealed it, or null when fingerprint unlock is off here.
+ * Throws when the device cannot be read, which must not be mistaken for it being off.
+ */
+export async function loadVaultBiometric(userId: string): Promise<KeptVaultBiometric | null> {
+  const kept = await run<Partial<KeptVaultBiometric> | undefined>(userId, 'readonly', (store) =>
+    store.get(BIOMETRIC),
+  );
+  return typeof kept?.iv === 'string' &&
+    typeof kept.sealed === 'string' &&
+    typeof kept.vault === 'string'
+    ? { iv: kept.iv, sealed: kept.sealed, vault: kept.vault }
+    : null;
+}
+
+/** Throws when the device could not delete it, so fingerprint unlock turned off stays off. */
+export const forgetVaultBiometric = (userId: string) => remove(userId, BIOMETRIC);
+
 /** Where a device notes that it has seen the user's vault (see `hasSeenVault`). */
 export const vaultSeenKey = (userId: string) => `catch-vault:${userId}`;
 
@@ -117,9 +146,13 @@ export function forgetVault(userId: string) {
   return forgetVaultDevice(userId);
 }
 
-/** Forgets every copy of the key this device keeps: remembered, and sealed under a PIN. */
-export function forgetVaultDevice(userId: string): Promise<void> {
-  return new Promise((resolve) => {
+/**
+ * Forgets every copy of the key this device keeps: remembered, sealed under a PIN, and sealed
+ * by the Keystore, whose key goes too so that no copy of it left behind opens again.
+ */
+export async function forgetVaultDevice(userId: string): Promise<void> {
+  await forgetBiometricKey(userId).catch(() => {});
+  await new Promise<void>((resolve) => {
     try {
       const request = indexedDB.deleteDatabase(databaseName(userId));
       request.onsuccess = () => resolve();

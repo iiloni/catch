@@ -59,10 +59,37 @@ before each try, tries run one at a time, and a PIN with no tries left is never 
 the device failed to delete it, but someone with the browser's developer tools can reset it. A PIN and
 remembering exclude each other, since a remembered vault never asks. Locking keeps the PIN;
 switching it off, forgetting it and signing out remove it, as does the vault being deleted or
-replaced. Because the vault opens again quickly, a device with a PIN locks it sooner: a
-minute after the app is hidden, and after five minutes on screen with no input, which covers
-a computer left open. A PIN known to the server was rejected: limiting its tries there would
-need the server's help to open the vault and a connection to do it.
+replaced. Because the vault opens again quickly, a device with a PIN or a fingerprint (below)
+locks it sooner: a minute after the app is hidden, and after five minutes on screen with no
+input, which covers a computer left open. A PIN known to the server was rejected: limiting its
+tries there would need the server's help to open the vault and a connection to do it.
+
+**The Android app can open the vault with a fingerprint.** Its threat model is the PIN's:
+convenience, and keeping out someone who comes across an unlocked phone, not a targeted
+attacker. `VaultKeyPlugin` seals the key a third time under an AES-256-GCM key in the
+Android Keystore, one per account (`catch-vault-bio-<user>`), held in StrongBox where the
+phone has one and bound to its account as additional data. The app keeps the sealed copy in
+an entry of its own in the device's database, beside the PIN's; the Keystore key never leaves
+the phone. The key opens only through a `BiometricPrompt` with a `CryptoObject` and a strong
+(class 3) biometric: every use needs its own fingerprint (`setUserAuthenticationParameters(0,
+AUTH_BIOMETRIC_STRONG)`, or a validity of -1 before Android 11), and the phone's screen-lock
+PIN is never taken in its place. It is invalidated when a fingerprint is enrolled, so someone
+who knows the phone's PIN cannot add their own finger and open the vault. A yes or no from
+the prompt with the key kept elsewhere was rejected: anything that could skip the prompt
+would have the key, while the Keystore gives nothing without a fingerprint. Many phones' face
+unlock is weaker than class 3 and does not count, so the app says "fingerprint" unless the
+phone also has face or iris hardware, where it says "biometrics".
+
+A fingerprint and a PIN are independent ways in and can both be set. Entering asks for a
+fingerprint first; its prompt's button, a dismissal or the phone's own lockout after too many
+tries leads to the PIN, then the password. A change in the phone's fingerprints turns
+fingerprint unlock off with a note saying why, and the next unlock with the PIN or password
+offers once to turn it on again. Locking keeps it. Switching it off, switching off Lock
+automatically (a vault that stays open needs no way back in), signing out and the vault being
+deleted or replaced remove it, deleting the Keystore key with the sealed copy. Turning it
+off fails loudly when either cannot be deleted, while one that opens nothing any
+longer goes even if its deletion fails, as with the PIN. Keystore protection for the PIN's
+copy, and unlocking with a passkey on the web, were left out.
 
 **Forgetting both secrets loses the notes.** The recovery code is shown once at setup and
 kept nowhere. Without the password or the code nobody can open the vault; the only way on
@@ -134,7 +161,9 @@ cost: Web Crypto measured about 1 GB/s on a 2019 laptop, and phones have hardwar
 - A script running in the app's origin while the vault is unlocked can read its notes, as
   it could read any note. The content security policy (ADR 0015) is what guards against
   that; the vault does not add to it.
-- A remembered key is as safe as the device and its browser profile.
+- A remembered key is as safe as the device and its browser profile. A fingerprint's copy is
+  safer than a PIN's against someone who copies the app's files, since its key stays in the
+  Keystore, but once open the vault key sits in script memory as it does after any unlock.
 - Web Crypto exists only in secure contexts, so a server reached over plain HTTP (other
   than localhost) cannot use the vault; the forms say so.
 - Additive for compatibility (ADR 0013): new routes, shapes and tables, and no change to

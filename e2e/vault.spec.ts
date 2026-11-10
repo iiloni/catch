@@ -240,6 +240,10 @@ test('a PIN set on this device opens the vault in place of its password', async 
   // A vault that never locks has nothing for a PIN to open.
   const autoLock = page.getByRole('switch', { name: 'Lock automatically' });
   await expect(autoLock).toBeChecked();
+  // Only the Android app can ask for a fingerprint.
+  await expect(
+    page.getByRole('switch', { name: /^Unlock with (fingerprint|biometrics)$/ }),
+  ).toHaveCount(0);
   await autoLock.click();
   await expect(pinSwitch).toHaveCount(0);
   await autoLock.click();

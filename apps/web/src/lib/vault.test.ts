@@ -1,7 +1,8 @@
 // @vitest-environment node
 import type { Note, Reminder, Vault, VaultFile, VaultNote } from '@catch/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { KeptVaultPin } from './vaultKeyStore';
+import type { BiometricFailure } from './vaultBiometrics';
+import type { KeptVaultBiometric, KeptVaultPin } from './vaultKeyStore';
 
 // The collections as plain maps: what the device's database and the outbox would be given.
 const store = vi.hoisted(() => {
@@ -63,8 +64,49 @@ vi.stubGlobal('document', {
   },
 });
 vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
-// What the device keeps under its PIN.
-const device = vi.hoisted(() => ({ pin: null as KeptVaultPin | null }));
+// What the device keeps under its PIN and its fingerprint.
+const device = vi.hoisted(() => ({
+  pin: null as KeptVaultPin | null,
+  biometric: null as KeptVaultBiometric | null,
+}));
+// The phone's Keystore: the key it seals the vault key under, and how the next prompt ends.
+const phone = vi.hoisted(() => ({
+  key: null as Uint8Array | null,
+  sealedWith: 0,
+  next: [] as BiometricFailure[],
+}));
+vi.mock('./vaultBiometrics', () => {
+  class BiometricError extends Error {
+    constructor(readonly reason: BiometricFailure) {
+      super(reason);
+    }
+  }
+  const prompt = () => {
+    const failure = phone.next.shift();
+    if (failure === 'invalidated') phone.key = null;
+    if (failure) throw new BiometricError(failure);
+  };
+  return {
+    BiometricError,
+    biometricsSupported: () => true,
+    sealWithBiometrics: vi.fn(async (_id: string, key: Uint8Array) => {
+      phone.key = null;
+      prompt();
+      phone.key = key.slice();
+      phone.sealedWith++;
+      return { iv: 'iv', sealed: `sealed under Keystore key ${phone.sealedWith}` };
+    }),
+    openWithBiometrics: vi.fn(async (_id: string, kept: { sealed: string }) => {
+      if (!phone.key || kept.sealed !== `sealed under Keystore key ${phone.sealedWith}`)
+        throw new BiometricError('gone');
+      prompt();
+      return phone.key.slice();
+    }),
+    forgetBiometricKey: vi.fn(async () => {
+      phone.key = null;
+    }),
+  };
+});
 vi.mock('./vaultKeyStore', () => ({
   vaultSeenKey: (id: string) => `catch-vault:${id}`,
   rememberVaultKey: vi.fn(async () => {}),
@@ -77,8 +119,17 @@ vi.mock('./vaultKeyStore', () => ({
   forgetVaultPin: vi.fn(async () => {
     device.pin = null;
   }),
+  keepVaultBiometric: vi.fn(async (_id: string, kept: KeptVaultBiometric) => {
+    device.biometric = kept;
+  }),
+  loadVaultBiometric: vi.fn(async () => device.biometric),
+  forgetVaultBiometric: vi.fn(async () => {
+    device.biometric = null;
+  }),
   forgetVaultDevice: vi.fn(async () => {
     device.pin = null;
+    device.biometric = null;
+    phone.key = null;
   }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
@@ -110,6 +161,7 @@ import {
   changeVaultPassword,
   createVault,
   deleteVault,
+  enableVaultBiometrics,
   enterVault,
   getSealedFiles,
   getVaultFiles,
@@ -121,12 +173,16 @@ import {
   lockVault,
   recoverVault,
   rememberVault,
+  removeVaultBiometrics,
   removeVaultNote,
   removeVaultPin,
   setVaultPin,
   startVault,
   unlockVault,
+  unlockWithBiometrics,
   unlockWithPin,
+  vaultBiometrics,
+  vaultBiometricsLost,
   vaultFileNote,
   vaultMode,
   vaultNotes,
@@ -135,6 +191,7 @@ import {
   vaultRemembered,
   vaultStatus,
 } from './vault';
+import { BiometricError, forgetBiometricKey } from './vaultBiometrics';
 import { forgetVaultKey, forgetVaultPin, loadVaultPin, rememberVaultKey } from './vaultKeyStore';
 
 const paragraph = (text: string) => [{ type: 'paragraph', content: [{ type: 'text', text }] }];
@@ -173,6 +230,9 @@ describe('the vault', () => {
     vi.mocked(rememberVaultKey).mockClear();
     vi.mocked(forgetVaultKey).mockClear();
     await removeVaultPin();
+    await removeVaultBiometrics();
+    phone.next = [];
+    vaultBiometricsLost.set(false);
     recoveryCode = await createVault('correct horse', false);
   });
 
@@ -477,5 +537,127 @@ describe('the vault', () => {
     await unlockVault('correct horse', false);
     vi.advanceTimersByTime(30 * 60_000);
     expect(vaultStatus.get()).toBe('unlocked');
+  });
+
+  describe('with a fingerprint', () => {
+    const prompt = { title: 'Unlock the vault', cancel: 'Use PIN' };
+
+    it('opens the vault, and stays on through a lock', async () => {
+      const id = add('secret');
+      await enableVaultBiometrics(prompt);
+      expect(vaultBiometrics.get()).toBe(true);
+      // The device keeps only what the Keystore sealed, for this vault.
+      expect(device.biometric).toMatchObject({ iv: 'iv', vault: expect.any(String) });
+      await lockVault();
+      expect(vaultBiometrics.get()).toBe(true);
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'unlocked' });
+      expect(getVaultNote(id)?.content).toEqual(paragraph('secret'));
+    });
+
+    it('can only be turned on while the vault is unlocked, and with a fingerprint', async () => {
+      phone.next = ['canceled'];
+      await expect(enableVaultBiometrics(prompt)).rejects.toBeInstanceOf(BiometricError);
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      await lockVault();
+      await expect(enableVaultBiometrics(prompt)).rejects.toThrow('locked');
+    });
+
+    it('leaves the PIN and password in charge when dismissed or locked out, and stays on', async () => {
+      await setVaultPin('2468');
+      await enableVaultBiometrics(prompt);
+      await lockVault();
+      for (const failure of ['canceled', 'fallback', 'lockout'] as const) {
+        phone.next = [failure];
+        expect(await unlockWithBiometrics(prompt)).toEqual({ result: failure });
+        expect(vaultStatus.get()).toBe('locked');
+        expect(vaultBiometrics.get()).toBe(true);
+      }
+      expect(await unlockWithPin('2468')).toEqual({ result: 'unlocked' });
+      await lockVault();
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'unlocked' });
+    });
+
+    it('turns off when the fingerprints change, and asks to come back once', async () => {
+      await setVaultPin('2468');
+      await enableVaultBiometrics(prompt);
+      await lockVault();
+      phone.next = ['invalidated'];
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'invalidated' });
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      expect(vaultBiometricsLost.get()).toBe(true);
+      // The PIN is its own way in, and still works.
+      expect(vaultPin.get()).not.toBeNull();
+      expect(await unlockWithPin('2468')).toEqual({ result: 'unlocked' });
+      await enableVaultBiometrics(prompt);
+      expect(vaultBiometricsLost.get()).toBe(false);
+      await lockVault();
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'unlocked' });
+    });
+
+    it('turns off when its Keystore key is gone or opens another copy', async () => {
+      await enableVaultBiometrics(prompt);
+      await lockVault();
+      phone.key = null;
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'forgotten' });
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      expect(vaultBiometricsLost.get()).toBe(false);
+    });
+
+    it('turns off for a vault deleted and set up again elsewhere', async () => {
+      await enableVaultBiometrics(prompt);
+      await lockVault();
+      const vault = store.vault.get('user-1');
+      if (vault) store.vault.insert({ ...vault, recoveryKey: 'another vault' });
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'forgotten' });
+      expect(device.biometric).toBeNull();
+      expect(phone.key).toBeNull();
+    });
+
+    it('is turned off strictly, and with the vault, and by not locking', async () => {
+      await enableVaultBiometrics(prompt);
+      vi.mocked(forgetBiometricKey).mockRejectedValueOnce(new Error('undeletable'));
+      await expect(removeVaultBiometrics()).rejects.toThrow('undeletable');
+      expect(vaultBiometrics.get()).toBe(true);
+      expect(device.biometric).not.toBeNull();
+      await removeVaultBiometrics();
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      expect(phone.key).toBeNull();
+
+      // A vault that stays open needs neither the PIN nor the fingerprint.
+      await setVaultPin('2468');
+      await enableVaultBiometrics(prompt);
+      await rememberVault(true);
+      expect(vaultPin.get()).toBeNull();
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      expect(phone.key).toBeNull();
+
+      await rememberVault(false);
+      await enableVaultBiometrics(prompt);
+      await deleteVault();
+      expect(vaultBiometrics.get()).toBe(false);
+      expect(device.biometric).toBeNull();
+      expect(phone.key).toBeNull();
+    });
+
+    it('locks sooner, as with a PIN', async () => {
+      startVault();
+      await enableVaultBiometrics(prompt);
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      page.visibility = 'hidden';
+      page.fire('visibilitychange');
+      vi.setSystemTime(Date.now() + 61_000);
+      page.visibility = 'visible';
+      page.fire('visibilitychange');
+      await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+
+      expect(await unlockWithBiometrics(prompt)).toEqual({ result: 'unlocked' });
+      vi.advanceTimersByTime(5 * 60_000 + 15_000);
+      await vi.waitFor(() => expect(vaultStatus.get()).toBe('locked'));
+    });
   });
 });
