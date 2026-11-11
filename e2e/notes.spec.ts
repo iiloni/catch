@@ -1174,7 +1174,11 @@ test('holding a deck card above the drop targets scrolls a tall column', async (
 
   // With the dock scrolled away, the targets come down into its place.
   const dock = await settledBox(page.locator('[data-dock]'));
+  // Scroll events arrive once a frame; let the one at the top land first, or both moves
+  // coalesce into a single upward step from where the drag left the page.
   await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(scrollY).toBe(0);
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
   await page.evaluate(() => window.scrollBy(0, 300));
   await expect(page.locator('[data-dock]')).toHaveAttribute('data-scroll-hidden', 'true');
   const next = await settledBox(column.getByRole('article').filter({ hasText: 'Note 9' }));
