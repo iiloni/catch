@@ -93,20 +93,14 @@ test('Site deploys on releases, not pushes to main, and builds the latest stable
       '-m',
       'init',
     );
-    for (const tag of [
-      'v0.9.0',
-      'v0.9.1',
-      'v0.9.2-preview',
-      'v0.10.0-preview',
-      'v0.10.0-rc',
-      'v1.0',
-    ])
+    // A text sort would put v0.9.1 above v0.10.0, and v0.10.1-preview above both.
+    for (const tag of ['v0.9.0', 'v0.9.1', 'v0.10.0', 'v0.10.1-preview', 'v0.10.1-rc', 'v1.0'])
       git('tag', tag);
     const picked = execFileSync('bash', ['-o', 'pipefail', '-c', `tag=$(${pick}); echo "$tag"`], {
       cwd: repo,
       encoding: 'utf8',
     }).trim();
-    assert.equal(picked, 'v0.9.1');
+    assert.equal(picked, 'v0.10.0');
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
