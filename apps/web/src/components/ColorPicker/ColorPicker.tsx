@@ -61,41 +61,40 @@ export function ColorSwatches({
   return (
     <fieldset className={cn('grid min-w-0 grid-cols-6 gap-2', className)}>
       <legend className="sr-only">Background color</legend>
-      {NOTE_COLORS.map((color) => (
-        <motion.button
-          key={color}
-          type="button"
-          data-note-color={color}
-          aria-label={
-            tags.find((tag) => tag.color === color)?.name
-              ? `${COLOR_NAMES[color]}: ${tags.find((tag) => tag.color === color)?.name}`
-              : COLOR_NAMES[color]
-          }
-          aria-pressed={value === color}
-          title={COLOR_NAMES[color]}
-          whileTap={{ scale: 0.85 }}
-          transition={springs.snappy}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (color !== value) haptics.selection();
-            onChange(color);
-          }}
-          className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-full border bg-note outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            value === color
-              ? 'border-foreground/70 ring-2 ring-foreground/15'
-              : 'border-foreground/10',
-          )}
-        >
-          {color === 'default' ? (
-            <Slash className="size-4" aria-hidden />
-          ) : tags.find((tag) => tag.color === color) ? (
-            <TagIcon name={tags.find((tag) => tag.color === color)?.icon} className="size-4" />
-          ) : value === color ? (
-            <Check className="size-4" aria-hidden />
-          ) : null}
-        </motion.button>
-      ))}
+      {NOTE_COLORS.map((color) => {
+        const linked = tags.find((tag) => tag.color === color);
+        return (
+          <motion.button
+            key={color}
+            type="button"
+            data-note-color={color}
+            aria-label={linked ? `${COLOR_NAMES[color]}: ${linked.name}` : COLOR_NAMES[color]}
+            aria-pressed={value === color}
+            title={COLOR_NAMES[color]}
+            whileTap={{ scale: 0.85 }}
+            transition={springs.snappy}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (color !== value) haptics.selection();
+              onChange(color);
+            }}
+            className={cn(
+              'flex size-9 shrink-0 items-center justify-center rounded-full border bg-note outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              value === color
+                ? 'border-foreground/70 ring-2 ring-foreground/15'
+                : 'border-foreground/10',
+            )}
+          >
+            {color === 'default' ? (
+              <Slash className="size-4" aria-hidden />
+            ) : linked ? (
+              <TagIcon name={linked.icon} className="size-4" />
+            ) : value === color ? (
+              <Check className="size-4" aria-hidden />
+            ) : null}
+          </motion.button>
+        );
+      })}
     </fieldset>
   );
 }

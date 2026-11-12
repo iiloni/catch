@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tagFormOpen } from '@/lib/dockState';
 import { createTag } from '@/lib/tags';
-import { NewTagButton } from './TagForm';
+import { NewTagButton, TagForm } from './TagForm';
 
 const root: Tag = {
   id: '018f3b5e-0000-7000-8000-000000000001',
@@ -80,10 +80,30 @@ describe('new tag button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save tag' }));
     expect(createTag).toHaveBeenCalledOnce();
   });
+  it('marks the colors other tags have with their icons', () => {
+    render(<NewTagButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
+    const taken = screen.getByRole('button', { name: 'Blue: Work' });
+    expect(taken.querySelector('.lucide-briefcase')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Red' }).querySelector('svg')).toBeNull();
+  });
+  it('leaves the edited tag’s own color free', () => {
+    render(
+      <TagForm
+        userId="ada"
+        tags={[root]}
+        initial={{ tag: root, parentId: null }}
+        onDone={vi.fn()}
+      />,
+    );
+    const own = screen.getByRole('button', { name: 'Blue' });
+    expect(own).toHaveAttribute('aria-pressed', 'true');
+    expect(own.querySelector('.lucide-check')).toBeInTheDocument();
+  });
   it('refuses a color another tag already has', () => {
     render(<NewTagButton />);
     fireEvent.click(screen.getByRole('button', { name: 'New tag' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue: Work' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Blue is already linked to another tag.');
   });
   it('is disabled without a signed-in user to own the tag', () => {
