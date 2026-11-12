@@ -768,7 +768,7 @@ test('settings creates roots and children and reserves linked colors', async ({ 
   dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill('Other');
-  await dialog.getByRole('button', { name: 'Teal', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Teal: Travel', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('already linked');
 });
 
