@@ -306,6 +306,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
   tokens in its `global.css` are a copy of `apps/web/src/styles.css`, so change both.
 - Everything the marketing page says must be true of the released product. Check a claim
   against the code before adding it, and say plainly what Catch lacks.
+- The site is deployed from the latest stable tag on each release, never from `main`
+  (ADR 0020). Document a user-facing feature in the PR that adds it, so its docs ship in
+  the same release; docs merged after a preview is cut miss that preview's promotion.
 - The comparison is data in `apps/site/src/lib/comparison.ts`. Take each cell about another
   product from that product's own pages, list the page in `sources` and update `checkedOn`.
 - Pictures of the app come from `./scripts/dev.sh screenshots` (`apps/site/scripts/screenshots.ts`),

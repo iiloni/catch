@@ -102,6 +102,10 @@ commit messages, but choose release versions explicitly.
   the failed refresh job. If deployment fails, or the released commit predates this job
   (including promotion of an older preview), run `gh workflow run site.yml --ref main`;
   the release artifacts do not need to be rebuilt.
+- The site's pages and docs always come from the latest stable tag, so they change only
+  with a stable release; a preview release refreshes just the changelog. Because a
+  promotion keeps the preview's commit, documentation must be merged before the preview
+  that will be promoted, ideally in the same PR as its feature.
 
 The release notes list what changed (see [Release notes and changelog](#release-notes-and-changelog)),
 then record the exact image, its digest, the source commit, and the Android version code.
