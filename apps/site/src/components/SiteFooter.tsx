@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { BrandLockup } from '@/components/BrandLockup';
+import { StableVersion } from '@/components/StableVersion';
+import { stableVersion } from '@/lib/changelogData';
 import { DEPLOYMENT_GUIDE_URL, RELEASES_URL, REPOSITORY_URL } from '@/lib/site';
 
 const columns = [
@@ -38,6 +40,7 @@ export function SiteFooter() {
           <p className="max-w-xs text-sm text-muted-foreground">
             A notes app you host yourself. Open source under the MIT license.
           </p>
+          <StableVersion version={stableVersion} />
         </div>
         {columns.map((column) => (
           <nav key={column.title} aria-label={column.title} className="space-y-3 text-sm">
