@@ -74,11 +74,9 @@ export function TagForm({
     }
     return options;
   }, [tags, initial.tag]);
-  const usedColors = new Set(
-    tags
-      .filter((tag) => tag.id !== initial.tag?.id)
-      .flatMap((tag) => (tag.color ? [tag.color] : [])),
-  );
+  // Only top-level tags hold a color, so these are the colors other tags have taken.
+  const linkedTags = tags.filter((tag) => tag.id !== initial.tag?.id && tag.color !== null);
+  const usedColors = new Set(linkedTags.flatMap((tag) => (tag.color ? [tag.color] : [])));
   function save(event: FormEvent) {
     event.preventDefault();
     const values = {
@@ -160,6 +158,7 @@ export function TagForm({
               <fieldset className="min-w-0">
                 <legend className="mb-2 text-sm font-medium">Color</legend>
                 <ColorSwatches
+                  tags={linkedTags}
                   value={color ?? 'default'}
                   onChange={(value) => {
                     if (value !== 'default' && usedColors.has(value)) {
