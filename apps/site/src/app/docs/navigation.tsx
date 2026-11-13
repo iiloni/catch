@@ -5,6 +5,7 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
+import { StableVersion } from '@/components/StableVersion';
 import { baseOptions } from '@/lib/layout.shared';
 
 const GUIDES = [
@@ -40,7 +41,15 @@ function GuideSelector() {
   );
 }
 
-export function DocsNavigation({ tree, children }: { tree: Root; children: ReactNode }) {
+export function DocsNavigation({
+  tree,
+  stableVersion,
+  children,
+}: {
+  tree: Root;
+  stableVersion: string | null;
+  children: ReactNode;
+}) {
   const selected = currentGuide(usePathname());
   const guideTree = useMemo<Root>(() => {
     const folder = tree.children.find(
@@ -67,9 +76,14 @@ export function DocsNavigation({ tree, children }: { tree: Root; children: React
     };
   }, [tree, selected.url]);
 
+  const base = baseOptions(null);
   return (
     <DocsLayout
-      {...baseOptions}
+      {...base}
+      nav={{
+        ...base.nav,
+        children: <StableVersion version={stableVersion} className="ms-2 me-1 self-center" />,
+      }}
       tree={guideTree}
       tabs={false}
       sidebar={{ components: { Separator: GuideSelector } }}

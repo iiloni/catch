@@ -42,8 +42,10 @@ product they describe.
   hero states that there is no hosted Catch. The comparison (`src/lib/comparison.ts`) lists
   the rows where Catch is behind, takes every claim about another product from that
   product's own pages, and carries the date it was checked. Claims about Catch must be true
-  of the released product. The latest published preview is the capability baseline for the
-  marketing page and user guides. Features are presented together without release-channel
+  of the released product. The latest stable release is the capability baseline for the
+  marketing page and user guides: the site is built from its tag (below), so a feature's
+  docs go live with the stable release that ships it, and preview users follow the
+  changelog. The header, hero and footer show that release's version. Features are presented together without release-channel
   badges or a separate "new" section; channel choices belong in installation and update
   guidance, and version history in the changelog.
 - **The changelog is the release tooling's JSON** (ADR 0017), generated when the site is
@@ -52,9 +54,11 @@ product they describe.
   links to the releases instead. A deploy sets `SITE_CHANGELOG=required`, so it fails rather
   than publish an empty changelog.
 - **Deployed from GitHub Actions to Cloudflare Workers with static assets**, not by
-  Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` builds
-  on pushes to `main` that touch the site or its inputs, external tag pushes or release
-  publication, and explicit dispatches from published **Release** runs in this repository.
+  Cloudflare's Git integration, whose clone has no tags. `.github/workflows/site.yml` deploys
+  on external tag pushes or release publication and explicit dispatches from published
+  **Release** runs in this repository, never on a push to `main`, which would publish docs
+  for unreleased features. Every release deploys, previews included, because the
+  changelog lists them; the pages and docs come from the latest stable tag either way.
   After successful publication, a separate job in a dispatched Release requests Site on
   `main` with `actions: write`, so it can be retried independently of artifact publication.
   Tag-push Release runs skip this request because the external push already deployed Site;
@@ -62,8 +66,9 @@ product they describe.
   trigger: `GITHUB_TOKEN` suppresses tag-push and release-published triggers, and Site did
   not start on completion of a Release dispatched by that token either. `workflow_dispatch`
   is a documented exception. A tag whose commit predates this release job (including an
-  older preview promoted to stable) still needs a manual Site dispatch. The deploy always
-  checks out `main` with all tags and does not consume the Release run's code or artifacts.
+  older preview promoted to stable) still needs a manual Site dispatch. The deploy clones
+  `main` with all tags, checks out the highest stable tag and builds that; it does not
+  consume the Release run's code or artifacts.
   It uploads the export and is skipped until the repository has the Cloudflare credentials
   and enables `CLOUDFLARE_SITE_ENABLED`.
   `apps/site/wrangler.jsonc`

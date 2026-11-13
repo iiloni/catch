@@ -1,5 +1,7 @@
 import { ArrowDown } from 'lucide-react';
 import { PhoneFrame, WindowFrame } from '@/components/Screenshot';
+import { StableVersion } from '@/components/StableVersion';
+import { stableVersion } from '@/lib/changelogData';
 import { shots } from '@/lib/screenshots';
 import { REPOSITORY_URL } from '@/lib/site';
 
@@ -34,6 +36,7 @@ export function Hero() {
             >
               View on GitHub
             </a>
+            <StableVersion version={stableVersion} className="h-8 px-3 text-sm" />
           </div>
           <p className="mt-5 text-sm text-muted-foreground">
             Open source. Imports from Google Keep.

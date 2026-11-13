@@ -65,14 +65,46 @@ function stepValues(
   return values;
 }
 
-test('Site retains external and manual triggers and builds main with every release tag', () => {
+test('Site deploys on releases, not pushes to main, and builds the latest stable tag', () => {
   const workflow = readFileSync(new URL('../.github/workflows/site.yml', import.meta.url), 'utf8');
   assert.match(workflow, /\n {2}workflow_dispatch:\n/);
-  assert.match(workflow, /\n {2}push:\n {4}branches: \[main\]\n/);
-  assert.match(workflow, /\n {4}tags: \['v\*'\]\n/);
+  assert.doesNotMatch(workflow, /branches:/);
+  assert.doesNotMatch(workflow, /paths:/);
+  assert.match(workflow, /\n {2}push:\n(?: {4}#.*\n)* {4}tags: \['v\*'\]\n/);
   assert.match(workflow, /\n {2}release:\n {4}types: \[published\]\n/);
   assert.doesNotMatch(workflow, /\n {2}workflow_run:/);
   assert.match(workflow, /ref: main\n\s+fetch-depth: 0\n\s+fetch-tags: true\n/);
+  const pick = /\n {10}tag=\$\((.+)\)\n/.exec(workflow)?.[1];
+  assert.ok(pick, 'Missing stable tag selection');
+  const repo = mkdtempSync(join(tmpdir(), 'catch-site-tag-'));
+  try {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
+    git('init', '--quiet');
+    git(
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--quiet',
+      '--allow-empty',
+      '-m',
+      'init',
+    );
+    // A text sort would put v0.9.1 above v0.10.0, and v0.10.1-preview above both.
+    for (const tag of ['v0.9.0', 'v0.9.1', 'v0.10.0', 'v0.10.1-preview', 'v0.10.1-rc', 'v1.0'])
+      git('tag', tag);
+    const picked = execFileSync('bash', ['-o', 'pipefail', '-c', `tag=$(${pick}); echo "$tag"`], {
+      cwd: repo,
+      encoding: 'utf8',
+    }).trim();
+    assert.equal(picked, 'v0.10.0');
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+  assert.match(workflow, /git checkout --quiet --detach "refs\/tags\/\$tag"\n/);
   assert.match(workflow, /SITE_CHANGELOG: required/);
   const condition = /\n {4}if: (.+)\n/.exec(workflow)?.[1];
   assert.ok(condition, 'Missing site deployment condition');

@@ -3,18 +3,9 @@ name: Site
 # Builds the public site (apps/site, ADR 0020) and uploads it to Cloudflare Workers. Pull
 # requests only build it, in CI's check job.
 on:
+  # The site describes the latest stable release (ADR 0020), so a push to main does not
+  # deploy it. Every release tag does, because the changelog lists previews too.
   push:
-    branches: [main]
-    paths:
-      - apps/site/**
-      - branding/**
-      - apps/web/public/wordmark/**
-      - apps/web/public/favicon-mark.svg
-      - scripts/changelog.ts
-      - scripts/release.ts
-      - pnpm-lock.yaml
-      - pnpm-workspace.yaml
-      - .github/workflows/site.yml
     # These events cover tags and releases created outside Actions. GITHUB_TOKEN
     # suppresses both, so Release explicitly dispatches Site after publication.
     tags: ['v*']
@@ -36,14 +27,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # Always main, with every tag: a tag can point at an older commit than the site's
-      # source, and the changelog is derived from the whole history (ADR 0017).
+      # Every tag and the whole history: the changelog is derived from them (ADR 0017), and
+      # the next step picks the release to build from them.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+      # The site's pages and docs come from the latest stable release, whatever triggered
+      # this run; a preview tag only brings the changelog up to date.
+      - name: Check out the latest stable release
+        run: |
+          tag=$(git tag --list 'v*' --sort=-v:refname | grep -Ex 'v[0-9]+\.[0-9]+\.[0-9]+' | sed -n 1p || true)
+          if [ -z "$tag" ]; then
+            echo '::error::There is no stable release tag to build the site from.'
+            exit 1
+          fi
+          git checkout --quiet --detach "refs/tags/$tag"
+          echo "Building the site from $tag." >> "$GITHUB_STEP_SUMMARY"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
