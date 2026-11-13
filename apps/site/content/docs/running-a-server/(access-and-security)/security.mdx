@@ -35,7 +35,7 @@ Invite links and temporary reset passwords are secrets. Invites are single-use a
 
 Accounts are separated by API and sync filters. The admin interface manages membership and backups; server/disk access can read ordinary notes and files. The [vault](/docs/using-catch/vault) encrypts notes and files on devices with a separate password. Administrators cannot reset that password or recover vault content without the user's password or recovery code. The server still sees note sizes and change times, attachment sizes and reminder schedules.
 
-A remembered vault is accessible to anyone who can open Catch on that device. An unlocked vault also depends on the safety of the device and the app's code; preserve the content security policy and avoid injecting scripts. Catch currently has no two-factor sign-in or self-service email recovery.
+A remembered vault is accessible to anyone who can open Catch on that device. A vault PIN or fingerprint unlock works only on the device where it was set up, and five wrong PINs in a row make that device ask for the vault password again. An unlocked vault also depends on the safety of the device and the app's code; preserve the content security policy and avoid injecting scripts. Catch currently has no two-factor sign-in or self-service email recovery.
 
 [Sharing links](/docs/using-catch/links-and-sharing#share-a-catch-note) grant anyone holding the link read-only access to that ordinary note and its files without signing in. Recipients can forward the link. Revocation takes effect once it reaches the server and cannot erase already downloaded copies. Links ask search engines not to index them, but that is not an access control.
 

@@ -8,11 +8,12 @@ Open **Settings** from the Gallery header. On a wide screen, pages are listed be
 ## General
 
 - **Appearance**: choose **System**, **Light** or **Dark**.
+- **App icon**: when your server runs a preview release, choose the stable or preview icon for this device. An installed web app may ask you to approve the change.
 - **Time format**: choose **Automatic**, **12 hour** or **24 hour**. Automatic follows the browser's language convention; in the native Android app it follows the phone's clock setting.
 - **Notes > Link previews**: show or hide preview cards. Your server must also allow fetching previews.
 - **Link capture**: install the browser [bookmarklet](/docs/using-catch/links-and-sharing#add-the-browser-bookmarklet).
 
-Appearance and time format are preferences on this device. Gallery layout, sorting, collapsed columns, recent searches and the archived-search preference are also local view choices.
+Appearance, app icon and time format are preferences on this device. Gallery layout, sorting, collapsed columns, recent searches and the archived-search preference are also local view choices.
 
 <DocsScreenshot name="settings" caption="General groups your device’s appearance and clock preferences with note and link settings." />
 
@@ -26,7 +27,7 @@ Appearance and time format are preferences on this device. Gallery layout, sorti
 
 ## Vault
 
-**Vault** sets up and manages your encrypted [vault](/docs/using-catch/vault). You can unlock or lock it, remember it on this device, hide the header shortcut, change its password or delete it. Its password is separate from your account password; an account password reset cannot open the vault.
+**Vault** sets up and manages your encrypted [vault](/docs/using-catch/vault). You can unlock or lock it, choose how it locks and opens on this device (automatically, with a PIN or, on Android, with a fingerprint), hide the header shortcut, change its password or delete it. Its password is separate from your account password; an account password reset cannot open the vault.
 
 ## Change your password
 
@@ -40,9 +41,11 @@ If you forget it, ask an administrator to reset it. Catch has no email password-
 
 Tap your avatar in the Gallery header to open the account list. Select **Add account** to sign in to another account on the same server without signing the first one out. Select an account to switch to it; a swipe across the avatar also switches accounts.
 
+Drag an account by its handle to reorder the list, or focus the handle and use the arrow keys. The order is also the order a swipe across the avatar follows.
+
 Close any open note or composer first. Switching reloads the app, keeps each account's local data separate and does not delete its queued work. That work sends when the account is open again. Browser tabs can show different accounts at the same time.
 
-When several accounts are signed in, browser addresses can contain a device-local number such as `/u/2/archive`. A bookmark uses that number on this device; the same number need not identify the same account on another device. A Catch note URL is not a way to share access.
+When several accounts are signed in, browser addresses contain the account's place in that list: the first is `/u/1`, the next `/u/2`, as in `/u/2/archive`. Reordering the accounts changes their numbers; open tabs stay on their account and move to its new number. A bookmark uses the number, so after a reorder it may open a different account. The number belongs to this device; the same number need not identify the same account on another device. A Catch note URL is not a way to share access.
 
 ## Sign out
 

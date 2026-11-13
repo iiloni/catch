@@ -36,11 +36,32 @@ The vault currently has these limits:
 - No importing into the vault or receiving shares from another app into it. Those notes go to ordinary Gallery.
 - Changes from different devices replace the whole vault note when they sync. Let a note sync before editing it elsewhere; there is no conflict merge. Encrypted [version history](/docs/using-catch/version-history) lets you review and recover saved content while the vault is unlocked.
 
-## Remember or lock this device
+## Choose how the vault locks on this device
 
-**Remember on this device** lets the vault open here without asking for its password, including after a restart. Anyone who can open Catch on this device can then open the vault. Enable it only on a device you trust.
+Each device decides how the vault locks and opens there. Find these choices in **Settings > Vault** under **This device**; they change only while the vault is unlocked.
 
-Without remembering, the vault locks when you leave it, reload Catch or spend five minutes in the background. In **Settings > Vault**, **Lock now** locks it and forgets its remembered key. Signing out also forgets it.
+**Lock automatically** is on unless you chose **Remember on this device** when setting up or unlocking. While it is on, the vault locks when you leave it or reload Catch, and also:
+
+- after five minutes with Catch in the background, if it opens with its password;
+- after one minute in the background, or five minutes on screen with no input, if it opens with a PIN or fingerprint.
+
+Turn **Lock automatically** off to keep the vault open here, including after a restart. Anyone who can open Catch on this device can then open the vault, so do this only on a device you trust. It also turns off this device's PIN and fingerprint unlock.
+
+**Lock now** locks the vault and forgets a remembered key, but keeps the PIN and fingerprint unlock. Signing out forgets all three.
+
+### Unlock with a PIN
+
+With **Lock automatically** on, turn on **Unlock with a PIN** and choose four to eight digits. The vault then opens here with the PIN instead of its password. The PIN belongs to this device only; set one on each device where you want it. Use **Change** beside **Change PIN** to replace it.
+
+After five wrong PINs in a row, the device forgets the PIN and asks for the vault password. Set a PIN again once you are in.
+
+### Unlock with a fingerprint on Android
+
+In the Android app, on a phone with a fingerprint or other strong biometric set up, turn on **Unlock with fingerprint** (some phones call it **Unlock with biometrics**). Entering the vault then asks for your fingerprint first. **Use PIN** or **Use password** on the prompt falls back to the PIN, if you set one, or the password. Catch does not use the phone's screen-lock PIN.
+
+If the fingerprints enrolled on the phone change, fingerprint unlock turns itself off. After you next unlock with the PIN or password, Catch offers to turn it back on.
+
+### Hide the vault button
 
 **Settings > Vault > Show vault button** hides or shows the header shortcut on this device, across its accounts. It does not delete or disable the vault; you can still open it from Settings or a reminder. The leave button stays visible while you are inside.
 
