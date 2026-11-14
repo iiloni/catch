@@ -521,10 +521,16 @@ function MorphingPill({
   const measured = useRef(0);
   const glassNow = useRef(glass);
   glassNow.current = glass;
+  const modeNow = useRef(mode);
+  modeNow.current = mode;
+  const updates = useRef(new Map<string, () => void>());
   const measure = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return;
+      const key = element.dataset.mode ?? '';
       const update = () => {
+        // Controls on their way out still resize as they leave; only the current ones count.
+        if (key !== modeNow.current) return;
         const next = element.offsetWidth;
         measured.current = next;
         onWidthChange?.(next);
@@ -534,13 +540,25 @@ function MorphingPill({
         else if (glassNow.current) animate(width, next, springs.smooth);
       };
       update();
-      if (typeof ResizeObserver === 'undefined') return;
+      updates.current.set(key, update);
+      const unregister = () => {
+        if (updates.current.get(key) === update) updates.current.delete(key);
+      };
+      if (typeof ResizeObserver === 'undefined') return unregister;
       const observer = new ResizeObserver(update);
       observer.observe(element);
-      return () => observer.disconnect();
+      return () => {
+        unregister();
+        observer.disconnect();
+      };
     },
     [width, glassOpacity, onWidthChange],
   );
+  // Controls called back before they finished leaving keep their element, which neither
+  // mounts nor resizes, so nothing else would fit the pill to them again.
+  useLayoutEffect(() => {
+    updates.current.get(mode)?.();
+  }, [mode]);
   useEffect(() => {
     let current = true;
     const fade = animate(glassOpacity, glass ? 1 : 0, { ...springs.smooth, visualDuration: 0.3 });
@@ -580,6 +598,7 @@ function MorphingPill({
           <motion.div
             key={mode}
             ref={measure}
+            data-mode={mode}
             className={cn(
               'header-fade absolute inset-y-0 flex items-center p-1',
               side === 'left' ? 'left-0 origin-left' : 'right-0 origin-right',
