@@ -244,3 +244,60 @@ test('a page too narrow for the wordmark and the title pill shows their icons in
   await expect(header.locator('h1 + span svg')).toBeHidden();
   expect((await settledBox(pill)).width).toBeGreaterThan(80);
 });
+
+test('the top right toolbar fits the page controls again after a selection ends at once', async ({
+  page,
+  isMobile,
+}) => {
+  await page.setViewportSize({ width: 400, height: 600 });
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 8 }, (_, index) => ({
+      title: `Note ${index + 1}`,
+      body: 'Something to scroll past. '.repeat(10),
+    })),
+  );
+  const sort = page.getByRole('button', { name: 'Sort' });
+  await expect(sort).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 300));
+  await settledBox(page.getByRole('button', { name: 'Scroll to top' }));
+  const toolbar = () =>
+    sort.evaluate((button) => {
+      const controls = button.closest('.header-fade.absolute');
+      const pill = controls?.parentElement?.parentElement;
+      if (!controls || !pill) throw new Error('Missing toolbar');
+      return { controls: controls.clientWidth, pill: pill.getBoundingClientRect().width };
+    });
+  const before = await toolbar();
+
+  // Selecting a note and clearing the selection while the page's controls are still leaving,
+  // as when a long-pressed card is dragged at once, which deselects it.
+  if (isMobile) {
+    const box = await settledBox(card(page, 'Note 6'));
+    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    await expect(page.getByLabel('1 selected')).toBeVisible();
+    for (let step = 1; step <= 4; step++) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: point.x, y: point.y + step * 10 }],
+      });
+    }
+    await expect(page.getByLabel('1 selected')).toBeHidden();
+    await page.waitForTimeout(100);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    const note = page
+      .locator('[data-note-cell]')
+      .filter({ has: page.getByRole('heading', { name: 'Note 6' }) });
+    await note.hover();
+    await note.getByRole('button', { name: 'Select note' }).click();
+    await page.getByRole('button', { name: 'Clear selection' }).click({ force: true });
+  }
+
+  await expect(sort).toBeVisible();
+  await settledBox(sort);
+  await expect.poll(toolbar).toEqual(before);
+});
