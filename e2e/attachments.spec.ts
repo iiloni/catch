@@ -963,21 +963,27 @@ test('media viewer fills the viewport and supports zoom, pan, pinch, navigation,
     expect(controls.x + controls.width).toBeLessThan(close.x);
     await page.screenshot({ path: testInfo.outputPath('media-viewer-small-phone.png') });
   }
+  // Sample from before the close: on a slow runner the 180ms fade can end while the close
+  // gesture's round trip is still returning.
+  await page.evaluate(() => {
+    const samples: number[] = [];
+    (window as unknown as { __exitOpacity: number[] }).__exitOpacity = samples;
+    const started = performance.now();
+    const sample = () => {
+      const viewer = document.querySelector('[data-media-viewer-content]');
+      if (!viewer || performance.now() - started > 10_000) return;
+      samples.push(Number(getComputedStyle(viewer).opacity));
+      requestAnimationFrame(sample);
+    };
+    sample();
+  });
   if (isMobile) await page.keyboard.press('Escape');
   else await stage.click({ button: 'right', position: center });
-  const exitOpacity = await page.evaluate(async () => {
-    const samples: number[] = [];
-    const started = performance.now();
-    while (performance.now() - started < 350) {
-      const viewer = document.querySelector('[data-media-viewer-content]');
-      if (!viewer) break;
-      samples.push(Number(getComputedStyle(viewer).opacity));
-      await new Promise(requestAnimationFrame);
-    }
-    return samples;
-  });
-  expect(exitOpacity.some((opacity) => opacity > 0 && opacity < 1)).toBe(true);
   await expect(viewer).toBeHidden();
+  const exitOpacity = await page.evaluate(
+    () => (window as unknown as { __exitOpacity: number[] }).__exitOpacity,
+  );
+  expect(exitOpacity.some((opacity) => opacity > 0 && opacity < 1)).toBe(true);
   await expect(page.getByRole('dialog', { name: 'Edit note' })).toBeVisible();
   await expect(thumbnail).toBeFocused();
 });
