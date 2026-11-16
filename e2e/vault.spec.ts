@@ -338,7 +338,7 @@ test('nothing a vault note holds reaches the server in the clear', async ({ page
   await page.getByRole('button', { name: 'New note' }).click();
   const window = page.getByRole('region', { name: 'New note', exact: true });
   await expect(window.getByRole('textbox')).toBeFocused();
-  await page.keyboard.type('Zebra crossing 4471 https://example.com/private-page');
+  await page.keyboard.type('Zebra crossing 4471902836 https://example.com/private-page');
   await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   const picker = page.getByRole('region', { name: 'Add attachment' });
   const [chooser] = await Promise.all([
@@ -347,10 +347,10 @@ test('nothing a vault note holds reaches the server in the clear', async ({ page
   ]);
   await chooser.setFiles(picture);
   await page.getByRole('button', { name: 'Save note' }).click();
-  await expect(card(page, 'Zebra crossing 4471')).toBeVisible();
+  await expect(card(page, 'Zebra crossing 4471902836')).toBeVisible();
 
   // The file opens under its real name on the device that holds the key.
-  const dialog = await openNote(page, 'Zebra crossing 4471');
+  const dialog = await openNote(page, 'Zebra crossing 4471902836');
   const media = dialog.getByRole('region', { name: 'Media' });
   await expect(media.getByText('passport-scan.png')).toBeVisible();
   await expect(media.getByRole('img')).toBeVisible();
@@ -378,7 +378,9 @@ test('nothing a vault note holds reaches the server in the clear', async ({ page
     .toHaveLength(2);
   await expect.poll(() => rows(page, 'tags')).toHaveLength(1);
 
-  const secrets = ['Zebra', '4471', 'private-page', 'passport-scan', 'image/png'];
+  // The number is long because digits are hex: a short one turns up in the hashes and
+  // ciphertext a vault note is sent with.
+  const secrets = ['Zebra', '4471902836', 'private-page', 'passport-scan', 'image/png'];
   const png = picture.buffer.subarray(0, 8).toString('latin1');
   for (const request of sent) {
     const body = request.postDataBuffer()?.toString('latin1') ?? '';
