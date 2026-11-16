@@ -183,7 +183,8 @@ function PreviewBlock({
             <span className="min-w-0 whitespace-pre-wrap">{text}</span>
           </p>
         ) : (
-          <p dir="auto" className="before:me-2 before:content-['–']">
+          <p dir="auto">
+            <span className="me-2 tabular-nums">{listIndex}.</span>
             {inline}
           </p>
         );

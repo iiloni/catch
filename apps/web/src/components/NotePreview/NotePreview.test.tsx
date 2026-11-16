@@ -31,6 +31,25 @@ describe('NotePreview', () => {
     expect(screen.getByText('Done').closest('p')).toHaveClass('line-through');
   });
 
+  it('numbers a numbered list from its start', () => {
+    const { container } = render(
+      <NotePreview
+        content={[
+          { type: 'numberedListItem', props: { start: 3 }, content: [text('Third')] },
+          { type: 'numberedListItem', content: [text('Fourth')] },
+          { type: 'paragraph', content: [text('Break')] },
+          { type: 'numberedListItem', content: [text('First again')] },
+        ]}
+      />,
+    );
+    expect(Array.from(container.querySelectorAll('p'), (line) => line.textContent)).toEqual([
+      '3.Third',
+      '4.Fourth',
+      'Break',
+      '1.First again',
+    ]);
+  });
+
   it('ends a card at its preview cutoff', () => {
     render(
       <NotePreview
