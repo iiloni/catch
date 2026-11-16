@@ -1,4 +1,6 @@
+import { Check } from 'lucide-react';
 import type { CSSProperties } from 'react';
+import type { Account } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 export function initials(name: string, email: string) {
@@ -40,6 +42,40 @@ export function AccountAvatar({ id, name, email, className, style }: AvatarProps
     >
       {initials(name, email)}
     </span>
+  );
+}
+
+export const accountLabel = ({ user }: Account) => user.name || user.email;
+
+/** An account to choose from a list of them: its avatar, name and email. */
+export function AccountOption({
+  account,
+  active,
+  disabled,
+  onClick,
+}: {
+  account: Account;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-current={active ? 'true' : undefined}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <AccountAvatar {...account.user} className="size-9" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{accountLabel(account)}</span>
+        {account.user.name && (
+          <span className="block truncate text-muted-foreground text-sm">{account.user.email}</span>
+        )}
+      </span>
+      {active && <Check className="size-4 shrink-0" aria-hidden />}
+    </button>
   );
 }
 

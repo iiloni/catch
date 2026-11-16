@@ -288,3 +288,67 @@ test('putting the accounts in order renumbers their addresses, in every open tab
   await expect(card(tab, 'First account note')).toBeVisible();
   await tab.close();
 });
+
+test('a capture saves to the account picked on it, keeping what was typed', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Choosing the account does not depend on the layout.');
+  const first = await signUp(page);
+  const second = await addAccount(page, first);
+  await seedNotes(page, ['Second account note']);
+  await page.route('**/api/link-previews/intake', (route) =>
+    route.fulfill({
+      json: {
+        title: 'Fetched title',
+        description: 'Fetched description',
+        siteName: 'Example',
+        imageHash: null,
+        imageWidth: null,
+        imageHeight: null,
+        iconHash: null,
+        hue: null,
+      },
+    }),
+  );
+
+  // The bookmarklet's address names no account: it opens as the one last used.
+  await page.goto(
+    `/capture#${new URLSearchParams({ url: 'https://example.com/read', title: 'Page', popup: 'true' })}`,
+  );
+  await expect(page).toHaveURL(/\/u\/2\/capture#/);
+  const picker = page.getByRole('button', { name: `Account: ${second}`, exact: true });
+  await expect(picker).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('Description')).toHaveValue('Fetched description');
+  await page.getByLabel('Title', { exact: true }).fill('My own title');
+  await page.getByLabel('Your notes').fill('Read this later');
+
+  await picker.click();
+  await page
+    .getByRole('list', { name: 'Accounts' })
+    .getByRole('button', { name: first, exact: true })
+    .click();
+  await expect(page.getByRole('button', { name: `Account: ${first}`, exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page).toHaveURL(/\/u\/1\/capture#/);
+  await expect(page.getByText(`Switched to ${first}`)).toBeVisible();
+  // Fetched again for the new account, without replacing what was typed.
+  await expect(page.getByLabel('Description')).toHaveValue('Fetched description');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('My own title');
+  await expect(page.getByLabel('Your notes')).toHaveValue('Read this later');
+  await page.getByRole('button', { name: 'Save link', exact: true }).click();
+  await expect(page.getByText(`Your note is in Gallery for ${first}.`)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Close window' })).toBeVisible();
+
+  // The account picked is the one the next capture, or a new tab, starts as.
+  // Gallery shows a link note as its page's preview.
+  const captured = page.locator('[data-note-card]', { hasText: 'example.com/read' });
+  await page.goto('/');
+  await expect(avatar(page, first)).toBeVisible({ timeout: 30_000 });
+  await expect(captured).toBeVisible();
+  await expect(card(page, 'Second account note')).toBeHidden();
+  await page.goto('/u/2/');
+  await expect(card(page, 'Second account note')).toBeVisible({ timeout: 30_000 });
+  await expect(captured).toBeHidden();
+});

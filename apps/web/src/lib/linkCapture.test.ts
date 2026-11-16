@@ -4,6 +4,7 @@ import { link, makeNote, paragraph } from '@/test/links';
 import {
   captureBookmarklet,
   capturedLinkContent,
+  captureFragment,
   enqueueLinkCapture,
   incomingLinkCaptures,
   incomingLinkDraft,
@@ -147,5 +148,28 @@ describe('capture bookmarklet', () => {
     });
     expect(open.mock.calls[0]?.[2]).toContain('noopener');
     expect(bookmarklet).not.toContain('localStorage');
+  });
+});
+
+describe('capture fragment', () => {
+  const draft = { url: 'https://example.com/a?b=c#d', title: 'A & B', description: '', notes: 'x' };
+  it('reads like the bookmarklet wrote it', () => {
+    const params = new URLSearchParams(
+      captureFragment(draft, { title: false, description: false }, true),
+    );
+    expect(Object.fromEntries(params)).toEqual({
+      url: draft.url,
+      title: 'A & B',
+      text: 'x',
+      popup: 'true',
+    });
+  });
+  it('carries a description and which fields were typed', () => {
+    const params = new URLSearchParams(
+      captureFragment({ ...draft, description: 'Mine' }, { title: true, description: true }, false),
+    );
+    expect(params.get('description')).toBe('Mine');
+    expect(params.get('edited')).toBe('title,description');
+    expect(params.has('popup')).toBe(false);
   });
 });

@@ -35,6 +35,7 @@ import {
   incomingLinkCaptures,
   type LinkCaptureControls,
   type LinkCaptureDraft,
+  type LinkCaptureEdits,
   linkCaptureControls,
   linkCaptureOpen,
   linkCaptureOrigin,
@@ -54,6 +55,8 @@ import { LinkCaptureOptions } from './LinkCaptureOptions';
 
 type FormProps = {
   initial?: Partial<LinkCaptureDraft>;
+  /** Fields of `initial` the user typed, which fetched details leave alone. */
+  initialEdited?: Partial<LinkCaptureEdits>;
   initialStatus?: string | null;
   autoFetch?: boolean;
   closing?: boolean;
@@ -64,6 +67,7 @@ type FormProps = {
   onOpenNote: (id: string) => void | Promise<void>;
   saveDraft?: (draft: LinkCaptureDraft, placement: LinkCapturePlacement) => Promise<string>;
   onSavingChange?: (saving: boolean) => void;
+  onDraftChange?: (draft: LinkCaptureDraft, edited: LinkCaptureEdits) => void;
 };
 
 const fieldClass = 'min-h-11 rounded-xl border-input bg-foreground/[0.03] text-base md:text-base';
@@ -166,6 +170,7 @@ function morphSurface(surface: HTMLElement, from: Rect, to: Rect, centered = tru
 
 export function LinkCaptureForm({
   initial,
+  initialEdited,
   initialStatus = null,
   autoFetch = false,
   closing = false,
@@ -175,6 +180,7 @@ export function LinkCaptureForm({
   onCancel,
   onOpenNote,
   onSavingChange,
+  onDraftChange,
   saveDraft,
 }: FormProps) {
   const id = useId();
@@ -194,7 +200,15 @@ export function LinkCaptureForm({
   }));
   const latest = useRef(draft);
   latest.current = draft;
-  const edited = useRef({ title: false, description: false });
+  const edited = useRef<LinkCaptureEdits>({
+    title: initialEdited?.title ?? false,
+    description: initialEdited?.description ?? false,
+  });
+  const draftListener = useRef(onDraftChange);
+  draftListener.current = onDraftChange;
+  useEffect(() => {
+    draftListener.current?.(draft, { ...edited.current });
+  }, [draft]);
   const request = useRef<AbortController | null>(null);
   const scrollArea = useRef<HTMLDivElement>(null);
   const saveErrorElement = useRef<HTMLParagraphElement>(null);

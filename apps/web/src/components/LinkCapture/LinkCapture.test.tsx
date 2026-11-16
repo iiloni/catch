@@ -293,6 +293,32 @@ describe('LinkCaptureForm', () => {
     expect(screen.getByLabelText('Title')).toHaveValue('My title');
     expect(screen.getByLabelText('Description')).toHaveValue('My description');
   });
+  it('keeps fields typed before an account switch and reports later changes', async () => {
+    const onDraftChange = vi.fn();
+    render(
+      <LinkCaptureForm
+        initial={{ url: 'https://example.com/', title: 'Typed title', notes: 'Selection' }}
+        initialEdited={{ title: true }}
+        autoFetch
+        onDraftChange={onDraftChange}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+        onOpenNote={vi.fn()}
+      />,
+    );
+    await screen.findByDisplayValue('Fetched description');
+    expect(screen.getByLabelText('Title')).toHaveValue('Typed title');
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Mine' } });
+    expect(onDraftChange).toHaveBeenLastCalledWith(
+      {
+        url: 'https://example.com/',
+        title: 'Typed title',
+        description: 'Mine',
+        notes: 'Selection',
+      },
+      { title: true, description: true },
+    );
+  });
   it('ignores an old response after the URL changes', async () => {
     let finish!: (value: LinkIntake) => void;
     mocks.intake.mockReturnValueOnce(
