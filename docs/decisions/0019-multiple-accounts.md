@@ -60,6 +60,10 @@ this one.
   It gains the number when the page loads if several accounts are signed in. With one
   account, addresses stay as they were: there is nobody to tell apart, and an existing
   bookmark or the installed app's start address needs no number.
+- The link capture bookmarklet is one such address, built once for the server and opened
+  in a new window, so it starts as the account last used. With several signed in, the
+  capture page shows that account and offers the others; choosing one loads the page again
+  as it (`switchAccountTo`), carrying the draft in the fragment.
 - An address whose number belongs to nobody signed in goes to the sign-in page, keeping the
   page asked for. Whoever signs in is taken to that page as themselves.
 - The Android app has no address bar and keeps its addresses without numbers.

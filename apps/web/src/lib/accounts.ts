@@ -49,11 +49,19 @@ const removedKey = (userId: string) => `catch-account-removed:${userId}`;
  * the collections open that account's notes.
  */
 export function switchAccount(userId: string, noteId?: string) {
+  switchAccountTo(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/');
+}
+
+/** Changes the account this tab shows and loads `path` as it, fragment included. */
+export function switchAccountTo(userId: string, path: string) {
   if (userId === getSignedInUser()?.id || !activateAccount(userId)) return;
   sessionStorage.setItem(SWITCHED_KEY, 'true');
-  window.location.assign(
-    accountPath(userId, noteId ? `/?note=${encodeURIComponent(noteId)}` : '/'),
-  );
+  const target = new URL(accountPath(userId, path), window.location.href);
+  // The phone's addresses carry no number, and a change of fragment alone loads nothing.
+  if (target.pathname + target.search === window.location.pathname + window.location.search) {
+    window.history.replaceState(window.history.state, '', target);
+    window.location.reload();
+  } else window.location.assign(target);
 }
 
 const openStores = [editorNote, quickNote, quickNoteMounted, linkCaptureOpen];

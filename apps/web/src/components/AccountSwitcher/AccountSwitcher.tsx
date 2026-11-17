@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Check, GripVertical, LogOut, Plus } from 'lucide-react';
+import { GripVertical, LogOut, Plus } from 'lucide-react';
 import {
   animate,
   type DragControls,
@@ -18,7 +18,11 @@ import {
   useState,
 } from 'react';
 import { toast } from 'sonner';
-import { AccountAvatar } from '@/components/AccountSummary/AccountSummary';
+import {
+  AccountAvatar,
+  AccountOption,
+  accountLabel,
+} from '@/components/AccountSummary/AccountSummary';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -38,8 +42,6 @@ import { isUpdateReloadBlocked } from '@/lib/useUpdateReloadBlocked';
 const TRAVEL = 32;
 /** A press that moves less than this is still a tap. */
 const SLOP = 6;
-
-const label = ({ user }: Account) => user.name || user.email;
 
 /** Leaving an account reloads the page, which would drop a note or composer still open. */
 function canLeave(action: string) {
@@ -217,7 +219,7 @@ export function AccountSwitcher() {
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={`Account: ${label(current)}`}
+            aria-label={`Account: ${accountLabel(current)}`}
             aria-description={accounts.length > 1 ? 'Swipe to switch accounts' : undefined}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -274,24 +276,12 @@ export function AccountSwitcher() {
                   onMove={(step) => move(account, step)}
                   onDrop={saveOrder}
                 >
-                  <button
-                    type="button"
-                    aria-current={active ? 'true' : undefined}
+                  <AccountOption
+                    account={account}
+                    active={active}
                     disabled={leaving !== null}
                     onClick={() => (active ? setOpen(false) : switchTo(account))}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-2 text-left outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <AccountAvatar {...account.user} className="size-9" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{label(account)}</span>
-                      {account.user.name && (
-                        <span className="block truncate text-muted-foreground text-sm">
-                          {account.user.email}
-                        </span>
-                      )}
-                    </span>
-                    {active && <Check className="size-4 shrink-0" aria-hidden />}
-                  </button>
+                  />
                   <button
                     type="button"
                     aria-label={`Sign out ${account.user.email}`}
@@ -320,7 +310,7 @@ export function AccountSwitcher() {
       <Dialog open={confirming !== null} onOpenChange={(next) => !next && setConfirming(null)}>
         {confirming && (
           <DialogContent>
-            <DialogTitle>Sign out {label(confirming.account)}?</DialogTitle>
+            <DialogTitle>Sign out {accountLabel(confirming.account)}?</DialogTitle>
             <DialogDescription>
               {confirming.pending === 0
                 ? 'Its notes are removed from this device and stay on your Catch server. Sign in again to get them back here.'

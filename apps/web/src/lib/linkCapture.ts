@@ -75,6 +75,22 @@ export function matchingLinkNotes(notes: readonly Note[], url: string): Note[] {
   );
 }
 
+/** Which fields the user typed into, so fetched page details do not replace them. */
+export type LinkCaptureEdits = { title: boolean; description: boolean };
+
+/**
+ * The capture page's fragment for a draft, as the bookmarklet writes it, plus what only the
+ * page writes: a description, and which fields were typed rather than fetched.
+ */
+export function captureFragment(draft: LinkCaptureDraft, edited: LinkCaptureEdits, popup: boolean) {
+  const params = new URLSearchParams({ url: draft.url, title: draft.title, text: draft.notes });
+  if (draft.description) params.set('description', draft.description);
+  const typed = (['title', 'description'] as const).filter((field) => edited[field]);
+  if (typed.length) params.set('edited', typed.join(','));
+  if (popup) params.set('popup', 'true');
+  return params.toString();
+}
+
 /** Instance-specific code; no credentials, and page content stays out of server access logs. */
 export function captureBookmarklet(serverUrl: string): string {
   const destination = JSON.stringify(new URL('/capture', serverUrl).href);
