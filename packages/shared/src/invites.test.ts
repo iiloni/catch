@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { inviteFromFragment, inviteFromText, inviteLink } from './invites';
 
-const token = 'aB3_-'.repeat(8) + 'xyz';
+const token = `${'aB3_-'.repeat(8)}xyz`;
 
 describe('invite links', () => {
   it('carry the token in the fragment and give it back', () => {
