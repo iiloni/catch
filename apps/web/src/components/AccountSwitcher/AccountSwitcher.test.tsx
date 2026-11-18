@@ -100,7 +100,9 @@ describe('AccountSwitcher', () => {
     render(<AccountSwitcher />);
     openList();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out bob@example.com' }));
-    expect(await screen.findByText(/2 changes on this device have not synced/)).toBeInTheDocument();
+    expect(
+      await screen.findByText('Signing out deletes 2 unsynced changes on this device.'),
+    ).toBeInTheDocument();
     expect(mocks.signOutAccount).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mocks.signOutAccount).toHaveBeenCalledWith(bob));

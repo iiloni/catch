@@ -155,16 +155,17 @@ describe('KeepImport', () => {
     choose([takeout]);
     await screen.findByRole('heading', { name: 'Import 1 attachment?' });
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('without inline blocks');
+    expect(dialog).toHaveTextContent('will appear in Media only');
+    expect(dialog).not.toHaveTextContent('after your existing notes');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
     expect(startImport).toHaveBeenCalledWith('Google Keep', 'user-1', found.notes, files);
     expect(files[0]?.read).not.toHaveBeenCalled();
   });
 
-  it('waits for the notes to sync', () => {
+  it('waits for notes and files to sync', () => {
     render(<KeepImport userId="user-1" notesSynced={false} />);
     expect(screen.getByRole('button', { name: 'Import from Google Keep' })).toBeDisabled();
-    expect(screen.getByText('Available once your notes have synced')).toBeInTheDocument();
+    expect(screen.getByText('Wait for notes and files to sync')).toBeInTheDocument();
   });
 
   it('explains files it cannot read', async () => {

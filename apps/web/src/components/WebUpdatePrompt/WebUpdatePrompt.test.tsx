@@ -35,9 +35,9 @@ describe('web update prompt', () => {
   it('explains that an incompatible frontend needs updating to resume sync and can keep working offline', () => {
     mocks.incompatibility = 'client-too-old';
     render(<WebUpdatePrompt />);
-    expect(screen.getByRole('dialog', { name: 'Update required to sync' })).toHaveTextContent(
-      'can no longer sync',
-    );
+    expect(
+      screen.getByRole('dialog', { name: 'Update required to sync' }),
+    ).toHaveAccessibleDescription(/Reload to resume syncing, or keep working offline/);
     expect(screen.queryByRole('button', { name: 'Later' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Keep working offline' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
