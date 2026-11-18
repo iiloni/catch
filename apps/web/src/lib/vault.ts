@@ -86,6 +86,11 @@ export const vaultStatus = createStore<VaultStatus>('loading');
 export const vaultMode = createStore(false);
 /** Whether the form that sets the vault up or unlocks it is asked for. */
 export const vaultPrompt = createStore(false);
+/**
+ * Where a pull drew its pill, for the form it asked for to grow out of, and what to tell once
+ * the form is on screen in the pill's place. Null otherwise.
+ */
+export const vaultPromptOrigin = createStore<{ from: DOMRect; shown: () => void } | null>(null);
 /** The vault's notes, opened. Empty unless unlocked. */
 export const vaultNotes = createStore<readonly Note[]>([]);
 /** How many notes the key could not open: sealed by a vault since replaced, or damaged. */

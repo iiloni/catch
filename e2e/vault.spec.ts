@@ -274,7 +274,7 @@ test('the vault is set up, locks on leaving, and opens with its password or reco
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
   await enter(page);
-  await gate(page).getByRole('button', { name: 'Use the recovery code' }).click();
+  await gate(page).getByRole('button', { name: 'Forgot password?' }).click();
   await gate(page).getByLabel('Recovery code').fill(code.toLowerCase());
   await gate(page).getByLabel('New vault password').fill('a brand new password');
   await gate(page).getByLabel('Repeat it').fill('a brand new password');
@@ -339,9 +339,9 @@ test('a PIN set on this device opens the vault in place of its password', async 
   // The password still works, and a device with a PIN does not offer to remember the vault.
   await leave(page);
   await enter(page);
-  await gate(page).getByRole('button', { name: 'Use the vault password' }).click();
+  await gate(page).getByRole('button', { name: 'Use password' }).click();
   await expect(gate(page).getByRole('switch', { name: 'Remember on this device' })).toHaveCount(0);
-  await gate(page).getByRole('button', { name: 'Use the PIN' }).click();
+  await gate(page).getByRole('button', { name: 'Use PIN' }).click();
 
   // Five wrong PINs in a row turn it off here, and the vault asks for its password.
   for (const left of [4, 3, 2]) {

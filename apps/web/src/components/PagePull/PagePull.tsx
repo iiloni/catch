@@ -39,7 +39,12 @@ export function PagePull({
 }: {
   enabled: boolean;
   action: PullAction;
-  onRelease: () => void;
+  /**
+   * Acts on a pull past the threshold, given the pill. A promise hands the pill off to what
+   * grows out of it (the vault's form): the pill stays where it is until that is on screen in
+   * its place, as the promise settles, and then goes rather than going back up.
+   */
+  onRelease: (pill: HTMLElement | null) => Promise<void> | undefined;
   children: ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -112,6 +117,8 @@ export function PagePull({
       armed: boolean;
     } | null = null;
     let suppressClick = false;
+    // Counts pulls, so a pill handed off is not put away during a later one.
+    let handOffs = 0;
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
 
     function springBack() {
@@ -191,6 +198,7 @@ export function PagePull({
         gesture.dragging = true;
         suppressClick = true;
         pull.stop();
+        handOffs++;
         const shape = pill.current;
         if (shape) hiddenY.current = -(shape.offsetTop + shape.offsetHeight + 8);
         setArmed(false);
@@ -216,9 +224,23 @@ export function PagePull({
       clickTimer = setTimeout(() => {
         suppressClick = false;
       }, 400);
-      springBack();
-      if (finished.armed && type !== 'touchcancel' && !defaultPrevented && touches.length === 0)
-        release.current();
+      const committed =
+        finished.armed && type !== 'touchcancel' && !defaultPrevented && touches.length === 0;
+      const replaced = committed ? release.current(pill.current) : undefined;
+      if (replaced) handOff(replaced);
+      else springBack();
+    }
+
+    function handOff(replaced: Promise<void>) {
+      const handOff = ++handOffs;
+      // A replacement that never arrives still lets the pill go.
+      const late = new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      void Promise.race([replaced, late]).then(() => {
+        if (handOff !== handOffs) return;
+        pull.jump(0);
+        setArmed(false);
+        setPulledAction(null);
+      });
     }
 
     function onClick(event: Event) {

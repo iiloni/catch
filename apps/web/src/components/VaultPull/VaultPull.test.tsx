@@ -3,8 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { createStore } from '@/lib/store';
 import { VaultPull } from './VaultPull';
 
+type Origin = { from: DOMRect; shown: () => void } | null;
+
 const vault = vi.hoisted(() => ({
   mode: null as ReturnType<typeof createStore<boolean>> | null,
+  prompt: null as ReturnType<typeof createStore<boolean>> | null,
+  origin: null as ReturnType<typeof createStore<Origin>> | null,
+  /** Whether entering asks for the password, as a locked vault does. */
+  locked: false,
   toggle: vi.fn(),
 }));
 
@@ -12,13 +18,30 @@ vi.mock('@/lib/haptics', () => ({ haptics: { threshold: vi.fn() } }));
 vi.mock('@/lib/vault', async () => {
   const { createStore } = await import('@/lib/store');
   vault.mode = createStore(false);
-  return { vaultMode: vault.mode, toggleVault: vault.toggle };
+  vault.prompt = createStore(false);
+  vault.origin = createStore<Origin>(null);
+  vault.toggle.mockImplementation(() => {
+    if (vault.mode?.get()) vault.mode.set(false);
+    else if (vault.locked) vault.prompt?.set(true);
+    else vault.mode?.set(true);
+  });
+  return {
+    vaultMode: vault.mode,
+    vaultPrompt: vault.prompt,
+    vaultPromptOrigin: vault.origin,
+    toggleVault: vault.toggle,
+  };
 });
 
 afterEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  act(() => vault.mode?.set(false));
+  vault.locked = false;
+  act(() => {
+    vault.mode?.set(false);
+    vault.prompt?.set(false);
+    vault.origin?.set(null);
+  });
 });
 
 function touch(target: Element, type: 'start' | 'move' | 'end', y: number, time: number) {
@@ -77,5 +100,26 @@ describe('vault pull', () => {
     localStorage.setItem('catch-pull-for-vault', 'true');
     pull(setup(true));
     expect(vault.toggle).not.toHaveBeenCalled();
+  });
+
+  it('hands its pill to the form a locked vault asks for, until the form is on screen', async () => {
+    localStorage.setItem('catch-pull-for-vault', 'true');
+    vault.locked = true;
+    const page = setup();
+    pull(page);
+    expect(vault.prompt?.get()).toBe(true);
+    const origin = vault.origin?.get();
+    expect(origin?.from).toBeDefined();
+    // The pill holds where it was, still saying what letting go did.
+    expect(screen.getByText('Release to open the vault')).toBeInTheDocument();
+    await act(async () => origin?.shown());
+    expect(screen.getByText('Pull to open the vault')).toBeInTheDocument();
+  });
+
+  it('asks nothing of the form when the vault opens without one', () => {
+    localStorage.setItem('catch-pull-for-vault', 'true');
+    pull(setup());
+    expect(vault.mode?.get()).toBe(true);
+    expect(vault.origin?.get()).toBeNull();
   });
 });

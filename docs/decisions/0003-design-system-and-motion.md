@@ -103,7 +103,11 @@ the page stays still while a glass pill is drawn down from above the screen, arr
 letting go starts to act. Unlike the sync pill it may cross the status bar, because it only
 comes when the finger draws it and it rests below the safe area. Its words then change as a header toolbar's controls do: they
 crossfade while the measured width animates. A pull keeps the words it began with until the pill
-is out of sight, so leaving the vault does not flash "open" on the way up. With reduced motion it fades in at rest instead.
+is out of sight, so leaving the vault does not flash "open" on the way up. A pull that asks for
+the vault's password hands its pill to the form instead of sending it back up: the pill fades
+where it is as the dialog starts from its exact shape and place, then opens into the form while
+moving into position (a clip and a translation, never a scale, so text does not stretch), and
+the form's contents fade in once there is room. Reduced motion skips this for the usual dialog. With reduced motion it fades in at rest instead.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns

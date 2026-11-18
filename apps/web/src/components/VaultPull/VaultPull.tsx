@@ -2,7 +2,7 @@ import { LockKeyhole, LockKeyholeOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { PagePull, type PullAction } from '@/components/PagePull/PagePull';
 import { usePageSurface } from '@/lib/pageSurface';
-import { toggleVault, vaultMode } from '@/lib/vault';
+import { toggleVault, vaultMode, vaultPrompt, vaultPromptOrigin } from '@/lib/vault';
 import { usePullForVault } from '@/lib/vaultPreferences';
 
 const ENTER: PullAction = {
@@ -15,6 +15,22 @@ const LEAVE: PullAction = {
   pull: 'Pull to leave the vault',
   release: 'Release to leave the vault',
 };
+
+/** Toggles the vault; a pull that asks for the password grows into the form asking for it. */
+function release(pill: HTMLElement | null) {
+  let shown = () => {};
+  const replaced = new Promise<void>((resolve) => {
+    shown = resolve;
+  });
+  // Set first: the form reads it as it opens.
+  if (pill && !vaultMode.get()) {
+    vaultPromptOrigin.set({ from: pill.getBoundingClientRect(), shown });
+  }
+  toggleVault();
+  if (vaultPrompt.get() && vaultPromptOrigin.get()) return replaced;
+  vaultPromptOrigin.set(null);
+  return undefined;
+}
 
 /**
  * Pulling down at the top of the Gallery or the Deck enters the vault, or leaves it from
@@ -30,7 +46,7 @@ export function VaultPull({ disabled, children }: { disabled: boolean; children:
     <PagePull
       enabled={on && active && !disabled}
       action={inside ? LEAVE : ENTER}
-      onRelease={toggleVault}
+      onRelease={release}
     >
       {children}
     </PagePull>

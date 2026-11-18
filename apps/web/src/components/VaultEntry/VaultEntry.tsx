@@ -1,11 +1,14 @@
 import { useRouterState } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { animate, useReducedMotion } from 'motion/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { VaultGate, VaultRecoveryCode } from '@/components/VaultGate/VaultGate';
 import { useBackFallback } from '@/lib/backButton';
 import { TAB_PATHS } from '@/lib/dockState';
+import { springs } from '@/lib/motion';
 import { noteStore } from '@/lib/noteStore';
 import { useOpenNote } from '@/lib/openNote';
+import { cn } from '@/lib/utils';
 import {
   hasSeenVault,
   isVaultNote,
@@ -14,8 +17,64 @@ import {
   vaultBiometrics,
   vaultMode,
   vaultPrompt,
+  vaultPromptOrigin,
   vaultStatus,
 } from '@/lib/vault';
+
+const mix = (from: number, to: number, progress: number) => from + (to - from) * progress;
+
+/**
+ * Grows the form out of the pill a pull drew, as one surface: it starts as the pill's shape
+ * where the pill was, and opens into the form while moving into place. The form's contents
+ * fade in once there is room for them, and nothing scales, so the text never stretches.
+ * Calls `shown` once the form is on screen in the pill's shape, for the pill to go. Returns
+ * what stops it, leaving the form as it would be at rest.
+ */
+function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
+  const box = form.getBoundingClientRect();
+  // The pill's shape sits at the top center of the form, then widens and lengthens to it.
+  const width = Math.min(pill.width, box.width);
+  const height = Math.min(pill.height, box.height);
+  const side = (box.width - width) / 2;
+  const x = pill.left + (pill.width - width) / 2 - (box.left + side);
+  const y = pill.top - box.top;
+  const radius = Number.parseFloat(getComputedStyle(form).borderTopLeftRadius) || 24;
+  const contents = [...form.children].filter((child) => child instanceof HTMLElement);
+
+  function frame(progress: number) {
+    const rest = 1 - progress;
+    form.style.transform = `translate(${x * rest}px, ${y * rest}px)`;
+    form.style.clipPath = `inset(0 ${side * rest}px ${(box.height - height) * rest}px ${side * rest}px round ${mix(height / 2, radius, progress)}px)`;
+    const shown = String(Math.min(1, Math.max(0, (progress - 0.45) / 0.45)));
+    for (const content of contents) content.style.opacity = shown;
+  }
+  function settle() {
+    form.style.transform = '';
+    form.style.clipPath = '';
+    for (const content of contents) content.style.opacity = '';
+  }
+
+  frame(0);
+  // Mounting the form makes a long frame. Started now, the spring would spend it unseen and
+  // first show the form partly grown; started once the pill's shape is on screen, it does not.
+  let growing: ReturnType<typeof animate> | null = null;
+  let painted = requestAnimationFrame(() => {
+    painted = requestAnimationFrame(() => {
+      shown();
+      growing = animate(0, 1, {
+        ...springs.smooth,
+        bounce: 0,
+        onUpdate: frame,
+        onComplete: settle,
+      });
+    });
+  });
+  return () => {
+    cancelAnimationFrame(painted);
+    growing?.stop();
+    settle();
+  };
+}
 
 /**
  * The way into the vault, for the whole app: the dialog that sets it up or unlocks it when
@@ -68,6 +127,23 @@ export function VaultEntry() {
 
   const open = asked || recoveryCode !== null;
 
+  // A pull's pill becomes the form (`growFrom`) in place of the dialog's own zoom, which is
+  // left off for as long as this form is open so it cannot start again partway.
+  const reducedMotion = useReducedMotion();
+  const origin = vaultPromptOrigin.use();
+  const grows = open && origin !== null && !reducedMotion;
+  useEffect(() => {
+    if (!open) vaultPromptOrigin.set(null);
+  }, [open]);
+  const grow = useCallback(
+    (form: HTMLDivElement | null) => {
+      if (!form || !origin) return;
+      if (grows) return growFrom(form, origin.from, origin.shown);
+      origin.shown();
+    },
+    [grows, origin],
+  );
+
   return (
     <Dialog
       open={open}
@@ -77,8 +153,12 @@ export function VaultEntry() {
       }}
     >
       <DialogContent
+        ref={grow}
         showCloseButton={recoveryCode === null}
-        className="top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto"
+        className={cn(
+          'top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto',
+          grows && 'data-[state=open]:animate-none',
+        )}
         onOpenAutoFocus={(event) => {
           // The fingerprint prompt comes up at once, and would shut a keyboard raised by
           // focusing the PIN or password field; the gate focuses it if the prompt gives way.

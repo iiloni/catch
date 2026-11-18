@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { SearchX } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { haptics } from '@/lib/haptics';
@@ -166,5 +166,29 @@ describe('page pull', () => {
     touch(target, 'end', 100, 220, 80);
     expect(screen.getByText('Release to open')).toBeInTheDocument();
     expect(screen.queryByText(/leave/)).toBeNull();
+  });
+
+  it('holds a handed off pill until what replaces it is on screen', async () => {
+    let shown = () => {};
+    const replaced = new Promise<void>((resolve) => {
+      shown = resolve;
+    });
+    render(
+      <div data-page-pager>
+        <PagePull
+          enabled
+          action={{ icon: SearchX, pull: 'Pull to open', release: 'Release to open' }}
+          onRelease={() => replaced}
+        >
+          <p>Page</p>
+        </PagePull>
+      </div>,
+    );
+    const target = screen.getByText('Page');
+    pull(target);
+    touch(target, 'end', 100, 220, 80);
+    expect(screen.getByText('Release to open')).toBeInTheDocument();
+    await act(async () => shown());
+    expect(screen.getByText('Pull to open')).toBeInTheDocument();
   });
 });
