@@ -1,11 +1,11 @@
 import { useRouterState } from '@tanstack/react-router';
-import { animate, useReducedMotion } from 'motion/react';
+import { motionValue, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { VaultGate, VaultRecoveryCode } from '@/components/VaultGate/VaultGate';
 import { useBackFallback } from '@/lib/backButton';
 import { TAB_PATHS } from '@/lib/dockState';
-import { springs } from '@/lib/motion';
+import { afterPaint, animateSteadySpring, springs, stopSteady } from '@/lib/motion';
 import { noteStore } from '@/lib/noteStore';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,7 @@ function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
   let visibleOpacity = sourceOpacity;
   let offsetX = 0;
   let offsetY = 0;
+  const progress = motionValue(0);
   const radius = Number.parseFloat(getComputedStyle(form).borderTopLeftRadius) || 24;
   const contents = [...form.children].filter((child) => child instanceof HTMLElement);
 
@@ -67,14 +68,11 @@ function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
     for (const content of contents) content.style.opacity = '';
   }
 
-  let growing: ReturnType<typeof animate> | null = null;
+  const stopFrames = progress.on('change', frame);
+  let started = false;
   function start() {
-    growing = animate(0, 1, {
-      ...springs.smooth,
-      bounce: 0,
-      onUpdate: frame,
-      onComplete: settle,
-    });
+    started = true;
+    void animateSteadySpring(progress, 1, { ...springs.smooth, bounce: 0 }).then(settle);
   }
 
   // A cold device can replace the loading panel with the setup or unlock form mid-spring.
@@ -83,13 +81,15 @@ function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
     const box = form.getBoundingClientRect();
     if (box.width === target.width && box.height === target.height) return;
     target = new DOMRect(box.x - offsetX, box.y - offsetY, box.width, box.height);
-    if (growing) {
-      growing.stop();
+    if (started) {
+      stopSteady(progress);
       source = visible;
       sourceRadius = visibleRadius;
       sourceOpacity = visibleOpacity;
+      progress.jump(0);
       frame(0);
-      start();
+      cancelPaint();
+      cancelPaint = afterPaint(start);
     } else {
       frame(0);
     }
@@ -97,17 +97,16 @@ function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
 
   frame(0);
   observer.observe(form, { box: 'border-box' });
-  // Mounting the form makes a long frame. Started now, the spring would spend it unseen and
-  // first show the form partly grown; started once the pill's shape is on screen, it does not.
-  let painted = requestAnimationFrame(() => {
-    painted = requestAnimationFrame(() => {
-      shown();
-      start();
-    });
+  // Paint the shared outline first. Play the spring by frames so a busy mount or panel
+  // change cannot skip its beginning.
+  let cancelPaint = afterPaint(() => {
+    shown();
+    start();
   });
   return () => {
-    cancelAnimationFrame(painted);
-    growing?.stop();
+    cancelPaint();
+    stopSteady(progress);
+    stopFrames();
     settle();
   };
 }
