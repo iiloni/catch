@@ -1,4 +1,4 @@
-import { SearchX } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   AnimatePresence,
   animate,
@@ -13,26 +13,38 @@ import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 
-/** Finger travel past this distance clears the filters on release. */
+/** Finger travel past this distance acts on release. */
 const RELEASE_DISTANCE = 90;
-/** How far the pill has been drawn by then: it arrives exactly as letting go starts to clear. */
+/** How far the pill has been drawn by then: it arrives exactly as letting go starts to act. */
 const ARRIVED = RELEASE_DISTANCE * 0.5;
 const MAX_PULL = 64;
 /** Android's first touchmove can already be this far along; a later claim is not cancelable. */
 const MOVE_TOLERANCE = 4;
 
+/** What the pill says while the finger draws it, and once letting go would act. */
+export type PullAction = { icon: LucideIcon; pull: string; release: string };
+
 /**
- * Pulling down at the top of the page clears the search and its filters. Anywhere on the pager
- * counts, as page swipes do, including the tap-only rows and chips the results are made of.
- * There is no undo, so unlike the edge pulls that close a surface a fling does not commit.
+ * Pulling down at the top of a page acts on release: Search clears its query and filters, the
+ * Gallery and the Deck can enter or leave the vault. Anywhere on the pager counts, as page
+ * swipes do, including the tap-only rows and chips Search's results are made of. Neither action
+ * is cheap to undo (clearing has no undo, and leaving can lock the vault), so unlike the edge
+ * pulls that close a surface only distance commits, never a fling.
  */
-export function ClearFiltersPull({
+export function PagePull({
   enabled,
-  onClear,
+  action,
+  onRelease,
   children,
 }: {
   enabled: boolean;
-  onClear: () => void;
+  action: PullAction;
+  /**
+   * Acts on a pull past the threshold, given the pill. A promise hands the pill off to what
+   * grows out of it (the vault's form): the pill stays where it is until that is on screen in
+   * its place, as the promise settles, and then goes rather than going back up.
+   */
+  onRelease: (pill: HTMLElement | null) => Promise<void> | undefined;
   children: ReactNode;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -72,8 +84,13 @@ export function ClearFiltersPull({
     [width, reducedMotion],
   );
   const [armed, setArmed] = useState(false);
-  const clear = useRef(onClear);
-  clear.current = onClear;
+  const release = useRef(onRelease);
+  release.current = onRelease;
+  // The words a pull began with stay until the pill is out of sight, though acting changes
+  // them (leaving the vault turns "leave" into "open").
+  const latestAction = useRef(action);
+  latestAction.current = action;
+  const [pulledAction, setPulledAction] = useState<PullAction | null>(null);
   const available = useRef(enabled);
   available.current = enabled;
   const blockedTouch = useRef(false);
@@ -100,13 +117,18 @@ export function ClearFiltersPull({
       armed: boolean;
     } | null = null;
     let suppressClick = false;
+    // Counts pulls, so a pill handed off is not put away during a later one.
+    let handOffs = 0;
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
 
     function springBack() {
       // Its words change back out of sight, not at the start of the next pull.
       animate(pull, 0, {
         ...(reducedMotion ? { duration: 0 } : springs.snappy),
-        onComplete: () => setArmed(false),
+        onComplete: () => {
+          setArmed(false);
+          setPulledAction(null);
+        },
       });
     }
 
@@ -176,9 +198,11 @@ export function ClearFiltersPull({
         gesture.dragging = true;
         suppressClick = true;
         pull.stop();
+        handOffs++;
         const shape = pill.current;
         if (shape) hiddenY.current = -(shape.offsetTop + shape.offsetHeight + 8);
         setArmed(false);
+        setPulledAction(latestAction.current);
       }
       move.preventDefault();
       gesture.distance = Math.max(0, dy);
@@ -200,9 +224,23 @@ export function ClearFiltersPull({
       clickTimer = setTimeout(() => {
         suppressClick = false;
       }, 400);
-      springBack();
-      if (finished.armed && type !== 'touchcancel' && !defaultPrevented && touches.length === 0)
-        clear.current();
+      const committed =
+        finished.armed && type !== 'touchcancel' && !defaultPrevented && touches.length === 0;
+      const replaced = committed ? release.current(pill.current) : undefined;
+      if (replaced) handOff(replaced);
+      else springBack();
+    }
+
+    function handOff(replaced: Promise<void>) {
+      const handOff = ++handOffs;
+      // A replacement that never arrives still lets the pill go.
+      const late = new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      void Promise.race([replaced, late]).then(() => {
+        if (handOff !== handOffs) return;
+        pull.jump(0);
+        setArmed(false);
+        setPulledAction(null);
+      });
     }
 
     function onClick(event: Event) {
@@ -228,7 +266,9 @@ export function ClearFiltersPull({
     };
   }, [enabled, pull, reducedMotion]);
 
-  const label = armed ? 'Release to clear filters' : 'Pull to clear filters';
+  const shown = pulledAction ?? action;
+  const label = armed ? shown.release : shown.pull;
+  const Icon = shown.icon;
   return (
     <>
       {createPortal(
@@ -238,7 +278,7 @@ export function ClearFiltersPull({
         >
           <motion.div
             ref={pill}
-            data-clear-filters-pill
+            data-page-pull-pill
             style={{ width, y, opacity }}
             className="glass relative h-10 overflow-hidden rounded-full text-sm font-medium"
           >
@@ -258,7 +298,7 @@ export function ClearFiltersPull({
                 }}
                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
               >
-                <SearchX className="size-4 text-muted-foreground" aria-hidden />
+                <Icon className="size-4 text-muted-foreground" aria-hidden />
                 {label}
               </motion.span>
             </AnimatePresence>

@@ -1,7 +1,7 @@
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, type Page, type Request, test } from '@playwright/test';
 import { z } from 'zod';
-import { card, noteAction, openDeck, openNote, seedNotes, signUp } from './helpers';
+import { beginSwipe, card, noteAction, openDeck, openNote, seedNotes, signUp } from './helpers';
 
 const PASSWORD = 'correct horse battery';
 
@@ -44,6 +44,9 @@ async function setUpVault(page: Page, { remember = false } = {}) {
   if (remember) await gate(page).getByRole('switch', { name: 'Remember on this device' }).click();
   await gate(page).getByRole('button', { name: 'Create vault' }).click();
   await expect(gate(page).getByText('Save your recovery code')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Gallery', exact: true, includeHidden: true }),
+  ).toBeVisible();
   const code = (await gate(page).getByRole('status').textContent()) ?? '';
   expect(code).toMatch(/^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
   await gate(page).getByRole('button', { name: 'I have saved it' }).click();
@@ -179,6 +182,73 @@ test('a hidden vault still opens from Settings and keeps its leave button', asyn
   await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
 });
 
+test('the Gallery tab’s menu enters and leaves the vault, and hides with the vault button', async ({
+  page,
+}) => {
+  await signUp(page);
+  await setUpVault(page, { remember: true });
+  await leave(page);
+  const menu = page.getByRole('navigation', { name: 'Gallery pages' });
+  const galleryTab = page.getByRole('link', { name: 'Gallery', exact: true });
+
+  await galleryTab.click();
+  await menu.getByRole('button', { name: 'Open the vault' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Vault', exact: true })).toBeVisible();
+  await expect(menu).toBeHidden();
+  await galleryTab.click();
+  await menu.getByRole('button', { name: 'Leave the vault' }).press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Gallery', exact: true })).toBeVisible();
+  await expect(galleryTab).toBeFocused();
+
+  await page.goto('/settings/vault');
+  await page.getByRole('switch', { name: 'Show vault button' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await galleryTab.click();
+  await expect(menu.getByRole('button', { name: 'Trash' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
+});
+
+test('once turned on, pulling down on the Gallery or Deck enters and leaves the vault', async ({
+  page,
+  isMobile,
+}) => {
+  await signUp(page);
+  await setUpVault(page, { remember: true });
+  await leave(page);
+  const heading = (name: string) => page.getByRole('heading', { level: 1, name, exact: true });
+
+  // Off by default.
+  const unset = await beginSwipe(page, isMobile, 195, 300);
+  await unset.move(0, 130);
+  await expect(page.getByText('Release to open the vault')).toHaveCount(0);
+  await unset.end();
+  await expect(heading('Gallery')).toBeVisible();
+
+  await page.goto('/settings/vault');
+  const pullSwitch = page.getByRole('switch', { name: 'Pull down to enter or leave' });
+  await expect(pullSwitch).not.toBeChecked();
+  await pullSwitch.click();
+  // Independent of the button: hiding it keeps the gesture.
+  await page.getByRole('switch', { name: 'Show vault button' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(heading('Gallery')).toBeVisible();
+
+  const enterPull = await beginSwipe(page, isMobile, 195, 300);
+  await enterPull.move(0, 130);
+  await expect(page.getByText('Release to open the vault')).toBeVisible();
+  await enterPull.end();
+  await expect(heading('Vault')).toBeVisible();
+
+  await openDeck(page);
+  await expect(heading('Vault deck')).toBeVisible();
+  const leavePull = await beginSwipe(page, isMobile, 195, 300);
+  await leavePull.move(0, 130);
+  await expect(page.getByText('Release to leave the vault')).toBeVisible();
+  await leavePull.end();
+  await expect(heading('Deck')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open the vault' })).toHaveCount(0);
+});
+
 test('the vault is set up, locks on leaving, and opens with its password or recovery code', async ({
   page,
 }) => {
@@ -208,7 +278,7 @@ test('the vault is set up, locks on leaving, and opens with its password or reco
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Gallery' })).toBeVisible();
   await enter(page);
-  await gate(page).getByRole('button', { name: 'Use the recovery code' }).click();
+  await gate(page).getByRole('button', { name: 'Forgot password?' }).click();
   await gate(page).getByLabel('Recovery code').fill(code.toLowerCase());
   await gate(page).getByLabel('New vault password').fill('a brand new password');
   await gate(page).getByLabel('Repeat it').fill('a brand new password');
@@ -273,9 +343,9 @@ test('a PIN set on this device opens the vault in place of its password', async 
   // The password still works, and a device with a PIN does not offer to remember the vault.
   await leave(page);
   await enter(page);
-  await gate(page).getByRole('button', { name: 'Use the vault password' }).click();
+  await gate(page).getByRole('button', { name: 'Use password' }).click();
   await expect(gate(page).getByRole('switch', { name: 'Remember on this device' })).toHaveCount(0);
-  await gate(page).getByRole('button', { name: 'Use the PIN' }).click();
+  await gate(page).getByRole('button', { name: 'Use PIN' }).click();
 
   // Five wrong PINs in a row turn it off here, and the vault asks for its password.
   for (const left of [4, 3, 2]) {

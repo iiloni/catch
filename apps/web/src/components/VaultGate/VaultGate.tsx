@@ -17,7 +17,6 @@ import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
 import { useSyncStatus } from '@/lib/syncStatus';
 import {
-  createVault,
   enableVaultBiometrics,
   recoverVault,
   unlockVault,
@@ -40,8 +39,7 @@ export const MIN_VAULT_PASSWORD = 8;
 
 type Props = {
   status: Exclude<VaultStatus, 'unlocked'>;
-  /** A vault was just made: its recovery code, which must be shown now or never. */
-  onCreated: (recoveryCode: string) => void;
+  onCreate: (password: string, remember: boolean) => Promise<void>;
 };
 
 /**
@@ -55,7 +53,7 @@ function focusWhenInFront(field: RefObject<HTMLInputElement | null>) {
 }
 
 /** What stands in front of the vault's notes: setting it up, or unlocking it. */
-export function VaultGate({ status, onCreated }: Props) {
+export function VaultGate({ status, onCreate }: Props) {
   const [recovering, setRecovering] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
   // Why a quicker way in gave way to the next, when it did so on its own.
@@ -113,29 +111,21 @@ export function VaultGate({ status, onCreated }: Props) {
   }, [biometrics, status, recovering]);
 
   const biometricsButton = biometrics ? (
-    <Button
-      type="button"
-      variant="ghost"
-      className="rounded-xl"
-      disabled={prompting}
-      onClick={() => void tryBiometrics()}
-    >
+    <SecondaryButton disabled={prompting} onClick={() => void tryBiometrics()}>
       {words.use}
-    </Button>
+    </SecondaryButton>
   ) : null;
 
   if (status === 'loading') {
     return (
       <Panel icon={LockKeyhole} title="Vault">
         <p className="text-muted-foreground text-sm">
-          {offline
-            ? 'This device has not seen your vault yet. Connect to the server once to open it or set it up.'
-            : 'Looking for your vault…'}
+          {offline ? 'Connect once to open or set up your vault here.' : 'Looking for your vault…'}
         </p>
       </Panel>
     );
   }
-  if (status === 'none') return <SetUp onCreated={onCreated} />;
+  if (status === 'none') return <SetUp onCreate={onCreate} />;
   if (recovering) return <Recover onBack={() => setRecovering(false)} />;
   if (pin && !usePassword) {
     return (
@@ -209,13 +199,40 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 px-2 pt-10 text-center">
-      <span className="flex size-16 items-center justify-center rounded-3xl bg-foreground/[0.06] text-muted-foreground">
-        <Icon className="size-7" aria-hidden />
+    <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-3 px-1 pt-1 text-center">
+      <span className="flex size-12 items-center justify-center rounded-2xl bg-foreground/[0.06] text-muted-foreground">
+        <Icon className="size-6" aria-hidden />
       </span>
       <h2 className="font-display font-semibold text-xl tracking-[-0.01em]">{title}</h2>
       {children}
     </div>
+  );
+}
+
+/** The quieter ways in or back, side by side under a form's main button. */
+function SecondaryActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap justify-center gap-x-1">{children}</div>;
+}
+
+function SecondaryButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="h-10 rounded-xl px-3 text-muted-foreground"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
   );
 }
 
@@ -272,7 +289,7 @@ function RememberSwitch({
       <label htmlFor={id} className="min-w-0 flex-1 text-sm">
         Remember on this device
         <span className="block text-muted-foreground text-xs">
-          The vault then opens here without its password, for anyone who can open Catch.
+          Opens for anyone using this device
         </span>
       </label>
       <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
@@ -315,7 +332,7 @@ export function newPasswordProblem(password: string, confirmation: string) {
   return null;
 }
 
-function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
+function SetUp({ onCreate }: Pick<Props, 'onCreate'>) {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [remember, setRemember] = useState(false);
@@ -330,7 +347,7 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
     if (problem) return;
     setPending(true);
     try {
-      onCreated(await createVault(password, remember));
+      await onCreate(password, remember);
       haptics.success();
     } catch (caught) {
       setError(failure(caught));
@@ -342,11 +359,9 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
   return (
     <Panel icon={ShieldCheck} title="Set up your vault">
       <p className="text-muted-foreground text-sm">
-        Notes in the vault are encrypted on your devices with a password only you know. The server,
-        its admin and its backups hold them only as ciphertext. Nobody can reset this password for
-        you.
+        Only your devices can read it, and nobody can reset this password.
       </p>
-      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-4">
+      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-3">
         <PasswordField
           label="Vault password"
           value={password}
@@ -418,7 +433,7 @@ function Unlock({
 
   return (
     <Panel icon={LockKeyhole} title="The vault is locked">
-      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-4">
+      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-3">
         <PasswordField
           label="Vault password"
           value={password}
@@ -434,15 +449,11 @@ function Unlock({
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
-        {biometrics}
-        {onPin && (
-          <Button type="button" variant="ghost" className="rounded-xl" onClick={onPin}>
-            Use the PIN
-          </Button>
-        )}
-        <Button type="button" variant="ghost" className="rounded-xl" onClick={onForgot}>
-          Use the recovery code
-        </Button>
+        <SecondaryActions>
+          {biometrics}
+          {onPin && <SecondaryButton onClick={onPin}>Use PIN</SecondaryButton>}
+          <SecondaryButton onClick={onForgot}>Forgot password?</SecondaryButton>
+        </SecondaryActions>
       </form>
     </Panel>
   );
@@ -550,7 +561,7 @@ function UnlockWithPin({
           event.preventDefault();
           void attempt(pin);
         }}
-        className="flex w-full flex-col gap-4"
+        className="flex w-full flex-col gap-3"
       >
         <label htmlFor={id} className="flex flex-col gap-2 text-left text-sm">
           Vault PIN
@@ -571,10 +582,10 @@ function UnlockWithPin({
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Unlocking…' : 'Unlock'}
         </Button>
-        {biometrics}
-        <Button type="button" variant="ghost" className="rounded-xl" onClick={onPassword}>
-          Use the vault password
-        </Button>
+        <SecondaryActions>
+          {biometrics}
+          <SecondaryButton onClick={onPassword}>Use password</SecondaryButton>
+        </SecondaryActions>
       </form>
     </Panel>
   );
@@ -614,9 +625,9 @@ function Recover({ onBack }: { onBack: () => void }) {
   return (
     <Panel icon={KeyRound} title="Recover your vault">
       <p className="text-muted-foreground text-sm">
-        Enter the recovery code you saved when you set the vault up, and choose a new password.
+        Enter your recovery code and choose a new password.
       </p>
-      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-4">
+      <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-3">
         <label htmlFor={codeId} className="flex flex-col gap-2 text-left text-sm">
           Recovery code
           <Input
@@ -649,9 +660,9 @@ function Recover({ onBack }: { onBack: () => void }) {
         <Button type="submit" disabled={pending} className="h-11 rounded-xl">
           {pending ? 'Recovering…' : 'Unlock and change password'}
         </Button>
-        <Button type="button" variant="ghost" className="rounded-xl" onClick={onBack}>
-          Back
-        </Button>
+        <SecondaryActions>
+          <SecondaryButton onClick={onBack}>Back</SecondaryButton>
+        </SecondaryActions>
       </form>
     </Panel>
   );
@@ -671,9 +682,7 @@ export function VaultRecoveryCode({ code, onDone }: { code: string; onDone: () =
   return (
     <Panel icon={KeyRound} title="Save your recovery code">
       <p className="text-muted-foreground text-sm">
-        If you forget the vault password, this code is the only other way in. It is shown once and
-        stored nowhere. Without the password or this code, the vault’s notes cannot be read by
-        anyone, including you.
+        The only way in if you forget the password. It won’t be shown again.
       </p>
       <output className="w-full select-all break-words rounded-2xl bg-foreground/[0.06] px-4 py-3 font-mono text-base">
         {code}
