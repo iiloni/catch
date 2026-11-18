@@ -112,20 +112,21 @@ export async function seedNotes(
 ) {
   await page.evaluate(
     async ({ notes, status }) => {
-      const { createNote } = await import('/src/lib/notes.ts');
+      const { createNotes } = await import('/src/lib/notes.ts');
       const { getSignedInUser } = await import('/src/lib/auth.ts');
-      const saved = notes.map((note) => {
+      const userId = getSignedInUser().id;
+      const inputs = notes.map((note) => {
         const { title, body } = typeof note === 'string' ? { title: note, body: null } : note;
-        return createNote({
-          userId: getSignedInUser().id,
+        return {
+          userId,
           status,
           content: [
             { type: 'heading', props: { level: 3 }, content: title },
             ...(body === null ? [] : [{ type: 'paragraph', content: body }]),
           ],
-        }).transaction.isPersisted.promise;
+        };
       });
-      await Promise.all(saved);
+      await createNotes(inputs)?.isPersisted.promise;
     },
     { notes, status },
   );

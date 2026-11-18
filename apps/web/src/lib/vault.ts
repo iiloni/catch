@@ -621,6 +621,7 @@ function requestFailure(error: unknown, conflict?: string) {
 export async function createVault(password: string, remember: boolean) {
   const id = requireUser();
   const { raw, vault, recoveryCode } = await createVaultKey(id, password);
+  startVault();
   try {
     await awaitVaultSync((await api.createVault(vault)).txid);
   } catch (error) {
