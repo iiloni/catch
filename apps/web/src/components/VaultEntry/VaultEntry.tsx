@@ -31,42 +31,77 @@ const mix = (from: number, to: number, progress: number) => from + (to - from) *
  * what stops it, leaving the form as it would be at rest.
  */
 function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
-  const box = form.getBoundingClientRect();
-  // The pill's shape sits at the top center of the form, then widens and lengthens to it.
-  const width = Math.min(pill.width, box.width);
-  const height = Math.min(pill.height, box.height);
-  const side = (box.width - width) / 2;
-  const x = pill.left + (pill.width - width) / 2 - (box.left + side);
-  const y = pill.top - box.top;
+  let target = form.getBoundingClientRect();
+  let source = pill;
+  let sourceRadius = pill.height / 2;
+  let sourceOpacity = 0;
+  let visible = source;
+  let visibleRadius = sourceRadius;
+  let visibleOpacity = sourceOpacity;
+  let offsetX = 0;
+  let offsetY = 0;
   const radius = Number.parseFloat(getComputedStyle(form).borderTopLeftRadius) || 24;
   const contents = [...form.children].filter((child) => child instanceof HTMLElement);
 
   function frame(progress: number) {
-    const rest = 1 - progress;
-    form.style.transform = `translate(${x * rest}px, ${y * rest}px)`;
-    form.style.clipPath = `inset(0 ${side * rest}px ${(box.height - height) * rest}px ${side * rest}px round ${mix(height / 2, radius, progress)}px)`;
-    const shown = String(Math.min(1, Math.max(0, (progress - 0.45) / 0.45)));
-    for (const content of contents) content.style.opacity = shown;
+    visible = new DOMRect(
+      mix(source.left, target.left, progress),
+      mix(source.top, target.top, progress),
+      mix(source.width, target.width, progress),
+      mix(source.height, target.height, progress),
+    );
+    const side = (target.width - visible.width) / 2;
+    offsetX = visible.left - target.left - side;
+    offsetY = visible.top - target.top;
+    visibleRadius = mix(sourceRadius, radius, progress);
+    visibleOpacity = mix(sourceOpacity, 1, Math.min(1, Math.max(0, (progress - 0.45) / 0.45)));
+    form.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    form.style.clipPath = `inset(0 ${side}px ${target.height - visible.height}px ${side}px round ${visibleRadius}px)`;
+    for (const content of contents) content.style.opacity = String(visibleOpacity);
   }
   function settle() {
+    observer.disconnect();
     form.style.transform = '';
     form.style.clipPath = '';
     for (const content of contents) content.style.opacity = '';
   }
 
+  let growing: ReturnType<typeof animate> | null = null;
+  function start() {
+    growing = animate(0, 1, {
+      ...springs.smooth,
+      bounce: 0,
+      onUpdate: frame,
+      onComplete: settle,
+    });
+  }
+
+  // A cold device can replace the loading panel with the setup or unlock form mid-spring.
+  // Keep the currently visible outline and grow it toward the new bounds.
+  const observer = new ResizeObserver(() => {
+    const box = form.getBoundingClientRect();
+    if (box.width === target.width && box.height === target.height) return;
+    target = new DOMRect(box.x - offsetX, box.y - offsetY, box.width, box.height);
+    if (growing) {
+      growing.stop();
+      source = visible;
+      sourceRadius = visibleRadius;
+      sourceOpacity = visibleOpacity;
+      frame(0);
+      start();
+    } else {
+      frame(0);
+    }
+  });
+
   frame(0);
+  observer.observe(form, { box: 'border-box' });
   // Mounting the form makes a long frame. Started now, the spring would spend it unseen and
   // first show the form partly grown; started once the pill's shape is on screen, it does not.
-  let growing: ReturnType<typeof animate> | null = null;
   let painted = requestAnimationFrame(() => {
     painted = requestAnimationFrame(() => {
       shown();
-      growing = animate(0, 1, {
-        ...springs.smooth,
-        bounce: 0,
-        onUpdate: frame,
-        onComplete: settle,
-      });
+      start();
     });
   });
   return () => {
@@ -158,6 +193,7 @@ export function VaultEntry() {
         className={cn(
           'top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto',
           grows && 'data-[state=open]:animate-none',
+          'motion-reduce:data-[state=open]:zoom-in-100 motion-reduce:data-[state=closed]:zoom-out-100',
         )}
         onOpenAutoFocus={(event) => {
           // The fingerprint prompt comes up at once, and would shut a keyboard raised by
@@ -177,11 +213,13 @@ export function VaultEntry() {
         <DialogDescription className="sr-only">
           Notes in the vault are encrypted on your devices.
         </DialogDescription>
-        {recoveryCode !== null ? (
-          <VaultRecoveryCode code={recoveryCode} onDone={() => setRecoveryCode(null)} />
-        ) : status !== 'unlocked' ? (
-          <VaultGate status={status} onCreated={setRecoveryCode} />
-        ) : null}
+        <div>
+          {recoveryCode !== null ? (
+            <VaultRecoveryCode code={recoveryCode} onDone={() => setRecoveryCode(null)} />
+          ) : status !== 'unlocked' ? (
+            <VaultGate status={status} onCreated={setRecoveryCode} />
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   );

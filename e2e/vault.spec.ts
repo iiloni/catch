@@ -193,8 +193,9 @@ test('the Gallery tab’s menu enters and leaves the vault, and hides with the v
   await expect(page.getByRole('heading', { level: 1, name: 'Vault', exact: true })).toBeVisible();
   await expect(menu).toBeHidden();
   await galleryTab.click();
-  await menu.getByRole('button', { name: 'Leave the vault' }).click();
+  await menu.getByRole('button', { name: 'Leave the vault' }).press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Gallery', exact: true })).toBeVisible();
+  await expect(galleryTab).toBeFocused();
 
   await page.goto('/settings/vault');
   await page.getByRole('switch', { name: 'Show vault button' }).click();

@@ -7,7 +7,7 @@ import {
   type LucideIcon,
   Trash2,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GalleryPage } from '@/lib/galleryPages';
 import { springs } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -39,16 +39,16 @@ export function switcherItemAt(x: number, y: number): SwitcherItem | null {
   // gaps and the top row's empty corners still pick something. Pointer capture sits on the
   // tab bar and native overlays come and go, so this is a geometric hit test rather than
   // elementFromPoint.
+  const card = document.querySelector<HTMLElement>('[data-gallery-switcher]:not([inert])');
+  if (!card) return null;
   let nearest: { item: SwitcherItem; distance: number } | null = null;
-  for (const element of document.querySelectorAll<HTMLElement>('[data-gallery-page]')) {
+  for (const element of card.querySelectorAll<HTMLElement>('[data-gallery-page]')) {
     const item = element.dataset.galleryPage;
     if (!isItem(item)) continue;
     const away = distance(x, y, element.getBoundingClientRect());
     if (!nearest || away < nearest.distance) nearest = { item, distance: away };
   }
   if (!nearest) return null;
-  const card = document.querySelector<HTMLElement>('[data-gallery-switcher]');
-  if (!card) return nearest.distance <= 12 ? nearest.item : null;
   const rect = card.getBoundingClientRect();
   const near =
     x >= rect.left - 16 && x <= rect.right + 16 && y >= rect.top - 56 && y <= rect.bottom + 16;
@@ -73,7 +73,16 @@ type Props = {
  * top, where a thumb holding the Gallery tab reaches up to them, and the Gallery, Archive and
  * Trash below. It floats as its own glass card with a gap, rather than growing the dock itself.
  */
-export function GallerySwitcher({ open, current, hovered, vault, onSelect }: Props) {
+export function GallerySwitcher({ open, ...props }: Props) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && <SwitcherCard key="switcher" {...props} />}
+    </AnimatePresence>
+  );
+}
+
+function SwitcherCard({ current, hovered, vault, onSelect }: Omit<Props, 'open'>) {
+  const isPresent = useIsPresent();
   const shown = hovered ?? current;
   const [gallery, reminders, archive, trash] = PAGES;
   const toggle: Item | null = !vault
@@ -89,62 +98,58 @@ export function GallerySwitcher({ open, current, hovered, vault, onSelect }: Pro
   ];
 
   return (
-    <AnimatePresence initial={false}>
-      {open && (
-        // No `filter` in this animation, and the glass on the animated element itself: a
-        // filter on an ancestor makes a backdrop root, so the glass would stop blurring the
-        // page behind it and look flatter than the dock.
-        <motion.nav
-          key="switcher"
-          aria-label="Gallery pages"
-          data-gallery-switcher
-          className="glass absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10 grid touch-none select-none grid-cols-6 gap-1 rounded-[var(--dock-radius)] p-1.5 [-webkit-touch-callout:none]"
-          initial={{ opacity: 0, y: 16, scale: 0.94 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.16 } }}
-          transition={springs.snappy}
-        >
-          {rows.map((row) =>
-            row.map((page, index) => {
-              const Icon = page.icon;
-              const isToggle = page.path === 'vault';
-              const selected = shown === page.path;
-              // The first segment of a row starts where centering the row puts it.
-              const start = index === 0 ? START[row.length] : undefined;
-              return (
-                <button
-                  key={page.path}
-                  type="button"
-                  data-gallery-page={page.path}
-                  aria-label={page.name}
-                  aria-current={current === page.path ? 'page' : undefined}
-                  aria-pressed={isToggle ? vault?.inside : undefined}
-                  onClick={() => onSelect(page.path)}
-                  className={cn(
-                    'relative z-0 col-span-2 flex h-16 min-w-0 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[calc(var(--dock-radius)-0.375rem)] font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
-                    start,
-                    selected || (isToggle && vault?.inside)
-                      ? 'text-foreground'
-                      : 'text-muted-foreground',
-                  )}
-                >
-                  {selected && (
-                    <motion.span
-                      layoutId="gallery-page"
-                      aria-hidden
-                      className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
-                      transition={springs.snappy}
-                    />
-                  )}
-                  <Icon className="size-5" aria-hidden />
-                  {page.label}
-                </button>
-              );
-            }),
-          )}
-        </motion.nav>
+    // No `filter` in this animation, and the glass on the animated element itself: a
+    // filter on an ancestor makes a backdrop root, so the glass would stop blurring the
+    // page behind it and look flatter than the dock.
+    <motion.nav
+      aria-label="Gallery pages"
+      data-gallery-switcher
+      inert={!isPresent}
+      className="glass absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-10 grid touch-none select-none grid-cols-6 gap-1 rounded-[var(--dock-radius)] p-1.5 [-webkit-touch-callout:none]"
+      initial={{ opacity: 0, y: 16, scale: 0.94 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 12, scale: 0.96, transition: { duration: 0.16 } }}
+      transition={springs.snappy}
+    >
+      {rows.map((row) =>
+        row.map((page, index) => {
+          const Icon = page.icon;
+          const isToggle = page.path === 'vault';
+          const selected = shown === page.path;
+          // The first segment of a row starts where centering the row puts it.
+          const start = index === 0 ? START[row.length] : undefined;
+          return (
+            <button
+              key={page.path}
+              type="button"
+              data-gallery-page={page.path}
+              aria-label={page.name}
+              aria-current={current === page.path ? 'page' : undefined}
+              aria-pressed={isToggle ? vault?.inside : undefined}
+              onClick={() => onSelect(page.path)}
+              className={cn(
+                'relative z-0 col-span-2 flex h-16 min-w-0 flex-col items-center justify-center gap-1 whitespace-nowrap rounded-[calc(var(--dock-radius)-0.375rem)] font-medium text-xs outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring/70',
+                start,
+                selected || (isToggle && vault?.inside)
+                  ? 'text-foreground'
+                  : 'text-muted-foreground',
+              )}
+            >
+              {selected && (
+                <motion.span
+                  layoutId="gallery-page"
+                  aria-hidden
+                  className="-z-10 absolute inset-0 rounded-[calc(var(--dock-radius)-0.375rem)] bg-foreground/[0.08] shadow-[inset_0_1px_0_var(--glass-highlight)]"
+                  transition={springs.snappy}
+                />
+              )}
+              <Icon className="size-5" aria-hidden />
+              {page.label}
+            </button>
+          );
+        }),
       )}
-    </AnimatePresence>
+    </motion.nav>
   );
 }
 

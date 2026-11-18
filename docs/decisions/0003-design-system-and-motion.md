@@ -106,8 +106,10 @@ crossfade while the measured width animates. A pull keeps the words it began wit
 is out of sight, so leaving the vault does not flash "open" on the way up. A pull that asks for
 the vault's password hands its pill to the form instead of sending it back up: the pill fades
 where it is as the dialog starts from its exact shape and place, then opens into the form while
-moving into position (a clip and a translation, never a scale, so text does not stretch), and
-the form's contents fade in once there is room. Reduced motion skips this for the usual dialog. With reduced motion it fades in at rest instead.
+moving into position using a clip and a translation, which keeps the text at its normal size.
+If vault status loads mid-spring, the surface grows from its current outline to the new
+form bounds. The contents fade in once there is room. With reduced motion the pill and
+dialog fade in at rest.
 While a note is open the dock stays put and becomes the note's toolbar (`NoteDock`: color,
 attachments, move, pin); the color button grows the dock upward into a palette, and archive/unarchive and trash
 live in the editor's top right. Tapping the move button grows the dock upward into a destination picker: Deck columns

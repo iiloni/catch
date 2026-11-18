@@ -49,6 +49,25 @@ describe('GallerySwitcher', () => {
     expect(screen.queryByRole('navigation', { name: 'Gallery pages' })).toBeNull();
   });
 
+  it('takes the exiting card out of the hit test', () => {
+    const props = {
+      current: '/',
+      hovered: null,
+      vault: { inside: true },
+      onSelect: vi.fn(),
+    } as const;
+    const { rerender } = render(<GallerySwitcher open {...props} />);
+    mockLayout();
+    const card = screen.getByRole('navigation', { name: 'Gallery pages' });
+    expect(switcherItemAt(200, 130)).toBe('vault');
+
+    rerender(<GallerySwitcher open={false} {...props} />);
+
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveAttribute('inert');
+    expect(switcherItemAt(200, 130)).toBeNull();
+  });
+
   it('maps a point near the card to the nearest segment', () => {
     render(
       <GallerySwitcher

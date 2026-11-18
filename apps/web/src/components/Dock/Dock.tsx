@@ -227,6 +227,7 @@ export function Dock() {
   const [overNote, setOverNote] = useState(false);
   useMotionValueEvent(editorProgress, 'change', (progress) => setOverNote(progress > 0));
   const dockRef = useRef<HTMLDivElement>(null);
+  const galleryTabRef = useRef<HTMLAnchorElement>(null);
 
   // The Gallery switcher (or, in Settings, the page picker) belongs to the page it was opened
   // on, so navigating closes it.
@@ -256,6 +257,9 @@ export function Dock() {
   function selectGalleryPage(item: SwitcherItem) {
     setSwitcherOn(null);
     if (item === 'vault') {
+      if (document.activeElement?.closest('[data-gallery-switcher]')) {
+        galleryTabRef.current?.focus();
+      }
       haptics.toggle();
       toggleVault();
       return;
@@ -373,6 +377,7 @@ export function Dock() {
                         {(mode === 'tabs' || mode === 'search') && (
                           <Tabs
                             key="tabs"
+                            galleryTabRef={galleryTabRef}
                             active={tab}
                             swipePosition={swipePosition}
                             searchProgress={searchProgress}
@@ -513,6 +518,7 @@ function PaneDock({
 }
 
 type TabsProps = {
+  galleryTabRef: RefObject<HTMLAnchorElement | null>;
   active: TabPath;
   swipePosition: MotionValue<number> | null;
   searchProgress: MotionValue<number>;
@@ -525,6 +531,7 @@ type TabsProps = {
 };
 
 function Tabs({
+  galleryTabRef,
   active,
   swipePosition,
   searchProgress,
@@ -694,6 +701,7 @@ function Tabs({
         return (
           <Link
             key={tab.path}
+            ref={tab.path === '/' ? galleryTabRef : undefined}
             to={tab.path}
             aria-label={tab.label}
             aria-current={active === tab.path ? 'page' : undefined}
