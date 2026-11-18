@@ -75,12 +75,7 @@ function firstPosition(vault = false) {
   return positionBetween(null, firstExistingPosition(vault));
 }
 
-/**
- * Note mutations. Each applies optimistically to the synced collection and
- * returns the TanStack DB transaction, whose `isPersisted.promise` settles once
- * the server has the change.
- */
-export function createNote(input: {
+type NewNote = {
   id?: string;
   userId: string;
   content: Note['content'];
@@ -91,10 +86,10 @@ export function createNote(input: {
   secondaryTagIds?: readonly string[];
   /** Make it a vault note, sealed before it is stored. The vault must be unlocked. */
   vault?: boolean;
-}) {
-  const vault = input.vault ?? false;
+};
+
+function insertNewNote(input: NewNote, id: string, position: string, vault: boolean) {
   const now = new Date();
-  const id = input.id ?? uuidv7();
   const linkedTag = input.color
     ? [...tagsCollection.values()].find((tag) => tag.color === input.color)
     : undefined;
@@ -103,32 +98,49 @@ export function createNote(input: {
     [...tagsCollection.values()],
     (input.secondaryTagIds ?? []).filter((tagId) => tagId !== primaryTagId),
   );
-  const transaction = write(() => {
-    noteStore.insert(
-      {
-        id,
-        userId: input.userId,
-        content: input.content,
-        color: primaryTagId ? 'default' : (input.color ?? 'default'),
-        status: input.status ?? null,
-        isPinned: false,
-        isArchived: false,
-        position: firstPosition(vault),
-        hiddenLinks: [],
-        galleryPreviewUrl: vault ? null : (input.galleryPreviewUrl ?? null),
-        createdAt: now,
-        updatedAt: now,
-        deletedAt: null,
-      },
-      vault,
-    );
-    if (primaryTagId || secondaryTagIds.length)
-      noteTagStore.set({ id, userId: input.userId }, (draft) => {
-        draft.primaryTagId = primaryTagId;
-        draft.secondaryTagIds = secondaryTagIds;
-      });
-  });
+  noteStore.insert(
+    {
+      id,
+      userId: input.userId,
+      content: input.content,
+      color: primaryTagId ? 'default' : (input.color ?? 'default'),
+      status: input.status ?? null,
+      isPinned: false,
+      isArchived: false,
+      position,
+      hiddenLinks: [],
+      galleryPreviewUrl: vault ? null : (input.galleryPreviewUrl ?? null),
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    },
+    vault,
+  );
+  if (primaryTagId || secondaryTagIds.length)
+    noteTagStore.set({ id, userId: input.userId }, (draft) => {
+      draft.primaryTagId = primaryTagId;
+      draft.secondaryTagIds = secondaryTagIds;
+    });
+}
+
+/** Creates one note optimistically. The transaction settles once the change has synced. */
+export function createNote(input: NewNote) {
+  const vault = input.vault ?? false;
+  const id = input.id ?? uuidv7();
+  const transaction = write(() => insertNewNote(input, id, firstPosition(vault), vault));
   return { id, transaction };
+}
+
+/** Prepends ordinary notes in one write. The last input appears first, as with separate creates. */
+export function createNotes(inputs: readonly Omit<NewNote, 'vault'>[]) {
+  if (inputs.length === 0) return null;
+  return write(() => {
+    let position = firstExistingPosition();
+    for (const input of inputs) {
+      position = positionBetween(null, position);
+      insertNewNote(input, input.id ?? uuidv7(), position, false);
+    }
+  });
 }
 
 /** The note as this device has it now, local writes included. Not a subscription. */
