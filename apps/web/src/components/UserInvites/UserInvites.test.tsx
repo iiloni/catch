@@ -9,7 +9,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   api: { listInvites: vi.fn(), createInvite: vi.fn(), deleteInvite: vi.fn() },
 }));
 
-const token = 'aB3_-'.repeat(8) + 'xyz';
+const token = `${'aB3_-'.repeat(8)}xyz`;
 const waiting: Invite = {
   id: '0199a0a0-0000-4000-8000-000000000001',
   label: 'Sam',

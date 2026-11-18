@@ -43,7 +43,7 @@ describe('history encoding', () => {
     let depth = 0;
     const original = structuredClone(previous);
     for (let index = 1; index <= 32; index++) {
-      const next = state('Some original words '.repeat(100) + ` ${index}`);
+      const next = state(`${'Some original words '.repeat(100)} ${index}`);
       const encoded = encodeHistory(next, { state: previous, depth });
       expect(decodeHistory(encoded.data, encoded.representation, previous)).toEqual(next);
       expect(encoded.representation).toBe(index === 32 ? 'snapshot' : 'delta');

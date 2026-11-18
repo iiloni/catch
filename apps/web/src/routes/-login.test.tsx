@@ -73,7 +73,7 @@ it('signs up with an invite link pasted into the form', async () => {
   expect(await screen.findByText(/not a whole invite link/)).toBeInTheDocument();
   expect(auth.signUp).not.toHaveBeenCalled();
 
-  const token = 'aB3_-'.repeat(8) + 'xyz';
+  const token = `${'aB3_-'.repeat(8)}xyz`;
   fireEvent.change(screen.getByLabelText('Invite link'), {
     target: { value: ` https://catch.example.com/login#invite=${token} ` },
   });
