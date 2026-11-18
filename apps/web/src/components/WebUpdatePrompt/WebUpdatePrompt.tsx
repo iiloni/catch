@@ -28,8 +28,8 @@ export function WebUpdatePrompt() {
         <DialogTitle>{required ? 'Update required to sync' : 'App update available'}</DialogTitle>
         <DialogDescription>
           {required
-            ? 'This version of Catch can no longer sync with your server. Reload to update and resume syncing. You can keep working offline; your saved notes and queued changes will stay on this device.'
-            : 'A new version of Catch is available. Reload to use it. Your saved notes and queued changes will stay on this device.'}
+            ? 'Reload to resume syncing, or keep working offline. Your saved notes and queued changes stay on this device.'
+            : 'Reload to update. Your saved notes and queued changes stay on this device.'}
         </DialogDescription>
         {error && (
           <p role="alert" className="text-destructive text-sm">

@@ -153,7 +153,7 @@ export default function GalleryPage() {
                   </EmptyState>
                 ) : (
                   <EmptyState icon={Lightbulb} title="Catch your first note">
-                    Tap + to write something down. It lands here.
+                    Tap + to add a note.
                   </EmptyState>
                 ))}
             </>

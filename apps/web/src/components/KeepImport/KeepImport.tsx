@@ -120,9 +120,7 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
       <SettingsRow
         icon={Lightbulb}
         label="Google Keep"
-        description={
-          notesSynced ? 'From a Google Takeout export' : 'Available once your notes have synced'
-        }
+        description={notesSynced ? undefined : 'Wait for notes and files to sync'}
       >
         <Button
           variant="secondary"
@@ -170,7 +168,7 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
               ? 'Opening the export…'
               : `${numbers.format(reading.read)} of ${count(reading.total, 'file', 'files')} read`}
           </p>
-          <p>This happens on this device. Nothing is added until you confirm.</p>
+          <p>Catch reads the export on this device and waits for you to confirm.</p>
         </ProgressRow>
       )}
       <Dialog open={found !== null} onOpenChange={(open) => !open && setFound(null)}>
@@ -179,13 +177,18 @@ export function KeepImport({ userId, notesSynced }: { userId: string; notesSynce
             Import {found?.fresh ? countNotes(found.fresh) : countAttachments(found?.files ?? 0)}?
           </DialogTitle>
           <DialogDescription>
-            They keep their colors, pins, archive and dates, and go after the notes you have, newest
-            first. Settings shows how the import is going, and you can leave while it runs.
+            {found && found.fresh > 0 && (
+              <>
+                Imported notes keep their colors, pins, archive status and dates. They appear after
+                your existing notes, newest first.{' '}
+              </>
+            )}
+            You can leave Settings while the import runs.
           </DialogDescription>
           {found && found.files > 0 && (
             <p className="text-muted-foreground text-sm">
-              {countAttachments(found.files)} will be added to their notes’ Media sections, without
-              inline blocks. Existing note text stays as it is.
+              {countAttachments(found.files)} will appear in Media only. Existing note text stays
+              the same.
             </p>
           )}
           {found && (

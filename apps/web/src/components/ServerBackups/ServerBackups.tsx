@@ -213,14 +213,10 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
         </SettingsRow>
         {overview.running?.kind === 'backup' && (
           <ProgressRow label="Backing up" done={0} total={null}>
-            <p>You can leave this page; the backup keeps going.</p>
+            <p>You can leave while the backup runs.</p>
           </ProgressRow>
         )}
-        <SettingsRow
-          icon={FileUp}
-          label="Add a backup file"
-          description="To restore one kept somewhere else"
-        >
+        <SettingsRow icon={FileUp} label="Add a backup file">
           <Button
             variant="secondary"
             size="sm"
@@ -255,7 +251,7 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
             <p>
               {uploading.sent < uploading.total
                 ? `${formatSize(uploading.sent)} of ${formatSize(uploading.total)}`
-                : 'Checking every file in it…'}
+                : 'Checking backup files…'}
             </p>
           </ProgressRow>
         )}
@@ -307,19 +303,18 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
         <DialogContent>
           <DialogTitle>Restore this backup?</DialogTitle>
           <DialogDescription>
-            The server goes back to {restoring && made(restoring)} for everyone: notes, accounts and
-            passwords. Changes made since then are lost, on every device.
+            This restores everyone's notes, accounts and passwords from{' '}
+            {restoring && made(restoring)}. Any changes synced after that will be lost.
           </DialogDescription>
           {restoring && (
             <ul className="flex list-disc flex-col gap-1 pl-5 text-muted-foreground text-sm">
-              <li>Catch is unavailable while it restores, then every device syncs again.</li>
-              <li>The database as it is now is kept as a backup, to undo this with.</li>
+              <li>Catch is unavailable during the restore. Devices sync again when it finishes.</li>
+              <li>Catch backs up the current database before restoring.</li>
               {!restoring.includesAttachments && (
-                <li>This backup has no attachments. The files on the server stay as they are.</li>
+                <li>This backup has no attachments. The server keeps its current files.</li>
               )}
               <li>
-                Everyone else has to sign in again, and so do you if this backup is from before your
-                account.
+                Everyone else must sign in again. You must too if the backup predates your account.
               </li>
             </ul>
           )}
@@ -344,8 +339,8 @@ export function ServerBackups({ onAccessDenied }: { onAccessDenied: () => void }
         <DialogContent>
           <DialogTitle>Delete this backup?</DialogTitle>
           <DialogDescription>
-            The backup from {deleting && made(deleting)} is removed from the server. Copies you
-            downloaded are not affected.
+            This removes the {deleting && made(deleting)} backup from the server. You keep your
+            downloaded copies.
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
@@ -453,7 +448,7 @@ function Schedule({
   return (
     <SettingsSection
       title="Automatic backups"
-      description="Only scheduled backups are removed to make room for new ones. The server also backs up its database before each update."
+      description="The limit applies to scheduled backups only. Catch also backs up its database before updates."
     >
       <SettingsRow
         icon={CalendarClock}
@@ -474,14 +469,10 @@ function Schedule({
           <SettingsRow label="Time">
             <TimeField value={draft.time} onCommit={(time) => void save({ time })} />
           </SettingsRow>
-          <SettingsRow label="Backups to keep" description="Older scheduled ones are removed">
+          <SettingsRow label="Backups to keep">
             <KeepInput value={draft.keep} onCommit={(keep) => void save({ keep })} />
           </SettingsRow>
-          <SettingsRow
-            icon={Paperclip}
-            label="Include attachments"
-            description="Off backs up the database alone"
-          >
+          <SettingsRow icon={Paperclip} label="Include attachments">
             <Switch
               aria-label="Include attachments in scheduled backups"
               checked={draft.includeAttachments}

@@ -129,7 +129,7 @@ export function VaultGate({ status, onCreated }: Props) {
       <Panel icon={LockKeyhole} title="Vault">
         <p className="text-muted-foreground text-sm">
           {offline
-            ? 'This device has not seen your vault yet. Connect to the server once to open it or set it up.'
+            ? 'Connect to the server to set up or open your vault on this device.'
             : 'Looking for your vault…'}
         </p>
       </Panel>
@@ -342,9 +342,8 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
   return (
     <Panel icon={ShieldCheck} title="Set up your vault">
       <p className="text-muted-foreground text-sm">
-        Notes in the vault are encrypted on your devices with a password only you know. The server,
-        its admin and its backups hold them only as ciphertext. Nobody can reset this password for
-        you.
+        Your devices encrypt vault notes before syncing them. Your server admin cannot read them or
+        reset your vault password.
       </p>
       <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-4">
         <PasswordField
@@ -614,7 +613,7 @@ function Recover({ onBack }: { onBack: () => void }) {
   return (
     <Panel icon={KeyRound} title="Recover your vault">
       <p className="text-muted-foreground text-sm">
-        Enter the recovery code you saved when you set the vault up, and choose a new password.
+        Use your recovery code to set a new vault password.
       </p>
       <form onSubmit={(event) => void submit(event)} className="flex w-full flex-col gap-4">
         <label htmlFor={codeId} className="flex flex-col gap-2 text-left text-sm">
@@ -671,9 +670,8 @@ export function VaultRecoveryCode({ code, onDone }: { code: string; onDone: () =
   return (
     <Panel icon={KeyRound} title="Save your recovery code">
       <p className="text-muted-foreground text-sm">
-        If you forget the vault password, this code is the only other way in. It is shown once and
-        stored nowhere. Without the password or this code, the vault’s notes cannot be read by
-        anyone, including you.
+        Save this code to recover your vault if you forget its password. Catch shows it once and
+        keeps no copy.
       </p>
       <output className="w-full select-all break-words rounded-2xl bg-foreground/[0.06] px-4 py-3 font-mono text-base">
         {code}

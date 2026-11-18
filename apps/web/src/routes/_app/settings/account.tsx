@@ -53,8 +53,8 @@ function AccountSettings() {
           <DialogTitle>Sign out?</DialogTitle>
           <DialogDescription>
             {pending === 1
-              ? 'A change on this device has not synced yet. Signing out deletes it.'
-              : `${pending} changes on this device have not synced yet. Signing out deletes them.`}
+              ? 'Signing out deletes 1 unsynced change on this device.'
+              : `Signing out deletes ${pending} unsynced changes on this device.`}
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>

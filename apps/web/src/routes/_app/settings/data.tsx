@@ -22,7 +22,7 @@ function DataSettings() {
         title="Import"
         description={
           <>
-            Export Keep from{' '}
+            Export Google Keep as a ZIP file with{' '}
             <a
               href={TAKEOUT_URL}
               target="_blank"
@@ -31,8 +31,7 @@ function DataSettings() {
             >
               Google Takeout
             </a>{' '}
-            as a .zip, then choose it here. Importing the same export again only adds missing notes
-            and attachments.
+            and choose the file here. Importing it again only adds missing notes and attachments.
           </>
         }
       >

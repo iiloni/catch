@@ -7,7 +7,7 @@ import { IconButton } from '@/components/IconButton/IconButton';
 import { MediaPreview } from '@/components/MediaPreview/MediaPreview';
 import { MediaViewer } from '@/components/MediaViewer/MediaViewer';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -189,11 +189,8 @@ function AttachmentCard({
         </DropdownMenu>
       </div>
       <Dialog open={rename} onOpenChange={setRename}>
-        <DialogContent className="z-[80]" data-attachment-menu>
-          <div className="flex flex-col gap-2">
-            <DialogTitle>Rename attachment</DialogTitle>
-            <DialogDescription>Choose a name for this file.</DialogDescription>
-          </div>
+        <DialogContent aria-describedby={undefined} className="z-[80]" data-attachment-menu>
+          <DialogTitle>Rename attachment</DialogTitle>
           <Input
             aria-label="File name"
             value={name}

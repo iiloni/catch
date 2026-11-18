@@ -10,7 +10,7 @@ export function BookmarkletSetup() {
   return (
     <SettingsSection
       title="Link capture"
-      description="On a page you want to keep, click the bookmark to open a small Catch window. You can edit the page details before saving. If dragging is unavailable, copy the bookmarklet and paste it into a bookmark’s URL field."
+      description="Click the bookmark on any page you want to save. To add it without dragging, copy the bookmarklet into a bookmark's URL field."
     >
       <SettingsRow
         icon={Link2}

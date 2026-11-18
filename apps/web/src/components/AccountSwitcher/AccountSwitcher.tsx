@@ -313,10 +313,10 @@ export function AccountSwitcher() {
             <DialogTitle>Sign out {accountLabel(confirming.account)}?</DialogTitle>
             <DialogDescription>
               {confirming.pending === 0
-                ? 'Its notes are removed from this device and stay on your Catch server. Sign in again to get them back here.'
+                ? 'This removes the local notes. Sign in again to sync them from the server.'
                 : confirming.pending === 1
-                  ? 'A change on this device has not synced yet. Signing out deletes it.'
-                  : `${confirming.pending} changes on this device have not synced yet. Signing out deletes them.`}
+                  ? 'Signing out deletes 1 unsynced change on this device.'
+                  : `Signing out deletes ${confirming.pending} unsynced changes on this device.`}
             </DialogDescription>
             <div className="flex justify-end gap-2">
               <DialogClose asChild>

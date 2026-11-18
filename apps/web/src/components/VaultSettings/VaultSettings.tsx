@@ -93,12 +93,11 @@ export function VaultSettings() {
         <VaultButtonSetting />
         <SettingsSection
           title="Vault"
-          description="Notes in the vault are encrypted on your devices with a password only you know. The server holds them only as ciphertext."
+          description="Your devices encrypt vault notes before syncing them. Your server cannot read them."
         >
           <SettingsRow
             icon={LockKeyhole}
             label={status === 'none' ? 'No vault yet' : 'Looking for your vault…'}
-            description={status === 'none' ? 'Set one up to keep private notes' : undefined}
           >
             {status === 'none' && (
               <Button variant="outline" className="h-11 rounded-full" onClick={enterVault}>
@@ -120,7 +119,7 @@ export function VaultSettings() {
           label={unlocked ? 'Unlocked' : 'Locked'}
           description={
             unlocked
-              ? 'Lock it on this device'
+              ? undefined
               : biometrics
                 ? `Opens with your ${words.name}`
                 : pin
@@ -203,7 +202,7 @@ export function VaultSettings() {
             <SettingsRow
               icon={RectangleEllipsis}
               label="Unlock with a PIN"
-              description={pin || unlocked ? 'Instead of the password' : 'Unlock to set one'}
+              description={pin || unlocked ? undefined : 'Unlock to set a PIN'}
             >
               <Switch
                 aria-label="Unlock with a PIN"
@@ -234,11 +233,7 @@ export function VaultSettings() {
         )}
       </SettingsSection>
       <SettingsSection title="Vault">
-        <SettingsRow
-          icon={KeyRound}
-          label="Vault password"
-          description="Your recovery code stays the same"
-        >
+        <SettingsRow icon={KeyRound} label="Vault password">
           <Button
             variant="outline"
             className="h-11 rounded-full"
@@ -250,7 +245,7 @@ export function VaultSettings() {
         <SettingsRow
           icon={Trash2}
           label="Delete vault"
-          description="Deletes every note in it, on every device"
+          description="Deletes all vault notes on every device"
         >
           <Button
             variant="outline"
@@ -350,8 +345,8 @@ function ChangeVaultPassword({ open, onClose }: { open: boolean; onClose: () => 
       <DialogContent showCloseButton={!pending} className={DIALOG}>
         <DialogTitle>Change vault password</DialogTitle>
         <DialogDescription>
-          Use at least {MIN_VAULT_PASSWORD} characters. Your recovery code stays the same, and
-          devices that remember the vault or open it another way keep doing so.
+          Use at least {MIN_VAULT_PASSWORD} characters. Your recovery code and device unlock
+          settings stay the same.
         </DialogDescription>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           {fields.map(([name, label, value, set, autoComplete]) => (
@@ -458,7 +453,7 @@ function SetVaultPin({
       <DialogContent showCloseButton={!pending} className={DIALOG}>
         <DialogTitle>{replacing ? 'Change PIN' : 'Set a PIN'}</DialogTitle>
         <DialogDescription>
-          Four to eight digits, for this device only. Five wrong tries turn it off.
+          Use 4 to 8 digits. Five wrong tries disable this device's PIN.
         </DialogDescription>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           {fields.map(([name, label, value, set]) => (
@@ -531,12 +526,12 @@ function DeleteVault({
         <DialogTitle>Delete the vault?</DialogTitle>
         <DialogDescription>
           {noteCount === null
-            ? 'The vault and every note in it will be deleted forever, from the server and every device. This does not need the vault password.'
+            ? 'This permanently deletes the vault and all its notes from the server and every device. You can delete it without the vault password.'
             : noteCount === 0
-              ? 'The vault will be deleted from the server and every device.'
+              ? 'This deletes the empty vault from the server and every device.'
               : noteCount === 1
-                ? 'The vault and the note in it will be deleted forever, from the server and every device.'
-                : `The vault and all ${noteCount} notes in it will be deleted forever, from the server and every device.`}
+                ? 'This permanently deletes the vault and its one note from the server and every device.'
+                : `This permanently deletes the vault and its ${noteCount} notes from the server and every device.`}
         </DialogDescription>
         <div className="flex justify-end gap-2">
           <DialogClose asChild>
