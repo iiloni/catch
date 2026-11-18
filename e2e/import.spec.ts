@@ -219,7 +219,7 @@ test('Keep attachments fill the catalog without inline blocks and reimports pres
   await expect(importButton).toBeEnabled();
   const archive = await mediaTakeout();
   await page.getByLabel('Google Takeout export').setInputFiles(archive);
-  await expect(page.getByRole('dialog')).toContainText('3 attachments will be added');
+  await expect(page.getByRole('dialog')).toContainText('3 attachments will appear in Media only');
   await page.getByRole('dialog').getByRole('button', { name: 'Import' }).click();
   await expect(page.getByRole('status')).toContainText(
     '1 note and 3 attachments imported from Google Keep',

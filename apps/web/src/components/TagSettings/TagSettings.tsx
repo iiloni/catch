@@ -34,11 +34,8 @@ export function TagSettings({ userId }: { userId: string }) {
   const [deleting, setDeleting] = useState<Tag | null>(null);
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection
-        title="Tags"
-        description="A note’s primary tag sets its color. Secondary tags add context."
-      >
-        <SettingsRow label="Your tags" description="Children inherit color and icon">
+      <SettingsSection title="Tags" description="A note's primary tag sets its color.">
+        <SettingsRow label="Your tags" description="Child tags inherit color and icon">
           <Button
             variant="secondary"
             className="h-11 rounded-xl"
@@ -51,7 +48,7 @@ export function TagSettings({ userId }: { userId: string }) {
         <div className="p-3">
           {!tags.length ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
-              Create your first tag, then add children to group related topics.
+              Add a tag to start organizing your notes.
             </p>
           ) : (
             <TagTree
@@ -141,9 +138,9 @@ export function TagSettings({ userId }: { userId: string }) {
           <DialogTitle>Delete {deleting?.name}?</DialogTitle>
           <DialogDescription>
             {deleting && tagSubtreeIds(tags, deleting.id).size > 1
-              ? 'This tag and all its children will be removed from your notes.'
-              : 'This tag will be removed from your notes.'}{' '}
-            Your notes will be kept.
+              ? 'This removes the tag and its descendants from your notes.'
+              : 'This removes the tag from your notes.'}{' '}
+            Your notes stay.
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>

@@ -148,10 +148,10 @@ export function UserActions({
           </DialogTitle>
           <DialogDescription>
             {action?.kind === 'password'
-              ? `Share this password with ${user.email}. They can replace it in Account settings. It will disappear when you close this dialog.`
+              ? `Copy this password for ${user.email} before closing. They can change it in Account settings.`
               : action?.kind === 'delete'
-                ? `Permanently delete ${user.name || user.email} (${user.email}), including all their notes and attachments? This cannot be undone.`
-                : `Generate a temporary password for ${user.name || user.email} (${user.email})? Their current password will stop working and they will be signed out of all devices.`}
+                ? `Deleting ${user.email} removes all their notes and attachments. This cannot be undone.`
+                : `This replaces the password for ${user.email} with a temporary one and signs them out on every device.`}
           </DialogDescription>
           {action?.kind === 'password' && (
             <Input

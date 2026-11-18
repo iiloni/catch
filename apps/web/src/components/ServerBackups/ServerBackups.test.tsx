@@ -127,10 +127,10 @@ describe('ServerBackups', () => {
     await openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Changes made since then are lost, on every device.');
+    expect(dialog).toHaveAccessibleDescription(/Any changes synced after that will be lost/);
     expect(dialog).toHaveTextContent('This backup has no attachments.');
     expect(dialog).toHaveTextContent(
-      'Everyone else has to sign in again, and so do you if this backup is from before your account.',
+      'Everyone else must sign in again. You must too if the backup predates your account.',
     );
     expect(serverBackups.restore).not.toHaveBeenCalled();
 

@@ -42,7 +42,6 @@ export function AppUpdate() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 px-4 py-2 text-center">
         <BrandLockup orientation="stacked" iconSize={80} channel={channel} />
-        <p className="text-muted-foreground text-sm">Your notes, wherever you are.</p>
       </div>
       <SettingsSection title="Version">
         <SettingsRow
@@ -102,8 +101,8 @@ export function AppUpdate() {
                 {installing ? 'Preparing update…' : `Update to ${server?.version}`}
               </Button>
               <p className="text-muted-foreground text-xs">
-                Android will ask you to confirm installation. You may need to allow Catch to install
-                updates.
+                Android asks you to confirm the update. It may also ask for permission to install
+                it.
               </p>
             </>
           )}
@@ -209,7 +208,7 @@ function ChannelReleases({ channel }: { channel: ReleasesResponse['channel'] }) 
       description={
         channel === 'dev'
           ? 'Development builds are not published to GitHub releases.'
-          : 'Recent releases from your server’s channel. App updates target the server’s version.'
+          : 'App updates match your server version.'
       }
     >
       {channel !== 'dev' &&

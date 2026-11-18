@@ -70,9 +70,7 @@ export function AppIconPicker() {
     <SettingsSection
       title="App icon"
       description={
-        android
-          ? 'Choose an icon for this device.'
-          : 'Choose an icon for this device. Installed web apps may ask you to approve the change.'
+        android ? undefined : 'Your installed web app may ask you to approve the new icon.'
       }
     >
       <div className="flex min-h-30 items-center justify-center px-4 pt-6 pb-4">

@@ -25,16 +25,16 @@ import { useSnoozeMinutes } from '@/lib/snooze';
 /** Why notifications cannot be turned on here, for the states where they cannot. */
 const UNAVAILABLE: Partial<Record<PushState, string>> = {
   'needs-install':
-    'On iPhone and iPad, add Catch to your Home Screen (Share, then Add to Home Screen) and turn notifications on from there.',
+    'On iPhone or iPad, use Share to add Catch to your Home Screen. Open Catch from there to turn on notifications.',
   unsupported: 'This browser cannot receive notifications from Catch.',
   blocked: Capacitor.isNativePlatform()
-    ? 'Notifications are blocked for Catch. Allow them in Android’s settings for the app, then turn them on here.'
-    : 'Notifications are blocked for Catch. Allow them in this browser’s site settings, then turn them on here.',
+    ? 'Notifications are blocked. Allow them in Android settings for Catch, then turn them on here.'
+    : "Notifications are blocked. Allow them in your browser's site settings, then turn them on here.",
 };
 
-const HOW = Capacitor.isNativePlatform()
-  ? 'This phone rings your reminders itself, so they arrive offline too. One set on another device arrives once the phone has been online. Each device is turned on separately.'
-  : 'Your Catch server sends reminders through this browser’s push service, encrypted so only this device can read them. Each device is turned on separately.';
+const ANDROID_HELP = Capacitor.isNativePlatform()
+  ? 'Reminders work offline on this phone once they sync.'
+  : undefined;
 
 const TIMES: { key: keyof ReminderTimes; label: string }[] = [
   { key: 'morning', label: 'Morning' },
@@ -136,8 +136,8 @@ export function NotificationSettings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsSection title="This device" description={unavailable ?? HOW}>
-        <SettingsRow icon={Bell} label="Reminder notifications" description="Show reminders here">
+      <SettingsSection title="This device" description={unavailable ?? ANDROID_HELP}>
+        <SettingsRow icon={Bell} label="Reminder notifications">
           <Switch
             aria-label="Reminder notifications"
             checked={state === 'on'}
@@ -146,7 +146,7 @@ export function NotificationSettings() {
           />
         </SettingsRow>
         {state === 'on' && (
-          <SettingsRow icon={BellRing} label="Test" description="Send one to this device now">
+          <SettingsRow icon={BellRing} label="Test notification">
             <Button variant="secondary" size="sm" disabled={busy} onClick={test}>
               Send
             </Button>
@@ -155,13 +155,13 @@ export function NotificationSettings() {
       </SettingsSection>
       <SettingsSection
         title="Snooze"
-        description="How long Snooze puts a reminder off, on all your devices."
+        description="The snooze duration applies on all your devices."
       >
         <SnoozePicker value={snooze} onChange={setSnooze} />
       </SettingsSection>
       <SettingsSection
         title="Quick times"
-        description="The times Morning, Afternoon and Evening stand for when you set a reminder, on all your devices."
+        description="These reminder shortcuts apply on all your devices."
       >
         {TIMES.map(({ key, label }) => (
           <SettingsRow key={key} icon={Clock} label={label}>

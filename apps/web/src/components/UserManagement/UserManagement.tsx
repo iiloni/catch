@@ -129,11 +129,11 @@ export function UserManagement({ currentUserId, onAccessDenied }: Props) {
       )}
       <SettingsSection
         title="Server accounts"
-        description="Manage roles, reset passwords and delete accounts. Manage your own password in Account settings."
+        description="Change your own password in Account settings."
       >
         <SettingsRow
           label={data ? `${data.total} ${data.total === 1 ? 'user' : 'users'}` : 'Users'}
-          description={query.search ? 'Matching your search' : 'Everyone on this Catch server'}
+          description={query.search ? 'Matching your search' : undefined}
         >
           <Button
             variant="ghost"

@@ -124,7 +124,7 @@ export function UserInvites({ onAccessDenied }: Props) {
     <>
       <SettingsSection
         title="Invites"
-        description={`Each link lets one person make an account, for ${INVITE_DAYS} days. Sign-up stays closed to everyone else.`}
+        description={`Each link lets one person sign up within ${INVITE_DAYS} days.`}
       >
         <form onSubmit={create} className="flex flex-wrap items-center gap-2 px-4 py-3">
           <Input
@@ -170,8 +170,8 @@ export function UserInvites({ onAccessDenied }: Props) {
         <DialogContent>
           <DialogTitle>Invite link</DialogTitle>
           <DialogDescription>
-            Send this link to the person you are inviting. It makes one account and works for{' '}
-            {INVITE_DAYS} days. It will disappear when you close this dialog.
+            Copy the link before you close this window. It works once and expires in {INVITE_DAYS}{' '}
+            days.
           </DialogDescription>
           <Input
             aria-label="Invite link"

@@ -3,13 +3,7 @@ import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsRow } from '@/components/SettingsSection/SettingsSection';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { changeAccountName } from '@/lib/auth';
 import { haptics } from '@/lib/haptics';
@@ -56,7 +50,7 @@ export function ChangeName({ name, onChanged }: Props) {
   }
 
   return (
-    <SettingsRow icon={UserRound} label="Name" description="How your account appears in Catch">
+    <SettingsRow icon={UserRound} label="Name">
       <Dialog
         open={open}
         onOpenChange={(value) => {
@@ -74,6 +68,7 @@ export function ChangeName({ name, onChanged }: Props) {
           </Button>
         </DialogTrigger>
         <DialogContent
+          aria-describedby={undefined}
           showCloseButton={!pending}
           className="top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto"
           onEscapeKeyDown={(event) => {
@@ -84,7 +79,6 @@ export function ChangeName({ name, onChanged }: Props) {
           }}
         >
           <DialogTitle>Change name</DialogTitle>
-          <DialogDescription>Choose the name shown for your account in Catch.</DialogDescription>
           <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
             <label htmlFor={fieldId} className="flex flex-col gap-2 text-sm">
               Name

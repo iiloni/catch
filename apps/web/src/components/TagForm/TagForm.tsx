@@ -126,8 +126,8 @@ export function TagForm({
         <DialogTitle>{initial.tag ? 'Edit tag' : 'New tag'}</DialogTitle>
         <DialogDescription>
           {parentId
-            ? 'This tag inherits its branch’s icon and color.'
-            : 'Link a color to tag existing notes of that color that have no primary tag.'}
+            ? "This tag uses its parent tag's icon and color."
+            : 'Linking a color adds this tag to notes of that color with no primary tag.'}
         </DialogDescription>
         <form onSubmit={save} className="flex flex-col gap-4">
           <label htmlFor={nameId} className="flex flex-col gap-1.5 text-sm font-medium">
@@ -170,8 +170,7 @@ export function TagForm({
                   }}
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {color ? COLOR_NAMES[color] : 'No color'} · Each color can be linked to one
-                  top-level tag.
+                  {color ? COLOR_NAMES[color] : 'No color'}. Each color can have one top-level tag.
                 </p>
               </fieldset>
               <fieldset className="min-w-0">

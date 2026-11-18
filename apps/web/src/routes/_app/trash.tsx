@@ -82,7 +82,7 @@ function TrashPage() {
           />
         ) : (
           <EmptyState icon={Trash2} title="No notes in the trash.">
-            Notes you move to the trash can be restored until you empty it.
+            You can restore notes from the trash until you empty it.
           </EmptyState>
         )}
       </motion.section>
@@ -91,8 +91,8 @@ function TrashPage() {
           <DialogTitle>Empty trash?</DialogTitle>
           <DialogDescription>
             {notes.length === 1
-              ? 'The note in the trash will be deleted forever.'
-              : `All ${notes.length} notes in the trash will be deleted forever.`}
+              ? 'This permanently deletes 1 note.'
+              : `This permanently deletes ${notes.length} notes.`}
           </DialogDescription>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>

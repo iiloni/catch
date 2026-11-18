@@ -64,11 +64,7 @@ export function ChangePassword() {
 
   return (
     <SettingsSection title="Security">
-      <SettingsRow
-        icon={KeyRound}
-        label="Password"
-        description="Change your password and sign out other devices"
-      >
+      <SettingsRow icon={KeyRound} label="Password">
         <Dialog
           open={open}
           onOpenChange={(value) => {
@@ -95,7 +91,7 @@ export function ChangePassword() {
           >
             <DialogTitle>Change password</DialogTitle>
             <DialogDescription>
-              Use at least 8 characters. Your other devices will be signed out.
+              Use at least 8 characters. You'll be signed out on your other devices.
             </DialogDescription>
             <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
               <label htmlFor={`${formId}-current`} className="flex flex-col gap-2 text-sm">

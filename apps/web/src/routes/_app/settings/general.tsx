@@ -28,19 +28,15 @@ function GeneralSettings() {
       <AppIconPicker />
       <SettingsSection
         title="Time format"
-        description="Automatic follows this device's language, which may not match its clock setting."
+        description="Automatic uses this device's language to choose 12- or 24-hour time."
       >
         <ClockPicker value={clock} onChange={setClock} />
       </SettingsSection>
       <SettingsSection
         title="Notes"
-        description="Previews are fetched by your Catch server, so the sites you link to never see this device."
+        description="Only your Catch server contacts linked sites to fetch previews."
       >
-        <SettingsRow
-          icon={Link2}
-          label="Link previews"
-          description="Cards with a title and image for each link"
-        >
+        <SettingsRow icon={Link2} label="Link previews">
           <Switch
             aria-label="Link previews"
             checked={linkPreviews}
