@@ -96,19 +96,18 @@ jobs:
       - run: python3 branding/wordmark/compose-catch-lockups.py --icons-json branding/wordmark/wordmark-icon-inputs.json --output-dir apps/web/public/wordmark --check
       - run: pnpm check
 
-  # Each project's tests are split over two runners, each with a stack of its own, so the
-  # halves do not compete for one machine the way a second worker would.
+  # Each shard has its own runner and development stack.
   e2e-desktop:
-    name: e2e desktop (${{ matrix.shard }}/2)
+    name: e2e desktop (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest
-    # Image and stack preparation can take over seven minutes before a 23-minute shard.
+    # Image and stack preparation can take over seven minutes with a cold cache.
     timeout-minutes: 45
     strategy: &e2e-shards
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
       PROJECT: desktop
     steps: &e2e-steps
@@ -137,8 +136,7 @@ jobs:
       # Debian packages are only fetched when the Dockerfile changes. `dev.sh up` then builds
       # the same image and finds every layer here. Writing the image out is what downloads
       # the kept layers: a build with no output reads only their names, and `dev.sh up` would
-      # run every step again. One job keeps the layers: four would each store a copy of their
-      # own after a change.
+      # run every step again. One job keeps the layers so the other shards can reuse them.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -151,16 +149,14 @@ jobs:
       - run: ./scripts/dev.sh up
       # Server backups and video posters are tested against a real Postgres with its client
       # tools and FFmpeg, which the check job's bare runner lacks (the tests skip themselves
-      # there) and this stack has. They and the API tests ride on the runner that finishes
-      # first, so they add nothing to the time the whole suite takes.
-      - if: env.PROJECT == 'android' && matrix.shard == 2
+      # there) and this stack has. Run them on the last Android shard, which has fewer
+      # browser tests.
+      - if: env.PROJECT == 'android' && matrix.shard == strategy.job-total
         run: ./scripts/dev.sh test
-      # The tests that only call the API open no page, so they run once. They get a run of
-      # their own because Playwright cuts the list of files in half by test count, and their
-      # few tests would move a project's cut to the far side of its largest file.
-      - if: env.PROJECT == 'android' && matrix.shard == 2
+      # API-only tests run once in their own Playwright project, outside browser sharding.
+      - if: env.PROJECT == 'android' && matrix.shard == strategy.job-total
         run: ./scripts/dev.sh e2e --project=api --workers=1
-      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/2 --workers=1
+      - run: ./scripts/dev.sh e2e --project=$PROJECT --shard=${{ matrix.shard }}/${{ strategy.job-total }} --workers=1
       - if: failure()
         run: ./scripts/dev.sh logs-once
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,7 +167,7 @@ jobs:
           retention-days: 7
 
   e2e-android:
-    name: e2e android (${{ matrix.shard }}/2)
+    name: e2e android (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: reuse
     if: needs.reuse.outputs.run_checks == 'true' && needs.reuse.outputs.run_e2e == 'true'
     runs-on: ubuntu-latest

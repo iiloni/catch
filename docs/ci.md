@@ -4,14 +4,14 @@ Catch's [CI workflow](../.github/workflows/ci.yml) separates PR iteration from f
 validation. Every PR update targeting `main` runs lint, type checks, unit tests and builds.
 The `run e2e` label requests the full suite on a draft without merge approval. The
 `merge on pass` label means functionality and design are approved and the agent may
-merge once all required checks pass. Either label requests the Docker-backed test suite: two desktop
-shards, two mobile shards, API tests and the unit tests that require FFmpeg and Postgres tools. Mobile E2E
-emulates Android in Chromium; it does not test a native APK.
+merge once all required checks pass. Either label requests the Docker-backed test suite with
+three desktop shards, three mobile shards, API tests and the unit tests that require FFmpeg
+and Postgres tools. Mobile E2E emulates Android in Chromium; it does not test a native APK.
 
 Each E2E job has a 45-minute budget for image preparation, stack startup and tests.
-The slowest shard takes about 23 minutes of tests, and preparation with a cold image
-cache can add more than seven minutes. Individual tests retain their 60-second timeout. Playwright logs
-each test's result and duration so interrupted runs still show their progress.
+Preparation with a cold image cache can take more than seven minutes. Individual tests
+retain their 60-second timeout. Playwright logs each test's result and duration so
+interrupted runs still show their progress.
 
 The required check is **`validation`**. For a PR, it fails until `merge on pass` is present
 and checks and both E2E projects succeed in the same run. A PR with only `run e2e` still
