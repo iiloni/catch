@@ -17,7 +17,6 @@ import { Switch } from '@/components/ui/switch';
 import { haptics } from '@/lib/haptics';
 import { useSyncStatus } from '@/lib/syncStatus';
 import {
-  createVault,
   enableVaultBiometrics,
   recoverVault,
   unlockVault,
@@ -40,8 +39,7 @@ export const MIN_VAULT_PASSWORD = 8;
 
 type Props = {
   status: Exclude<VaultStatus, 'unlocked'>;
-  /** A vault was just made: its recovery code, which must be shown now or never. */
-  onCreated: (recoveryCode: string) => void;
+  onCreate: (password: string, remember: boolean) => Promise<void>;
 };
 
 /**
@@ -55,7 +53,7 @@ function focusWhenInFront(field: RefObject<HTMLInputElement | null>) {
 }
 
 /** What stands in front of the vault's notes: setting it up, or unlocking it. */
-export function VaultGate({ status, onCreated }: Props) {
+export function VaultGate({ status, onCreate }: Props) {
   const [recovering, setRecovering] = useState(false);
   const [usePassword, setUsePassword] = useState(false);
   // Why a quicker way in gave way to the next, when it did so on its own.
@@ -127,7 +125,7 @@ export function VaultGate({ status, onCreated }: Props) {
       </Panel>
     );
   }
-  if (status === 'none') return <SetUp onCreated={onCreated} />;
+  if (status === 'none') return <SetUp onCreate={onCreate} />;
   if (recovering) return <Recover onBack={() => setRecovering(false)} />;
   if (pin && !usePassword) {
     return (
@@ -334,7 +332,7 @@ export function newPasswordProblem(password: string, confirmation: string) {
   return null;
 }
 
-function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
+function SetUp({ onCreate }: Pick<Props, 'onCreate'>) {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [remember, setRemember] = useState(false);
@@ -349,7 +347,7 @@ function SetUp({ onCreated }: Pick<Props, 'onCreated'>) {
     if (problem) return;
     setPending(true);
     try {
-      onCreated(await createVault(password, remember));
+      await onCreate(password, remember);
       haptics.success();
     } catch (caught) {
       setError(failure(caught));

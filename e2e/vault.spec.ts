@@ -44,6 +44,9 @@ async function setUpVault(page: Page, { remember = false } = {}) {
   if (remember) await gate(page).getByRole('switch', { name: 'Remember on this device' }).click();
   await gate(page).getByRole('button', { name: 'Create vault' }).click();
   await expect(gate(page).getByText('Save your recovery code')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Gallery', exact: true, includeHidden: true }),
+  ).toBeVisible();
   const code = (await gate(page).getByRole('status').textContent()) ?? '';
   expect(code).toMatch(/^([A-Z2-7]{4}-){7}[A-Z2-7]{4}$/);
   await gate(page).getByRole('button', { name: 'I have saved it' }).click();

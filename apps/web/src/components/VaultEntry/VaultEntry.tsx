@@ -10,6 +10,7 @@ import { noteStore } from '@/lib/noteStore';
 import { useOpenNote } from '@/lib/openNote';
 import { cn } from '@/lib/utils';
 import {
+  createVault,
   hasSeenVault,
   isVaultNote,
   leaveVault,
@@ -118,9 +119,20 @@ function growFrom(form: HTMLElement, pill: DOMRect, shown: () => void) {
 export function VaultEntry() {
   const asked = vaultPrompt.use();
   const status = vaultStatus.use();
-  // Held here because creating the vault unlocks it, which would otherwise close the dialog
-  // before its recovery code has been shown.
+  // Adopting the new key unlocks the vault before creation returns its recovery code.
+  const [creating, setCreating] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const canDismiss = !creating && recoveryCode === null;
+  const gateStatus = creating ? 'none' : status;
+
+  async function create(password: string, remember: boolean) {
+    setCreating(true);
+    try {
+      setRecoveryCode(await createVault(password, remember));
+    } finally {
+      setCreating(false);
+    }
+  }
 
   // A device that has seen the vault follows it from launch, so a remembered key is ready
   // and its reminders can ring. Any other waits to be asked.
@@ -130,10 +142,10 @@ export function VaultEntry() {
 
   // Unlocked (here, or by the key the device remembered arriving late): go in.
   useEffect(() => {
-    if (!asked || status !== 'unlocked' || recoveryCode !== null) return;
+    if (!asked || status !== 'unlocked' || !canDismiss) return;
     vaultMode.set(true);
     vaultPrompt.set(false);
-  }, [asked, status, recoveryCode]);
+  }, [asked, status, canDismiss]);
 
   // The pages now show the other kind of note, so one left open from before (as it can be
   // in the pane beside the page) closes. A note opened by entering, from its reminder, stays.
@@ -160,7 +172,7 @@ export function VaultEntry() {
   });
   useBackFallback(mode && onTab, leaveVault);
 
-  const open = asked || recoveryCode !== null;
+  const open = asked || !canDismiss;
 
   // A pull's pill becomes the form (`growFrom`) in place of the dialog's own zoom, which is
   // left off for as long as this form is open so it cannot start again partway.
@@ -183,13 +195,13 @@ export function VaultEntry() {
     <Dialog
       open={open}
       onOpenChange={(value) => {
-        // The recovery code is dismissed with its own button, not by a stray tap.
-        if (!value && recoveryCode === null) vaultPrompt.set(false);
+        // The recovery code must stay until it is acknowledged.
+        if (!value && canDismiss) vaultPrompt.set(false);
       }}
     >
       <DialogContent
         ref={grow}
-        showCloseButton={recoveryCode === null}
+        showCloseButton={canDismiss}
         className={cn(
           'top-[calc((100dvh-var(--keyboard))/2)] max-h-[calc(100dvh-var(--keyboard)-var(--safe-top)-var(--safe-bottom)-2rem)] overflow-y-auto',
           grows && 'data-[state=open]:animate-none',
@@ -203,10 +215,10 @@ export function VaultEntry() {
           if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
         }}
         onPointerDownOutside={(event) => {
-          if (recoveryCode !== null) event.preventDefault();
+          if (!canDismiss) event.preventDefault();
         }}
         onEscapeKeyDown={(event) => {
-          if (recoveryCode !== null) event.preventDefault();
+          if (!canDismiss) event.preventDefault();
         }}
       >
         <DialogTitle className="sr-only">Vault</DialogTitle>
@@ -216,8 +228,8 @@ export function VaultEntry() {
         <div>
           {recoveryCode !== null ? (
             <VaultRecoveryCode code={recoveryCode} onDone={() => setRecoveryCode(null)} />
-          ) : status !== 'unlocked' ? (
-            <VaultGate status={status} onCreated={setRecoveryCode} />
+          ) : gateStatus !== 'unlocked' ? (
+            <VaultGate status={gateStatus} onCreate={create} />
           ) : null}
         </div>
       </DialogContent>
