@@ -324,3 +324,68 @@ export async function moveNote(page: Page, title: string, destination = 'New Def
     .click();
   return dialog;
 }
+
+/**
+ * A touch drag from a point, moved in steps. Android uses real touch input; desktop browsers
+ * dispatch the same touch events to the element under the point.
+ */
+export async function beginSwipe(page: Page, isMobile: boolean, x = 260, y = 60) {
+  await waitForPageTransition(page);
+  const touch = isMobile ? await page.context().newCDPSession(page) : null;
+  const target = touch
+    ? null
+    : await page.evaluateHandle(({ x, y }) => document.elementFromPoint(x, y), { x, y });
+  let timestamp = Date.now() / 1000;
+  let offset = { x: 0, y: 0 };
+  async function send(type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel') {
+    const ended = type === 'touchEnd' || type === 'touchCancel';
+    const point = { x: x + offset.x, y: y + offset.y };
+    if (touch) {
+      await touch.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: ended ? [] : [{ ...point, id: 1 }],
+        timestamp,
+      });
+    } else if (target) {
+      await target.evaluate(
+        (element, { type, ended, point, time }) => {
+          if (!element) throw new Error('Missing swipe target');
+          const event = new Event(type.toLowerCase(), { bubbles: true, cancelable: true });
+          Object.defineProperties(event, {
+            touches: {
+              value: ended ? [] : [{ identifier: 0, clientX: point.x, clientY: point.y }],
+            },
+            timeStamp: { value: time },
+          });
+          element.dispatchEvent(event);
+        },
+        { type, ended, point, time: timestamp * 1000 },
+      );
+    }
+  }
+  await send('touchStart');
+  return {
+    async move(dx: number, dy = 0) {
+      const from = offset;
+      for (const fraction of [0.03, 0.06, 0.1, 0.2, 0.4, 0.6, 0.8, 1]) {
+        timestamp += 0.016;
+        offset = { x: from.x + (dx - from.x) * fraction, y: from.y + (dy - from.y) * fraction };
+        await send('touchMove');
+      }
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+    },
+    async end(cancel = false) {
+      // A touch lifted in motion is a fling to Chrome, which drops the next tap's click.
+      await page.waitForTimeout(110);
+      timestamp += 0.11;
+      await send(cancel ? 'touchCancel' : 'touchEnd');
+      await touch?.detach();
+      await target?.dispose();
+    },
+  };
+}

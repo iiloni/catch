@@ -1,6 +1,6 @@
 # 0020: The vault
 
-Status: accepted (2026-10-06), revised 2026-10-07 and 2026-11-10
+Status: accepted (2026-10-06), revised 2026-10-07, 2026-11-10 and 2026-11-18
 
 ## Context
 
@@ -120,10 +120,22 @@ and not of each card. `lib/noteStore.ts` sends each change to the notes collecti
 vault by the note's id, so the note actions, the editor and the dock are the same code for
 both. Search runs on the device (ADR 0002) and so covers the open notes without the server.
 
-Settings > Vault can hide the header's entry button on this device, with it shown by
-default, even before a vault exists. This is a device appearance preference, shared by its
-accounts like the theme. Settings and reminders still open the vault; while inside, the
-leave button is always shown so there is a way back to ordinary notes.
+The header's button sits at the top of the screen, out of a thumb's reach, so there are
+nearer ways in and out. The same toggle sits beside Reminders on the top row of the Gallery
+tab's menu above the dock, reached by holding the tab and sliding onto it. In the Android app, the back gesture on the Gallery, the
+Deck or Search leaves the vault before it leaves the app (`useBackFallback`): those pages
+replace history, so back had nowhere nearer to go, and an open note, menu or the dock's search
+still closes first. The web gets no such step, since it would need a history entry for a mode
+the address does not hold. Pulling down at the top of the Gallery or the Deck can enter and
+leave too; it is off by default, since a pull that changes which notes a page shows is easy to
+start by accident, and Search keeps its pull for clearing filters. A floating button above the
+dock was rejected: shown outside the vault it would be noise and would advertise the vault.
+
+Settings > Vault can hide the vault's buttons on this device, in the header and the Gallery
+tab's menu, with them shown by default, even before a vault exists. The pull is a setting of
+its own, so a device can hide the buttons and keep the gesture. Both are device appearance
+preferences, shared by its accounts like the theme. Settings and reminders still open the
+vault; while inside, the leave buttons are always shown so there is a way back to ordinary notes.
 
 **Reminders ring without saying what for.** A vault note's reminder is an ordinary row in
 `reminders`, so the server's scheduler and the phone's alarms work unchanged, and the

@@ -18,7 +18,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { VaultPull } from '@/components/VaultPull/VaultPull';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
+import { useBackHandler } from '@/lib/backButton';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { useGalleryLayout } from '@/lib/galleryLayout';
 import { haptics } from '@/lib/haptics';
@@ -26,6 +28,7 @@ import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
+import { usePageSurface } from '@/lib/pageSurface';
 import { sortNotes } from '@/lib/sortNotes';
 import { isFolded, PAGE_MAX, useNotePane, usePageGutterShift } from '@/lib/splitView';
 import { usePersistentState } from '@/lib/storage';
@@ -133,40 +136,46 @@ export default function GalleryPage() {
         style={{ x: gutterShift }}
         className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        <div ref={measureGrid}>
-          {awaitingSync ? null : (
-            <>
-              <NoteGrid
-                notes={sorted}
-                groupPinned
-                layout={layout}
-                onOpen={(note, card) => open(note.id, card)}
-                onArchive={(note) => setNoteArchived(note.id, true)}
-                onMove={onMove}
-                selected={selection.ids}
-                onSelect={selection.select}
-              />
-              {shown.length === 0 &&
-                (vault ? (
-                  <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
-                    Tap + to write a note only your devices can read.
-                  </EmptyState>
-                ) : (
-                  <EmptyState icon={Lightbulb} title="Catch your first note">
-                    Tap + to add a note.
-                  </EmptyState>
-                ))}
-            </>
-          )}
-        </div>
+        <VaultPull disabled={selection.selecting}>
+          <div ref={measureGrid}>
+            {awaitingSync ? null : (
+              <>
+                <NoteGrid
+                  notes={sorted}
+                  groupPinned
+                  layout={layout}
+                  onOpen={(note, card) => open(note.id, card)}
+                  onArchive={(note) => setNoteArchived(note.id, true)}
+                  onMove={onMove}
+                  selected={selection.ids}
+                  onSelect={selection.select}
+                />
+                {shown.length === 0 &&
+                  (vault ? (
+                    <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+                      Tap + to write a note only your devices can read.
+                    </EmptyState>
+                  ) : (
+                    <EmptyState icon={Lightbulb} title="Catch your first note">
+                      Tap + to add a note.
+                    </EmptyState>
+                  ))}
+              </>
+            )}
+          </div>
+        </VaultPull>
       </motion.section>
     </>
   );
 }
 
 function ViewOptions({ sort, onChange }: { sort: Sort; onChange: (sort: Sort) => void }) {
+  const [open, setOpen] = useState(false);
+  const active = usePageSurface()?.active ?? true;
+  useBackHandler(active && open, () => setOpen(false));
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         aria-label="Sort"
         className="flex size-10 items-center justify-center rounded-full outline-none hover:bg-foreground/[0.06] focus-visible:ring-[3px] focus-visible:ring-ring/50"

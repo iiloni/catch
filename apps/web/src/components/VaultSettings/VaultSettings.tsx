@@ -1,4 +1,5 @@
 import {
+  ChevronsDown,
   FingerprintPattern,
   KeyRound,
   LockKeyhole,
@@ -45,7 +46,7 @@ import {
 } from '@/lib/vault';
 import { BiometricError, biometricWords, useBiometricAvailability } from '@/lib/vaultBiometrics';
 import { isVaultPin } from '@/lib/vaultCrypto';
-import { useShowVaultButton } from '@/lib/vaultPreferences';
+import { usePullForVault, useShowVaultButton } from '@/lib/vaultPreferences';
 
 const failure = (error: unknown) =>
   error instanceof Error && error.message ? error.message : 'Something went wrong. Try again.';
@@ -273,13 +274,14 @@ export function VaultSettings() {
 
 function VaultButtonSetting() {
   const [shown, setShown] = useShowVaultButton();
+  const [pull, setPull] = usePullForVault();
 
   return (
-    <SettingsSection title="Vault button">
+    <SettingsSection title="Shortcuts">
       <SettingsRow
         icon={LockKeyhole}
         label="Show vault button"
-        description="Header shortcut on this device"
+        description="In the header and the Gallery tab's menu on this device"
       >
         <Switch
           aria-label="Show vault button"
@@ -287,6 +289,20 @@ function VaultButtonSetting() {
           onCheckedChange={(checked) => {
             haptics.toggle();
             setShown(checked);
+          }}
+        />
+      </SettingsRow>
+      <SettingsRow
+        icon={ChevronsDown}
+        label="Pull down to enter or leave"
+        description="At the top of the Gallery or Deck on this device"
+      >
+        <Switch
+          aria-label="Pull down to enter or leave"
+          checked={pull}
+          onCheckedChange={(checked) => {
+            haptics.toggle();
+            setPull(checked);
           }}
         />
       </SettingsRow>
