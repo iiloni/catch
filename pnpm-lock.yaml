@@ -166,6 +166,7 @@ overrides:
   better-auth>drizzle-kit: '-'
   better-auth>next: '-'
   better-auth>vitest: '-'
+  '@shikijs/vscode-textmate': ^10.1.0
 
 patchedDependencies:
   '@tanstack/db-sqlite-persistence-core@0.2.23': 5b36a9a40172272078a292a2843adf1ab9ed4f0a786181d2eed2b8c666fe8fc7
