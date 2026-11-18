@@ -32,7 +32,11 @@ import {
   useState,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { GallerySwitcher, galleryPageAt } from '@/components/GallerySwitcher/GallerySwitcher';
+import {
+  GallerySwitcher,
+  type SwitcherItem,
+  switcherItemAt,
+} from '@/components/GallerySwitcher/GallerySwitcher';
 import { HistoryToolbar } from '@/components/HistoryToolbar/HistoryToolbar';
 import { NoteDock } from '@/components/NoteDock/NoteDock';
 import { HistoryDockSlot } from '@/components/NoteHistory/HistoryDock';
@@ -87,6 +91,8 @@ import {
   usePaneWidthAtLeast,
 } from '@/lib/splitView';
 import { cn } from '@/lib/utils';
+import { toggleVault, vaultMode } from '@/lib/vault';
+import { useVaultButtonShown } from '@/lib/vaultPreferences';
 import { focusWidgetInput } from '@/lib/widgetInputFocus';
 
 const TABS = [
@@ -225,7 +231,7 @@ export function Dock() {
   // The Gallery switcher (or, in Settings, the page picker) belongs to the page it was opened
   // on, so navigating closes it.
   const [switcherOn, setSwitcherOn] = useState<string | null>(null);
-  const [switcherHover, setSwitcherHover] = useState<GalleryPage | null>(null);
+  const [switcherHover, setSwitcherHover] = useState<SwitcherItem | null>(null);
   const [settingsHover, setSettingsHover] = useState<SettingsPath | null>(null);
   const switcherOpen = switcherOn === pathname && (mode === 'tabs' || mode === 'settings');
   const filtersOpen = searchFiltersOpen.use();
@@ -244,10 +250,18 @@ export function Dock() {
   const goToGalleryPage = useGalleryPages();
   const setSwitcher = (open: boolean) => setSwitcherOn(open ? pathname : null);
 
-  function selectGalleryPage(page: GalleryPage) {
-    haptics.selection();
+  const insideVault = vaultMode.use();
+  const vaultButton = useVaultButtonShown();
+
+  function selectGalleryPage(item: SwitcherItem) {
     setSwitcherOn(null);
-    goToGalleryPage(page);
+    if (item === 'vault') {
+      haptics.toggle();
+      toggleVault();
+      return;
+    }
+    haptics.selection();
+    goToGalleryPage(item);
   }
 
   const settings = useSettingsNavigation();
@@ -326,6 +340,7 @@ export function Dock() {
                   open={switcherOpen && mode === 'tabs'}
                   current={asGalleryPage(pathname)}
                   hovered={switcherHover}
+                  vault={vaultButton ? { inside: insideVault } : null}
                   onSelect={selectGalleryPage}
                 />
                 <SettingsTabPicker
@@ -505,8 +520,8 @@ type TabsProps = {
   onSearch: () => void;
   switcherOpen: boolean;
   onSwitcher: (open: boolean) => void;
-  onSwitcherHover: (page: GalleryPage | null) => void;
-  onSwitcherSelect: (page: GalleryPage) => void;
+  onSwitcherHover: (item: SwitcherItem | null) => void;
+  onSwitcherSelect: (item: SwitcherItem) => void;
 };
 
 function Tabs({
@@ -564,7 +579,7 @@ function Tabs({
 
   // Holding the Gallery tab opens the switcher; the same finger then slides onto a segment
   // and lets go to pick it.
-  const hold = useRef<{ timer: number; holding: boolean; page: GalleryPage | null }>({
+  const hold = useRef<{ timer: number; holding: boolean; page: SwitcherItem | null }>({
     timer: 0,
     holding: false,
     page: null,
@@ -616,7 +631,7 @@ function Tabs({
   function onPointerMove(event: PointerEvent<HTMLElement>) {
     if (!pressed) return;
     if (hold.current.holding) {
-      const page = galleryPageAt(event.clientX, event.clientY);
+      const page = switcherItemAt(event.clientX, event.clientY);
       if (page !== hold.current.page) {
         hold.current.page = page;
         if (page) haptics.selection();
@@ -640,7 +655,7 @@ function Tabs({
       // Letting go on a segment picks it; anywhere else leaves the switcher open to tap.
       // Hit-test at release: the last move may have missed or been swallowed by a
       // native drag, so don't rely on it alone.
-      const page = galleryPageAt(event.clientX, event.clientY) ?? hold.current.page;
+      const page = switcherItemAt(event.clientX, event.clientY) ?? hold.current.page;
       endHold();
       if (page) onSwitcherSelect(page);
       return;

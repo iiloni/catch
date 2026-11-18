@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { VaultPull } from '@/components/VaultPull/VaultPull';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { useGalleryLayout } from '@/lib/galleryLayout';
@@ -133,32 +134,34 @@ export default function GalleryPage() {
         style={{ x: gutterShift }}
         className="gallery-fade mx-auto flex max-w-7xl flex-col gap-5 px-3 pt-5 sm:px-6"
       >
-        <div ref={measureGrid}>
-          {awaitingSync ? null : (
-            <>
-              <NoteGrid
-                notes={sorted}
-                groupPinned
-                layout={layout}
-                onOpen={(note, card) => open(note.id, card)}
-                onArchive={(note) => setNoteArchived(note.id, true)}
-                onMove={onMove}
-                selected={selection.ids}
-                onSelect={selection.select}
-              />
-              {shown.length === 0 &&
-                (vault ? (
-                  <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
-                    Tap + to write a note only your devices can read.
-                  </EmptyState>
-                ) : (
-                  <EmptyState icon={Lightbulb} title="Catch your first note">
-                    Tap + to write something down. It lands here.
-                  </EmptyState>
-                ))}
-            </>
-          )}
-        </div>
+        <VaultPull disabled={selection.selecting}>
+          <div ref={measureGrid}>
+            {awaitingSync ? null : (
+              <>
+                <NoteGrid
+                  notes={sorted}
+                  groupPinned
+                  layout={layout}
+                  onOpen={(note, card) => open(note.id, card)}
+                  onArchive={(note) => setNoteArchived(note.id, true)}
+                  onMove={onMove}
+                  selected={selection.ids}
+                  onSelect={selection.select}
+                />
+                {shown.length === 0 &&
+                  (vault ? (
+                    <EmptyState icon={LockKeyholeOpen} title="The vault is empty">
+                      Tap + to write a note only your devices can read.
+                    </EmptyState>
+                  ) : (
+                    <EmptyState icon={Lightbulb} title="Catch your first note">
+                      Tap + to write something down. It lands here.
+                    </EmptyState>
+                  ))}
+              </>
+            )}
+          </div>
+        </VaultPull>
       </motion.section>
     </>
   );

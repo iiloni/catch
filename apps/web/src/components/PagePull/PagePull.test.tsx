@@ -1,8 +1,9 @@
 import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { SearchX } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { haptics } from '@/lib/haptics';
 import { LONG_PRESS_MS } from '@/lib/longPress';
-import { ClearFiltersPull } from './ClearFiltersPull';
+import { PagePull } from './PagePull';
 
 vi.mock('@/lib/haptics', () => ({ haptics: { threshold: vi.fn() } }));
 
@@ -16,7 +17,15 @@ function setup(enabled = true) {
   const onPress = vi.fn();
   render(
     <div data-page-pager data-testid="pager">
-      <ClearFiltersPull enabled={enabled} onClear={onClear}>
+      <PagePull
+        enabled={enabled}
+        action={{
+          icon: SearchX,
+          pull: 'Pull to clear filters',
+          release: 'Release to clear filters',
+        }}
+        onRelease={onClear}
+      >
         <button type="button" onClick={onPress}>
           Result
         </button>
@@ -24,7 +33,7 @@ function setup(enabled = true) {
         <div data-testid="scroller" style={{ overflowY: 'auto' }}>
           <p>Inside</p>
         </div>
-      </ClearFiltersPull>
+      </PagePull>
     </div>,
   );
   return { onClear, onPress, row: screen.getByRole('button') };
@@ -60,7 +69,7 @@ function pull(target: Element, distance = 120) {
   return claimed;
 }
 
-describe('clear filters pull', () => {
+describe('page pull', () => {
   it('clears from anywhere on the page, without the click beneath the finger', () => {
     const { onClear, onPress, row } = setup();
     expect(pull(row)).toBe(true);
@@ -136,5 +145,26 @@ describe('clear filters pull', () => {
     expect(pull(row)).toBe(false);
     touch(row, 'end', 100, 220, 80);
     expect(onClear).not.toHaveBeenCalled();
+  });
+
+  it('keeps the words a pull began with while its action changes', () => {
+    const enter = { icon: SearchX, pull: 'Pull to open', release: 'Release to open' };
+    const leave = { icon: SearchX, pull: 'Pull to leave', release: 'Release to leave' };
+    const page = (action: typeof enter) => (
+      <div data-page-pager>
+        <PagePull enabled action={action} onRelease={() => {}}>
+          <p>Page</p>
+        </PagePull>
+      </div>
+    );
+    const { rerender } = render(page(enter));
+    const target = screen.getByText('Page');
+    pull(target);
+    expect(screen.getByText('Release to open')).toBeInTheDocument();
+    // Acting flips the action as letting go starts the pill back up.
+    rerender(page(leave));
+    touch(target, 'end', 100, 220, 80);
+    expect(screen.getByText('Release to open')).toBeInTheDocument();
+    expect(screen.queryByText(/leave/)).toBeNull();
   });
 });

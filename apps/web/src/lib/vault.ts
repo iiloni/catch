@@ -913,6 +913,12 @@ export function leaveVault() {
   else void lockVault();
 }
 
+/** Leaves the vault from inside it, and enters it from anywhere else. */
+export function toggleVault() {
+  if (vaultMode.get()) leaveVault();
+  else enterVault();
+}
+
 /**
  * Runs `then` inside the vault when the id is one of its notes, as when a reminder is
  * opened from outside: a locked vault asks for its password first. False for any other note.

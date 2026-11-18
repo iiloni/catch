@@ -6,6 +6,7 @@ import { ColumnManager } from '@/components/NoteBoard/ColumnManager';
 import { NoteBoard } from '@/components/NoteBoard/NoteBoard';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
+import { VaultPull } from '@/components/VaultPull/VaultPull';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { boardColumnsCollection, notesCollection } from '@/lib/collections';
 import { springs } from '@/lib/motion';
@@ -62,16 +63,18 @@ export default function DeckPage() {
       />
       <ColumnManager columns={columns} open={managing} onOpenChange={setManaging} />
       <div className="mx-auto max-w-7xl pt-3">
-        {awaitingSync ? null : (
-          <NoteBoard
-            notes={notes}
-            columns={columns}
-            onOpen={(note, card) => open(note.id, card)}
-            selected={selection.ids}
-            onSelect={selection.select}
-            onSelectionDone={selection.clear}
-          />
-        )}
+        <VaultPull disabled={selection.selecting || managing}>
+          {awaitingSync ? null : (
+            <NoteBoard
+              notes={notes}
+              columns={columns}
+              onOpen={(note, card) => open(note.id, card)}
+              selected={selection.ids}
+              onSelect={selection.select}
+              onSelectionDone={selection.clear}
+            />
+          )}
+        </VaultPull>
       </div>
     </>
   );

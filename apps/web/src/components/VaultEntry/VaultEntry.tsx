@@ -1,11 +1,15 @@
+import { useRouterState } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { VaultGate, VaultRecoveryCode } from '@/components/VaultGate/VaultGate';
+import { useBackFallback } from '@/lib/backButton';
+import { TAB_PATHS } from '@/lib/dockState';
 import { noteStore } from '@/lib/noteStore';
 import { useOpenNote } from '@/lib/openNote';
 import {
   hasSeenVault,
   isVaultNote,
+  leaveVault,
   startVault,
   vaultBiometrics,
   vaultMode,
@@ -50,6 +54,17 @@ export function VaultEntry() {
     const belongs = mode ? isVaultNote(id) : noteStore.has(id) && !isVaultNote(id);
     if (!belongs) close();
   }, [mode, close]);
+
+  // On the Gallery, the Deck or Search, Android's back gesture leaves the vault before it
+  // would leave the app: those pages replace history, so back has nowhere nearer to go. An
+  // open note, the dock's search or a menu still closes first, and Reminders, the Archive and
+  // the Trash go back to the Gallery first.
+  const onTab = useRouterState({
+    select: ({ location }) =>
+      TAB_PATHS.some((tab) => tab === location.pathname) &&
+      !(location.search as { note?: string }).note,
+  });
+  useBackFallback(mode && onTab, leaveVault);
 
   const open = asked || recoveryCode !== null;
 

@@ -4,10 +4,10 @@ import { Clock, Search, SearchX } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { ClearFiltersPull } from '@/components/ClearFiltersPull/ClearFiltersPull';
 import { EmptyState } from '@/components/EmptyState/EmptyState';
 import { NoteTags } from '@/components/NoteTags/NoteTags';
 import { TabPageHeader } from '@/components/PageHeader/PageHeader';
+import { PagePull, type PullAction } from '@/components/PagePull/PagePull';
 import {
   ActiveSearchFilters,
   BrowseTags,
@@ -42,6 +42,11 @@ import { cn } from '@/lib/utils';
 import { useVaultView } from '@/lib/vault';
 
 const MAX_RESULTS = 60;
+const CLEAR_FILTERS: PullAction = {
+  icon: SearchX,
+  pull: 'Pull to clear filters',
+  release: 'Release to clear filters',
+};
 const recentSchema = z.array(z.string()).max(8);
 
 export default function SearchPage() {
@@ -195,11 +200,12 @@ export default function SearchPage() {
         style={{ x: gutterShift }}
         className="mx-auto max-w-2xl px-3 pt-3 pb-6 sm:px-6"
       >
-        <ClearFiltersPull
+        <PagePull
           enabled={
             active && (filterCount > 0 || query !== '') && !filtersOpen && !selection.selecting
           }
-          onClear={() => {
+          action={CLEAR_FILTERS}
+          onRelease={() => {
             clearFilters();
             searchQuery.set('');
           }}
@@ -309,7 +315,7 @@ export default function SearchPage() {
               </SearchView>
             </AnimatePresence>
           </div>
-        </ClearFiltersPull>
+        </PagePull>
       </motion.div>
     </>
   );
