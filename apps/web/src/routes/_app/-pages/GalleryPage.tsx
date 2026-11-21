@@ -24,6 +24,7 @@ import { useBackHandler } from '@/lib/backButton';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
 import { useGalleryLayout } from '@/lib/galleryLayout';
 import { haptics } from '@/lib/haptics';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { moveNote, setNoteArchived } from '@/lib/notes';
@@ -90,6 +91,7 @@ export default function GalleryPage() {
     ? vault.filter((note) => !note.deletedAt && !note.isArchived && note.status === null)
     : notes;
   const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);
+  useFinishLaunch(!awaitingSync);
   const sorted = sortNotes(shown, sort.field, sort.direction);
   // Notes can only be dragged into place while they are shown in that order.
   const onMove = sort.field === 'position' ? moveNote : undefined;

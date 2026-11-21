@@ -336,7 +336,15 @@ touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instea
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
 **Cold starts.** The document starts on the saved theme's canvas, without an additional
-in-app splash or a wait for fonts or sync. Android and installed PWAs remember the last
+in-app splash or a wait for fonts or sync. On Android the system's launch screen, which is
+on that canvas too, stays until the first page is drawn with the device's copy of its notes
+(`lib/launchScreen.ts`, `MainActivity`), and then fades out over it. Android would otherwise
+remove it at the window's first frame, an empty WebView, and the dock, the page and its
+notes would arrive one after another. A route marked `holdsLaunchScreen` lets it go from its page
+(`useFinishLaunch`) once the page stops waiting for its notes; any other page lets it go
+once the router shows it. The app stops holding after three seconds
+regardless. Opening the app while it is still in memory shows no launch screen and draws
+the page as it was left. Android and installed PWAs remember the last
 Deck or Gallery page in device-local storage and restore it before the router renders a
 fresh launch at `/`. Other pages do not replace that preference, and URLs with a path
 other than `/`, a query or a fragment keep their destination. Ordinary browser tabs keep opening

@@ -3,4 +3,6 @@
     <color name="colorPrimary">#FFC247</color>
     <color name="colorPrimaryDark">#FFA32B</color>
     <color name="colorAccent">#FFC247</color>
+    <!-- The page's background token in styles.css, so the launch screen leaves onto the same colour. -->
+    <color name="canvas">#F6F3ED</color>
 </resources>

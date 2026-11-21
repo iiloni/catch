@@ -9,6 +9,7 @@ import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { notesCollection, useReminders, useRemindersReady } from '@/lib/collections';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { isReminderPast, reminderTime } from '@/lib/reminders';
@@ -17,6 +18,7 @@ import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/reminders')({
+  staticData: { holdsLaunchScreen: true },
   component: RemindersPage,
 });
 
@@ -32,6 +34,7 @@ function RemindersPage() {
   );
   const remindersReady = useRemindersReady();
   const awaitingSync = useAwaitingSync((isLoading && !vault) || !remindersReady, reminded.length);
+  useFinishLaunch(!awaitingSync);
 
   const upcoming: { note: Note; at: number }[] = [];
   const past: { note: Note; at: number }[] = [];

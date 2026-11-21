@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { notesCollection } from '@/lib/collections';
 import { haptics } from '@/lib/haptics';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { deleteNotesForever } from '@/lib/notes';
 import { useOpenNote } from '@/lib/openNote';
@@ -26,6 +27,7 @@ import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/trash')({
+  staticData: { holdsLaunchScreen: true },
   component: TrashPage,
 });
 
@@ -39,6 +41,7 @@ function TrashPage() {
   const vault = useVaultView();
   const notes = vault ? vault.filter((note) => note.deletedAt) : plainNotes;
   const awaitingSync = useAwaitingSync(isLoading && !vault, notes.length);
+  useFinishLaunch(!awaitingSync);
   const sorted = sortNotes(notes);
   const selection = useNoteSelection(sorted);
   const gutterShift = usePageGutterShift(PAGE_MAX);

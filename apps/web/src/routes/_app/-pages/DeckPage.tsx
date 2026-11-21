@@ -9,6 +9,7 @@ import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar'
 import { VaultPull } from '@/components/VaultPull/VaultPull';
 import { VaultToggle } from '@/components/VaultToggle/VaultToggle';
 import { boardColumnsCollection, notesCollection } from '@/lib/collections';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
@@ -36,7 +37,11 @@ export default function DeckPage() {
   const notes = vault
     ? vault.filter((note) => !note.deletedAt && !note.isArchived && note.status !== null)
     : plainNotes;
-  const awaitingSync = useAwaitingSync((isLoading && !vault) || columnsLoading, columns.length);
+  // The board waits for both: columns alone would draw every count as 0 until the notes load.
+  const awaitingColumns = useAwaitingSync(columnsLoading, columns.length);
+  const awaitingNotes = useAwaitingSync(isLoading && !vault, notes.length);
+  const awaitingSync = awaitingColumns || awaitingNotes;
+  useFinishLaunch(!awaitingSync);
   const selection = useNoteSelection(sortNotes(notes, 'position'));
 
   return (
