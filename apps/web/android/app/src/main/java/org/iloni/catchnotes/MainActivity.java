@@ -1,13 +1,10 @@
 package org.iloni.catchnotes;
 
-import android.os.Bundle;
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.View;
-import android.view.animation.PathInterpolator;
 import androidx.core.splashscreen.SplashScreen;
-import androidx.core.splashscreen.SplashScreenViewProvider;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -18,7 +15,7 @@ public class MainActivity extends BridgeActivity {
     private Intent initialIntent;
     // Both only change on the main thread.
     private boolean launching = true;
-    private SplashScreenViewProvider launchScreen;
+    private LaunchScreenAnimation launchScreen;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -29,8 +26,9 @@ public class MainActivity extends BridgeActivity {
         // setKeepOnScreenCondition, which stops the window drawing: the WebView then ran the
         // page's startup at about half speed.
         SplashScreen.installSplashScreen(this).setOnExitAnimationListener((provider) -> {
-            launchScreen = provider;
-            if (!launching) dismissLaunchScreen();
+            launchScreen = new LaunchScreenAnimation(this, provider);
+            if (launching) launchScreen.breathe();
+            else launchScreen.finish();
         });
         new Handler(Looper.getMainLooper()).postDelayed(this::finishLaunch, LAUNCH_TIMEOUT_MS);
         initialIntent = getIntent();
@@ -59,20 +57,8 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> {
             if (!launching) return;
             launching = false;
-            if (launchScreen != null) dismissLaunchScreen();
+            if (launchScreen != null) launchScreen.finish();
         });
-    }
-
-    private void dismissLaunchScreen() {
-        SplashScreenViewProvider provider = launchScreen;
-        launchScreen = null;
-        View view = provider.getView();
-        view.animate()
-            .alpha(0f)
-            .setDuration(250)
-            .setInterpolator(new PathInterpolator(0.3f, 0f, 0.2f, 1f))
-            .withEndAction(provider::remove)
-            .start();
     }
 
     @Override
