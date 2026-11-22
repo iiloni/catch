@@ -336,7 +336,24 @@ touch-feedback setting. `@capacitor/haptics` plays raw vibration patterns instea
 "selection" is a 100 ms buzz). Components call named events in `src/lib/haptics.ts`.
 
 **Cold starts.** The document starts on the saved theme's canvas, without an additional
-in-app splash or a wait for fonts or sync. Android and installed PWAs remember the last
+in-app splash or a wait for fonts or sync. On Android the system's launch screen, which is
+on that canvas too, stays until the first page is drawn with the device's copy of its notes
+(`lib/launchScreen.ts`, `MainActivity`). Android would otherwise
+remove it at the window's first frame, an empty WebView, and the dock, the page and its
+notes would arrive one after another. A route marked `holdsLaunchScreen` lets it go from its page
+(`useFinishLaunch`) once the page stops waiting for its notes; any other page lets it go
+once the router shows it. The app stops holding after three seconds
+regardless. The launch screen stays as a view over the window, not through
+`setKeepOnScreenCondition`: that stops the window drawing, and the WebView then ran the
+page's startup at about half speed (2.3 s instead of 1 s to the first notes on a Galaxy Z
+Fold7). Once Android hands the launch screen to the app, a soft glow in the icon's colour
+breathes behind the icon while the page loads (`LaunchScreenAnimation`). When the page is
+ready the icon swells slightly and collapses into itself while only the launch screen's
+background fades, so the icon stays solid as it shrinks away over the page. With animations
+off it simply fades. We tried growing the icon's colour to fill the screen first: a solid
+screen of colour was jarring and glared in the dark, and a translucent one never filled the
+screen. Opening the app while it is still in memory shows Android's snapshot of it and then
+the page as it was left, with no launch screen. Android and installed PWAs remember the last
 Deck or Gallery page in device-local storage and restore it before the router renders a
 fresh launch at `/`. Other pages do not replace that preference, and URLs with a path
 other than `/`, a query or a fragment keep their destination. Ordinary browser tabs keep opening

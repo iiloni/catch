@@ -17,6 +17,7 @@ import { currentPath, getAuthToken, getSignedInUser } from '@/lib/auth';
 import { useBackButton } from '@/lib/backButton';
 import { quickNote } from '@/lib/dockState';
 import { headerPills } from '@/lib/headerState';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { enqueueLinkCapture } from '@/lib/linkCapture';
 import { watchNativeShares } from '@/lib/nativeShares';
 import { prepareShare } from '@/lib/receiveShare';
@@ -133,6 +134,16 @@ function Root() {
   useApplyTheme();
   useSystemBarsStyle();
   useBackButton();
+  // Pages of notes let the launch screen leave once those are drawn; any other page has
+  // nothing more to wait for once the router has shown it.
+  useFinishLaunch(
+    useRouterState({
+      select: (state) =>
+        state.status === 'idle' &&
+        state.resolvedLocation !== undefined &&
+        !state.matches.some((match) => match.staticData.holdsLaunchScreen),
+    }),
+  );
   // An open note covers a phone's page, and its own top bar is always pills.
   const noteOpen = useRouterState({
     select: (state) => Boolean((state.location.search as { note?: string }).note),

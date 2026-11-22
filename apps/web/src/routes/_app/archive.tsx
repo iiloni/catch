@@ -8,6 +8,7 @@ import { NoteGrid } from '@/components/NoteGrid/NoteGrid';
 import { BackToGallery, TabPageHeader } from '@/components/PageHeader/PageHeader';
 import { selectionHeader } from '@/components/SelectionToolbar/SelectionToolbar';
 import { notesCollection, useSharedNotes } from '@/lib/collections';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { useNoteSelection } from '@/lib/noteSelection';
 import { useOpenNote } from '@/lib/openNote';
 import { sortNotes } from '@/lib/sortNotes';
@@ -16,6 +17,7 @@ import { useAwaitingSync } from '@/lib/syncStatus';
 import { useVaultView } from '@/lib/vault';
 
 export const Route = createFileRoute('/_app/archive')({
+  staticData: { holdsLaunchScreen: true },
   component: ArchivePage,
 });
 
@@ -32,6 +34,7 @@ function ArchivePage() {
   const vault = useVaultView();
   const shown = vault ? vault.filter((note) => !note.deletedAt && note.isArchived) : notes;
   const awaitingSync = useAwaitingSync(isLoading && !vault, shown.length);
+  useFinishLaunch(!awaitingSync);
   const sorted = sortNotes(shown);
   const selection = useNoteSelection(sorted);
   const gutterShift = usePageGutterShift(PAGE_MAX);

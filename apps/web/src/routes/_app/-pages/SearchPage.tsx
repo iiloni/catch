@@ -28,6 +28,7 @@ import {
 } from '@/lib/collections';
 import { searchFilterCount, searchFiltersOpen, searchQuery } from '@/lib/dockState';
 import { haptics } from '@/lib/haptics';
+import { useFinishLaunch } from '@/lib/launchScreen';
 import { useLongPress } from '@/lib/longPress';
 import { springs } from '@/lib/motion';
 import { useNoteSelection } from '@/lib/noteSelection';
@@ -53,6 +54,8 @@ export default function SearchPage() {
   const active = usePageSurface()?.active ?? true;
   const query = searchQuery.use();
   const filtersOpen = searchFiltersOpen.use();
+  // Search starts from its field, recent searches and filters, which need no notes.
+  useFinishLaunch(true);
   const deferredQuery = useDeferredValue(query);
   const [filter, setFilter] = useState<TagSearchFilter>({ ids: [], match: 'any', untagged: false });
   const [color, setColor] = useState<NoteColor | null>(null);
