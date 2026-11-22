@@ -343,8 +343,11 @@ remove it at the window's first frame, an empty WebView, and the dock, the page 
 notes would arrive one after another. A route marked `holdsLaunchScreen` lets it go from its page
 (`useFinishLaunch`) once the page stops waiting for its notes; any other page lets it go
 once the router shows it. The app stops holding after three seconds
-regardless. Opening the app while it is still in memory shows no launch screen and draws
-the page as it was left. Android and installed PWAs remember the last
+regardless. The launch screen stays as a view over the window, not through
+`setKeepOnScreenCondition`: that stops the window drawing, and the WebView then ran the
+page's startup at about half speed (2.3 s instead of 1 s to the first notes on a Galaxy Z
+Fold7). Opening the app while it is still in memory shows Android's snapshot of it and then
+the page as it was left, with no launch screen. Android and installed PWAs remember the last
 Deck or Gallery page in device-local storage and restore it before the router renders a
 fresh launch at `/`. Other pages do not replace that preference, and URLs with a path
 other than `/`, a query or a fragment keep their destination. Ordinary browser tabs keep opening

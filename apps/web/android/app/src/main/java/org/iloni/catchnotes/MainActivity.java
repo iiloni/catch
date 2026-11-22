@@ -7,6 +7,7 @@ import android.os.Looper;
 import android.view.View;
 import android.view.animation.PathInterpolator;
 import androidx.core.splashscreen.SplashScreen;
+import androidx.core.splashscreen.SplashScreenViewProvider;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -15,23 +16,21 @@ public class MainActivity extends BridgeActivity {
     private static final long LAUNCH_TIMEOUT_MS = 3000;
 
     private Intent initialIntent;
-    private volatile boolean launching = true;
+    // Both only change on the main thread.
+    private boolean launching = true;
+    private SplashScreenViewProvider launchScreen;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // The system removes its launch screen at the window's first frame, which is an empty
-        // WebView. Holding it until the page reports its first screen (LaunchScreenPlugin) shows
-        // the notes instead of the shell, the page and its notes arriving one after another.
-        SplashScreen splash = SplashScreen.installSplashScreen(this);
-        splash.setKeepOnScreenCondition(() -> launching);
-        splash.setOnExitAnimationListener((provider) -> {
-            View view = provider.getView();
-            view.animate()
-                .alpha(0f)
-                .setDuration(250)
-                .setInterpolator(new PathInterpolator(0.3f, 0f, 0.2f, 1f))
-                .withEndAction(provider::remove)
-                .start();
+        // WebView. Keeping it over the page until the page reports its first screen
+        // (LaunchScreenPlugin) shows the notes instead of the shell, the page and its notes
+        // arriving one after another. It stays as a view on top rather than through
+        // setKeepOnScreenCondition, which stops the window drawing: the WebView then ran the
+        // page's startup at about half speed.
+        SplashScreen.installSplashScreen(this).setOnExitAnimationListener((provider) -> {
+            launchScreen = provider;
+            if (!launching) dismissLaunchScreen();
         });
         new Handler(Looper.getMainLooper()).postDelayed(this::finishLaunch, LAUNCH_TIMEOUT_MS);
         initialIntent = getIntent();
@@ -57,7 +56,23 @@ public class MainActivity extends BridgeActivity {
 
     /** Lets the launch screen leave. Later calls, such as from a reloaded page, do nothing. */
     void finishLaunch() {
-        launching = false;
+        runOnUiThread(() -> {
+            if (!launching) return;
+            launching = false;
+            if (launchScreen != null) dismissLaunchScreen();
+        });
+    }
+
+    private void dismissLaunchScreen() {
+        SplashScreenViewProvider provider = launchScreen;
+        launchScreen = null;
+        View view = provider.getView();
+        view.animate()
+            .alpha(0f)
+            .setDuration(250)
+            .setInterpolator(new PathInterpolator(0.3f, 0f, 0.2f, 1f))
+            .withEndAction(provider::remove)
+            .start();
     }
 
     @Override
