@@ -64,6 +64,16 @@ locks it sooner: a minute after the app is hidden, and after five minutes on scr
 input, which covers a computer left open. A PIN known to the server was rejected: limiting its
 tries there would need the server's help to open the vault and a connection to do it.
 
+**The Android app keeps the vault out of the recent apps screen.** While the pages show the
+vault, `AppSwitcherPlugin` asks Android to leave the app's picture out of it, so a phone
+handed over or left unlocked does not show vault notes there after the vault locks. Android
+13 and later can drop just that picture (`setRecentsScreenshotEnabled`), so screenshots
+still work; earlier versions can only mark the window `FLAG_SECURE`, which also blocks
+screenshots and screen recording until the vault is left. Outside the vault the picture is
+shown as usual. A browser gives a page no say in its tab or task switcher picture, and
+blurring the page when it is hidden comes too late on browsers that take it first, so the
+web app does not try.
+
 **The Android app can open the vault with a fingerprint.** Its threat model is the PIN's:
 convenience, and keeping out someone who comes across an unlocked phone, not a targeted
 attacker. `VaultKeyPlugin` seals the key a third time under an AES-256-GCM key in the
