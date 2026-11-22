@@ -12,6 +12,7 @@ import type {
 import { canonicalHistory, historyReading } from '@catch/shared';
 import { useEffect } from 'react';
 import { ApiError, api } from './api';
+import { hideFromAppSwitcher } from './appSwitcher';
 import { closeSealedFiles, setSealedFiles } from './attachmentFiles';
 import { getSignedInUser } from './auth';
 import {
@@ -539,6 +540,8 @@ export function startVault() {
   void restoreKey();
   void restorePin();
   void restoreBiometrics();
+  // The recent apps screen would otherwise keep a picture of the vault's notes after it locks.
+  vaultMode.subscribe(() => hideFromAppSwitcher(vaultMode.get()));
 
   let hiddenAt: number | null = null;
   document.addEventListener('visibilitychange', () => {

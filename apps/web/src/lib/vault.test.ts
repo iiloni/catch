@@ -44,6 +44,7 @@ vi.mock('./collections', () => ({
   },
 }));
 vi.mock('./auth', () => ({ getSignedInUser: () => ({ id: 'user-1' }) }));
+vi.mock('./appSwitcher', () => ({ hideFromAppSwitcher: vi.fn() }));
 vi.mock('./attachmentFiles', () => ({ setSealedFiles: vi.fn(), closeSealedFiles: vi.fn() }));
 // The page as the vault sees it: whether it is shown, and what it hears from the user.
 const page = vi.hoisted(() => {
@@ -154,6 +155,7 @@ vi.mock('./api', () => ({
   },
 }));
 
+import { hideFromAppSwitcher } from './appSwitcher';
 import { closeSealedFiles } from './attachmentFiles';
 import { publishVaultAssignments } from './collections';
 import {
@@ -372,6 +374,15 @@ describe('the vault', () => {
     leaveVault();
     expect(vaultMode.get()).toBe(false);
     expect(vaultStatus.get()).toBe('unlocked');
+  });
+
+  it('keeps the app out of the recent apps screen only while inside the vault', async () => {
+    const hide = vi.mocked(hideFromAppSwitcher);
+    hide.mockClear();
+    enterVault();
+    expect(hide).toHaveBeenLastCalledWith(true);
+    await lockVault();
+    expect(hide).toHaveBeenLastCalledWith(false);
   });
 
   it('changes the password without losing the notes or the recovery code', async () => {
