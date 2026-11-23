@@ -79,12 +79,13 @@ type TabPageHeaderProps = {
 /** How far below the header's row the large title rests. */
 const TITLE_REST_Y = 66;
 /**
- * The scroll at which the title leaves for its corner: while it is still below the row. A
- * centered title on a phone is wider than the gap between the corners, so riding the page
- * any further would run it into the controls on the right, and it still rises a little on
- * its way out from under them.
+ * The scroll at which the title leaves for its corner. Until then it rides the page, so the
+ * content below keeps its place under it and a nudge (or the start of a system swipe) leaves
+ * the header as it is. It leaves while still below the row: a centered title on a phone is
+ * wider than the gap between the corners, and on the narrowest one with every control (360 px,
+ * five of them) it is 25 px below them at rest, so riding any further would run it into them.
  */
-const TITLE_COLLAPSE_AT = 2;
+const TITLE_COLLAPSE_AT = 20;
 /** The title pill's text size and side padding, and its width around an icon alone. */
 const PILL_FONT_SIZE = 17;
 const PILL_PADDING = 14;
@@ -153,7 +154,7 @@ const HeaderCollapsed = createContext(false);
 
 /**
  * The header of every page. The large title moves into the top left corner as a glass pill
- * once the page starts to scroll, taking the place of the brand there or sitting beside the
+ * once the page has scrolled a little, taking the place of the brand there or sitting beside the
  * back button.
  */
 export function TabPageHeader({
