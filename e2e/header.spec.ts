@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { card, openNote, seedNotes, settledBox, signUp } from './helpers';
+import { beginSwipe, card, openNote, seedNotes, settledBox, signUp } from './helpers';
 
 const SAFE_TOP = 32;
 
@@ -188,6 +188,86 @@ test('the title and brand stay clear of the controls and status bar while the pa
   await page.getByRole('button', { name: 'Scroll to top' }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(brand).toBeVisible();
+});
+
+test('a nudge leaves the large title riding the page; a real scroll folds it into its pill', async ({
+  page,
+  isMobile,
+}) => {
+  if (isMobile) await page.setViewportSize({ width: 360, height: 780 });
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 24 }, (_, index) => ({
+      title: `Note ${index + 1}`,
+      body: 'Something to scroll past',
+    })),
+  );
+  await expect(card(page, 'Note 24')).toBeVisible();
+  const brand = page.getByRole('banner').getByRole('img', { name: 'Catch' });
+  const pill = page.getByRole('button', { name: 'Scroll to top' });
+  const title = page.getByRole('banner').getByRole('heading', { level: 1 });
+  const gap = () =>
+    page.evaluate(() => {
+      const heading = document.querySelector('header h1');
+      const first = document.querySelector('[data-note-card]');
+      if (!heading || !first) throw new Error('Missing title or card');
+      return first.getBoundingClientRect().top - heading.getBoundingClientRect().bottom;
+    });
+  const resting = await gap();
+
+  for (const nudge of [6, 19]) {
+    await page.evaluate((top) => window.scrollTo(0, top), nudge);
+    await page.waitForTimeout(400);
+    await expect(brand).toBeVisible();
+    await expect(pill).toBeDisabled();
+    await expect(title).toHaveCSS('font-size', /^(?:[3-9]\d|\d{3})/);
+    // The title rides the page, so the cards below keep their distance from it.
+    expect(Math.abs((await gap()) - resting)).toBeLessThan(1);
+  }
+
+  await page.evaluate(() => window.scrollTo(0, 60));
+  await expect(brand).toBeHidden();
+  await expect(pill).toBeEnabled();
+  await page.evaluate(() => window.scrollTo(0, 12));
+  await expect(brand).toBeVisible();
+  await expect(pill).toBeDisabled();
+});
+
+test('a swipe the system takes from the bottom edge leaves the page where it was', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Only touch input scrolls the page, and phones have the system swipe');
+  await page.setViewportSize({ width: 360, height: 780 });
+  await signUp(page);
+  await seedNotes(
+    page,
+    Array.from({ length: 24 }, (_, index) => ({
+      title: `Note ${index + 1}`,
+      body: 'Something to scroll past',
+    })),
+  );
+  await expect(card(page, 'Note 24')).toBeVisible();
+  const brand = page.getByRole('banner').getByRole('img', { name: 'Catch' });
+  const scrollY = () => page.evaluate(() => window.scrollY);
+
+  // Android hands the page the start of its swipe home, then cancels the touch.
+  const swipe = await beginSwipe(page, isMobile, 80, 776);
+  await swipe.move(0, -60);
+  expect(await scrollY()).toBeGreaterThan(20);
+  await swipe.end(true);
+  await expect.poll(scrollY).toBe(0);
+  await page.waitForTimeout(400);
+  await expect(brand).toBeVisible();
+
+  // The same drag kept by the page scrolls it as usual.
+  const drag = await beginSwipe(page, isMobile, 80, 776);
+  await drag.move(0, -60);
+  await drag.end();
+  await page.waitForTimeout(200);
+  expect(await scrollY()).toBeGreaterThan(20);
+  await expect(brand).toBeHidden();
 });
 
 test('a page too narrow for the wordmark and the title pill shows their icons instead', async ({

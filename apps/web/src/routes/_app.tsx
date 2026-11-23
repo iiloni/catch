@@ -31,6 +31,7 @@ import { syncReminderSettings } from '@/lib/reminders';
 import { pageBounceY, watchScrollBounce } from '@/lib/scrollBounce';
 import { needsServerUrl } from '@/lib/serverUrl';
 import { useNotePaneLayout } from '@/lib/splitView';
+import { watchSystemGestureScroll } from '@/lib/systemGestures';
 import { watchUpdates } from '@/lib/updates';
 import { inVaultFor } from '@/lib/vault';
 import { watchWidgetLaunch } from '@/lib/widgetLaunch';
@@ -60,6 +61,7 @@ export const Route = createFileRoute('/_app')({
 function AppLayout() {
   useEffect(watchUpdates, []);
   useEffect(watchScrollBounce, []);
+  useEffect(watchSystemGestureScroll, []);
   const { open, close } = useOpenNote();
   useEffect(
     () =>

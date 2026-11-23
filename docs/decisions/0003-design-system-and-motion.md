@@ -140,14 +140,21 @@ Gallery's sort and settings, the Deck's column editor, Archive and Trash's back 
 Empty trash). A toolbar grows out of its corner when it gets controls, and when its controls
 change it animates its width (never scale) to fit the new ones while the old ones fade out.
 Every page shares `TabPageHeader`: a large centered
-title that moves into the top left corner as a glass pill once the page starts to scroll.
+title that moves into the top left corner as a glass pill once the page has scrolled 20 px.
 Archive, Trash and Reminders drop the back button's “Gallery” label when the title joins it
 there, since a phone cannot fit the label, the title and Empty trash in one row.
 Long titles reduce their expanded font size to fit the page's width, keeping the full name
 on one line and measuring again when the page resizes or the font loads.
-The title follows the page for the first 16 px and then leaves for the corner, while it is
-still below the header's row: on a phone the centered title is wider than the gap between the corners, so
-riding the page up to the row ran it into the controls on the right. Until then
+The title follows the page for those first 20 px, so the content below keeps its distance
+from it and a small scroll (a nudge, or the start of Android's swipe home) changes nothing
+else in the header. It then leaves for the corner while still below the header's row: on a
+phone the centered title is wider than the gap between the corners, and on the narrowest
+(360 px, five controls) it rests 25 px below them, so riding the page further ran it into
+the controls on the right. The title always rides the page up to where it leaves, so there
+is no in-between state to settle or snap: the scroll alone says which form it has, with no
+separate thresholds for leaving and returning. A swipe from the bottom edge that the system
+takes for itself reaches the page first and is then cancelled, so the page goes back to
+where that touch found it (`lib/systemGestures.ts`). Until then
 their top right controls are flat buttons on the page, and they gain the same glass as the
 title does. Selecting notes always shows the glass. Settings uses the open page's title on
 phones and “Settings” on wide screens, where its title pill sits beside the Back toolbar.
