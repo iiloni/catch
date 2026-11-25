@@ -5,6 +5,8 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
+# shellcheck source=scripts/worktree-processes.sh
+source "$repo_root/scripts/worktree-processes.sh"
 
 PORT_BASE=24080
 PORT_SPAN=3000
@@ -150,8 +152,8 @@ resolve_worktree() {
 }
 
 # Ignored paths that are safe to discard when removing a worktree: dependencies,
-# build output, test artifacts and Android build products.
-DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.next|\.source|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|apps/web/android/app/src/main/assets/|apps/site/(out|src/generated)/|(^|/)next-env\.d\.ts$|(^|/)res/xml/config\.xml$|\.(tsbuildinfo|log|apk)$'
+# build output, test artifacts, host dev pidfiles and Android build products.
+DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.next|\.source|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|^\.dev-android\.pid$|apps/web/android/app/src/main/assets/|apps/site/(out|src/generated)/|(^|/)next-env\.d\.ts$|(^|/)res/xml/config\.xml$|\.(tsbuildinfo|log|apk)$'
 
 remove_worktree() {
     local query=$1
@@ -171,6 +173,10 @@ remove_worktree() {
     IFS=$'\t' read -r target branch <<< "$match"
     [[ "$target" != "$(primary_worktree)" ]] || { echo "Refusing to remove the primary worktree." >&2; exit 1; }
     [[ "$target" != "$repo_root" ]] || { echo "Run removal from another worktree, or use self-remove." >&2; exit 1; }
+
+    # Stop lingering host processes (such as `cap run android --live-reload`) even when
+    # `.env.worktree` is gone, and before `git status` so live reload can restore its config.
+    stop_worktree_host_processes "$target"
 
     status=$(git -C "$target" status --porcelain --untracked-files=all)
     [[ -z "$status" ]] || { echo "Refusing to remove a dirty worktree:" >&2; printf '%s\n' "$status" >&2; exit 1; }

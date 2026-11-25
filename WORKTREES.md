@@ -84,7 +84,7 @@ Run these from inside the worktree; they always target that worktree's stack.
 ./scripts/dev.sh psql
 ./scripts/dev.sh shell
 ./scripts/dev.sh install        # after pulling a lockfile change
-./scripts/dev.sh down           # stop, keeping data
+./scripts/dev.sh down           # stop stack and lingering host processes, keeping data
 ./scripts/dev.sh reset [-y]     # wipe this worktree's volumes and start fresh
 ```
 
@@ -125,8 +125,10 @@ Or from inside the worktree itself, as an agent's final command:
 ```
 
 Removal refuses the primary checkout, the checkout running the command, and worktrees with
-uncommitted changes, untracked files or unexpected ignored files. Dependencies, build output,
-test reports and Android build products are treated as disposable; pass `--strict` to
+uncommitted changes, untracked files or unexpected ignored files. Before checking cleanliness,
+it stops lingering worktree host processes (such as `./scripts/dev.sh android` live reload,
+sending `SIGINT` first so Capacitor can restore its config). Dependencies, build output,
+test reports, host dev pidfiles and Android build products are treated as disposable; pass `--strict` to
 refuse those too. It then deletes that worktree's Compose volumes and the app image Compose
 built for it (asking first unless `-y`) and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
 non-forced `git branch -d`, so unmerged work is never deleted.
