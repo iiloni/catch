@@ -1,448 +1,190 @@
-#!/usr/bin/env bash
-# Stops lingering host processes bound to a Catch Git worktree (for example
-# `cap run android --live-reload` started by `./scripts/dev.sh android`).
-# Sourced by scripts/dev.sh and scripts/worktree.sh; may also be run directly:
-#   ./scripts/worktree-processes.sh stop <worktree-path>
+# shellcheck shell=bash
+# Stops host processes that belong to one worktree, such as the live-reload
+# `cap run android` that `./scripts/dev.sh android` leaves running until Ctrl+C.
+# Sourced by dev.sh (down, destroy) and worktree.sh (remove), so stopping or removing a
+# worktree does not leave them holding memory.
+#
+# A process belongs to the worktree when it is the `dev.sh android` session recorded in
+# the worktree's pidfile, or a `cap run android` whose arguments (or, failing those, its
+# working directory) lie in that worktree rather than in another one nested in it. Their
+# descendants go with them. Nothing else is matched: editors, shells and agents that merely
+# work in the checkout are left alone, and so are this script and every process it runs
+# under, even when those match.
 
-WORKTREE_ANDROID_PIDFILE='.dev-android.pid'
-
-worktree_android_pidfile() {
-    printf '%s/%s\n' "${1%/}" "$WORKTREE_ANDROID_PIDFILE"
+# Kept in the worktree's own Git directory: never a file in the checkout, and removed
+# with the worktree.
+android_pidfile() {
+    local git_dir
+    git_dir=$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
+    printf '%s/catch-android.pid' "$git_dir"
 }
 
-_worktree_proc_read_stat() {
-    local pid=$1 stat_line rest
-    [[ "$pid" =~ ^[0-9]+$ ]] && ((pid > 1)) || return 1
-    if [[ -r "/proc/$pid/stat" ]]; then
-        stat_line=$(<"/proc/$pid/stat") 2>/dev/null || return 1
-        rest=${stat_line##*') '}
-        read -r _wt_stat_state _wt_stat_ppid _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _wt_stat_starttime _ <<< "$rest"
-        return 0
-    fi
-    if command -v ps >/dev/null 2>&1; then
-        local ps_out
-        ps_out=$(ps -o stat=,ppid= -p "$pid" 2>/dev/null) || return 1
-        read -r _wt_stat_state _wt_stat_ppid <<< "$ps_out"
-        [[ -n "$_wt_stat_state" && "$_wt_stat_ppid" =~ ^[0-9]+$ ]] || return 1
-        _wt_stat_starttime=''
-        return 0
-    fi
-    return 1
+# Sets stat_state, stat_ppid and stat_start (start time in clock ticks, which tells a
+# process from a later one given the same PID).
+read_proc_stat() {
+    local line IFS=' '
+    local -a fields
+    { read -r line <"/proc/$1/stat"; } 2>/dev/null || return 1
+    # The command name is in parentheses and may contain spaces or parentheses itself.
+    # What follows is numbers and a state letter, so splitting cannot glob.
+    # shellcheck disable=SC2206
+    fields=(${line##*) })
+    stat_state=${fields[0]} stat_ppid=${fields[1]} stat_start=${fields[19]}
 }
 
-_worktree_proc_is_alive() {
-    local pid=$1
-    [[ "$pid" =~ ^[0-9]+$ ]] && ((pid > 1)) || return 1
-    if [[ -d /proc ]]; then
-        _worktree_proc_read_stat "$pid" || return 1
-        [[ "$_wt_stat_state" != Z* && "$_wt_stat_state" != X* ]]
-        return
-    fi
-    kill -0 "$pid" 2>/dev/null
+# The `dev.sh android` session records itself so `down` can stop it.
+record_android_session() {
+    local pidfile
+    pidfile=$(android_pidfile "$1") || return 0
+    read_proc_stat "$$" || return 0
+    printf '%s %s\n' "$$" "$stat_start" >"$pidfile"
+    local release
+    printf -v release 'release_android_session %q' "$pidfile"
+    # shellcheck disable=SC2064 # Expand the path now, quoted; the trap runs after it is gone.
+    trap "$release" EXIT
 }
 
-write_worktree_android_pidfile() {
-    local worktree_root=$1 pid=${2:-$$} pidfile
-    pidfile=$(worktree_android_pidfile "$worktree_root")
-    if _worktree_proc_read_stat "$pid" && [[ -n "${_wt_stat_starttime:-}" ]]; then
-        printf '%s %s\n' "$pid" "$_wt_stat_starttime" > "$pidfile"
-    else
-        printf '%s\n' "$pid" > "$pidfile"
-    fi
+release_android_session() {
+    local recorded_pid=''
+    { read -r recorded_pid _ <"$1"; } 2>/dev/null || return 0
+    [[ "$recorded_pid" != "$$" ]] || rm -f "$1"
 }
 
-remove_worktree_android_pidfile() {
-    local worktree_root=$1 expected_pid=${2:-} pidfile recorded_pid
-    pidfile=$(worktree_android_pidfile "$worktree_root")
-    [[ -f "$pidfile" ]] || return 0
-    if [[ -z "$expected_pid" ]]; then
-        rm -f "$pidfile"
-        return 0
-    fi
-    read -r recorded_pid _ < "$pidfile" 2>/dev/null || recorded_pid=''
-    if [[ "$recorded_pid" == "$expected_pid" ]]; then
-        rm -f "$pidfile"
-    fi
-}
-
-_worktree_canonical_path() {
-    local raw=$1 resolved
-    [[ -n "$raw" ]] || return 1
-    if [[ -d "$raw" ]]; then
-        resolved=$(cd "$raw" 2>/dev/null && pwd -P) || return 1
-    else
-        resolved=${raw%/}
-    fi
-    [[ -n "$resolved" && "$resolved" != "/" ]] || return 1
-    printf '%s\n' "$resolved"
-}
-
-_worktree_path_within() {
-    local candidate=$1 root=$2
-    [[ -n "$candidate" && -n "$root" ]] || return 1
-    candidate=${candidate%/}
-    [[ "$candidate" == "$root" || "$candidate" == "$root/"* ]]
-}
-
-_worktree_matches_root() {
-    local candidate=$1 target=$2 raw_target=$3
-    _worktree_path_within "$candidate" "$target" && return 0
-    [[ -n "$raw_target" && "$raw_target" != "$target" ]] \
-        && _worktree_path_within "$candidate" "$raw_target"
-}
-
-_worktree_is_excluded_tool_name() {
-    local name=${1##*/}
-    name=${name#-}
-    case "$name" in
-        t3-code|electron|antigravity|antigravity-acp|claude|codex|opencode|gemini|aider|cursor|code|zed|nvim|vim|vi|hx|emacs|tmux|screen|sshd|tsserver|typescript-language-server|biome)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
-
-# Decides whether a single process (already checked not to be self/ancestor) is a
-# Catch worktree-bound host process rather than an unrelated shell, editor or agent.
-_worktree_is_dev_process() {
-    local target=$1 raw_target=$2 cwd=$3
-    shift 3
-    local -a argv=("$@")
-    ((${#argv[@]} > 0)) || return 1
-
-    local cmd0=${argv[0]} cmd0_base=${argv[0]##*/}
-    cmd0_base=${cmd0_base#-}
-    _worktree_is_excluded_tool_name "$cmd0_base" && return 1
-
-    # Quick pre-filter: only inspect cwd/args for processes that could possibly be
-    # a Catch worktree script, package manager, Capacitor CLI or JS/TS dev runner.
-    local eligible=false
-    case "$cmd0_base" in
-        bash|sh|dash|env|node|nodejs|pnpm|npm|npx|cap|capacitor|playwright|vite|vitest|next|tsx)
-            eligible=true
-            ;;
-        *)
-            if _worktree_matches_root "$cmd0" "$target" "$raw_target"; then
-                eligible=true
-            fi
-            ;;
-    esac
-    $eligible || return 1
-
-    local cwd_in_wt=false argv_in_wt=false arg val resolved
-    if [[ -n "$cwd" ]] && _worktree_matches_root "$cwd" "$target" "$raw_target"; then
-        cwd_in_wt=true
-    fi
-
-    for arg in "${argv[@]}"; do
-        if _worktree_matches_root "$arg" "$target" "$raw_target"; then
-            argv_in_wt=true
-            break
-        fi
-        if [[ "$arg" == *=* ]]; then
-            val=${arg#*=}
-            if _worktree_matches_root "$val" "$target" "$raw_target"; then
-                argv_in_wt=true
-                break
-            fi
-        fi
-    done
-
-    $cwd_in_wt || $argv_in_wt || return 1
-
-    # Reject language servers and known agent/editor scripts invoked through node/env.
-    local i prev=''
-    for ((i = 1; i < ${#argv[@]}; i++)); do
-        arg=${argv[$i]}
-        case "$arg" in
-            lsp-proxy|*/lsp-proxy|tsserver|*/tsserver|typescript-language-server|*/typescript-language-server)
-                return 1
+# Whether the arguments run `cap run android` (pnpm's `exec cap run android`, or Capacitor's
+# own `.../capacitor run android`), compared argument by argument.
+runs_cap_android() {
+    while (($# >= 3)); do
+        case "$1" in
+            cap | */cap | capacitor | */capacitor)
+                [[ $2 == run && $3 == android ]] && return 0
                 ;;
         esac
-        if [[ "$cmd0_base" == node || "$cmd0_base" == nodejs || "$cmd0_base" == env ]]; then
-            if [[ "$arg" != -* && "$prev" != -e && "$prev" != --eval && "$prev" != -p && "$prev" != --print ]]; then
-                _worktree_is_excluded_tool_name "$arg" && return 1
-                break
-            fi
-        fi
-        prev=$arg
-    done
-
-    # Helper to test a path token (also resolving safe relative paths when cwd is inside the worktree).
-    local is_script_in_wt=false is_node_modules_in_wt=false is_node_file_in_wt=false
-    local is_pkg_manager=false is_dev_runner=false
-    case "$cmd0_base" in
-        pnpm|npm|npx) is_pkg_manager=true ;;
-        cap|capacitor|playwright|vite|vitest|next) is_dev_runner=true ;;
-    esac
-
-    prev=''
-    for ((i = 0; i < ${#argv[@]}; i++)); do
-        arg=${argv[$i]}
-        # Never treat `-c <command>` shell code strings as script paths.
-        if [[ "$prev" == -c && ( "$cmd0_base" == sh || "$cmd0_base" == bash || "$cmd0_base" == dash ) ]]; then
-            prev=$arg
-            continue
-        fi
-        resolved=$arg
-        if $cwd_in_wt && [[ "$arg" != /* && "$arg" != -* && "$arg" != *".."* ]]; then
-            if [[ "$arg" == */* ]]; then
-                resolved="${cwd%/}/${arg#./}"
-            elif [[ $i -ge 1 && -f "${cwd%/}/$arg" ]]; then
-                resolved="${cwd%/}/$arg"
-            fi
-        fi
-
-        # 1. Script inside <worktree>/scripts/
-        if [[ "$resolved" == "$target/scripts/"* || ( -n "$raw_target" && "$resolved" == "$raw_target/scripts/"* ) ]]; then
-            is_script_in_wt=true
-        fi
-
-        # 2. Binary/script inside <worktree>/(apps/*|packages/*)?/node_modules/
-        if _worktree_matches_root "$resolved" "$target" "$raw_target"; then
-            case "$resolved" in
-                */node_modules/*)
-                    is_node_modules_in_wt=true
-                    ;;
-            esac
-            # 5. JS/TS file directly under the worktree executed by node/tsx (not a directory flag value).
-            if [[ $i -ge 1 && ( "$cmd0_base" == node || "$cmd0_base" == nodejs || "$cmd0_base" == tsx ) ]]; then
-                case "$prev" in
-                    --dir|--cwd|--workspace|--project|--root|-C) ;;
-                    *)
-                        case "$resolved" in
-                            *.js|*.mjs|*.cjs|*.ts|*.mts|*.cts)
-                                is_node_file_in_wt=true
-                                ;;
-                        esac
-                        ;;
-                esac
-            fi
-        fi
-
-        # 3. Package manager launched via node/env
-        if [[ $i -ge 1 ]]; then
-            case "$arg" in
-                pnpm|*/pnpm|*/pnpm.cjs|*/pnpm.mjs|npm|*/npm-cli.js|npx|*/npx-cli.js)
-                    is_pkg_manager=true
-                    ;;
-                */.bin/cap|*/.bin/capacitor|*/.bin/playwright|*/.bin/vite|*/.bin/vitest|*/.bin/next|*@capacitor/cli*|*@capacitor+cli*|*/capacitor/bin/*|*/apps/site/scripts/screenshots.ts)
-                    is_dev_runner=true
-                    ;;
-                cap|*/cap|capacitor|*/capacitor)
-                    if [[ $((i + 2)) -lt ${#argv[@]} && "${argv[$((i + 1))]}" == "run" && "${argv[$((i + 2))]}" == "android" ]]; then
-                        is_dev_runner=true
-                    elif [[ "$cmd0_base" == node || "$cmd0_base" == nodejs || "$cmd0_base" == env ]]; then
-                        is_dev_runner=true
-                    fi
-                    ;;
-                playwright|*/playwright|vite|*/vite|vitest|*/vitest|next|*/next)
-                    if [[ "$cmd0_base" == node || "$cmd0_base" == nodejs || "$cmd0_base" == env ]]; then
-                        is_dev_runner=true
-                    fi
-                    ;;
-            esac
-        fi
-        prev=$arg
-    done
-
-    $is_script_in_wt || $is_node_modules_in_wt || $is_pkg_manager || $is_dev_runner || $is_node_file_in_wt
-}
-
-_worktree_wait_for_exit() {
-    local max_ds=$1
-    shift
-    local -a pids=("$@")
-    local elapsed=0 pid alive
-    while ((elapsed < max_ds)); do
-        alive=false
-        for pid in "${pids[@]}"; do
-            if _worktree_proc_is_alive "$pid"; then
-                alive=true
-                break
-            fi
-        done
-        $alive || return 0
-        sleep 0.1
-        elapsed=$((elapsed + 1))
+        shift
     done
     return 1
 }
 
-stop_worktree_host_processes() {
-    local raw_target=${1:-} target
-    target=$(_worktree_canonical_path "$raw_target") || return 0
-    raw_target=${raw_target%/}
-
-    local sigint_wait_ds=${CATCH_STOP_SIGINT_WAIT_DS:-50}
-    local sigterm_wait_ds=${CATCH_STOP_SIGTERM_WAIT_DS:-20}
-    local sigkill_wait_ds=${CATCH_STOP_SIGKILL_WAIT_DS:-10}
-
-    # Strictly exclude self, subshell pid and every ancestor up to PID 1.
-    local -A excluded=()
-    local p start_p
-    for start_p in "$$" "${BASHPID:-$$}" "$PPID"; do
-        p=$start_p
-        while [[ "$p" =~ ^[0-9]+$ ]] && ((p > 1)); do
-            [[ -n "${excluded[$p]:-}" ]] && break
-            excluded[$p]=1
-            _worktree_proc_read_stat "$p" || break
-            [[ "$_wt_stat_ppid" =~ ^[0-9]+$ && "$_wt_stat_ppid" != "$p" ]] || break
-            p=$_wt_stat_ppid
-        done
-    done
-
-    local -A matched=()
-    local -A children_by_ppid=()
-    local pidfile pidfile_pid='' pidfile_start='' has_pidfile=false
-    pidfile=$(worktree_android_pidfile "$target")
-    if [[ -f "$pidfile" ]]; then
-        has_pidfile=true
-        read -r pidfile_pid pidfile_start _ < "$pidfile" 2>/dev/null || { pidfile_pid=''; pidfile_start=''; }
-        if [[ "$pidfile_pid" =~ ^[0-9]+$ ]] && ((pidfile_pid > 1)) && [[ -z "${excluded[$pidfile_pid]:-}" ]]; then
-            if [[ ! -d /proc || -O "/proc/$pidfile_pid" ]] && _worktree_proc_is_alive "$pidfile_pid"; then
-                if [[ -z "$pidfile_start" || -z "${_wt_stat_starttime:-}" || "$_wt_stat_starttime" == "$pidfile_start" ]]; then
-                    matched[$pidfile_pid]=1
-                fi
-            fi
-        fi
-    fi
-
-    if [[ -d /proc ]]; then
-        local proc_dir pid cwd
-        local -a argv=()
-        for proc_dir in /proc/[0-9]*; do
-            pid=${proc_dir#/proc/}
-            [[ "$pid" =~ ^[0-9]+$ ]] && ((pid > 1)) || continue
-            [[ -O "$proc_dir" ]] || continue
-            [[ -z "${excluded[$pid]:-}" ]] || continue
-            _worktree_proc_read_stat "$pid" || continue
-            [[ "$_wt_stat_state" != Z* && "$_wt_stat_state" != X* ]] || continue
-            children_by_ppid[$_wt_stat_ppid]+=" $pid"
-
-            argv=()
-            mapfile -d '' -t argv < "$proc_dir/cmdline" 2>/dev/null || continue
-            ((${#argv[@]} > 0)) || continue
-
-            # Only pay for readlink(cwd) when argv[0] could match a dev process.
-            local cmd0_base=${argv[0]##*/}
-            cmd0_base=${cmd0_base#-}
-            case "$cmd0_base" in
-                bash|sh|dash|env|node|nodejs|pnpm|npm|npx|cap|capacitor|playwright|vite|vitest|next|tsx)
-                    cwd=$(readlink "$proc_dir/cwd" 2>/dev/null || true)
-                    ;;
-                *)
-                    if _worktree_matches_root "${argv[0]}" "$target" "$raw_target"; then
-                        cwd=$(readlink "$proc_dir/cwd" 2>/dev/null || true)
-                    else
-                        continue
-                    fi
-                    ;;
-            esac
-
-            if _worktree_is_dev_process "$target" "$raw_target" "$cwd" "${argv[@]}"; then
-                matched[$pid]=1
-            fi
-        done
-    fi
-
-    # Expand descendants (BFS) so child processes like `cap` or Playwright browsers
-    # are signaled alongside (and before) their parent wrapper.
-    local -a bfs_queue=()
-    local -a ordered_descendants=()
-    local -A seen=()
-    local root_pid child
-    if ((${#matched[@]} > 0)); then
-        for root_pid in "${!matched[@]}"; do
-            bfs_queue+=("$root_pid")
-            seen[$root_pid]=1
-        done
-    fi
-
-    local idx=0 current
-    while ((idx < ${#bfs_queue[@]})); do
-        current=${bfs_queue[$idx]}
-        idx=$((idx + 1))
-        ordered_descendants+=("$current")
-        for child in ${children_by_ppid[$current]:-}; do
-            [[ -z "${excluded[$child]:-}" && -z "${seen[$child]:-}" ]] || continue
-            if _worktree_proc_is_alive "$child"; then
-                seen[$child]=1
-                bfs_queue+=("$child")
-            fi
-        done
-    done
-
-    # Signal deepest descendants first (mirrors Ctrl+C reaching leaf `cap` first).
-    local -a targets=()
-    local i
-    for ((i = ${#ordered_descendants[@]} - 1; i >= 0; i--)); do
-        targets+=("${ordered_descendants[$i]}")
-    done
-
-    if ((${#targets[@]} == 0)); then
-        if $has_pidfile; then
-            remove_worktree_android_pidfile "$target" "$pidfile_pid"
-        fi
-        return 0
-    fi
-
-    echo "Stopping ${#targets[@]} lingering host process(es) for $target..."
-
-    local pid
-    # 1. SIGINT first so `cap run android --live-reload` restores Capacitor config cleanly.
-    for pid in "${targets[@]}"; do
-        kill -INT "$pid" 2>/dev/null || true
-    done
-    _worktree_wait_for_exit "$sigint_wait_ds" "${targets[@]}" || true
-
-    # 2. SIGTERM for anything still alive.
-    local -a remaining=()
-    for pid in "${targets[@]}"; do
-        _worktree_proc_is_alive "$pid" && remaining+=("$pid")
-    done
-    if ((${#remaining[@]} > 0)); then
-        for pid in "${remaining[@]}"; do
-            kill -TERM "$pid" 2>/dev/null || true
-        done
-        _worktree_wait_for_exit "$sigterm_wait_ds" "${remaining[@]}" || true
-    fi
-
-    # 3. SIGKILL fallback for anything that ignored SIGINT and SIGTERM.
-    local -a stubborn=()
-    if ((${#remaining[@]} > 0)); then
-        for pid in "${remaining[@]}"; do
-            _worktree_proc_is_alive "$pid" && stubborn+=("$pid")
-        done
-    fi
-    if ((${#stubborn[@]} > 0)); then
-        for pid in "${stubborn[@]}"; do
-            kill -KILL "$pid" 2>/dev/null || true
-        done
-        _worktree_wait_for_exit "$sigkill_wait_ds" "${stubborn[@]}" || true
-    fi
-
-    if $has_pidfile; then
-        remove_worktree_android_pidfile "$target" "$pidfile_pid"
-    fi
+# Whether a process is still the one first seen: alive and with the same start time.
+same_process() {
+    read_proc_stat "$1" && [[ "$stat_state" != Z && "$stat_start" == "$2" ]]
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    set -euo pipefail
-    case "${1:-}" in
-        stop)
-            [[ $# -ge 2 ]] || { echo "Usage: $0 stop <worktree-path>" >&2; exit 2; }
-            stop_worktree_host_processes "$2"
-            ;;
-        write-pid)
-            [[ $# -ge 2 ]] || { echo "Usage: $0 write-pid <worktree-path> [pid]" >&2; exit 2; }
-            write_worktree_android_pidfile "$2" "${3:-$$}"
-            ;;
-        *)
-            echo "Usage: $0 <stop|write-pid> <worktree-path> [args...]" >&2
-            exit 2
-            ;;
-    esac
-fi
+# The worktree a path lies in: the longest of the given roots that contains it.
+owning_worktree() {
+    local path=$1 root best=''
+    shift
+    for root in "$@"; do
+        [[ "$path" == "$root" || "$path" == "$root"/* ]] || continue
+        ((${#root} > ${#best})) && best=$root
+    done
+    printf '%s' "$best"
+}
+
+stop_worktree_processes() {
+    # Without /proc (macOS) there is nothing reliable to match on, so those hosts stop live
+    # reload with Ctrl+C as before.
+    [[ -r /proc/self/stat ]] || return 0
+    local root worktree
+    root=$(cd "$1" 2>/dev/null && pwd -P) || root=$1
+    local -a roots=("$root")
+    while IFS= read -r worktree; do
+        [[ -d "$worktree" ]] && worktree=$(cd "$worktree" && pwd -P)
+        roots+=("$worktree")
+    done < <(git -C "$root" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+
+    # This shell and everything it runs under: the caller's terminal, shell or agent.
+    local -A keep=() parent=() start=() target=()
+    local pid=$BASHPID
+    while [[ "$pid" =~ ^[1-9][0-9]*$ && -z "${keep[$pid]:-}" ]]; do
+        keep[$pid]=1
+        read_proc_stat "$pid" || break
+        pid=$stat_ppid
+    done
+    keep[$$]=1
+
+    local dir arg owner cwd
+    local -a argv candidates=()
+    for dir in /proc/[0-9]*; do
+        pid=${dir#/proc/}
+        [[ -O "$dir" ]] || continue
+        read_proc_stat "$pid" || continue
+        [[ "$stat_state" != Z ]] || continue
+        parent[$pid]=$stat_ppid
+        start[$pid]=$stat_start
+        { mapfile -d '' -t argv <"$dir/cmdline"; } 2>/dev/null || continue
+        runs_cap_android "${argv[@]}" || continue
+        # `pnpm --dir <worktree>/apps/web` and Capacitor's own script name the worktree
+        # they run from; the working directory may be anywhere for the former.
+        owner=''
+        for arg in "${argv[@]}"; do
+            arg=${arg#--*=}
+            [[ "$arg" == /* ]] || continue
+            owner=$(owning_worktree "$arg" "${roots[@]}")
+            [[ -z "$owner" ]] || break
+        done
+        if [[ -z "$owner" ]]; then
+            cwd=$(readlink "$dir/cwd" 2>/dev/null) || continue
+            owner=$(owning_worktree "${cwd% (deleted)}" "${roots[@]}")
+        fi
+        [[ "$owner" != "$root" ]] || candidates+=("$pid")
+    done
+
+    local pidfile recorded_pid='' recorded_start=''
+    if pidfile=$(android_pidfile "$root") && [[ -f "$pidfile" ]]; then
+        { read -r recorded_pid recorded_start _ <"$pidfile"; } 2>/dev/null || true
+        if [[ "$recorded_pid" =~ ^[1-9][0-9]*$ && "$recorded_start" =~ ^[0-9]+$ && "${start[$recorded_pid]:-}" == "$recorded_start" ]]; then
+            candidates+=("$recorded_pid")
+        else
+            rm -f "$pidfile"
+        fi
+    fi
+
+    local child
+    local -a queue=()
+    ((${#candidates[@]})) && queue=("${candidates[@]}")
+    while ((${#queue[@]})); do
+        pid=${queue[0]}
+        queue=("${queue[@]:1}")
+        [[ -z "${keep[$pid]:-}" && -z "${target[$pid]:-}" ]] || continue
+        target[$pid]=1
+        for child in "${!parent[@]}"; do
+            [[ "${parent[$child]}" != "$pid" ]] || queue+=("$child")
+        done
+    done
+    ((${#target[@]})) || return 0
+
+    echo "Stopping host processes from $root:"
+    for pid in "${!target[@]}"; do
+        { mapfile -d '' -t argv <"/proc/$pid/cmdline"; } 2>/dev/null || argv=()
+        printf '  %s %.150s\n' "$pid" "${argv[*]}"
+    done
+
+    # Interrupt first, as Ctrl+C would: live reload restores the Capacitor config it
+    # rewrote only on SIGINT. Then terminate, then kill whatever is left. Each PID is checked
+    # just before each signal to narrow the window for PID reuse.
+    local signal poll polls=${CATCH_STOP_PROCESS_POLLS:-30}
+    for signal in INT TERM KILL; do
+        for pid in "${!target[@]}"; do
+            if same_process "$pid" "${start[$pid]}"; then
+                kill -s "$signal" "$pid" 2>/dev/null || true
+            else
+                unset "target[$pid]"
+            fi
+        done
+        for ((poll = 0; poll < polls; poll++)); do
+            for pid in "${!target[@]}"; do
+                same_process "$pid" "${start[$pid]}" || unset "target[$pid]"
+            done
+            if ((${#target[@]} == 0)); then
+                # A newer Android session may have claimed the file during shutdown.
+                if [[ -f "$pidfile" && "$(<"$pidfile")" == "$recorded_pid $recorded_start" ]]; then
+                    rm -f "$pidfile"
+                fi
+                return 0
+            fi
+            sleep 0.1
+        done
+    done
+    echo "Could not stop: ${!target[*]}" >&2
+    return 1
+}

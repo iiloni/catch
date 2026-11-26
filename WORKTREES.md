@@ -128,10 +128,16 @@ Removal refuses the primary checkout, the checkout running the command, and work
 uncommitted changes, untracked files or unexpected ignored files. Before checking cleanliness,
 it stops lingering worktree host processes (such as `./scripts/dev.sh android` live reload,
 sending `SIGINT` first so Capacitor can restore its config). Dependencies, build output,
-test reports, host dev pidfiles and Android build products are treated as disposable; pass `--strict` to
+test reports and Android build products are treated as disposable; pass `--strict` to
 refuse those too. It then deletes that worktree's Compose volumes and the app image Compose
 built for it (asking first unless `-y`) and removes the checkout. The branch is kept unless `--delete-branch` is given, which uses a
 non-forced `git branch -d`, so unmerged work is never deleted.
+
+On Linux, teardown uses `/proc` to identify the recorded Android session, worktree-owned
+`cap run android` commands and their children. The pidfile lives in the worktree's Git
+directory. If a process survives SIGINT, SIGTERM and SIGKILL, removal refuses to delete the
+checkout. The `down` and `destroy` commands still stop Docker and report failure. On hosts
+without Linux's `/proc`, stop live reload with Ctrl+C before teardown.
 
 To remove every non-main worktree, run this from the primary checkout while it is on `main`:
 

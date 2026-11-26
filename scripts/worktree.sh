@@ -152,8 +152,8 @@ resolve_worktree() {
 }
 
 # Ignored paths that are safe to discard when removing a worktree: dependencies,
-# build output, test artifacts, host dev pidfiles and Android build products.
-DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.next|\.source|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|^\.dev-android\.pid$|apps/web/android/app/src/main/assets/|apps/site/(out|src/generated)/|(^|/)next-env\.d\.ts$|(^|/)res/xml/config\.xml$|\.(tsbuildinfo|log|apk)$'
+# build output, test artifacts and Android build products.
+DISPOSABLE='(^|/)(node_modules|dist|dev-dist|coverage|playwright-report|test-results|\.tanstack|\.next|\.source|\.gradle|build|capacitor-cordova-android-plugins)(/|$)|(^|/)(local\.properties|capacitor\.config\.json)$|apps/web/android/app/src/main/assets/|apps/site/(out|src/generated)/|(^|/)next-env\.d\.ts$|(^|/)res/xml/config\.xml$|\.(tsbuildinfo|log|apk)$'
 
 remove_worktree() {
     local query=$1
@@ -176,7 +176,10 @@ remove_worktree() {
 
     # Stop lingering host processes (such as `cap run android --live-reload`) even when
     # `.env.worktree` is gone, and before `git status` so live reload can restore its config.
-    stop_worktree_host_processes "$target"
+    if ! stop_worktree_processes "$target"; then
+        echo "Refusing to remove a worktree whose processes are still running; stop them, then retry." >&2
+        exit 1
+    fi
 
     status=$(git -C "$target" status --porcelain --untracked-files=all)
     [[ -z "$status" ]] || { echo "Refusing to remove a dirty worktree:" >&2; printf '%s\n' "$status" >&2; exit 1; }

@@ -123,8 +123,10 @@ case "$command" in
         install_dependencies
         ;;
     down)
-        stop_worktree_host_processes "$repo_root"
+        cleanup_status=0
+        stop_worktree_processes "$repo_root" || cleanup_status=$?
         "${compose[@]}" down --remove-orphans "$@"
+        exit "$cleanup_status"
         ;;
     restart)
         "${compose[@]}" restart "$@"
@@ -191,6 +193,7 @@ case "$command" in
             echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
             exit 1
         fi
+        record_android_session "$repo_root"
         "$repo_root/scripts/dev.sh" up
         port=$(env_value CATCH_PORT)
         host=$(env_value CATCH_PUBLIC_HOST)
@@ -217,8 +220,6 @@ case "$command" in
             # Live reload ignores the copied assets, so any web build will do.
             [[ -f "$repo_root/apps/web/dist/index.html" ]] || pnpm --dir "$repo_root/apps/web" build
             echo "Live reload from http://$host:$port. Keep this running; Ctrl+C restores the Capacitor config."
-            trap 'remove_worktree_android_pidfile "$repo_root" "$$"' EXIT
-            write_worktree_android_pidfile "$repo_root" "$$"
             pnpm --dir "$repo_root/apps/web" exec cap run android \
                 --live-reload --host "$host" --port "$port" "${forward[@]}" "${cap_args[@]}" --flavor dev
         fi
@@ -266,10 +267,12 @@ case "$command" in
             "${compose[@]}" down -v --remove-orphans
             "$0" up
         else
-            stop_worktree_host_processes "$repo_root"
+            cleanup_status=0
+            stop_worktree_processes "$repo_root" || cleanup_status=$?
             # `--rmi local` removes only the images Compose built (those without an `image:`
             # tag, i.e. this project's app image), not pulled ones such as postgres or electric.
             "${compose[@]}" down -v --remove-orphans --rmi local
+            exit "$cleanup_status"
         fi
         ;;
     help|-h|--help)
