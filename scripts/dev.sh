@@ -3,6 +3,8 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/worktree-processes.sh
+source "$repo_root/scripts/worktree-processes.sh"
 env_file=${CATCH_WORKTREE_ENV:-"$repo_root/.env.worktree"}
 export CATCH_UID=${CATCH_UID:-$(id -u)}
 export CATCH_GID=${CATCH_GID:-$(id -g)}
@@ -121,7 +123,10 @@ case "$command" in
         install_dependencies
         ;;
     down)
+        cleanup_status=0
+        stop_worktree_processes "$repo_root" || cleanup_status=$?
         "${compose[@]}" down --remove-orphans "$@"
+        exit "$cleanup_status"
         ;;
     restart)
         "${compose[@]}" restart "$@"
@@ -188,6 +193,7 @@ case "$command" in
             echo "No Android device connected. Plug in over USB or run 'adb connect <ip>:<port>'." >&2
             exit 1
         fi
+        record_android_session "$repo_root"
         "$repo_root/scripts/dev.sh" up
         port=$(env_value CATCH_PORT)
         host=$(env_value CATCH_PUBLIC_HOST)
@@ -261,9 +267,12 @@ case "$command" in
             "${compose[@]}" down -v --remove-orphans
             "$0" up
         else
+            cleanup_status=0
+            stop_worktree_processes "$repo_root" || cleanup_status=$?
             # `--rmi local` removes only the images Compose built (those without an `image:`
             # tag, i.e. this project's app image), not pulled ones such as postgres or electric.
             "${compose[@]}" down -v --remove-orphans --rmi local
+            exit "$cleanup_status"
         fi
         ;;
     help|-h|--help)
@@ -271,7 +280,7 @@ case "$command" in
 Usage: ./scripts/dev.sh <command>
 
   up                  Build, install dependencies and start this worktree's stack
-  down                Stop the stack, keeping its database
+  down                Stop the stack and lingering host processes, keeping its database
   restart [service]   Restart all services or one (app, postgres, electric)
   logs [service]      Follow logs
   logs-once [service] Print current logs without following
@@ -298,7 +307,7 @@ Usage: ./scripts/dev.sh <command>
   psql [args]         Open psql against this worktree's database
   fix-permissions     Return ownership of generated files to the host user
   reset [-y]          Delete this worktree's volumes and start fresh
-  destroy [-y]        Stop the stack and delete its volumes and built images
+  destroy [-y]        Stop the stack and host processes, and delete volumes and built images
 USAGE
         ;;
     *)

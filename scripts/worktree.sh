@@ -5,6 +5,8 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
+# shellcheck source=scripts/worktree-processes.sh
+source "$repo_root/scripts/worktree-processes.sh"
 
 PORT_BASE=24080
 PORT_SPAN=3000
@@ -171,6 +173,13 @@ remove_worktree() {
     IFS=$'\t' read -r target branch <<< "$match"
     [[ "$target" != "$(primary_worktree)" ]] || { echo "Refusing to remove the primary worktree." >&2; exit 1; }
     [[ "$target" != "$repo_root" ]] || { echo "Run removal from another worktree, or use self-remove." >&2; exit 1; }
+
+    # Stop lingering host processes (such as `cap run android --live-reload`) even when
+    # `.env.worktree` is gone, and before `git status` so live reload can restore its config.
+    if ! stop_worktree_processes "$target"; then
+        echo "Refusing to remove a worktree whose processes are still running; stop them, then retry." >&2
+        exit 1
+    fi
 
     status=$(git -C "$target" status --porcelain --untracked-files=all)
     [[ -z "$status" ]] || { echo "Refusing to remove a dirty worktree:" >&2; printf '%s\n' "$status" >&2; exit 1; }

@@ -53,6 +53,8 @@ checkout's stack. Never hard-code container or project names.
 - `./scripts/dev.sh android [--static] [--usb]` (host): install Catch Dev on a connected
   phone. By default it loads Vite with live reload; `--static` bundles the frontend while
   using this worktree's HTTP API. Static installs need rerunning after web or native changes.
+  Live reload runs until Ctrl+C. On Linux, `down`, `destroy` and worktree removal use
+  `/proc` to stop it. On other hosts, stop it with Ctrl+C before teardown.
   `--usb` reaches the backend through adb instead of Tailscale in either mode.
 - `pnpm --filter @catch/web android:sync` (host): build the web app into the Android project.
 
