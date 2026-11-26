@@ -341,6 +341,9 @@ If clients write to it, add it to `writableCollections` and `send()` in `collect
 - The Android app runs on `https://localhost`, a different origin than the server, so all
   clients authenticate with Better Auth bearer tokens (`set-auth-token` header), not cookies.
 - Android blocks cleartext HTTP by default, so the Android app needs the server on HTTPS.
+- Android WebView can drop the page's tiles while the app is in the background and then show
+  only its background on return until the first touch. `MainActivity` asks for a fresh frame on
+  every warm resume (`ResumeRepaint.java`); keep that in place when changing its lifecycle.
 - The on-screen keyboard overlays the page instead of resizing it (see ADR 0003). Keep fixed
   bottom UI above it with `var(--keyboard)`, and keep focus in editors by calling
   `preventDefault()` on `pointerdown` in buttons that act on them.
