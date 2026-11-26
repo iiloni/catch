@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.webkit.WebView;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
@@ -16,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     // Both only change on the main thread.
     private boolean launching = true;
     private LaunchScreenAnimation launchScreen;
+    private ResumeRepaint resumeRepaint;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -49,8 +51,34 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppSwitcherPlugin.class);
         super.onCreate(savedInstanceState);
         // The page scrollbar is drawn by the WebView separately from nested CSS scrollers.
-        getBridge().getWebView().setVerticalScrollBarEnabled(false);
-        getBridge().getWebView().setHorizontalScrollBarEnabled(false);
+        WebView webView = getBridge().getWebView();
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        resumeRepaint = new ResumeRepaint(webView);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (resumeRepaint != null) resumeRepaint.resumed();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && resumeRepaint != null) resumeRepaint.focused();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (resumeRepaint != null) resumeRepaint.stopped();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (resumeRepaint != null) resumeRepaint.destroyed();
+        super.onDestroy();
     }
 
     /** Lets the launch screen leave. Later calls, such as from a reloaded page, do nothing. */
